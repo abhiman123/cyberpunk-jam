@@ -1,39 +1,79 @@
+import MachineRecipes from '../data/MachineRecipes.js';
+
 export default class ConveyorBelt {
     constructor(scene) {
         this.scene = scene;
-        this.speed = 60;          // pixels per second, increase over time
-        this.activeMachine = null;
+        this.speed = 60;        // pixels per second — increases over time
         this.queue = [];
+        this.activeMachine = null;
 
         // callbacks — set these from GameScene
-        this.onMachineArrived = null;
+        this.onMachineArrived   = null;
         this.onMachineCompleted = null;
-        this.onMachineLeft = null;
+        this.onMachineLeft      = null;
 
-        this.spawnZone = { x: 900 };   // machines enter from the right
-        this.workZone  = { x: 400 };   // where the player interacts
-        this.exitZone  = { x: -100 };  // machine leaves screen left
+        this.spawnZone = { x: 1350 };   // machines enter from the right
+        this.workZone  = { x: 500  };   // where the player interacts
+        this.exitZone  = { x: -150 };   // machine leaves the screen left
 
+        this.beltY = 380;
+
+        this._buildVisual();
         this._spawnNext();
     }
 
+    // ─── VISUAL ─────────────────────────────────────────────────────────────
+
+    _buildVisual() {
+        this.beltTiles = [];
+        const tileW = 40;
+        const count = Math.ceil(1280 / tileW) + 2;
+
+        for (let i = 0; i < count; i++) {
+            const tile = this.scene.add.image(i * tileW, this.beltY + 60, 'conveyor_tile')
+                .setDepth(1);
+            this.beltTiles.push(tile);
+        }
+    }
+
+    _scrollBelt(dt) {
+        const scrollSpeed = this.speed * dt;
+        for (const tile of this.beltTiles) {
+            tile.x -= scrollSpeed;
+            if (tile.x < -40) {
+                tile.x += this.beltTiles.length * 40;
+            }
+        }
+    }
+
+    // ─── SPAWNING ────────────────────────────────────────────────────────────
+
     _spawnNext() {
         const recipe = MachineRecipes.getRandom();
+        const sprite = this.scene.add.image(this.spawnZone.x, this.beltY, recipe.spriteKey)
+            .setDepth(5);
+
         const machine = {
             recipe,
-            sprite: this.scene.add.image(this.spawnZone.x, 360, recipe.spriteKey),
+            sprite,
             completedParts: new Set(),
             arrived: false,
             failed: false,
+            _done: false,
         };
+
         this.queue.push(machine);
     }
 
+    // ─── UPDATE ──────────────────────────────────────────────────────────────
+
     update(delta) {
-        const dt = delta / 1000;  // convert ms to seconds
+        const dt = delta / 1000;
+
+        this._scrollBelt(dt);
 
         for (const machine of this.queue) {
-            if (machine.failed) continue;
+            if (machine._done) continue;
 
             machine.sprite.x -= this.speed * dt;
 
@@ -44,9 +84,9 @@ export default class ConveyorBelt {
                 this.onMachineArrived?.(machine);
             }
 
-            // machine leaves without being completed
+            // machine leaves the screen without being completed
             if (machine.sprite.x <= this.exitZone.x) {
-                if (!this._isMachineComplete(machine)) {
+                if (!this._isMachineComplete(machine) && !machine.failed) {
                     machine.failed = true;
                     this.onMachineLeft?.(machine);
                 }
@@ -55,9 +95,11 @@ export default class ConveyorBelt {
             }
         }
 
-        // remove cleaned up machines
+        // purge done machines
         this.queue = this.queue.filter(m => !m._done);
     }
+
+    // ─── COMPLETION ──────────────────────────────────────────────────────────
 
     completePart(machine, partId) {
         machine.completedParts.add(partId);
@@ -75,10 +117,14 @@ export default class ConveyorBelt {
     _cleanup(machine) {
         machine.sprite.destroy();
         machine._done = true;
-        if (this.activeMachine === machine) this.activeMachine = null;
+        if (this.activeMachine === machine) {
+            this.activeMachine = null;
+        }
     }
 
+    // ─── DIFFICULTY ──────────────────────────────────────────────────────────
+
     increaseSpeed(amount) {
-        this.speed += amount;
+        this.speed = Math.min(this.speed + amount, 200); // cap at 200
     }
 }
