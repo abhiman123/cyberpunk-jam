@@ -64,7 +64,7 @@ export default class GameScene extends Phaser.Scene {
 
         // ── Panel backgrounds and borders ─────────────────────────────────────
         const borderGfx = this.add.graphics().setDepth(81);
-        borderGfx.lineStyle(1, 0x1e1e1e, 1);
+        borderGfx.lineStyle(1, 0x2e2e2e, 1);
         borderGfx.strokeRect(PANEL.case.x,    PANEL.headerH, PANEL.case.w,    630);
         borderGfx.strokeRect(PANEL.details.x, PANEL.headerH, PANEL.details.w, 630);
         borderGfx.strokeRect(PANEL.tools.x,   PANEL.headerH, PANEL.tools.w,   630);
@@ -131,15 +131,15 @@ export default class GameScene extends Phaser.Scene {
 
         this._dayText = this.add.text(16, 15,
             `PERIOD ${period}  |  DAY ${day}  |  UNIT PROCESSING DIVISION`, {
-            fontFamily: 'monospace', fontSize: '11px', color: '#3a3a3a',
+            fontFamily: 'monospace', fontSize: '11px', color: '#606060',
         }).setDepth(3);
 
         this._paycheckText = this.add.text(1264, 15, this._formatPaycheck(), {
-            fontFamily: 'monospace', fontSize: '11px', color: '#2f2f2f',
+            fontFamily: 'monospace', fontSize: '11px', color: '#585858',
         }).setOrigin(1, 0).setDepth(3);
 
         this._gearIcon = this.add.text(1232, 14, '⚙', {
-            fontFamily: 'monospace', fontSize: '15px', color: '#2a2a2a',
+            fontFamily: 'monospace', fontSize: '15px', color: '#505050',
         }).setOrigin(0.5, 0).setDepth(3);
 
         Animations.fadeIn(this, [this._dayText, this._paycheckText, this._gearIcon],
@@ -157,7 +157,7 @@ export default class GameScene extends Phaser.Scene {
                 stripX + stripW / 2,
                 PANEL.headerH + i * tileH,
                 'conveyor_tile'
-            ).setDisplaySize(stripW, tileH).setDepth(3).setAlpha(0.45);
+            ).setDisplaySize(stripW, tileH).setDepth(3).setAlpha(0.75);
             this._conveyorTiles.push(tile);
         }
 
@@ -181,28 +181,28 @@ export default class GameScene extends Phaser.Scene {
         const cx = dx + dw / 2;
 
         const header = this.add.text(cx, PANEL.headerH + 16, 'INSPECTION LOG', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#2a2a2a',
+            fontFamily: 'monospace', fontSize: '11px', color: '#00cc88',
         }).setOrigin(0.5).setDepth(101);
 
         const divGfx = this.add.graphics().setDepth(4);
-        divGfx.lineStyle(1, 0x181818);
+        divGfx.lineStyle(1, 0x2a2a2a);
         divGfx.lineBetween(dx + 10, PANEL.headerH + 32, dx + dw - 10, PANEL.headerH + 32);
 
         this._caseCountText = this.add.text(cx, PANEL.headerH + 46, '', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#252525',
+            fontFamily: 'monospace', fontSize: '11px', color: '#505050',
         }).setOrigin(0.5).setDepth(101);
 
         this._logText = this.add.text(dx + 14, PANEL.headerH + 68, '', {
             fontFamily: 'monospace',
             fontSize: '10px',
-            color: '#1e4a44',
+            color: '#00cc88',
             lineSpacing: 5,
             wordWrap: { width: dw - 28 },
         }).setDepth(101);
 
         // Gear icon — top right of details panel
         this._detailsGear = this.add.text(dx + dw - 14, PANEL.headerH + 12, '⚙', {
-            fontFamily: 'monospace', fontSize: '18px', color: '#1a2a1e',
+            fontFamily: 'monospace', fontSize: '18px', color: '#1a4a38',
         }).setOrigin(1, 0).setDepth(101);
 
         this.tweens.add({
@@ -229,11 +229,11 @@ export default class GameScene extends Phaser.Scene {
         const bw = tw - 40;
 
         const header = this.add.text(cx, PANEL.headerH + 16, 'MAKE A RULING', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#2a2a2a',
+            fontFamily: 'monospace', fontSize: '11px', color: '#00cc88',
         }).setOrigin(0.5).setDepth(4);
 
         const divGfx = this.add.graphics().setDepth(4);
-        divGfx.lineStyle(1, 0x181818);
+        divGfx.lineStyle(1, 0x2a2a2a);
         divGfx.lineBetween(tx + 10, PANEL.headerH + 32, tx + tw - 10, PANEL.headerH + 32);
 
         const buttons = [
@@ -257,7 +257,7 @@ export default class GameScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true })
             .setDepth(100);
         const rbTxt = this.add.text(cx, 535, '[B]  RULEBOOK', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#005555',
+            fontFamily: 'monospace', fontSize: '13px', color: '#00aaaa',
         }).setOrigin(0.5).setDepth(101);
         rbBg.on('pointerover',  () => rbBg.setFillStyle(0x002a2a));
         rbBg.on('pointerout',   () => rbBg.setFillStyle(0x001a1a));
@@ -269,7 +269,7 @@ export default class GameScene extends Phaser.Scene {
         Animations.slideInFromBottom(this, [rbBg, rbTxt], { delay: 460, duration: 260 });
 
         this._mistakesText = this.add.text(cx, 600, 'Violations: 0', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#222222',
+            fontFamily: 'monospace', fontSize: '11px', color: '#505050',
         }).setOrigin(0.5).setDepth(4);
 
         Animations.fadeIn(this, [header, this._mistakesText], { delay: 150 });
@@ -414,7 +414,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _drawGrid() {
-        const g = this.add.graphics().setDepth(0).setAlpha(0.035);
+        const g = this.add.graphics().setDepth(0).setAlpha(0.06);
         g.lineStyle(1, 0x00ffcc);
         for (let x = 0; x < 1280; x += 80) {
             g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 720); g.strokePath();

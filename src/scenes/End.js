@@ -167,6 +167,11 @@ export default class EndScene extends Phaser.Scene {
 
     // ── Beat 8–10: Title card + play again ──────────────────────────────────
     _showTitleCard() {
+        // Hide everything from the dialogue stage so it doesn't bleed through
+        this._dialogueText.setAlpha(0);
+        if (this._managerSprite) this._managerSprite.setAlpha(0);
+        this._lights.forEach(l => l.setAlpha(0));
+
         // Reset camera rotation for title card
         this.cameras.main.setRotation(0);
         this.cameras.main.fadeIn(800, 0, 0, 0);
