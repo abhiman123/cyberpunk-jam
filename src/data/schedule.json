@@ -1,0 +1,8 @@
+[
+  { "period": 1, "day": 1, "caseIds": ["C-01", "C-02", "C-03"] },
+  { "period": 1, "day": 2, "caseIds": ["C-03", "C-01", "C-02"] },
+  { "period": 2, "day": 1, "caseIds": ["C-04", "C-05", "C-06"] },
+  { "period": 2, "day": 2, "caseIds": ["C-07", "C-04", "C-05"] },
+  { "period": 3, "day": 1, "caseIds": ["C-08", "C-09", "C-10"] },
+  { "period": 3, "day": 2, "caseIds": ["C-10", "C-11"] }
+]

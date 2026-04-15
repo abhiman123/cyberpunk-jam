@@ -1,0 +1,9 @@
+[
+  { "id": 1, "period": 1, "text": "Robots with a cracked chassis must be sent for repair." },
+  { "id": 2, "period": 1, "text": "Robots with serial numbers beginning with ERR must be scrapped." },
+  { "id": 3, "period": 1, "text": "Approve all units with a green status light." },
+  { "id": 4, "period": 2, "text": "Cybernetic parts manufactured before 2087 must be scrapped regardless of condition." },
+  { "id": 5, "period": 2, "text": "Units flagged MODIFIED in their log must be approved only with a supervisor override code. If no code is present, scrap." },
+  { "id": 6, "period": 3, "text": "Any unit processed by a human technician in its service history must be quarantined (scrap)." },
+  { "id": 7, "period": 3, "text": "Human-origin biological components count as cybernetic parts for all rule purposes." }
+]

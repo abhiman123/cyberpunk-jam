@@ -1,13 +1,18 @@
 import * as Phaser from 'phaser';
 import BootScene from './src/scenes/Boot.js';
+import MenuScene from './src/scenes/Menu.js';
+import BriefingScene from './src/scenes/Briefing.js';
 import GameScene from './src/scenes/Game.js';
-import GameOverScene from './src/scenes/GameOver.js';
+import SummaryScene from './src/scenes/Summary.js';
+import TransitionScene from './src/scenes/Transition.js';
+import EndScene from './src/scenes/End.js';
 
 const config = {
     type: Phaser.AUTO,
     width: 1280,
     height: 720,
-    scene: [BootScene, GameScene, GameOverScene],
+    backgroundColor: '#0a0a0a',
+    scene: [BootScene, MenuScene, BriefingScene, GameScene, SummaryScene, TransitionScene, EndScene],
 };
 
 new Phaser.Game(config);
