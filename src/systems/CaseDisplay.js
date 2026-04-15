@@ -80,15 +80,8 @@ export default class CaseDisplay {
             const revealText = this.scene.add.text(
                 zx + 10, zy + zone.h / 2, // Slight padding from the left edge
                 zone.label,
-                { 
-                    fontFamily: 'monospace', 
-                    fontSize: '11px', 
-                    color: '#00ffcc',
-                    // ADD THESE TWO LINES:
-                    wordWrap: { width: zone.w - 20 }, // Wrap text before it hits the box edge
-                    lineSpacing: 2
-                }
-            ).setOrigin(0, 0.5).setAlpha(0).setDepth(11);
+                { fontFamily: 'monospace', fontSize: '11px', color: '#00ffcc' }
+            ).setOrigin(0, 0.5).setAlpha(0).setDepth(6);
             this._track(revealText);
 
             // Staggered fade in for each zone after conveyor arrives

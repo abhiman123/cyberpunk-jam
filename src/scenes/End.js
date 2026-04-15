@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
+import { playManagerVoice } from '../fx/Voice.js';
 
 export default class EndScene extends Phaser.Scene {
     constructor() { super('End'); }
@@ -94,9 +95,12 @@ export default class EndScene extends Phaser.Scene {
         ];
         let lineIndex = 0;
 
+        this._voice = playManagerVoice(this);
+
         const revealLine = () => {
             if (lineIndex >= lines.length) {
-                // All lines done — wait then trigger shake
+                // All lines done — stop voice, wait then trigger shake
+                if (this._voice) { this._voice.stop(); this._voice = null; }
                 this.time.delayedCall(1000, () => this._shakeSequence());
                 return;
             }
