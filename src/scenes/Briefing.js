@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
+import { playManagerVoice } from '../fx/Voice.js';
 
 const PERIOD_BG = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
 const PERIOD_ACCENT = { 1: 0x886644, 2: 0x446688, 3: 0x2244aa };
@@ -63,19 +64,22 @@ export default class BriefingScene extends Phaser.Scene {
         if (newRuleIds.length > 0) {
             const rulesForPeriod = allRules.filter(r => newRuleIds.includes(r.id));
             let ry = 490;
-            this.add.text(380, ry, 'NEW DIRECTIVES:', {
+            const headerTxt = this.add.text(380, ry, 'NEW DIRECTIVES:', {
                 fontFamily: 'monospace', fontSize: '13px', color: '#ffcc44',
             });
-            ry += 22;
+            ry += headerTxt.height + 8;
             rulesForPeriod.forEach(r => {
-                this.add.text(380, ry, `  [${r.id}] ${r.text}`, {
+                const ruleTxt = this.add.text(380, ry, `  [${r.id}] ${r.text}`, {
                     fontFamily: 'monospace', fontSize: '13px', color: '#ffaa00',
                     wordWrap: { width: 840 },
                 });
-                ry += 22;
+                ry += ruleTxt.height + 8;
                 GameState.rulebookSeenRules.add(r.id);
             });
         }
+
+        // Voice playback while manager speaks (seamless loop + layered pitch)
+        const voice = playManagerVoice(this);
 
         // Acknowledged button — interactive from the start, action guarded by flag
         let textDone = false;
@@ -92,6 +96,7 @@ export default class BriefingScene extends Phaser.Scene {
         const markTextDone = () => {
             if (textDone) return;
             textDone = true;
+            voice.stop();
             btnBg.setAlpha(1).setFillStyle(0x1a1a1a).setStrokeStyle(1, 0x888888);
             btnText.setColor('#cccccc');
         };
