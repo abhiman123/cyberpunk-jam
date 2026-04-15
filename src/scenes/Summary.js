@@ -21,27 +21,27 @@ export default class SummaryScene extends Phaser.Scene {
         scan.fillStyle(0x000000, 0.06);
         for (let y = 0; y < H; y += 3) scan.fillRect(0, y, W, 1);
 
-        const accentColor = this._mistakes > 0 ? 0xaa2222 : 0x1a4a2a;
+        const accentColor = this._mistakes > 0 ? 0xcc3333 : 0x1a7a3a;
         this.add.rectangle(cx, 0, W, 2, accentColor).setOrigin(0.5, 0);
 
         this.add.text(cx, 72, 'END OF SHIFT', {
             fontFamily: 'monospace',
             fontSize: '11px',
-            color: '#333333',
+            color: '#dddddd',
             letterSpacing: 6,
         }).setOrigin(0.5);
 
         this.add.text(cx, 102, `PERIOD ${GameState.period}  ·  DAY ${GameState.day} OF 2`, {
             fontFamily: 'monospace',
             fontSize: '10px',
-            color: '#2a2a2a',
+            color: '#aaaaaa',
             letterSpacing: 4,
         }).setOrigin(0.5);
 
-        this._rule(140, 0x1c1c1c);
+        this._rule(140, 0x333333);
 
         const hasViolations = this._mistakes > 0;
-        const statusColor   = hasViolations ? '#882222' : '#1e5c32';
+        const statusColor   = hasViolations ? '#ff4444' : '#00cc66';
         const statusText    = hasViolations
             ? `${this._mistakes} VIOLATION${this._mistakes > 1 ? 'S' : ''} RECORDED`
             : 'NO VIOLATIONS';
@@ -49,7 +49,7 @@ export default class SummaryScene extends Phaser.Scene {
         this.add.text(cx, 188, 'QC ASSESSMENT', {
             fontFamily: 'monospace',
             fontSize: '10px',
-            color: '#2e2e2e',
+            color: '#bbbbbb',
             letterSpacing: 5,
         }).setOrigin(0.5);
 
@@ -59,12 +59,12 @@ export default class SummaryScene extends Phaser.Scene {
             color: statusColor,
         }).setOrigin(0.5);
 
-        this._rule(268, 0x141414);
+        this._rule(268, 0x333333);
 
         this.add.text(cx, 300, 'COMPENSATION LOG', {
             fontFamily: 'monospace',
             fontSize: '10px',
-            color: '#2e2e2e',
+            color: '#bbbbbb',
             letterSpacing: 5,
         }).setOrigin(0.5);
 
@@ -72,34 +72,34 @@ export default class SummaryScene extends Phaser.Scene {
         const totalStr = `$${Math.max(0, GameState.paycheckTotal).toFixed(8)}`;
 
         this.add.text(cx - 80, 338, 'DEDUCTED', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#2a2a2a',
+            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa',
         }).setOrigin(1, 0.5);
         this.add.text(cx - 64, 338, deltaStr, {
             fontFamily: 'monospace', fontSize: '13px',
-            color: hasViolations ? '#663333' : '#2a2a2a',
+            color: hasViolations ? '#ff5555' : '#aaaaaa',
         }).setOrigin(0, 0.5);
 
         this.add.text(cx - 80, 362, 'RUNNING', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#2a2a2a',
+            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa',
         }).setOrigin(1, 0.5);
         this.add.text(cx - 64, 362, totalStr, {
-            fontFamily: 'monospace', fontSize: '13px', color: '#383838',
+            fontFamily: 'monospace', fontSize: '13px', color: '#44cc88',
         }).setOrigin(0, 0.5);
 
         if (this._notificationText) {
-            this._rule(410, 0x141414);
+            this._rule(410, 0x333333);
 
             const tagText = this.add.text(cx, 440, '// INCOMING TRANSMISSION', {
                 fontFamily: 'monospace',
                 fontSize: '10px',
-                color: '#2a3a2a',
+                color: '#55cc55',
                 letterSpacing: 3,
             }).setOrigin(0.5);
 
             const msgText = this.add.text(cx, 490, this._notificationText, {
                 fontFamily: 'monospace',
                 fontSize: '14px',
-                color: '#3d5c3d',
+                color: '#aaddaa',
                 wordWrap: { width: 660 },
                 align: 'center',
                 lineSpacing: 8,
@@ -111,17 +111,17 @@ export default class SummaryScene extends Phaser.Scene {
         }
 
 
-        this._rule(600, 0x141414);
+        this._rule(600, 0x333333);
 
         const btnY  = 648;
         const btnBg = this.add.rectangle(cx, btnY, 200, 38, 0x0c0c0c)
-            .setStrokeStyle(1, 0x282828)
+            .setStrokeStyle(1, 0x555555)
             .setInteractive({ useHandCursor: true });
 
         const btnLabel = this.add.text(cx, btnY, 'NEXT SHIFT', {
             fontFamily: 'monospace',
             fontSize: '13px',
-            color: '#444444',
+            color: '#cccccc',
             letterSpacing: 4,
         }).setOrigin(0.5);
 
@@ -129,11 +129,11 @@ export default class SummaryScene extends Phaser.Scene {
 
         btnBg.on('pointerover', () => {
             btnBg.setStrokeStyle(1, accentColor);
-            btnLabel.setColor(this._mistakes > 0 ? '#aa2222' : '#2a7a3a');
+            btnLabel.setColor(this._mistakes > 0 ? '#ff4444' : '#00cc66');
         });
         btnBg.on('pointerout', () => {
-            btnBg.setStrokeStyle(1, 0x282828);
-            btnLabel.setColor('#444444');
+            btnBg.setStrokeStyle(1, 0x555555);
+            btnLabel.setColor('#999999');
         });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
@@ -154,7 +154,7 @@ export default class SummaryScene extends Phaser.Scene {
     }
 
 
-    _rule(y, color = 0x1c1c1c) {
+    _rule(y, color = 0x333333) {
         const g = this.add.graphics();
         g.lineStyle(1, color, 1);
         g.lineBetween(280, y, 1000, y);

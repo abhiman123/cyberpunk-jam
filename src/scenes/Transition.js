@@ -29,11 +29,11 @@ export default class TransitionScene extends Phaser.Scene {
 
         // Period label fades in
         const label = this.add.text(cx, 320, PERIOD_LABEL[p] || `PERIOD ${p}`, {
-            fontFamily: 'monospace', fontSize: '52px', color: '#333333',
+            fontFamily: 'monospace', fontSize: '52px', color: '#cccccc',
         }).setOrigin(0.5).setAlpha(0);
 
         const sub = this.add.text(cx, 400, PERIOD_SUB[p] || '', {
-            fontFamily: 'monospace', fontSize: '18px', color: '#222222',
+            fontFamily: 'monospace', fontSize: '18px', color: '#888888',
         }).setOrigin(0.5).setAlpha(0);
 
         this.tweens.add({ targets: label, alpha: 1, duration: 600, delay: 200 });

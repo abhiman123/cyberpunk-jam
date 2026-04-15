@@ -32,11 +32,11 @@ export default class BriefingScene extends Phaser.Scene {
         this.add.rectangle(cx, 0, W, 2, accent).setOrigin(0.5, 0);
 
         this.add.text(cx, 42, `PERIOD ${period}  ·  DAY ${day} OF 2`, {
-            fontFamily: 'monospace', fontSize: '10px', color: '#2e2e2e', letterSpacing: 5,
+            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa', letterSpacing: 5,
         }).setOrigin(0.5);
 
         this.add.text(cx, 68, 'MANAGER BRIEFING', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#333333', letterSpacing: 6,
+            fontFamily: 'monospace', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
         }).setOrigin(0.5);
 
         this._rule(96, accent, 0.12);
@@ -46,7 +46,7 @@ export default class BriefingScene extends Phaser.Scene {
 
         const managerLabel = briefing.managerType === 'robot' ? 'UNIT_MGR_492' : 'MANAGER';
         this.add.text(160, 460, managerLabel, {
-            fontFamily: 'monospace', fontSize: '10px', color: '#2a2a2a', letterSpacing: 3,
+            fontFamily: 'monospace', fontSize: '10px', color: '#bbbbbb', letterSpacing: 3,
         }).setOrigin(0.5);
 
         const boxX = 320, boxY = 130, boxW = 860, boxH = 260;
@@ -64,13 +64,13 @@ export default class BriefingScene extends Phaser.Scene {
             this._rule(420, accent, 0.1);
 
             this.add.text(320, 440, 'NEW DIRECTIVES', {
-                fontFamily: 'monospace', fontSize: '10px', color: '#3a3a2a', letterSpacing: 5,
+                fontFamily: 'monospace', fontSize: '10px', color: '#dddddd', letterSpacing: 5,
             });
 
             let ry = 466;
             rulesForPeriod.forEach(r => {
                 const t = this.add.text(320, ry, `[${r.id}]  ${r.text}`, {
-                    fontFamily: 'monospace', fontSize: '13px', color: '#7a6a22',
+                    fontFamily: 'monospace', fontSize: '13px', color: '#ccaa33',
                     wordWrap: { width: 860 },
                 });
                 ry += t.height + 10;
@@ -82,39 +82,39 @@ export default class BriefingScene extends Phaser.Scene {
         let muted = false;
 
         const muteBtn = this.add.text(1220, 36, '♪', {
-            fontFamily: 'monospace', fontSize: '16px', color: '#2a2a2a',
+            fontFamily: 'monospace', fontSize: '16px', color: '#777777',
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        muteBtn.on('pointerover', () => muteBtn.setColor('#555555'));
-        muteBtn.on('pointerout',  () => muteBtn.setColor(muted ? '#882222' : '#2a2a2a'));
+        muteBtn.on('pointerover', () => muteBtn.setColor('#aaaaaa'));
+        muteBtn.on('pointerout',  () => muteBtn.setColor(muted ? '#ff4444' : '#777777'));
         muteBtn.on('pointerdown', () => {
             muted = !muted;
             voice.setMute(muted);
-            muteBtn.setColor(muted ? '#882222' : '#2a2a2a');
+            muteBtn.setColor(muted ? '#ff4444' : '#777777');
         });
 
         let textDone = false;
         let transitioning = false;
 
         const btnBg = this.add.rectangle(cx, 648, 200, 38, 0x0c0c0c)
-            .setStrokeStyle(1, 0x1e1e1e)
+            .setStrokeStyle(1, 0x444444)
             .setAlpha(0.4)
             .setInteractive({ useHandCursor: true });
 
         const btnLabel = this.add.text(cx, 648, 'ACKNOWLEDGED', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#333333', letterSpacing: 4,
+            fontFamily: 'monospace', fontSize: '12px', color: '#666666', letterSpacing: 4,
         }).setOrigin(0.5);
 
         const markTextDone = () => {
             if (textDone) return;
             textDone = true;
             if (!muted) voice.stop();
-            btnBg.setAlpha(1).setStrokeStyle(1, 0x333333);
-            btnLabel.setColor('#666666');
+            btnBg.setAlpha(1).setStrokeStyle(1, 0x888888);
+            btnLabel.setColor('#dddddd');
         };
 
-        btnBg.on('pointerover', () => { if (textDone) { btnBg.setStrokeStyle(1, accent); btnLabel.setColor('#999999'); } });
-        btnBg.on('pointerout',  () => { if (textDone) { btnBg.setStrokeStyle(1, 0x333333); btnLabel.setColor('#666666'); } });
+        btnBg.on('pointerover', () => { if (textDone) { btnBg.setStrokeStyle(1, accent); btnLabel.setColor('#ffffff'); } });
+        btnBg.on('pointerout',  () => { if (textDone) { btnBg.setStrokeStyle(1, 0x888888); btnLabel.setColor('#dddddd'); } });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
             if (!textDone) {
@@ -143,7 +143,7 @@ export default class BriefingScene extends Phaser.Scene {
         this.cameras.main.fadeIn(400, 0, 0, 0);
     }
 
-    _rule(y, color = 0x1c1c1c, alpha = 1) {
+    _rule(y, color = 0x333333, alpha = 1) {
         const g = this.add.graphics();
         g.lineStyle(1, color, alpha);
         g.lineBetween(280, y, 1000, y);
