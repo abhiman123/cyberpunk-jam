@@ -80,7 +80,10 @@ export default class CaseDisplay {
             const revealText = this.scene.add.text(
                 zx + 10, zy + zone.h / 2, // Slight padding from the left edge
                 zone.label,
-                { fontFamily: 'monospace', fontSize: '11px', color: '#00ffcc' }
+                {
+                    fontFamily: 'monospace', fontSize: '11px', color: '#00ffcc',
+                    wordWrap: { width: zone.w - 14 },
+                }
             ).setOrigin(0, 0.5).setAlpha(0).setDepth(6);
             this._track(revealText);
 
