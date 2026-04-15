@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
 import { playManagerVoice } from '../fx/Voice.js';
 
-const PERIOD_BG = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
+const PERIOD_BG     = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
 const PERIOD_ACCENT = { 1: 0x886644, 2: 0x446688, 3: 0x2244aa };
 
 export default class BriefingScene extends Phaser.Scene {
@@ -16,97 +16,108 @@ export default class BriefingScene extends Phaser.Scene {
         const briefing = allBriefings.find(b => b.period === period && b.day === day)
             || { managerType: 'human', text: 'No directives. Complete your shift.' };
 
-        // Determine which rules are new this period
         const newRuleIds = allRules
             .filter(r => r.period === period && !GameState.rulebookSeenRules.has(r.id))
             .map(r => r.id);
 
-        // Background
-        this.add.rectangle(640, 360, 1280, 720, PERIOD_BG[period] || 0x101010);
+        const accent = PERIOD_ACCENT[period] || 0x333333;
+        const W = 1280, H = 720, cx = W / 2;
 
-        // Scanlines
+        this.add.rectangle(cx, H / 2, W, H, PERIOD_BG[period] || 0x101010);
+
         const scan = this.add.graphics();
         scan.fillStyle(0x000000, 0.06);
-        for (let y = 0; y < 720; y += 4) scan.fillRect(0, y, 1280, 2);
+        for (let y = 0; y < H; y += 3) scan.fillRect(0, y, W, 1);
 
-        // Header bar
-        this.add.rectangle(640, 30, 1280, 60, PERIOD_ACCENT[period] || 0x333333, 0.3);
-        this.add.text(640, 30, `PERIOD ${period}  —  DAY ${day}`, {
-            fontFamily: 'monospace', fontSize: '16px', color: '#aaaaaa',
+        this.add.rectangle(cx, 0, W, 2, accent).setOrigin(0.5, 0);
+
+        this.add.text(cx, 42, `PERIOD ${period}  ·  DAY ${day} OF 2`, {
+            fontFamily: 'monospace', fontSize: '10px', color: '#2e2e2e', letterSpacing: 5,
         }).setOrigin(0.5);
 
-        // Manager sprite (left side)
+        this.add.text(cx, 68, 'MANAGER BRIEFING', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#333333', letterSpacing: 6,
+        }).setOrigin(0.5);
+
+        this._rule(96, accent, 0.12);
+
         const spriteKey = briefing.managerType === 'robot' ? 'manager_robot' : 'manager_human';
-        this.add.image(180, 380, spriteKey).setScale(2.5);
+        this.add.image(160, 340, spriteKey).setScale(2.5);
 
-        // Manager label
-        const managerLabel = briefing.managerType === 'robot'
-            ? 'UNIT_MGR_492 [ROBOTICIZED]'
-            : 'Manager';
-        this.add.text(180, 450, managerLabel, {
-            fontFamily: 'monospace', fontSize: '12px', color: '#555555',
+        const managerLabel = briefing.managerType === 'robot' ? 'UNIT_MGR_492' : 'MANAGER';
+        this.add.text(160, 460, managerLabel, {
+            fontFamily: 'monospace', fontSize: '10px', color: '#2a2a2a', letterSpacing: 3,
         }).setOrigin(0.5);
 
-        // Briefing text box
-        const boxX = 380, boxY = 180, boxW = 800, boxH = 280;
-        this.add.rectangle(boxX + boxW / 2, boxY + boxH / 2, boxW, boxH, 0x111111)
-            .setStrokeStyle(1, PERIOD_ACCENT[period] || 0x333333, 0.5);
+        const boxX = 320, boxY = 130, boxW = 860, boxH = 260;
+        this.add.rectangle(boxX + boxW / 2, boxY + boxH / 2, boxW, boxH, 0x0c0c0c)
+            .setStrokeStyle(1, accent, 0.25);
 
-        this._typewriterText = this.add.text(boxX + 20, boxY + 20, '', {
-            fontFamily: 'monospace',
-            fontSize: '16px',
-            color: '#cccccc',
-            wordWrap: { width: boxW - 40 },
-            lineSpacing: 6,
+        this._typewriterText = this.add.text(boxX + 28, boxY + 28, '', {
+            fontFamily: 'monospace', fontSize: '15px', color: '#aaaaaa',
+            wordWrap: { width: boxW - 56 }, lineSpacing: 8,
         });
 
-        // New rules section
         if (newRuleIds.length > 0) {
             const rulesForPeriod = allRules.filter(r => newRuleIds.includes(r.id));
-            let ry = 490;
-            const headerTxt = this.add.text(380, ry, 'NEW DIRECTIVES:', {
-                fontFamily: 'monospace', fontSize: '13px', color: '#ffcc44',
+
+            this._rule(420, accent, 0.1);
+
+            this.add.text(320, 440, 'NEW DIRECTIVES', {
+                fontFamily: 'monospace', fontSize: '10px', color: '#3a3a2a', letterSpacing: 5,
             });
-            ry += headerTxt.height + 8;
+
+            let ry = 466;
             rulesForPeriod.forEach(r => {
-                const ruleTxt = this.add.text(380, ry, `  [${r.id}] ${r.text}`, {
-                    fontFamily: 'monospace', fontSize: '13px', color: '#ffaa00',
-                    wordWrap: { width: 840 },
+                const t = this.add.text(320, ry, `[${r.id}]  ${r.text}`, {
+                    fontFamily: 'monospace', fontSize: '13px', color: '#7a6a22',
+                    wordWrap: { width: 860 },
                 });
-                ry += ruleTxt.height + 8;
+                ry += t.height + 10;
                 GameState.rulebookSeenRules.add(r.id);
             });
         }
 
-        // Voice playback while manager speaks (seamless loop + layered pitch)
         const voice = playManagerVoice(this);
+        let muted = false;
 
-        // Acknowledged button — interactive from the start, action guarded by flag
+        const muteBtn = this.add.text(1220, 36, '♪', {
+            fontFamily: 'monospace', fontSize: '16px', color: '#2a2a2a',
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        muteBtn.on('pointerover', () => muteBtn.setColor('#555555'));
+        muteBtn.on('pointerout',  () => muteBtn.setColor(muted ? '#882222' : '#2a2a2a'));
+        muteBtn.on('pointerdown', () => {
+            muted = !muted;
+            voice.setMute(muted);
+            muteBtn.setColor(muted ? '#882222' : '#2a2a2a');
+        });
+
         let textDone = false;
         let transitioning = false;
 
-        const btnBg = this.add.rectangle(960, 620, 220, 50, 0x111111)
-            .setStrokeStyle(1, 0x333333)
+        const btnBg = this.add.rectangle(cx, 648, 200, 38, 0x0c0c0c)
+            .setStrokeStyle(1, 0x1e1e1e)
             .setAlpha(0.4)
             .setInteractive({ useHandCursor: true });
-        const btnText = this.add.text(960, 620, 'ACKNOWLEDGED', {
-            fontFamily: 'monospace', fontSize: '16px', color: '#555555',
+
+        const btnLabel = this.add.text(cx, 648, 'ACKNOWLEDGED', {
+            fontFamily: 'monospace', fontSize: '12px', color: '#333333', letterSpacing: 4,
         }).setOrigin(0.5);
 
         const markTextDone = () => {
             if (textDone) return;
             textDone = true;
-            voice.stop();
-            btnBg.setAlpha(1).setFillStyle(0x1a1a1a).setStrokeStyle(1, 0x888888);
-            btnText.setColor('#cccccc');
+            if (!muted) voice.stop();
+            btnBg.setAlpha(1).setStrokeStyle(1, 0x333333);
+            btnLabel.setColor('#666666');
         };
 
-        btnBg.on('pointerover', () => { if (textDone) { btnBg.setFillStyle(0x2a2a2a); btnText.setColor('#ffffff'); } });
-        btnBg.on('pointerout',  () => { if (textDone) { btnBg.setFillStyle(0x1a1a1a); btnText.setColor('#cccccc'); } });
+        btnBg.on('pointerover', () => { if (textDone) { btnBg.setStrokeStyle(1, accent); btnLabel.setColor('#999999'); } });
+        btnBg.on('pointerout',  () => { if (textDone) { btnBg.setStrokeStyle(1, 0x333333); btnLabel.setColor('#666666'); } });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
             if (!textDone) {
-                // First click while typing — skip to full text
                 typeEvent.remove();
                 this._typewriterText.setText(fullText);
                 markTextDone();
@@ -117,7 +128,6 @@ export default class BriefingScene extends Phaser.Scene {
             this.time.delayedCall(300, () => this.scene.start('Game'));
         });
 
-        // Typewriter reveal
         const fullText = briefing.text;
         let charIndex = 0;
         const typeEvent = this.time.addEvent({
@@ -131,5 +141,11 @@ export default class BriefingScene extends Phaser.Scene {
         });
 
         this.cameras.main.fadeIn(400, 0, 0, 0);
+    }
+
+    _rule(y, color = 0x1c1c1c, alpha = 1) {
+        const g = this.add.graphics();
+        g.lineStyle(1, color, alpha);
+        g.lineBetween(280, y, 1000, y);
     }
 }

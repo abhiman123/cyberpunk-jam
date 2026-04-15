@@ -5,89 +5,141 @@ export default class SummaryScene extends Phaser.Scene {
     constructor() { super('Summary'); }
 
     init(data) {
-        this._mistakes        = data.mistakes        || 0;
-        this._paycheckDelta   = data.paycheckDelta   || 0;
+        this._mistakes         = data.mistakes        || 0;
+        this._paycheckDelta    = data.paycheckDelta   || 0;
         this._notificationText = data.notificationText || '';
     }
 
     create() {
-        const cx = 640;
+        const W  = 1280;
+        const H  = 720;
+        const cx = W / 2;
 
-        this.add.rectangle(640, 360, 1280, 720, 0x060606);
+        this.add.rectangle(cx, H / 2, W, H, 0x060606);
 
-        // Scanlines
         const scan = this.add.graphics();
-        scan.fillStyle(0x000000, 0.07);
-        for (let y = 0; y < 720; y += 4) scan.fillRect(0, y, 1280, 2);
+        scan.fillStyle(0x000000, 0.06);
+        for (let y = 0; y < H; y += 3) scan.fillRect(0, y, W, 1);
 
-        // Header
-        this.add.text(cx, 80, 'SHIFT COMPLETE', {
-            fontFamily: 'monospace', fontSize: '32px', color: '#888888',
+        const accentColor = this._mistakes > 0 ? 0xaa2222 : 0x1a4a2a;
+        this.add.rectangle(cx, 0, W, 2, accentColor).setOrigin(0.5, 0);
+
+        this.add.text(cx, 72, 'END OF SHIFT', {
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            color: '#333333',
+            letterSpacing: 6,
         }).setOrigin(0.5);
 
-        // Divider
-        const div = this.add.graphics();
-        div.lineStyle(1, 0x222222);
-        div.lineBetween(300, 120, 980, 120);
-
-        // Stats
-        const qcColor = this._mistakes > 0 ? '#ff4444' : '#00cc66';
-        const mistakeLabel = this._mistakes === 0 ? 'No violations.' : `${this._mistakes} violation(s) recorded.`;
-
-        this.add.text(cx, 175, 'QC REPORT', {
-            fontFamily: 'monospace', fontSize: '14px', color: '#444444',
+        this.add.text(cx, 102, `PERIOD ${GameState.period}  ·  DAY ${GameState.day} OF 2`, {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            color: '#2a2a2a',
+            letterSpacing: 4,
         }).setOrigin(0.5);
 
-        this.add.text(cx, 210, mistakeLabel, {
-            fontFamily: 'monospace', fontSize: '18px', color: qcColor,
+        this._rule(140, 0x1c1c1c);
+
+        const hasViolations = this._mistakes > 0;
+        const statusColor   = hasViolations ? '#882222' : '#1e5c32';
+        const statusText    = hasViolations
+            ? `${this._mistakes} VIOLATION${this._mistakes > 1 ? 'S' : ''} RECORDED`
+            : 'NO VIOLATIONS';
+
+        this.add.text(cx, 188, 'QC ASSESSMENT', {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            color: '#2e2e2e',
+            letterSpacing: 5,
         }).setOrigin(0.5);
 
-        // Paycheck
-        const paycheckLabel = `Credits deducted: -$${Math.abs(this._paycheckDelta).toFixed(8)}`;
-        this.add.text(cx, 260, paycheckLabel, {
-            fontFamily: 'monospace', fontSize: '14px', color: '#555555',
+        this.add.text(cx, 224, statusText, {
+            fontFamily: 'monospace',
+            fontSize: '26px',
+            color: statusColor,
         }).setOrigin(0.5);
 
-        this.add.text(cx, 290, `Running total: $${Math.max(0, GameState.paycheckTotal).toFixed(8)}`, {
-            fontFamily: 'monospace', fontSize: '13px', color: '#404040',
+        this._rule(268, 0x141414);
+
+        this.add.text(cx, 300, 'COMPENSATION LOG', {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            color: '#2e2e2e',
+            letterSpacing: 5,
         }).setOrigin(0.5);
 
-        // Divider
-        div.lineBetween(300, 330, 980, 330);
+        const deltaStr = `-$${Math.abs(this._paycheckDelta).toFixed(8)}`;
+        const totalStr = `$${Math.max(0, GameState.paycheckTotal).toFixed(8)}`;
 
-        // Notification blip
+        this.add.text(cx - 80, 338, 'DEDUCTED', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#2a2a2a',
+        }).setOrigin(1, 0.5);
+        this.add.text(cx - 64, 338, deltaStr, {
+            fontFamily: 'monospace', fontSize: '13px',
+            color: hasViolations ? '#663333' : '#2a2a2a',
+        }).setOrigin(0, 0.5);
+
+        this.add.text(cx - 80, 362, 'RUNNING', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#2a2a2a',
+        }).setOrigin(1, 0.5);
+        this.add.text(cx - 64, 362, totalStr, {
+            fontFamily: 'monospace', fontSize: '13px', color: '#383838',
+        }).setOrigin(0, 0.5);
+
         if (this._notificationText) {
-            this.add.text(cx, 360, '// INCOMING TRANSMISSION', {
-                fontFamily: 'monospace', fontSize: '11px', color: '#333333',
+            this._rule(410, 0x141414);
+
+            const tagText = this.add.text(cx, 440, '// INCOMING TRANSMISSION', {
+                fontFamily: 'monospace',
+                fontSize: '10px',
+                color: '#2a3a2a',
+                letterSpacing: 3,
             }).setOrigin(0.5);
 
-            this.add.text(cx, 400, this._notificationText, {
+            const msgText = this.add.text(cx, 490, this._notificationText, {
                 fontFamily: 'monospace',
-                fontSize: '15px',
-                color: '#557755',
-                wordWrap: { width: 700 },
+                fontSize: '14px',
+                color: '#3d5c3d',
+                wordWrap: { width: 660 },
                 align: 'center',
-                lineSpacing: 6,
+                lineSpacing: 8,
             }).setOrigin(0.5);
+
+
+            this._flicker(tagText);
+            this._flicker(msgText, 80);
         }
 
-        // Next shift button
-        const btnBg = this.add.rectangle(cx, 580, 220, 50, 0x111111)
-            .setStrokeStyle(1, 0x444444)
+
+        this._rule(600, 0x141414);
+
+        const btnY  = 648;
+        const btnBg = this.add.rectangle(cx, btnY, 200, 38, 0x0c0c0c)
+            .setStrokeStyle(1, 0x282828)
             .setInteractive({ useHandCursor: true });
 
-        const btnText = this.add.text(cx, 580, 'NEXT SHIFT  \u2192', {
-            fontFamily: 'monospace', fontSize: '16px', color: '#cccccc',
+        const btnLabel = this.add.text(cx, btnY, 'NEXT SHIFT', {
+            fontFamily: 'monospace',
+            fontSize: '13px',
+            color: '#444444',
+            letterSpacing: 4,
         }).setOrigin(0.5);
 
         let transitioning = false;
-        btnBg.on('pointerover', () => { btnBg.setFillStyle(0x1e1e1e); btnText.setColor('#ffffff'); });
-        btnBg.on('pointerout',  () => { btnBg.setFillStyle(0x111111); btnText.setColor('#cccccc'); });
+
+        btnBg.on('pointerover', () => {
+            btnBg.setStrokeStyle(1, accentColor);
+            btnLabel.setColor(this._mistakes > 0 ? '#aa2222' : '#2a7a3a');
+        });
+        btnBg.on('pointerout', () => {
+            btnBg.setStrokeStyle(1, 0x282828);
+            btnLabel.setColor('#444444');
+        });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
             transitioning = true;
-            this.cameras.main.fade(350, 0, 0, 0);
-            this.time.delayedCall(350, () => {
+            this.cameras.main.fade(400, 0, 0, 0);
+            this.time.delayedCall(400, () => {
                 const prevPeriod = GameState.period;
                 GameState.advanceDay();
                 if (GameState.period !== prevPeriod) {
@@ -98,11 +150,33 @@ export default class SummaryScene extends Phaser.Scene {
             });
         });
 
-        // Period/day counter at bottom
-        this.add.text(cx, 660, `Period ${GameState.period}  |  Day ${GameState.day} of 2`, {
-            fontFamily: 'monospace', fontSize: '12px', color: '#333333',
-        }).setOrigin(0.5);
+        this.cameras.main.fadeIn(500, 0, 0, 0);
+    }
 
-        this.cameras.main.fadeIn(400, 0, 0, 0);
+
+    _rule(y, color = 0x1c1c1c) {
+        const g = this.add.graphics();
+        g.lineStyle(1, color, 1);
+        g.lineBetween(280, y, 1000, y);
+    }
+
+    _flicker(obj, baseDelay = 0) {
+        const tick = () => {
+            const delay  = baseDelay + Phaser.Math.Between(1800, 4200);
+            const alpha  = Phaser.Math.FloatBetween(0.55, 1.0);
+            const dur    = Phaser.Math.Between(40, 120);
+            this.time.delayedCall(delay, () => {
+                if (!obj.active) return;
+                this.tweens.add({
+                    targets: obj,
+                    alpha,
+                    duration: dur,
+                    yoyo: true,
+                    ease: 'Stepped',
+                    onComplete: tick,
+                });
+            });
+        };
+        tick();
     }
 }
