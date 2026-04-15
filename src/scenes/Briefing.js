@@ -92,12 +92,12 @@ export default class BriefingScene extends Phaser.Scene {
         const markTextDone = () => {
             if (textDone) return;
             textDone = true;
-            btnBg.setAlpha(1).setFillColor(0x1a1a1a).setStrokeStyle(1, 0x888888);
+            btnBg.setAlpha(1).setFillStyle(0x1a1a1a).setStrokeStyle(1, 0x888888);
             btnText.setColor('#cccccc');
         };
 
-        btnBg.on('pointerover', () => { if (textDone) { btnBg.setFillColor(0x2a2a2a); btnText.setColor('#ffffff'); } });
-        btnBg.on('pointerout',  () => { if (textDone) { btnBg.setFillColor(0x1a1a1a); btnText.setColor('#cccccc'); } });
+        btnBg.on('pointerover', () => { if (textDone) { btnBg.setFillStyle(0x2a2a2a); btnText.setColor('#ffffff'); } });
+        btnBg.on('pointerout',  () => { if (textDone) { btnBg.setFillStyle(0x1a1a1a); btnText.setColor('#cccccc'); } });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
             if (!textDone) {

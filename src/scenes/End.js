@@ -53,11 +53,11 @@ export default class EndScene extends Phaser.Scene {
 
         // Not interactive yet — enabled when visible (in _showTitleCard)
         this._playAgainBg.on('pointerover', () => {
-            this._playAgainBg.setFillColor(0x1e1e1e);
+            this._playAgainBg.setFillStyle(0x1e1e1e);
             this._playAgainText.setColor('#ffffff');
         });
         this._playAgainBg.on('pointerout', () => {
-            this._playAgainBg.setFillColor(0x111111);
+            this._playAgainBg.setFillStyle(0x111111);
             this._playAgainText.setColor('#888888');
         });
         this._playAgainBg.on('pointerdown', () => {

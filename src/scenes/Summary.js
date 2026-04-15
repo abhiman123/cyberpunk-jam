@@ -81,8 +81,8 @@ export default class SummaryScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         let transitioning = false;
-        btnBg.on('pointerover', () => { btnBg.setFillColor(0x1e1e1e); btnText.setColor('#ffffff'); });
-        btnBg.on('pointerout',  () => { btnBg.setFillColor(0x111111); btnText.setColor('#cccccc'); });
+        btnBg.on('pointerover', () => { btnBg.setFillStyle(0x1e1e1e); btnText.setColor('#ffffff'); });
+        btnBg.on('pointerout',  () => { btnBg.setFillStyle(0x111111); btnText.setColor('#cccccc'); });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
             transitioning = true;

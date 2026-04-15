@@ -64,12 +64,12 @@ export default class MenuScene extends Phaser.Scene {
 
         let transitioning = false;
         btnBg.on('pointerover', () => {
-            btnBg.setFillColor(0x2a2a2a);
+            btnBg.setFillStyle(0x2a2a2a);
             btnBg.setStrokeStyle(1, 0x888888);
             btnText.setColor('#ffffff');
         });
         btnBg.on('pointerout', () => {
-            btnBg.setFillColor(0x1a1a1a);
+            btnBg.setFillStyle(0x1a1a1a);
             btnBg.setStrokeStyle(1, 0x444444);
             btnText.setColor('#cccccc');
         });
