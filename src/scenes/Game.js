@@ -63,7 +63,7 @@ export default class GameScene extends Phaser.Scene {
         this._buildConveyorStrip();
 
         // ── Panel backgrounds and borders ─────────────────────────────────────
-        const borderGfx = this.add.graphics().setDepth(2);
+        const borderGfx = this.add.graphics().setDepth(81);
         borderGfx.lineStyle(1, 0x1e1e1e, 1);
         borderGfx.strokeRect(PANEL.case.x,    PANEL.headerH, PANEL.case.w,    630);
         borderGfx.strokeRect(PANEL.details.x, PANEL.headerH, PANEL.details.w, 630);
@@ -71,12 +71,12 @@ export default class GameScene extends Phaser.Scene {
 
         this.add.rectangle(
             PANEL.details.x + PANEL.details.w / 2, 365,
-            PANEL.details.w, 630, 0x060606, 0.88
-        ).setDepth(1);
+            PANEL.details.w, 630, 0x060606, 0.98
+        ).setDepth(80);
         this.add.rectangle(
             PANEL.tools.x + PANEL.tools.w / 2, 365,
             PANEL.tools.w, 630, 0x050505, 0.94
-        ).setDepth(1);
+        ).setDepth(80);
 
         // ── Timer bar ─────────────────────────────────────────────────────────
         const duration = TIMER_DURATION[period] || 60;
@@ -182,7 +182,7 @@ export default class GameScene extends Phaser.Scene {
 
         const header = this.add.text(cx, PANEL.headerH + 16, 'INSPECTION LOG', {
             fontFamily: 'monospace', fontSize: '11px', color: '#2a2a2a',
-        }).setOrigin(0.5).setDepth(4);
+        }).setOrigin(0.5).setDepth(101);
 
         const divGfx = this.add.graphics().setDepth(4);
         divGfx.lineStyle(1, 0x181818);
@@ -190,7 +190,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._caseCountText = this.add.text(cx, PANEL.headerH + 46, '', {
             fontFamily: 'monospace', fontSize: '11px', color: '#252525',
-        }).setOrigin(0.5).setDepth(4);
+        }).setOrigin(0.5).setDepth(101);
 
         this._logText = this.add.text(dx + 14, PANEL.headerH + 68, '', {
             fontFamily: 'monospace',
@@ -198,12 +198,12 @@ export default class GameScene extends Phaser.Scene {
             color: '#1e4a44',
             lineSpacing: 5,
             wordWrap: { width: dw - 28 },
-        }).setDepth(4);
+        }).setDepth(101);
 
-        // Gear icon — top right of details panel (per sketch)
+        // Gear icon — top right of details panel
         this._detailsGear = this.add.text(dx + dw - 14, PANEL.headerH + 12, '⚙', {
             fontFamily: 'monospace', fontSize: '18px', color: '#1a2a1e',
-        }).setOrigin(1, 0).setDepth(4);
+        }).setOrigin(1, 0).setDepth(101);
 
         this.tweens.add({
             targets: this._detailsGear,
@@ -213,6 +213,10 @@ export default class GameScene extends Phaser.Scene {
             ease: 'Linear',
         });
 
+        // --- THE FIX FOR DUPLICATE LOGS ---
+        // Clear the global or scene event listener if it already exists 
+        // to prevent stacking when switching periods.
+        this.events.off('zoneRevealed');
         this.events.on('zoneRevealed', (zoneId) => this._appendLog(zoneId));
 
         Animations.fadeIn(this, [header, this._caseCountText, this._logText], { delay: 120 });
@@ -251,10 +255,10 @@ export default class GameScene extends Phaser.Scene {
         const rbBg = this.add.rectangle(cx, 535, bw, 42, 0x001a1a)
             .setStrokeStyle(1, 0x003a3a)
             .setInteractive({ useHandCursor: true })
-            .setDepth(4);
+            .setDepth(100);
         const rbTxt = this.add.text(cx, 535, '[B]  RULEBOOK', {
             fontFamily: 'monospace', fontSize: '13px', color: '#005555',
-        }).setOrigin(0.5).setDepth(5);
+        }).setOrigin(0.5).setDepth(101);
         rbBg.on('pointerover',  () => rbBg.setFillStyle(0x002a2a));
         rbBg.on('pointerout',   () => rbBg.setFillStyle(0x001a1a));
         rbBg.on('pointerdown',  () => {
@@ -392,11 +396,11 @@ export default class GameScene extends Phaser.Scene {
         const btn = this.add.rectangle(x, y, w, 56, bgColor)
             .setStrokeStyle(1, 0x282828)
             .setInteractive({ useHandCursor: true })
-            .setDepth(4);
+            .setDepth(100);
 
         const txt = this.add.text(x, y, label, {
             fontFamily: 'monospace', fontSize: '17px', color: textColor,
-        }).setOrigin(0.5).setDepth(5);
+        }).setOrigin(0.5).setDepth(101);
 
         btn.on('pointerover',  () => btn.setStrokeStyle(2, 0x666666));
         btn.on('pointerout',   () => btn.setStrokeStyle(1, 0x282828));

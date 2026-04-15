@@ -67,7 +67,7 @@ export default class CaseDisplay {
                 0x181818
             ).setStrokeStyle(1, 0x2e2e2e)
              .setInteractive({ useHandCursor: true })
-             .setDepth(5).setAlpha(0);
+             .setDepth(10).setAlpha(0);
             this._track(rect);
 
             const hint = this.scene.add.text(
@@ -78,10 +78,17 @@ export default class CaseDisplay {
             this._track(hint);
 
             const revealText = this.scene.add.text(
-                zx + 7, zy + zone.h / 2,
+                zx + 10, zy + zone.h / 2, // Slight padding from the left edge
                 zone.label,
-                { fontFamily: 'monospace', fontSize: '11px', color: '#00ffcc' }
-            ).setOrigin(0, 0.5).setAlpha(0).setDepth(6);
+                { 
+                    fontFamily: 'monospace', 
+                    fontSize: '11px', 
+                    color: '#00ffcc',
+                    // ADD THESE TWO LINES:
+                    wordWrap: { width: zone.w - 20 }, // Wrap text before it hits the box edge
+                    lineSpacing: 2
+                }
+            ).setOrigin(0, 0.5).setAlpha(0).setDepth(11);
             this._track(revealText);
 
             // Staggered fade in for each zone after conveyor arrives

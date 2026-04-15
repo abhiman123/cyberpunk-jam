@@ -63,7 +63,7 @@ export default class RulebookOverlay {
     isVisible() { return this._visible; }
 
     _build() {
-        const depth = 50;
+        const depth = 101;
 
         // Dim overlay for left panel
         this._dimOverlay = this.scene.add.rectangle(384, 360, 768, 720, 0x000000, 0.5)
