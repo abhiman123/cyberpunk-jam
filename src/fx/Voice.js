@@ -114,5 +114,8 @@ export function playManagerVoice(scene, volume = 0.65) {
             try { dryGain.disconnect(); }    catch (_) {}
             try { wetGain.disconnect(); }    catch (_) {}
         },
+        setMute(muted) {
+            masterGain.gain.value = muted ? 0 : volume * 0.5;
+        },
     };
 }

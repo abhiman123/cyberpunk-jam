@@ -138,11 +138,7 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'monospace', fontSize: '11px', color: '#00cc88',
         }).setOrigin(1, 0).setDepth(3);
 
-        this._gearIcon = this.add.text(1232, 14, '⚙', {
-            fontFamily: 'monospace', fontSize: '15px', color: '#888888',
-        }).setOrigin(0.5, 0).setDepth(3);
-
-        Animations.fadeIn(this, [this._dayText, this._paycheckText, this._gearIcon],
+        Animations.fadeIn(this, [this._dayText, this._paycheckText],
             { duration: 500 });
     }
 
@@ -184,12 +180,16 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'monospace', fontSize: '11px', color: '#00cc88',
         }).setOrigin(0.5).setDepth(101);
 
-        const divGfx = this.add.graphics().setDepth(4);
+        const divGfx = this.add.graphics().setDepth(82);
         divGfx.lineStyle(1, 0x2a2a2a);
         divGfx.lineBetween(dx + 10, PANEL.headerH + 32, dx + dw - 10, PANEL.headerH + 32);
 
-        this._caseCountText = this.add.text(cx, PANEL.headerH + 46, '', {
+        this._caseCountText = this.add.text(cx - 40, PANEL.headerH + 46, '', {
             fontFamily: 'monospace', fontSize: '11px', color: '#aaaaaa',
+        }).setOrigin(0.5).setDepth(101);
+
+        this._zoneCountText = this.add.text(cx + 40, PANEL.headerH + 46, '', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#336655',
         }).setOrigin(0.5).setDepth(101);
 
         this._logText = this.add.text(dx + 14, PANEL.headerH + 68, '', {
@@ -200,26 +200,13 @@ export default class GameScene extends Phaser.Scene {
             wordWrap: { width: dw - 28 },
         }).setDepth(101);
 
-        // Gear icon — top right of details panel
-        this._detailsGear = this.add.text(dx + dw - 14, PANEL.headerH + 12, '⚙', {
-            fontFamily: 'monospace', fontSize: '18px', color: '#1a9a68',
-        }).setOrigin(1, 0).setDepth(101);
-
-        this.tweens.add({
-            targets: this._detailsGear,
-            angle: 360,
-            duration: 9000,
-            repeat: -1,
-            ease: 'Linear',
-        });
-
         // --- THE FIX FOR DUPLICATE LOGS ---
         // Clear the global or scene event listener if it already exists 
         // to prevent stacking when switching periods.
         this.events.off('zoneRevealed');
         this.events.on('zoneRevealed', (zoneId) => this._appendLog(zoneId));
 
-        Animations.fadeIn(this, [header, this._caseCountText, this._logText], { delay: 120 });
+        Animations.fadeIn(this, [header, this._caseCountText, this._zoneCountText, this._logText], { delay: 120 });
     }
 
     _buildToolsPanel(period, activeRules, allRules) {
@@ -230,9 +217,9 @@ export default class GameScene extends Phaser.Scene {
 
         const header = this.add.text(cx, PANEL.headerH + 16, 'MAKE A RULING', {
             fontFamily: 'monospace', fontSize: '11px', color: '#00cc88',
-        }).setOrigin(0.5).setDepth(4);
+        }).setOrigin(0.5).setDepth(101);
 
-        const divGfx = this.add.graphics().setDepth(4);
+        const divGfx = this.add.graphics().setDepth(82);
         divGfx.lineStyle(1, 0x2a2a2a);
         divGfx.lineBetween(tx + 10, PANEL.headerH + 32, tx + tw - 10, PANEL.headerH + 32);
 
@@ -270,7 +257,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._mistakesText = this.add.text(cx, 600, 'Violations: 0', {
             fontFamily: 'monospace', fontSize: '11px', color: '#aaaaaa',
-        }).setOrigin(0.5).setDepth(4);
+        }).setOrigin(0.5).setDepth(101);
 
         Animations.fadeIn(this, [header, this._mistakesText], { delay: 150 });
 
@@ -289,9 +276,11 @@ export default class GameScene extends Phaser.Scene {
 
         this._actionLocked = false;
         this._currentCase  = this._casesQueue[this._caseIndex];
+        this._zonesScanned = 0;
 
         this._logText.setText('');
         this._caseCountText.setText(`Case ${this._caseIndex + 1} / ${this._casesQueue.length}`);
+        this._zoneCountText.setText(`0/${this._currentCase.inspectionZones.length} zones`);
 
         // Timer starts only after the case has slid into place
         this._caseDisplay.load(this._currentCase, () => {
@@ -362,7 +351,14 @@ export default class GameScene extends Phaser.Scene {
         const line = `> ${zone.label.substring(0, 36)}`;
         const cur  = this._logText.text;
         this._logText.setText(cur ? cur + '\n' + line : line);
-        Animations.glitchText(this, this._logText, { duration: 120, finalAlpha: 1 });    
+        Animations.glitchText(this, this._logText, { duration: 120, finalAlpha: 1 });
+
+        this._zonesScanned = (this._zonesScanned || 0) + 1;
+        const total = this._currentCase.inspectionZones.length;
+        const allDone = this._zonesScanned >= total;
+        this._zoneCountText
+            .setText(`${this._zonesScanned}/${total} zones`)
+            .setColor(allDone ? '#00cc88' : '#336655');
     }
 
     _endShift() {
