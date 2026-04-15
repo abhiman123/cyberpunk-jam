@@ -104,7 +104,7 @@ export default class GameScene extends Phaser.Scene {
                 wordWrap: { width: PANEL.case.w - 20 },
                 align: 'center',
                 stroke: '#000000',
-                strokeThickness: 3,
+                strokeThickness: 1,
             }
         ).setOrigin(0.5).setDepth(10).setAlpha(0);
 

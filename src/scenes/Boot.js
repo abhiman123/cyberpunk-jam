@@ -10,6 +10,7 @@ export default class BootScene extends Phaser.Scene {
         this.load.json('notifications', 'src/data/notifications.json');
         this.load.json('briefings',     'src/data/briefings.json');
         this.load.json('schedule',      'src/data/schedule.json');
+        this.load.audio('manager_voice', 'Voice2.wav');
     }
 
     create() {
