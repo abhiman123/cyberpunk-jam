@@ -38,7 +38,7 @@ export default class CaseDisplay {
         const descText = this.scene.add.text(cx, padY + 36, caseData.description, {
             fontFamily: 'monospace',
             fontSize: '11px',
-            color: '#555555',
+            color: '#686868',
             wordWrap: { width: this.panelW - 40 },
             align: 'center',
         }).setOrigin(0.5).setDepth(5);
@@ -46,7 +46,7 @@ export default class CaseDisplay {
 
         // ── Divider ──────────────────────────────────────────────────────────
         const divGfx = this.scene.add.graphics().setDepth(5);
-        divGfx.lineStyle(1, 0x242424);
+        divGfx.lineStyle(1, 0x2e2e2e);
         divGfx.lineBetween(
             this.panelX + 18, padY + 54,
             this.panelX + this.panelW - 18, padY + 54
@@ -65,7 +65,7 @@ export default class CaseDisplay {
                 zx + zone.w / 2, zy + zone.h / 2,
                 zone.w, zone.h,
                 0x181818
-            ).setStrokeStyle(1, 0x2e2e2e)
+            ).setStrokeStyle(1, 0x3a3a3a)
              .setInteractive({ useHandCursor: true })
              .setDepth(10).setAlpha(0);
             this._track(rect);
@@ -73,7 +73,7 @@ export default class CaseDisplay {
             const hint = this.scene.add.text(
                 zx + zone.w / 2, zy + zone.h / 2,
                 '[ inspect ]',
-                { fontFamily: 'monospace', fontSize: '10px', color: '#2e2e2e' }
+                { fontFamily: 'monospace', fontSize: '10px', color: '#505050' }
             ).setOrigin(0.5).setDepth(11).setAlpha(0);
             this._track(hint);
 
@@ -121,7 +121,7 @@ export default class CaseDisplay {
             const flavor = this.scene.add.text(cx, fy,
                 `// ${caseData.moralFlavor}`,
                 {
-                    fontFamily: 'monospace', fontSize: '10px', color: '#303030',
+                    fontFamily: 'monospace', fontSize: '10px', color: '#484848',
                     wordWrap: { width: this.panelW - 56 }, align: 'center',
                     fontStyle: 'italic',
                 }

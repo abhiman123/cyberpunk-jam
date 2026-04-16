@@ -125,7 +125,7 @@ export default class RulebookOverlay {
         const closeHint = this.scene.add.text(640, 660, 'Press [B] or [ESC] to close', {
             fontFamily: 'monospace',
             fontSize: '13px',
-            color: '#006666',
+            color: '#44aaaa',
         }).setOrigin(0.5).setDepth(depth + 2).setVisible(false);
         this._objects.push(closeHint);
     }
