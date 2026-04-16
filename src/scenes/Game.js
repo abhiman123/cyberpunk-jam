@@ -4,6 +4,7 @@ import CaseDisplay        from '../systems/CaseDisplay.js';
 import TimerBar           from '../systems/TimerBar.js';
 import RulebookOverlay    from '../systems/RulebookOverlay.js';
 import Animations         from '../fx/Animations.js';
+import { applyCyberpunkLook, glitchBurst } from '../fx/applyCyberpunkLook.js';
 
 // ── Layout constants ────────────────────────────────────────────────────────
 //
@@ -35,22 +36,20 @@ export default class GameScene extends Phaser.Scene {
         const schedEntry = schedule.find(s => s.period === period && s.day === day);
         const caseIds    = schedEntry ? schedEntry.caseIds : [];
 
-        this._casesQueue    = caseIds.map(id => allCases.find(c => c.id === id)).filter(Boolean);
+        this._casesQueue    = caseIds
+            .map(id => allCases.find(c => c.id === id))
+            .filter(Boolean)
+            .filter(c => !GameState.casesCompleted.includes(c.id));
         this._caseIndex     = 0;
         this._dayMistakes   = 0;
         this._paycheckDelta = 0;
         this._actionLocked  = false;
         this._currentCase   = null;
-        this._pipeline      = null;
+        this._cmFilter      = null;
         this._conveyorTiles = [];
 
-        // ── Post-process pipeline ─────────────────────────────────────────────
-        try {
-            this.cameras.main.setPostPipeline('Cyberpunk');
-            this._pipeline = this.cameras.main.getPostPipeline('Cyberpunk');
-        } catch (e) {
-            // Canvas renderer — pipeline unavailable, continue without it
-        }
+        const fx = applyCyberpunkLook(this);
+        this._cmFilter = fx.cmFilter;
 
         // ── Background ────────────────────────────────────────────────────────
         this.add.image(640, 360, PERIOD_BG_KEY[period] || 'bg_p1').setDepth(0);
@@ -329,7 +328,7 @@ export default class GameScene extends Phaser.Scene {
             this._paycheckText.setText(this._formatPaycheck());
             this._mistakesText.setText(`Violations: ${this._dayMistakes}`);
 
-            if (this._pipeline) this._pipeline.aberrationBurst(this, 0.014, 420);
+            glitchBurst(this, this._cmFilter, 420);
             Animations.shake(this, [this._feedbackText], { intensity: 5, duration: 280 });
 
             const matchBtn = this._actionButtons.find(b => b.action === action);

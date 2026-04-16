@@ -64,7 +64,7 @@ export default class EndScene extends Phaser.Scene {
         this._playAgainBg.on('pointerdown', () => {
             GameState.reset();
             this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => this.scene.start('Menu'));
+            this.time.delayedCall(400, () => this.scene.start('Workshop'));
         });
 
         // ── Begin sequence after 2s ──────────────────────────────────────────

@@ -1,5 +1,4 @@
 import * as Phaser from 'phaser';
-import CyberpunkPipeline from '../fx/CyberpunkPipeline.js';
 
 export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
@@ -14,19 +13,10 @@ export default class BootScene extends Phaser.Scene {
     }
 
     create() {
-        // In Phaser 4, we check the pipeline manager differently
-        if (this.renderer && this.renderer.pipelines) {
-            // Try the standard registration
-            this.cameras.main.setPostFilters([ 'CyberpunkFilter' ]);
-        } else {
-            console.warn("Pipeline registration failed: Renderer not ready or incompatible build.");
-        }
-
         this._generatePlaceholders();
-        
-        // Check if Menu exists; if not, go straight to Game for testing
-        if (this.scene.get('Menu')) {
-            this.scene.start('Menu');
+
+        if (this.scene.get('Workshop')) {
+            this.scene.start('Workshop');
         } else {
             this.scene.start('Game');
         }
