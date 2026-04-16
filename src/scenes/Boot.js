@@ -10,16 +10,13 @@ export default class BootScene extends Phaser.Scene {
         this.load.json('briefings',     'src/data/briefings.json');
         this.load.json('schedule',      'src/data/schedule.json');
         this.load.audio('manager_voice', 'Voice2.wav');
+        this.load.image('bg_main',    'mainview.jpeg');
+        this.load.image('bg_inspect', 'inspectview.jpeg');
     }
 
     create() {
         this._generatePlaceholders();
-
-        if (this.scene.get('Workshop')) {
-            this.scene.start('Workshop');
-        } else {
-            this.scene.start('Game');
-        }
+        this.scene.start('Briefing');
     }
 
     _generatePlaceholders() {
