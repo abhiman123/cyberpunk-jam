@@ -23,18 +23,14 @@ export default class BriefingScene extends Phaser.Scene {
 
         this.add.rectangle(cx, H / 2, W, H, PERIOD_BG[period] || 0x101010);
 
-        const scan = this.add.graphics();
-        scan.fillStyle(0x000000, 0.06);
-        for (let y = 0; y < H; y += 3) scan.fillRect(0, y, W, 1);
-
         this.add.rectangle(cx, 0, W, 2, accent).setOrigin(0.5, 0);
 
         this.add.text(cx, 42, `PERIOD ${period}  ·  DAY ${day} OF 2`, {
-            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa', letterSpacing: 5,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa', letterSpacing: 5,
         }).setOrigin(0.5);
 
         this.add.text(cx, 68, 'MANAGER BRIEFING', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
+            fontFamily: 'Courier New', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
         }).setOrigin(0.5);
 
         this._rule(96, accent, 0.12);
@@ -44,7 +40,7 @@ export default class BriefingScene extends Phaser.Scene {
 
         const managerLabel = briefing.managerType === 'robot' ? 'UNIT_MGR_492' : 'MANAGER';
         this.add.text(160, 460, managerLabel, {
-            fontFamily: 'monospace', fontSize: '10px', color: '#bbbbbb', letterSpacing: 3,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#bbbbbb', letterSpacing: 3,
         }).setOrigin(0.5);
 
         const boxX = 320, boxY = 130, boxW = 860, boxH = 260;
@@ -52,25 +48,30 @@ export default class BriefingScene extends Phaser.Scene {
             .setStrokeStyle(1, accent, 0.25);
 
         this._typewriterText = this.add.text(boxX + 28, boxY + 28, '', {
-            fontFamily: 'monospace', fontSize: '15px', color: '#aaaaaa',
+            fontFamily: 'Courier New', fontSize: '15px', color: '#aaaaaa',
             wordWrap: { width: boxW - 56 }, lineSpacing: 8,
         });
 
         if (newRules.length > 0) {
             this._rule(420, accent, 0.1);
             this.add.text(320, 440, 'NEW DIRECTIVES', {
-                fontFamily: 'monospace', fontSize: '10px', color: '#dddddd', letterSpacing: 5,
+                fontFamily: 'Courier New', fontSize: '10px', color: '#dddddd', letterSpacing: 5,
             });
             let ry = 466;
             newRules.forEach(r => {
                 const t = this.add.text(320, ry, `[${r.id}]  ${r.text}`, {
-                    fontFamily: 'monospace', fontSize: '13px', color: '#ccaa33',
+                    fontFamily: 'Courier New', fontSize: '13px', color: '#ccaa33',
                     wordWrap: { width: 860 },
                 });
                 ry += t.height + 10;
                 GameState.rulebookSeenRules.add(r.id);
             });
         }
+
+        // Scanlines
+        const scan = this.add.graphics();
+        scan.fillStyle(0x000000, 0.3);
+        for (let y = 0; y < H; y += 4) scan.fillRect(0, y, W, 2);
 
         // Music
         this._music = null;
