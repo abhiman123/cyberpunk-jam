@@ -260,22 +260,31 @@ export default class GameScene extends Phaser.Scene {
         });
 
         // ===== RIGHT HALF — ruling + tools =====
-        // (Panel backgrounds are painted into bg_inspectview.jpeg — no rects needed.)
+        // Panel art is painted into bg_inspectview.jpeg. Buttons overlay the art elements.
 
+        // Ruling buttons — centered in the dark panel (x=640–1280, center x=960)
+        // Spaced equally across the panel height (y≈0–490 before gold bar)
         const rulingDefs = [
-            { y: 120, label: 'SCRAP',   textColor: '#ff5544', action: 'scrap'   },
-            { y: 210, label: 'REPAIR',  textColor: '#ffdd44', action: 'repair'  },
-            { y: 300, label: 'APPROVE', textColor: '#44ff88', action: 'approve' },
+            { y: 140, label: 'SCRAP',   fillColor: 0xff3322, dotColor: 0xff3322, textColor: '#ff6655', action: 'scrap'   },
+            { y: 285, label: 'REPAIR',  fillColor: 0xffcc00, dotColor: 0xffcc00, textColor: '#ffdd44', action: 'repair'  },
+            { y: 425, label: 'APPROVE', fillColor: 0x00cc44, dotColor: 0x00cc44, textColor: '#44ff88', action: 'approve' },
         ];
         rulingDefs.forEach(def => {
-            const btnBg = this.add.rectangle(910, def.y, 660, 60, 0x000000, 0)
+            // Semi-transparent colored background so it's clearly clickable but art shows through
+            const btnBg = this.add.rectangle(960, def.y, 580, 68, def.fillColor, 0.18)
+                .setStrokeStyle(2, def.fillColor, 0.85)
                 .setInteractive({ useHandCursor: true });
-            const lbl = this.add.text(910, def.y, def.label, {
-                fontFamily: 'monospace', fontSize: '17px', color: def.textColor,
+
+            // Colored dot on left edge (mirrors art dots)
+            const dot = this.add.circle(690, def.y, 9, def.dotColor, 1.0);
+
+            const lbl = this.add.text(970, def.y, def.label, {
+                fontFamily: 'monospace', fontSize: '20px', color: def.textColor,
+                stroke: '#000000', strokeThickness: 3,
             }).setOrigin(0.5);
 
-            btnBg.on('pointerover', () => btnBg.setFillStyle(0xffffff, 0.08));
-            btnBg.on('pointerout',  () => btnBg.setFillStyle(0x000000, 0));
+            btnBg.on('pointerover', () => btnBg.setFillStyle(def.fillColor, 0.35));
+            btnBg.on('pointerout',  () => btnBg.setFillStyle(def.fillColor, 0.18));
             btnBg.on('pointerdown', () => {
                 if (this._screen !== 'inspection') return;
                 if (this._actionLocked || this._rulebook.isVisible()) return;
@@ -284,24 +293,27 @@ export default class GameScene extends Phaser.Scene {
             });
 
             this._inspectionContainer.add(btnBg);
+            this._inspectionContainer.add(dot);
             this._inspectionContainer.add(lbl);
         });
 
-        // ─ Tool buttons (hammer/scanner) — icons & panel are painted into the bg art ─
+        // Tool buttons — overlaid on the hammer and gun painted in the gold bar (y≈500–720)
         const toolDefs = [
-            { x: 730, key: 'hammer',  label: 'HAMMER'  },
-            { x: 1090, key: 'scanner', label: 'SCANNER' },
+            { x: 790,  key: 'hammer',  label: 'HAMMER'  },
+            { x: 1130, key: 'scanner', label: 'SCANNER' },
         ];
         this._toolBtns = {};
         toolDefs.forEach(t => {
-            const bg = this.add.rectangle(t.x, 530, 210, 130, 0x000000, 0)
+            const bg = this.add.rectangle(t.x, 605, 240, 170, 0xaa8800, 0.15)
+                .setStrokeStyle(2, 0xaa8800, 0.6)
                 .setInteractive({ useHandCursor: true });
-            const lbl  = this.add.text(t.x, 562, t.label, {
-                fontFamily: 'monospace', fontSize: '12px', color: '#aa8833',
+            const lbl = this.add.text(t.x, 667, t.label, {
+                fontFamily: 'monospace', fontSize: '13px', color: '#ccaa33',
+                stroke: '#000000', strokeThickness: 3,
             }).setOrigin(0.5);
 
-            bg.on('pointerover', () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xffffff, 0.08); });
-            bg.on('pointerout',  () => { if (this._selectedTool !== t.key) bg.setFillStyle(0x000000, 0); });
+            bg.on('pointerover', () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xffdd44, 0.22); });
+            bg.on('pointerout',  () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xaa8800, 0.15); });
             bg.on('pointerdown', () => this._onToolSelect(t.key));
 
             this._inspectionContainer.add(bg);
@@ -309,14 +321,16 @@ export default class GameScene extends Phaser.Scene {
             this._toolBtns[t.key] = { bg, lbl };
         });
 
-        // [B] RULEBOOK button
-        const rbBg = this.add.rectangle(910, 626, 300, 36, 0x000000, 0)
+        // [B] RULEBOOK button — bottom strip of gold panel
+        const rbBg = this.add.rectangle(960, 696, 320, 38, 0x001a1a, 0.6)
+            .setStrokeStyle(1, 0x00aaaa, 0.7)
             .setInteractive({ useHandCursor: true });
-        const rbTxt = this.add.text(910, 626, '[B]  RULEBOOK', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#00aaaa',
+        const rbTxt = this.add.text(960, 696, '[B]  RULEBOOK', {
+            fontFamily: 'monospace', fontSize: '13px', color: '#00dddd',
+            stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5);
-        rbBg.on('pointerover', () => rbBg.setFillStyle(0x00aaaa, 0.12));
-        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x000000, 0));
+        rbBg.on('pointerover', () => rbBg.setFillStyle(0x00aaaa, 0.22));
+        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x001a1a, 0.6));
         rbBg.on('pointerdown', () => {
             if (this._screen !== 'inspection') return;
             Animations.buttonPunch(this, rbBg);
@@ -349,11 +363,11 @@ export default class GameScene extends Phaser.Scene {
         this._selectedTool = tool;
         Object.entries(this._toolBtns).forEach(([k, b]) => {
             if (k === tool) {
-                b.bg.setFillStyle(0xffcc44, 0.18);
-                b.lbl.setColor('#ffcc44');
+                b.bg.setFillStyle(0xffcc44, 0.4).setStrokeStyle(2, 0xffcc44, 1.0);
+                b.lbl.setColor('#ffee88');
             } else {
-                b.bg.setFillStyle(0x000000, 0);
-                b.lbl.setColor('#aa8833');
+                b.bg.setFillStyle(0xaa8800, 0.15).setStrokeStyle(2, 0xaa8800, 0.6);
+                b.lbl.setColor('#ccaa33');
             }
         });
     }
@@ -487,8 +501,8 @@ export default class GameScene extends Phaser.Scene {
         this._selectedTool = null;
 
         Object.entries(this._toolBtns).forEach(([, b]) => {
-            b.bg.setFillStyle(0x000000, 0);
-            b.lbl.setColor('#aa8833');
+            b.bg.setFillStyle(0xaa8800, 0.15).setStrokeStyle(2, 0xaa8800, 0.6);
+            b.lbl.setColor('#ccaa33');
         });
         Object.entries(this._zoneBtns).forEach(([, z]) => {
             z.highlighted = false;
