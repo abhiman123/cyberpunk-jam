@@ -6,29 +6,23 @@ export default class TitleScene extends Phaser.Scene {
     create() {
         const W = 1280, H = 720, cx = W / 2, cy = H / 2;
 
-        // Pixel art background at low alpha
-        if (this.textures.exists('bg_mainview')) {
-            this.add.image(cx, cy, 'bg_mainview').setDisplaySize(W, H).setAlpha(0.22);
-        } else {
-            this.add.rectangle(cx, cy, W, H, 0x080808);
-        }
+        // Background
+        this.cameras.main.setBackgroundColor('#161a1f');
 
-        // Scanlines
-        const scan = this.add.graphics();
-        scan.fillStyle(0x000000, 0.18);
-        for (let y = 0; y < H; y += 3) scan.fillRect(0, y, W, 1);
+
 
         // Top tagline
-        this.add.text(cx, 80, '// a bureaucratic horror game', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#445566', letterSpacing: 2,
-        }).setOrigin(0.5);
+        // this.add.text(cx, 80, '// a bureaucratic horror game', {
+        //     fontFamily: 'monospace', fontSize: '13px', color: '#33ff00', letterSpacing: 2,
+        // }).setOrigin(0.5);
 
         // Main title
         this.add.text(cx, 240, "YOU'RE JUST", {
-            fontFamily: 'monospace', fontSize: '64px', color: '#dddddd',
+            fontFamily: 'Courier New', fontSize: '64px', color: '#33ff00',
         }).setOrigin(0.5);
+
         this.add.text(cx, 320, 'A MACHINE.', {
-            fontFamily: 'monospace', fontSize: '64px', color: '#ffffff',
+            fontFamily: 'Courier New', fontSize: '64px', color: '#33ff00',
         }).setOrigin(0.5);
 
         // Divider
@@ -40,7 +34,7 @@ export default class TitleScene extends Phaser.Scene {
         this.add.text(cx, 420,
             'You are Unit #492240182. You inspect robots on a conveyor belt.\nApprove the compliant. Scrap the defective. Repair the repairable.\nDo not ask questions.',
             {
-                fontFamily: 'monospace', fontSize: '14px', color: '#778899',
+                fontFamily: 'Courier New', fontSize: '14px', color: '#33ff00',
                 align: 'center', lineSpacing: 8,
             }
         ).setOrigin(0.5);
@@ -50,8 +44,8 @@ export default class TitleScene extends Phaser.Scene {
         const btnBg = this.add.rectangle(cx, 600, 240, 44, 0x0a0a0a)
             .setStrokeStyle(1, 0x334455)
             .setInteractive({ useHandCursor: true });
-        const btnLabel = this.add.text(cx, 600, '[ BEGIN SHIFT ]', {
-            fontFamily: 'monospace', fontSize: '15px', color: '#778899', letterSpacing: 3,
+        const btnLabel = this.add.text(cx, 600, 'BEGIN SHIFT', {
+            fontFamily: 'Courier New', fontSize: '15px', color: '#dddd', letterSpacing: 3,
         }).setOrigin(0.5);
 
         // Flicker the button in after 0.8s
@@ -82,6 +76,11 @@ export default class TitleScene extends Phaser.Scene {
             this.time.delayedCall(400, () => this.scene.start('Briefing'));
         });
 
-        this.cameras.main.fadeIn(600, 0, 0, 0);
+        // Scanlines
+        const scan = this.add.graphics();
+        scan.fillStyle(0x000000, 0.18);
+        for (let y = 0; y < H; y += 3) scan.fillRect(0, y, W, 1);
+
+        this.cameras.main.fadeIn(2000);
     }
 }
