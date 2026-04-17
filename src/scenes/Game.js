@@ -173,19 +173,12 @@ export default class GameScene extends Phaser.Scene {
     _buildInspectionScreen() {
         this._inspectionContainer = this.add.container(0, 0).setDepth(10);
 
-        // Full dark background
-        const bg = this.add.rectangle(640, 385, 1280, 670, 0x080808, 1.0);
-        this._inspectionContainer.add(bg);
-
         if (this.textures.exists('bg_inspectview')) {
-            const inspBg = this.add.image(640, 385, 'bg_inspectview').setDisplaySize(1280, 670).setAlpha(0.35);
+            const inspBg = this.add.image(640, 360, 'bg_inspectview').setDisplaySize(1280, 720).setAlpha(1.0);
             this._inspectionContainer.add(inspBg);
         }
 
         // ===== LEFT HALF — unit + zones + log =====
-        const leftBg = this.add.rectangle(255, 385, 510, 670, 0x050505, 0.95)
-            .setStrokeStyle(1, 0x2a2a3a, 0.7);
-        this._inspectionContainer.add(leftBg);
 
         // Unit name and description
         this._inspUnitName = this.add.text(255, 72, '', {
@@ -236,8 +229,7 @@ export default class GameScene extends Phaser.Scene {
         });
 
         // Inspection log panel
-        const logBg = this.add.rectangle(255, 590, 480, 185, 0x040408, 0.95)
-            .setStrokeStyle(1, 0x1a1a2a, 0.8);
+        const logBg = this.add.rectangle(255, 590, 480, 185, 0x000000, 0.55);
         this._inspectionContainer.add(logBg);
 
         const logHeader = this.add.text(255, 504, 'INSPECTION LOG  (scroll to review)', {
@@ -268,36 +260,22 @@ export default class GameScene extends Phaser.Scene {
         });
 
         // ===== RIGHT HALF — ruling + tools =====
-        const rightBg = this.add.rectangle(910, 385, 740, 670, 0x060606, 0.95)
-            .setStrokeStyle(1, 0x2a2a2a, 0.6);
-        this._inspectionContainer.add(rightBg);
-
-        // ─ Ruling panel (top-right, gray) ─
-        const ruleBg = this.add.rectangle(910, 210, 700, 330, 0x0a0a0a)
-            .setStrokeStyle(1, 0x444444, 0.5);
-        this._inspectionContainer.add(ruleBg);
-
-        const rulingHeader = this.add.text(910, 67, 'MAKE A RULING', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#666666', letterSpacing: 4,
-        }).setOrigin(0.5);
-        this._inspectionContainer.add(rulingHeader);
+        // (Panel backgrounds are painted into bg_inspectview.jpeg — no rects needed.)
 
         const rulingDefs = [
-            { y: 120, label: 'SCRAP',   dotColor: 0xff3322, textColor: '#ff5544', action: 'scrap'   },
-            { y: 210, label: 'REPAIR',  dotColor: 0xffcc00, textColor: '#ffdd44', action: 'repair'  },
-            { y: 300, label: 'APPROVE', dotColor: 0x00cc44, textColor: '#44ff88', action: 'approve' },
+            { y: 120, label: 'SCRAP',   textColor: '#ff5544', action: 'scrap'   },
+            { y: 210, label: 'REPAIR',  textColor: '#ffdd44', action: 'repair'  },
+            { y: 300, label: 'APPROVE', textColor: '#44ff88', action: 'approve' },
         ];
         rulingDefs.forEach(def => {
-            const btnBg = this.add.rectangle(910, def.y, 660, 60, 0x111111)
-                .setStrokeStyle(1, 0x333333)
+            const btnBg = this.add.rectangle(910, def.y, 660, 60, 0x000000, 0)
                 .setInteractive({ useHandCursor: true });
-            const dot = this.add.circle(596, def.y, 7, def.dotColor, 0.9);
             const lbl = this.add.text(910, def.y, def.label, {
                 fontFamily: 'monospace', fontSize: '17px', color: def.textColor,
             }).setOrigin(0.5);
 
-            btnBg.on('pointerover', () => btnBg.setStrokeStyle(1, 0x666666));
-            btnBg.on('pointerout',  () => btnBg.setStrokeStyle(1, 0x333333));
+            btnBg.on('pointerover', () => btnBg.setFillStyle(0xffffff, 0.08));
+            btnBg.on('pointerout',  () => btnBg.setFillStyle(0x000000, 0));
             btnBg.on('pointerdown', () => {
                 if (this._screen !== 'inspection') return;
                 if (this._actionLocked || this._rulebook.isVisible()) return;
@@ -306,53 +284,39 @@ export default class GameScene extends Phaser.Scene {
             });
 
             this._inspectionContainer.add(btnBg);
-            this._inspectionContainer.add(dot);
             this._inspectionContainer.add(lbl);
         });
 
-        // ─ Tool bar (bottom-right, gold panel) ─
-        const toolBg = this.add.rectangle(910, 540, 700, 210, 0x0d0b00)
-            .setStrokeStyle(1, 0x554400, 0.7);
-        this._inspectionContainer.add(toolBg);
-
-        const toolHeader = this.add.text(910, 446, 'SELECT TOOL', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#665500', letterSpacing: 3,
-        }).setOrigin(0.5);
-        this._inspectionContainer.add(toolHeader);
-
+        // ─ Tool buttons (hammer/scanner) — icons & panel are painted into the bg art ─
         const toolDefs = [
-            { x: 730, key: 'hammer',  label: 'HAMMER',  icon: 'tool_hammer'  },
-            { x: 1090, key: 'scanner', label: 'SCANNER', icon: 'tool_scanner' },
+            { x: 730, key: 'hammer',  label: 'HAMMER'  },
+            { x: 1090, key: 'scanner', label: 'SCANNER' },
         ];
         this._toolBtns = {};
         toolDefs.forEach(t => {
-            const bg = this.add.rectangle(t.x, 530, 210, 130, 0x110f00)
-                .setStrokeStyle(1, 0x554400)
+            const bg = this.add.rectangle(t.x, 530, 210, 130, 0x000000, 0)
                 .setInteractive({ useHandCursor: true });
-            const icon = this.add.image(t.x, 510, t.icon).setScale(1.2);
             const lbl  = this.add.text(t.x, 562, t.label, {
                 fontFamily: 'monospace', fontSize: '12px', color: '#aa8833',
             }).setOrigin(0.5);
 
-            bg.on('pointerover', () => { if (this._selectedTool !== t.key) bg.setStrokeStyle(1, 0x998822); });
-            bg.on('pointerout',  () => { if (this._selectedTool !== t.key) bg.setStrokeStyle(1, 0x554400); });
+            bg.on('pointerover', () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xffffff, 0.08); });
+            bg.on('pointerout',  () => { if (this._selectedTool !== t.key) bg.setFillStyle(0x000000, 0); });
             bg.on('pointerdown', () => this._onToolSelect(t.key));
 
             this._inspectionContainer.add(bg);
-            this._inspectionContainer.add(icon);
             this._inspectionContainer.add(lbl);
             this._toolBtns[t.key] = { bg, lbl };
         });
 
         // [B] RULEBOOK button
-        const rbBg = this.add.rectangle(910, 626, 300, 36, 0x001a1a)
-            .setStrokeStyle(1, 0x003a3a)
+        const rbBg = this.add.rectangle(910, 626, 300, 36, 0x000000, 0)
             .setInteractive({ useHandCursor: true });
         const rbTxt = this.add.text(910, 626, '[B]  RULEBOOK', {
             fontFamily: 'monospace', fontSize: '12px', color: '#00aaaa',
         }).setOrigin(0.5);
-        rbBg.on('pointerover', () => rbBg.setFillStyle(0x002a2a));
-        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x001a1a));
+        rbBg.on('pointerover', () => rbBg.setFillStyle(0x00aaaa, 0.12));
+        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x000000, 0));
         rbBg.on('pointerdown', () => {
             if (this._screen !== 'inspection') return;
             Animations.buttonPunch(this, rbBg);
@@ -385,10 +349,10 @@ export default class GameScene extends Phaser.Scene {
         this._selectedTool = tool;
         Object.entries(this._toolBtns).forEach(([k, b]) => {
             if (k === tool) {
-                b.bg.setStrokeStyle(3, 0xffcc44);
+                b.bg.setFillStyle(0xffcc44, 0.18);
                 b.lbl.setColor('#ffcc44');
             } else {
-                b.bg.setStrokeStyle(1, 0x554400);
+                b.bg.setFillStyle(0x000000, 0);
                 b.lbl.setColor('#aa8833');
             }
         });
@@ -523,7 +487,7 @@ export default class GameScene extends Phaser.Scene {
         this._selectedTool = null;
 
         Object.entries(this._toolBtns).forEach(([, b]) => {
-            b.bg.setStrokeStyle(1, 0x554400);
+            b.bg.setFillStyle(0x000000, 0);
             b.lbl.setColor('#aa8833');
         });
         Object.entries(this._zoneBtns).forEach(([, z]) => {
