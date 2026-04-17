@@ -134,7 +134,7 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorContainer.add(bg);
 
         // Monitor text overlaid on the pixel art screen (left panel area)
-        this._monitorText = this.add.text(120, 375,
+        this._monitorText = this.add.text(130, 375,
             'AWAITING UNIT\n\nSTATUS: READY', {
             fontFamily: 'monospace', fontSize: '10px', color: '#301934',
             align: 'center', lineSpacing: 4,
