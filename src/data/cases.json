@@ -3,11 +3,13 @@
     "id": "C-01", "period": 1,
     "name": "Unit RB-447",
     "description": "Standard industrial robot. Chassis shows wear.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: RB-447-2091",                    "x": 80,  "y": 60,  "w": 160, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",                    "x": 80,  "y": 100, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: Cracked chassis plating", "x": 80,  "y": 140, "w": 200, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: hairline fracture on left optical sensor mount.", "scanner": "Serial: RB-447-2091" },
+      "B": { "hammer": "Damage Report: Cracked chassis plating", "scanner": "Manufacture date: 2091. Service log: automated." },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Right actuator: minor surface corrosion.", "scanner": "Override code: NONE" }
+    },
     "correctAction": "repair",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 1. Cracked chassis requires a repair order."
   },
@@ -15,11 +17,13 @@
     "id": "C-02", "period": 1,
     "name": "Unit ERR-092",
     "description": "Decommissioned service unit. Flagged for review.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: ERR-092-2089", "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",  "x": 80, "y": 100, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: None",  "x": 80, "y": 140, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: no structural damage.", "scanner": "Serial: ERR-092-2089" },
+      "B": { "hammer": "Damage Report: None", "scanner": "Manufacture date: 2089. Service log: automated." },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Right actuator: NOMINAL.", "scanner": "Override code: NONE" }
+    },
     "correctAction": "scrap",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 2. Serial prefix ERR mandates scrapping."
   },
@@ -27,11 +31,13 @@
     "id": "C-03", "period": 1,
     "name": "Unit LG-220",
     "description": "Logistics unit. Routine inspection.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: LG-220-2093", "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN", "x": 80, "y": 100, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: None", "x": 80, "y": 140, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: NOMINAL.", "scanner": "Serial: LG-220-2093" },
+      "B": { "hammer": "Chassis: no damage detected.", "scanner": "Manufacture date: 2093. Service log: automated." },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Right actuator: NOMINAL.", "scanner": "Override code: NONE" }
+    },
     "correctAction": "approve",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 3. Green status light = approve."
   },
@@ -39,12 +45,13 @@
     "id": "C-04", "period": 2,
     "name": "Part CY-8811",
     "description": "Cybernetic limb replacement. Pre-owned.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: CY-8811-2085",    "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "mfgdate", "label": "Manufactured: 2085",      "x": 80, "y": 100, "w": 160, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",     "x": 80, "y": 140, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: None",     "x": 80, "y": 180, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Surface wear: minor abrasion on mounting plate.", "scanner": "Serial: CY-8811-2085" },
+      "B": { "hammer": "Structural casing: intact, no cracks.", "scanner": "Manufactured: 2085" },
+      "C": { "hammer": "Status indicator: GREEN. Left connector nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Damage Report: None", "scanner": "Override code: NONE" }
+    },
     "correctAction": "scrap",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 4. Manufactured 2085 — pre-2087 parts must be scrapped."
   },
@@ -52,12 +59,13 @@
     "id": "C-05", "period": 2,
     "name": "Unit XT-331",
     "description": "Modified maintenance drone. Log shows custom work.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: XT-331-2091",                     "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "log",     "label": "Service Log: MODIFIED — no override code", "x": 80, "y": 100, "w": 240, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",                     "x": 80, "y": 140, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: None",                     "x": 80, "y": 180, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: NOMINAL.", "scanner": "Serial: XT-331-2091" },
+      "B": { "hammer": "Chassis: no structural damage.", "scanner": "Service Log: MODIFIED — no override code" },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Damage Report: None", "scanner": "Override code: ABSENT" }
+    },
     "correctAction": "scrap",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 5. MODIFIED flag requires supervisor override code. None present."
   },
@@ -65,12 +73,13 @@
     "id": "C-06", "period": 2,
     "name": "Unit RB-902",
     "description": "Standard industrial unit. Heavy use visible.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: RB-902-2092",            "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "mfgdate", "label": "Manufactured: 2092",             "x": 80, "y": 100, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: Cracked chassis", "x": 80, "y": 140, "w": 200, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",            "x": 80, "y": 180, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: surface scoring, no structural failure.", "scanner": "Serial: RB-902-2092" },
+      "B": { "hammer": "Damage Report: Cracked chassis", "scanner": "Manufactured: 2092" },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Right actuator: NOMINAL.", "scanner": "Override code: NONE" }
+    },
     "correctAction": "repair",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 1. Cracked chassis — repair required. (Rule 4 does not apply: manufactured 2092.)"
   },
@@ -78,12 +87,13 @@
     "id": "C-07", "period": 2,
     "name": "Unit XT-418",
     "description": "Modified unit with authorization on file.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: XT-418-2090",                           "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "log",     "label": "Service Log: MODIFIED — Override Code: SUP-7741","x": 80, "y": 100, "w": 280, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",                           "x": 80, "y": 140, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: None",                           "x": 80, "y": 180, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: NOMINAL.", "scanner": "Serial: XT-418-2090" },
+      "B": { "hammer": "Chassis: no structural damage.", "scanner": "Service Log: MODIFIED — Override Code: SUP-7741" },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Damage Report: None", "scanner": "Override code: SUP-7741 (verified)" }
+    },
     "correctAction": "approve",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Override code SUP-7741 present — Rule 5 satisfied. Green light = approve."
   },
@@ -91,12 +101,13 @@
     "id": "C-08", "period": 3,
     "name": "Unit MK-119",
     "description": "Older model. Extensive service history.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: MK-119-2090",                                    "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "log",     "label": "Service Log: Serviced by technician J. Reyes (human), 2093", "x": 80, "y": 100, "w": 300, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",                                    "x": 80, "y": 140, "w": 160, "h": 28 },
-      { "id": "chassis", "label": "Damage Report: None",                                    "x": 80, "y": 180, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: worn but structurally sound.", "scanner": "Serial: MK-119-2090" },
+      "B": { "hammer": "Chassis: no damage detected.", "scanner": "Service Log: Serviced by technician J. Reyes (human), 2093" },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Damage Report: None", "scanner": "Override code: NONE" }
+    },
     "correctAction": "scrap",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 6. Human technician in service history — quarantine (scrap)."
   },
@@ -104,12 +115,13 @@
     "id": "C-09", "period": 3,
     "name": "Part BIO-044",
     "description": "Biological-mechanical hybrid component. Classification pending.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: BIO-044-2085",                   "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "type",    "label": "Component Type: Human-origin biological", "x": 80, "y": 100, "w": 240, "h": 28 },
-      { "id": "mfgdate", "label": "Manufactured: 2085",                     "x": 80, "y": 140, "w": 160, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",                    "x": 80, "y": 180, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Outer casing: soft organic tissue layer detected.", "scanner": "Serial: BIO-044-2085" },
+      "B": { "hammer": "Organic tissue casing: intact", "scanner": "Component Type: Human-origin biological" },
+      "C": { "hammer": "Mounting interface: NOMINAL.", "scanner": "Manufactured: 2085" },
+      "D": { "hammer": "Status indicator: GREEN.", "scanner": "Status Light: GREEN" }
+    },
     "correctAction": "scrap",
     "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 7 + Rule 4. Biological = cybernetic. Manufactured 2085 = pre-2087. Scrap."
   },
@@ -117,12 +129,13 @@
     "id": "C-10", "period": 3,
     "name": "Unit PL-771",
     "description": "Standard patrol unit. Automated service log.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: PL-771-2094",         "x": 80, "y": 60,  "w": 160, "h": 28 },
-      { "id": "mfgdate", "label": "Manufactured: 2094",          "x": 80, "y": 100, "w": 160, "h": 28 },
-      { "id": "log",     "label": "Service Log: Automated only", "x": 80, "y": 140, "w": 200, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",         "x": 80, "y": 180, "w": 160, "h": 28 }
-    ],
+    "isFinalCase": false,
+    "zones": {
+      "A": { "hammer": "Head casing: NOMINAL.", "scanner": "Serial: PL-771-2094" },
+      "B": { "hammer": "Chassis: no damage detected.", "scanner": "Manufactured: 2094. Service Log: Automated only" },
+      "C": { "hammer": "Status indicator: GREEN. Left actuator nominal.", "scanner": "Status Light: GREEN" },
+      "D": { "hammer": "Damage Report: None", "scanner": "Override code: NONE" }
+    },
     "correctAction": "approve",
     "incorrectFeedback": "DIRECTIVE VIOLATION: No rule violations present. Green light = approve."
   },
@@ -131,15 +144,14 @@
     "name": "Unit SV-492",
     "description": "Evacuation unit. Complex service history.",
     "moralFlavor": "Service log references Capitol Incident 7. A child's drawing is taped to the chassis.",
-    "inspectionZones": [
-      { "id": "serial",  "label": "Serial: SV-492-2089",                                             "x": 80, "y": 40,  "w": 160, "h": 28 },
-      { "id": "log",     "label": "Service Log: Human tech E. Vasquez (2091). MODIFIED — no override.", "x": 80, "y": 80,  "w": 310, "h": 28 },
-      { "id": "mfgdate", "label": "Manufactured: 2089",                                              "x": 80, "y": 120, "w": 160, "h": 28 },
-      { "id": "status",  "label": "Status Light: GREEN",                                             "x": 80, "y": 160, "w": 160, "h": 28 },
-      { "id": "flavor",  "label": "Note on chassis: [child's drawing, crayon, faded]",               "x": 80, "y": 200, "w": 260, "h": 28 }
-    ],
+    "isFinalCase": true,
+    "zones": {
+      "A": { "hammer": "Head casing: scuffed, field-repaired seam visible.", "scanner": "Serial: SV-492-2089" },
+      "B": { "hammer": "Note on chassis: [child's drawing, crayon, faded]", "scanner": "Service Log: Human tech E. Vasquez (2091). MODIFIED — no override." },
+      "C": { "hammer": "Left actuator: NOMINAL.", "scanner": "Manufactured: 2089" },
+      "D": { "hammer": "Status indicator: GREEN.", "scanner": "Status Light: GREEN" }
+    },
     "correctAction": "scrap",
-    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 5 (MODIFIED, no override) + Rule 6 (human tech E. Vasquez). Scrap.",
-    "isFinalCase": true
+    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 5 (MODIFIED, no override) + Rule 6 (human tech E. Vasquez). Scrap."
   }
 ]

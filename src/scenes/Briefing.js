@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
-import { playManagerVoice } from '../fx/Voice.js';
+import Animations from '../fx/Animations.js';
 
 const PERIOD_BG     = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
 const PERIOD_ACCENT = { 1: 0x886644, 2: 0x446688, 3: 0x2244aa };
@@ -9,16 +9,14 @@ export default class BriefingScene extends Phaser.Scene {
     constructor() { super('Briefing'); }
 
     create() {
-        const { period, day, activeRules } = GameState;
+        const { period, day } = GameState;
         const allBriefings = this.cache.json.get('briefings');
         const allRules     = this.cache.json.get('rules');
 
         const briefing = allBriefings.find(b => b.period === period && b.day === day)
             || { managerType: 'human', text: 'No directives. Complete your shift.' };
 
-        const newRuleIds = allRules
-            .filter(r => r.period === period && !GameState.rulebookSeenRules.has(r.id))
-            .map(r => r.id);
+        const newRules = allRules.filter(r => r.period === period && !GameState.rulebookSeenRules.has(r.id));
 
         const accent = PERIOD_ACCENT[period] || 0x333333;
         const W = 1280, H = 720, cx = W / 2;
@@ -58,17 +56,13 @@ export default class BriefingScene extends Phaser.Scene {
             wordWrap: { width: boxW - 56 }, lineSpacing: 8,
         });
 
-        if (newRuleIds.length > 0) {
-            const rulesForPeriod = allRules.filter(r => newRuleIds.includes(r.id));
-
+        if (newRules.length > 0) {
             this._rule(420, accent, 0.1);
-
             this.add.text(320, 440, 'NEW DIRECTIVES', {
                 fontFamily: 'monospace', fontSize: '10px', color: '#dddddd', letterSpacing: 5,
             });
-
             let ry = 466;
-            rulesForPeriod.forEach(r => {
+            newRules.forEach(r => {
                 const t = this.add.text(320, ry, `[${r.id}]  ${r.text}`, {
                     fontFamily: 'monospace', fontSize: '13px', color: '#ccaa33',
                     wordWrap: { width: 860 },
@@ -78,22 +72,16 @@ export default class BriefingScene extends Phaser.Scene {
             });
         }
 
-        const voice = playManagerVoice(this);
-        let muted = false;
+        // Music
+        this._music = null;
+        if (this.cache.audio.has('music_manager')) {
+            this._music = this.sound.add('music_manager', { loop: true, volume: 0 });
+            this._music.play();
+            this.tweens.add({ targets: this._music, volume: 0.7, duration: 800 });
+        }
 
-        const muteBtn = this.add.text(1220, 36, '♪', {
-            fontFamily: 'monospace', fontSize: '16px', color: '#777777',
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-        muteBtn.on('pointerover', () => muteBtn.setColor('#aaaaaa'));
-        muteBtn.on('pointerout',  () => muteBtn.setColor(muted ? '#ff4444' : '#777777'));
-        muteBtn.on('pointerdown', () => {
-            muted = !muted;
-            voice.setMute(muted);
-            muteBtn.setColor(muted ? '#ff4444' : '#777777');
-        });
-
-        let textDone = false;
+        // ACKNOWLEDGED button
+        let textDone    = false;
         let transitioning = false;
 
         const btnBg = this.add.rectangle(cx, 648, 200, 38, 0x0c0c0c)
@@ -108,9 +96,21 @@ export default class BriefingScene extends Phaser.Scene {
         const markTextDone = () => {
             if (textDone) return;
             textDone = true;
-            if (!muted) voice.stop();
             btnBg.setAlpha(1).setStrokeStyle(1, 0x888888);
             btnLabel.setColor('#dddddd');
+        };
+
+        const doTransition = () => {
+            transitioning = true;
+            if (this._music) {
+                this.tweens.add({
+                    targets: this._music, volume: 0, duration: 400,
+                    onComplete: () => { this._music.stop(); this.scene.start('Game'); },
+                });
+            } else {
+                this.cameras.main.fade(300, 0, 0, 0);
+                this.time.delayedCall(300, () => this.scene.start('Game'));
+            }
         };
 
         btnBg.on('pointerover', () => { if (textDone) { btnBg.setStrokeStyle(1, accent); btnLabel.setColor('#ffffff'); } });
@@ -123,22 +123,11 @@ export default class BriefingScene extends Phaser.Scene {
                 markTextDone();
                 return;
             }
-            transitioning = true;
-            this.cameras.main.fade(300, 0, 0, 0);
-            this.time.delayedCall(300, () => this.scene.start('Game'));
+            doTransition();
         });
 
         const fullText = briefing.text;
-        let charIndex = 0;
-        const typeEvent = this.time.addEvent({
-            delay: 38,
-            repeat: fullText.length - 1,
-            callback: () => {
-                charIndex++;
-                this._typewriterText.setText(fullText.substring(0, charIndex));
-                if (charIndex >= fullText.length) markTextDone();
-            },
-        });
+        const typeEvent = Animations.typewriter(this, this._typewriterText, fullText, 38, markTextDone);
 
         this.cameras.main.fadeIn(400, 0, 0, 0);
     }
