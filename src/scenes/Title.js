@@ -66,15 +66,8 @@ export default class TitleScene extends Phaser.Scene {
 
         btnBg.on('pointerup', () => {
             if (!ready) return;
-            this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => this.scene.start('Briefing'));
-        });
-
-        // Any key also starts
-        this.input.keyboard.once('keydown', () => {
-            if (!ready) return;
-            this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => this.scene.start('Briefing'));
+            this.cameras.main.fadeOut(400, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Briefing'));
         });
 
         // Scanlines
