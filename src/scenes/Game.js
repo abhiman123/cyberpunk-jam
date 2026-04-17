@@ -134,7 +134,7 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorContainer.add(bg);
 
         // Monitor text overlaid on the pixel art screen (left panel area)
-        this._monitorText = this.add.text(113, 255,
+        this._monitorText = this.add.text(113, 290,
             'AWAITING UNIT\n\nSTATUS: READY', {
             fontFamily: 'monospace', fontSize: '10px', color: '#00cc55',
             align: 'center', lineSpacing: 4,
@@ -142,7 +142,7 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorContainer.add(this._monitorText);
 
         // Unit container — rides on the belt, Y tuned to pixel art belt position
-        this._unitContainer  = this.add.container(1400, 390).setDepth(15);
+        this._unitContainer  = this.add.container(1400, 420).setDepth(15);
         const unitSpr        = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText   = this.add.text(0, 115, '', {
             fontFamily: 'monospace', fontSize: '13px', color: '#ccddee',
@@ -240,16 +240,32 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0x1a1a2a, 0.8);
         this._inspectionContainer.add(logBg);
 
-        const logHeader = this.add.text(255, 504, 'INSPECTION LOG', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#005544', letterSpacing: 3,
+        const logHeader = this.add.text(255, 504, 'INSPECTION LOG  (scroll to review)', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#005544', letterSpacing: 2,
         }).setOrigin(0.5);
         this._inspectionContainer.add(logHeader);
 
-        this._logObj = this.add.text(30, 515, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#00cc88',
-            wordWrap: { width: 460 }, lineSpacing: 5,
+        // Scrollable log container clipped to the panel
+        const LOG_X = 15, LOG_TOP = 503, LOG_W = 480, LOG_H = 178;
+        const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
+        maskShape.fillRect(LOG_X, LOG_TOP, LOG_W, LOG_H);
+        const logMask = maskShape.createGeometryMask();
+
+        this._logContainerBaseY = LOG_TOP + 4;
+        this._logContainer = this.add.container(LOG_X + 6, this._logContainerBaseY);
+        this._logContainer.setMask(logMask);
+        this._inspectionContainer.add(this._logContainer);
+
+        this._logLineHeight = 16;
+        this._logScrollY    = 0;
+        this._logPanelH     = LOG_H;
+
+        this.input.on('wheel', (_ptr, _objs, _dx, dy) => {
+            if (this._screen !== 'inspection') return;
+            const maxScroll = Math.max(0, this._logLines.length * this._logLineHeight - LOG_H + 8);
+            this._logScrollY = Phaser.Math.Clamp(this._logScrollY + dy * 0.4, 0, maxScroll);
+            this._updateLogScroll();
         });
-        this._inspectionContainer.add(this._logObj);
 
         // ===== RIGHT HALF — ruling + tools =====
         const rightBg = this.add.rectangle(910, 385, 740, 670, 0x060606, 0.95)
@@ -385,8 +401,7 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
         const key = `${zoneId}:${this._selectedTool}`;
-        if (this._inspectedZones.has(key)) return;
-        this._inspectedZones.add(key);
+        this._inspectedZones.add(key); // still track for zone highlight
 
         const result = this._currentCase.zones[zoneId][this._selectedTool];
         this._appendLog(`[${zoneId}/${this._selectedTool.toUpperCase()}] ${result}`);
@@ -395,11 +410,26 @@ export default class GameScene extends Phaser.Scene {
         if (this.cache.audio.has('sfx_reveal')) this.sound.play('sfx_reveal', { volume: 0.7 });
     }
 
+    _updateLogScroll() {
+        this._logContainer.y = this._logContainerBaseY - this._logScrollY;
+    }
+
     _appendLog(text) {
+        const idx = this._logLines.length;
         this._logLines.push(text);
-        if (this._logLines.length > 6) this._logLines.shift();
-        this._logObj.setText(this._logLines.join('\n'));
-        Animations.glitchText(this, this._logObj, { duration: 120, finalAlpha: 1 });
+        const lineObj = this.add.text(0, idx * this._logLineHeight, text, {
+            fontFamily: 'monospace', fontSize: '10px', color: '#00cc88',
+            wordWrap: { width: 460 }, lineSpacing: 3,
+        });
+        this._logContainer.add(lineObj);
+        Animations.glitchText(this, lineObj, { duration: 120, finalAlpha: 1 });
+
+        // Auto-scroll to bottom so newest entry is visible
+        const totalH = (this._logLines.length) * this._logLineHeight;
+        if (totalH > this._logPanelH) {
+            this._logScrollY = totalH - this._logPanelH + 8;
+            this._updateLogScroll();
+        }
     }
 
     _highlightZone(zoneId) {
@@ -486,7 +516,9 @@ export default class GameScene extends Phaser.Scene {
         // Reset inspection state
         this._inspectedZones = new Set();
         this._logLines = [];
-        this._logObj.setText('');
+        this._logContainer.removeAll(true);
+        this._logScrollY = 0;
+        this._updateLogScroll();
         this._actionLocked = false;
         this._selectedTool = null;
 
