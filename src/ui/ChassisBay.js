@@ -58,7 +58,7 @@ export default class ChassisBay {
         });
 
         // Diagnostic port (torso) — only visible when case has circuit
-        this._diagBtn = this.scene.add.container(0, 130).setVisible(false);
+        this._diagBtn = this.scene.add.container(0, 190).setVisible(false);
         const dBg = this.scene.add.rectangle(0, 0, 220, 36, 0x003344, 0.85)
             .setStrokeStyle(1, 0x00cccc, 0.9)
             .setInteractive({ useHandCursor: true });
