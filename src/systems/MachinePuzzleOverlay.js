@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { FACTORY_DEBUG, MACHINE_PUZZLE } from '../constants/gameConstants.js';
+import { FACTORY_DEBUG, MACHINE_PUZZLE, SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
 
 const CELL_WALL = 1;
 const EMPTY_PLACED_OFFSET = 10;
@@ -29,6 +29,7 @@ export default class MachinePuzzleOverlay {
         this._dominoViewMap = new Map();
         this._activePreviewKeys = [];
         this._dragState = null;
+        this._floatingDominoView = null;
         this._tableBounds = null;
 
         this._handlePointerMove = this._handlePointerMove.bind(this);
@@ -47,7 +48,7 @@ export default class MachinePuzzleOverlay {
         this._root = this.scene.add.container(0, 0).setDepth(340).setVisible(false).setAlpha(0);
         this._backdrop = this.scene.add.rectangle(640, 360, 1280, 720, 0x050302, 0.82)
             .setInteractive({ useHandCursor: false });
-        this._backdrop.on('pointerdown', () => {});
+        this._backdrop.on('pointerdown', () => this._handleBackgroundClick());
 
         this._panel = this.scene.add.container(640, 360);
 
@@ -55,7 +56,11 @@ export default class MachinePuzzleOverlay {
             .setStrokeStyle(2, 0xa88a63, 0.95);
         const inner = this.scene.add.rectangle(0, 0, panelWidth - 22, panelHeight - 22, 0x2a1d18, 0.96)
             .setStrokeStyle(1, 0x5f4b3b, 0.85);
+        const panelClickCatcher = this.scene.add.rectangle(0, 0, panelWidth - 28, panelHeight - 28, 0xffffff, 0.001)
+            .setInteractive({ useHandCursor: false });
         const headerRule = this.scene.add.rectangle(0, -(panelHeight / 2) + 62, panelWidth - 60, 2, 0x7b634a, 0.85);
+
+        panelClickCatcher.on('pointerdown', () => this._handleBackgroundClick());
 
         this._titleText = this.scene.add.text(0, -(panelHeight / 2) + 34, 'MACHINE GRID', {
             fontFamily: 'Courier New',
@@ -105,6 +110,7 @@ export default class MachinePuzzleOverlay {
         this._panel.add([
             frame,
             inner,
+            panelClickCatcher,
             headerRule,
             this._titleText,
             this._subtitleText,
@@ -337,15 +343,6 @@ export default class MachinePuzzleOverlay {
         const startingPoint = dominoState.tablePosition || slot;
         const container = this.scene.add.container(startingPoint.x, startingPoint.y);
         container.setSize(MACHINE_PUZZLE.dominoWidth + 16, MACHINE_PUZZLE.dominoHeight + 16);
-        container.setInteractive(
-            new Phaser.Geom.Rectangle(
-                -(MACHINE_PUZZLE.dominoWidth / 2) - MACHINE_PUZZLE.dominoHitPaddingX,
-                -(MACHINE_PUZZLE.dominoHeight / 2) - MACHINE_PUZZLE.dominoHitPaddingY,
-                MACHINE_PUZZLE.dominoWidth + (MACHINE_PUZZLE.dominoHitPaddingX * 2),
-                MACHINE_PUZZLE.dominoHeight + (MACHINE_PUZZLE.dominoHitPaddingY * 2),
-            ),
-            Phaser.Geom.Rectangle.Contains,
-        );
 
         const hoverGlow = this.scene.add.rectangle(0, 0, MACHINE_PUZZLE.dominoWidth + 24, MACHINE_PUZZLE.dominoHeight + 24, 0xd8ff95, 0)
             .setStrokeStyle(2, 0xf2ffd0, 0);
@@ -364,14 +361,23 @@ export default class MachinePuzzleOverlay {
             stroke: '#24412c',
             strokeThickness: 2,
         }).setOrigin(0.5).setVisible(false);
+        const inputZone = this.scene.add.rectangle(
+            0,
+            0,
+            MACHINE_PUZZLE.dominoWidth + (MACHINE_PUZZLE.dominoHitPaddingX * 2),
+            MACHINE_PUZZLE.dominoHeight + (MACHINE_PUZZLE.dominoHitPaddingY * 2),
+            0xffffff,
+            0.001,
+        ).setInteractive({ useHandCursor: true });
 
-        container.add([hoverGlow, graphics, topLabel, bottomLabel]);
+        container.add([hoverGlow, graphics, topLabel, bottomLabel, inputZone]);
         this._dominoLayer.add(container);
 
         const dominoView = {
             id: dominoState.id,
             dominoState,
             container,
+            inputZone,
             hoverGlow,
             graphics,
             topLabel,
@@ -380,11 +386,12 @@ export default class MachinePuzzleOverlay {
             previousState: null,
             currentCandidate: null,
             isHovered: false,
+            isFloating: false,
         };
 
-        container.on('pointerdown', (pointer) => this._beginPointerIntent(dominoView, pointer));
-        container.on('pointerover', () => this._setDominoHover(dominoView, true));
-        container.on('pointerout', () => this._setDominoHover(dominoView, false));
+        inputZone.on('pointerdown', (pointer) => this._beginPointerIntent(dominoView, pointer));
+        inputZone.on('pointerover', () => this._setDominoHover(dominoView, true));
+        inputZone.on('pointerout', () => this._setDominoHover(dominoView, false));
 
         this._applyDominoStateToView(dominoView, false);
         return dominoView;
@@ -394,16 +401,17 @@ export default class MachinePuzzleOverlay {
         const width = MACHINE_PUZZLE.dominoWidth;
         const height = MACHINE_PUZZLE.dominoHeight;
         const { firstGlow, secondGlow, globalGlow } = this._getDominoGlowState(dominoView);
+        const emphasisActive = globalGlow || dominoView.isFloating || dominoView.isHovered;
 
         dominoView.graphics.clear();
-        dominoView.hoverGlow.setFillStyle(0xd8ff95, globalGlow ? 0.18 : dominoView.isHovered ? 0.12 : 0);
-        dominoView.hoverGlow.setStrokeStyle(2, 0xf2ffd0, globalGlow ? 0.75 : dominoView.isHovered ? 0.42 : 0);
+        dominoView.hoverGlow.setFillStyle(0xd8ff95, globalGlow ? 0.18 : dominoView.isFloating ? 0.16 : dominoView.isHovered ? 0.12 : 0);
+        dominoView.hoverGlow.setStrokeStyle(2, 0xf2ffd0, globalGlow ? 0.75 : dominoView.isFloating ? 0.62 : dominoView.isHovered ? 0.42 : 0);
 
         dominoView.graphics.fillStyle(0x102214, 0.2);
         dominoView.graphics.fillRoundedRect(-width / 2 + 4, -height / 2 + 6, width, height, 14);
         dominoView.graphics.fillStyle(0x2ca55e, 1);
         dominoView.graphics.fillRoundedRect(-width / 2, -height / 2, width, height, 14);
-        dominoView.graphics.lineStyle(2, globalGlow ? 0xf5ffd3 : 0xd7ffde, globalGlow ? 1 : 0.9);
+        dominoView.graphics.lineStyle(2, emphasisActive ? 0xf5ffd3 : 0xd7ffde, emphasisActive ? 1 : 0.9);
         dominoView.graphics.strokeRoundedRect(-width / 2, -height / 2, width, height, 14);
         dominoView.graphics.fillStyle(0xffffff, 0.08);
         dominoView.graphics.fillRoundedRect(-(width / 2) + 6, -(height / 2) + 6, width - 12, 18, 10);
@@ -471,44 +479,51 @@ export default class MachinePuzzleOverlay {
         };
     }
 
-    _handleDominoClick(dominoView) {
+    _rotateDominoInPlace(dominoView, keepFloating = false) {
         if (!this.isVisible()) return;
 
-        const previousRotationIndex = this._getDominoRotationIndex(dominoView.dominoState);
-        const nextRotationIndex = normalizeRotationIndex(previousRotationIndex + 1);
-        const previousAnchor = dominoView.dominoState.anchor ? { ...dominoView.dominoState.anchor } : null;
+        const nextRotationIndex = normalizeRotationIndex(this._getDominoRotationIndex(dominoView.dominoState) + 1);
+        const targetAngle = this._getDominoTargetAngle(nextRotationIndex);
+        this._setDominoRotation(dominoView, nextRotationIndex);
+        this._drawDomino(dominoView);
+        this._animateDominoAngle(dominoView, dominoView.container.angle + 90, targetAngle);
+        this._playPuzzleSound(SOUND_ASSETS.fuseRotate, SOUND_ASSETS.inspectionReveal, SOUND_VOLUMES.puzzleRotate);
 
-        if (!previousAnchor) {
-            this._setDominoRotation(dominoView, nextRotationIndex);
-            this._drawDomino(dominoView);
-            this._animateDominoAngle(dominoView, dominoView.container.angle + 90);
+        if (keepFloating) {
+            this._floatingDominoView = dominoView;
+            dominoView.isFloating = true;
+            this._updateFloatingCandidate(dominoView);
             return;
         }
 
-        this._puzzleState.clearDominoPlacement(dominoView.id);
-        const rotatedCandidate = this._createCandidateFromAnchor(nextRotationIndex, previousAnchor.row, previousAnchor.col);
-        if (this._validateCandidate(rotatedCandidate).valid) {
-            this._setDominoRotation(dominoView, nextRotationIndex);
-            this._drawDomino(dominoView);
-            this._animateDominoAngle(dominoView, dominoView.container.angle + 90);
-            this._placeDomino(dominoView, rotatedCandidate, true);
-            return;
-        }
+        this._applyDominoVisualScale(dominoView);
+    }
 
-        const restoreCandidate = this._createCandidateFromAnchor(previousRotationIndex, previousAnchor.row, previousAnchor.col);
-        this._puzzleState.placeDomino(dominoView.id, restoreCandidate);
-        this._refreshAllCells();
-        this._refreshAllDominoViews();
-        this._showMessage('That rotation does not fit the charge map.');
+    _handleBackgroundClick() {
+        if (!this.isVisible() || this._dragState) return;
+        if (!this._floatingDominoView) return;
+
+        this._restoreDomino(this._floatingDominoView);
     }
 
     _beginPointerIntent(dominoView, pointer) {
         if (!this.isVisible()) return;
         if (this._dragState && this._dragState.pointerId !== pointer.id) return;
 
+        if (this._floatingDominoView && this._floatingDominoView !== dominoView) {
+            this._restoreDomino(this._floatingDominoView);
+        }
+
         const localX = pointer.worldX - this._panel.x;
         const localY = pointer.worldY - this._panel.y;
         const startedFromTable = this._isDominoOnTable(dominoView);
+        const wasFloatingAtPointerDown = this._floatingDominoView === dominoView;
+
+        if (!startedFromTable && !wasFloatingAtPointerDown) {
+            this._liftDominoFromGrid(dominoView);
+        }
+
+        this._setDominoHover(dominoView, true);
 
         this._dragState = {
             dominoView,
@@ -519,16 +534,8 @@ export default class MachinePuzzleOverlay {
             offsetY: localY - dominoView.container.y,
             dragging: false,
             startedFromTable,
+            wasFloatingAtPointerDown,
         };
-
-        if (!startedFromTable) return;
-
-        const nextRotationIndex = normalizeRotationIndex(this._getDominoRotationIndex(dominoView.dominoState) + 1);
-        this._setDominoRotation(dominoView, nextRotationIndex);
-        this._drawDomino(dominoView);
-        this._beginDominoDrag(dominoView);
-        this._dragState.dragging = true;
-        this._animateDominoAngle(dominoView, dominoView.container.angle + 90);
     }
 
     _handlePointerMove(pointer) {
@@ -558,7 +565,7 @@ export default class MachinePuzzleOverlay {
     _handlePointerUp(pointer) {
         if (!this._dragState || this._dragState.pointerId !== pointer.id) return;
 
-        const { dominoView, dragging } = this._dragState;
+        const { dominoView, dragging, startedFromTable, wasFloatingAtPointerDown } = this._dragState;
         this._dragState = null;
 
         if (dragging) {
@@ -566,10 +573,20 @@ export default class MachinePuzzleOverlay {
             return;
         }
 
-        this._handleDominoClick(dominoView);
+        if (startedFromTable) {
+            this._rotateDominoInPlace(dominoView, false);
+            return;
+        }
+
+        if (wasFloatingAtPointerDown) {
+            this._rotateDominoInPlace(dominoView, true);
+            return;
+        }
+
+        this._updateFloatingCandidate(dominoView);
     }
 
-    _beginDominoDrag(dominoView) {
+    _liftDominoFromGrid(dominoView) {
         dominoView.previousState = {
             x: dominoView.container.x,
             y: dominoView.container.y,
@@ -584,14 +601,48 @@ export default class MachinePuzzleOverlay {
             this._clearDominoPlacement(dominoView);
         }
 
+        dominoView.isFloating = true;
+        this._floatingDominoView = dominoView;
         this.scene.tweens.killTweensOf(dominoView.container);
         this._dominoLayer.bringToTop(dominoView.container);
-        this.scene.tweens.add({ targets: dominoView.container, scaleX: 1.05, scaleY: 1.05, duration: 80, ease: 'Quad.Out' });
+        this._applyDominoVisualScale(dominoView);
+        this._updateFloatingCandidate(dominoView);
+    }
+
+    _beginDominoDrag(dominoView) {
+        if (!dominoView.previousState) {
+            dominoView.previousState = {
+                x: dominoView.container.x,
+                y: dominoView.container.y,
+                rotationIndex: this._getDominoRotationIndex(dominoView.dominoState),
+                orientation: dominoView.dominoState.orientation,
+                anchor: dominoView.dominoState.anchor ? { ...dominoView.dominoState.anchor } : null,
+                placedCells: dominoView.dominoState.placedCells.map((cell) => ({ ...cell })),
+                tablePosition: dominoView.dominoState.tablePosition ? { ...dominoView.dominoState.tablePosition } : null,
+            };
+        }
+
+        if (dominoView.dominoState.placedCells.length > 0) {
+            this._clearDominoPlacement(dominoView);
+        }
+
+        dominoView.isFloating = true;
+        this._floatingDominoView = dominoView;
+        this.scene.tweens.killTweensOf(dominoView.container);
+        this._dominoLayer.bringToTop(dominoView.container);
+        this._applyDominoVisualScale(dominoView);
+    }
+
+    _updateFloatingCandidate(dominoView) {
+        if (!dominoView?.isFloating) return;
+        this._dragDomino(dominoView, dominoView.container.x, dominoView.container.y);
     }
 
     _dragDomino(dominoView, targetX, targetY) {
         dominoView.container.x = targetX;
         dominoView.container.y = targetY;
+        dominoView.isFloating = true;
+        this._floatingDominoView = dominoView;
 
         const candidate = this._candidateFromLocalPoint(dominoView, targetX, targetY);
         const validation = this._validateCandidate(candidate);
@@ -602,10 +653,15 @@ export default class MachinePuzzleOverlay {
 
         this._applyPreview(previewCells, validation.valid);
         dominoView.currentCandidate = { ...candidate, valid: validation.valid, reason: validation.reason };
+        this._applyDominoVisualScale(dominoView);
     }
 
     _endDominoDrag(dominoView) {
-        this.scene.tweens.add({ targets: dominoView.container, scaleX: 1, scaleY: 1, duration: 90, ease: 'Quad.Out' });
+        this._commitFloatingDomino(dominoView);
+    }
+
+    _commitFloatingDomino(dominoView) {
+        if (!dominoView) return;
 
         const candidate = dominoView.currentCandidate;
         const droppedOnTable = this._isPointOverTable(dominoView.container.x, dominoView.container.y);
@@ -630,7 +686,10 @@ export default class MachinePuzzleOverlay {
 
     _restoreDomino(dominoView) {
         const previousState = dominoView.previousState;
-        if (!previousState) return;
+        if (!previousState) {
+            this._clearFloatingState(dominoView);
+            return;
+        }
 
         this._setDominoRotation(dominoView, previousState.rotationIndex);
         this._animateDominoAngle(dominoView, this._getDominoTargetAngle(previousState.rotationIndex));
@@ -647,6 +706,8 @@ export default class MachinePuzzleOverlay {
         });
         dominoView.dominoState.anchor = null;
         dominoView.dominoState.placedCells = [];
+        dominoView.previousState = null;
+        this._clearFloatingState(dominoView);
         this._refreshAllDominoViews();
         this.scene.tweens.add({
             targets: dominoView.container,
@@ -661,6 +722,8 @@ export default class MachinePuzzleOverlay {
         this._puzzleState.updateDominoTablePosition(dominoView.id, { ...dominoView.slot });
         dominoView.dominoState.anchor = null;
         dominoView.dominoState.placedCells = [];
+        dominoView.previousState = null;
+        this._clearFloatingState(dominoView);
         this._refreshAllCells();
         this._refreshAllDominoViews();
         this.scene.tweens.add({
@@ -673,9 +736,19 @@ export default class MachinePuzzleOverlay {
     }
 
     _placeDomino(dominoView, candidate, animated) {
+        const previousEvaluation = this._puzzleState.getEvaluation();
+        const previousCellMatches = candidate.cells.map((cell) => ({
+            row: cell.row,
+            col: cell.col,
+            charge: this._puzzleState.isChargeMatched(cell.row, cell.col),
+            equality: this._puzzleState.isEqualMatched(cell.row, cell.col),
+        }));
+
         candidate.rotationIndex = this._getDominoRotationIndex(dominoView.dominoState);
         candidate.orientation = dominoView.dominoState.orientation;
         this._puzzleState.placeDomino(dominoView.id, candidate);
+        this._clearFloatingState(dominoView);
+        dominoView.previousState = null;
         this._refreshAllCells();
         this._refreshAllDominoViews();
 
@@ -687,8 +760,25 @@ export default class MachinePuzzleOverlay {
             ease: animated ? 'Back.Out' : 'Linear',
         });
 
+        const nextEvaluation = this._puzzleState.getEvaluation();
+        const hasNewEquality = candidate.cells.some((cell) => {
+            const before = previousCellMatches.find((entry) => entry.row === cell.row && entry.col === cell.col);
+            return this._puzzleState.isEqualMatched(cell.row, cell.col) && !before?.equality;
+        });
+        const hasNewCharge = candidate.cells.some((cell) => {
+            const before = previousCellMatches.find((entry) => entry.row === cell.row && entry.col === cell.col);
+            return this._puzzleState.isChargeMatched(cell.row, cell.col) && !before?.charge;
+        });
+        const solvedNow = nextEvaluation.solved && !previousEvaluation.solved;
+
         this._flashPlacement(candidate.cells);
         this._notifyGridChanged();
+        this._playPuzzleSound(SOUND_ASSETS.circuitLock, SOUND_ASSETS.inspectionReveal, SOUND_VOLUMES.puzzleLock);
+        if (hasNewCharge || solvedNow) {
+            this._playPuzzleSound(SOUND_ASSETS.circuitPower, SOUND_ASSETS.puzzleFixed, SOUND_VOLUMES.puzzlePower);
+        } else if (hasNewEquality) {
+            this._playPuzzleSound(SOUND_ASSETS.fuseConnect, SOUND_ASSETS.puzzleFixed, SOUND_VOLUMES.puzzleConnect);
+        }
     }
 
     _clearDominoPlacement(dominoView) {
@@ -700,13 +790,18 @@ export default class MachinePuzzleOverlay {
         this._notifyGridChanged();
     }
 
-    _animateDominoAngle(dominoView, targetAngle = null) {
+    _animateDominoAngle(dominoView, targetAngle = null, finalAngle = null) {
         this.scene.tweens.killTweensOf(dominoView.container);
         this.scene.tweens.add({
             targets: dominoView.container,
             angle: targetAngle ?? this._getDominoTargetAngle(this._getDominoRotationIndex(dominoView.dominoState)),
             duration: MACHINE_PUZZLE.dominoRotationMs,
             ease: 'Sine.Out',
+            onComplete: () => {
+                if (finalAngle !== null) {
+                    dominoView.container.angle = finalAngle;
+                }
+            },
         });
     }
 
@@ -985,7 +1080,7 @@ export default class MachinePuzzleOverlay {
         }
 
         dominoView.container.angle = this._getDominoTargetAngle(rotationIndex);
-        dominoView.container.setScale(1);
+        this._applyDominoVisualScale(dominoView);
 
         if (animated) {
             this.scene.tweens.add({
@@ -1001,10 +1096,28 @@ export default class MachinePuzzleOverlay {
     }
 
     _setDominoHover(dominoView, isHovering) {
-        if (this._dragState?.dominoView === dominoView) return;
         dominoView.isHovered = isHovering;
         this._drawDomino(dominoView);
-        dominoView.container.setScale(isHovering ? 1.03 : 1);
+        this._applyDominoVisualScale(dominoView);
+    }
+
+    _applyDominoVisualScale(dominoView) {
+        if (!dominoView?.container) return;
+
+        const baseScale = dominoView.isFloating
+            ? MACHINE_PUZZLE.dominoFloatingScale
+            : (dominoView.isHovered ? MACHINE_PUZZLE.dominoHoverScale : MACHINE_PUZZLE.dominoRestScale);
+        dominoView.container.setScale(baseScale);
+    }
+
+    _clearFloatingState(dominoView) {
+        if (!dominoView) return;
+        dominoView.isFloating = false;
+        dominoView.currentCandidate = null;
+        if (this._floatingDominoView === dominoView) {
+            this._floatingDominoView = null;
+        }
+        this._applyDominoVisualScale(dominoView);
     }
 
     _getDominoRotationIndex(dominoState) {
@@ -1039,12 +1152,31 @@ export default class MachinePuzzleOverlay {
     }
 
     _cancelInteraction() {
-        if (!this._dragState) return;
-
-        const dominoView = this._dragState.dominoView;
-        this._dragState = null;
         this._clearPreview();
-        this._restoreDomino(dominoView);
+
+        if (this._dragState) {
+            const dominoView = this._dragState.dominoView;
+            this._dragState = null;
+            this._restoreDomino(dominoView);
+        }
+
+        if (this._floatingDominoView) {
+            const floatingDomino = this._floatingDominoView;
+            this._floatingDominoView = null;
+            this._restoreDomino(floatingDomino);
+        }
+    }
+
+    _playPuzzleSound(primarySound, fallbackSound = null, volume = SOUND_VOLUMES.puzzleLock) {
+        const chosenSound = primarySound && this.scene.cache.audio.has(primarySound.key)
+            ? primarySound
+            : (fallbackSound && this.scene.cache.audio.has(fallbackSound.key) ? fallbackSound : null);
+        if (!chosenSound) return null;
+
+        const sound = this.scene.sound.add(chosenSound.key, { volume });
+        sound.once('complete', () => sound.destroy());
+        sound.play();
+        return sound;
     }
 
     _notifyGridChanged() {

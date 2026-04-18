@@ -28,11 +28,136 @@ const createGridOption = ({ grid, dominos, impossible = false }) => ({
     impossible,
 });
 
+const createFlowPuzzleOption = ({
+    sourceRow,
+    outputs,
+    forbiddenCount = 0,
+    impossible = false,
+    previewTitle = 'POWER BUS',
+}) => ({
+    sourceRow,
+    outputs,
+    forbiddenCount,
+    impossible,
+    previewTitle,
+});
+
+const createMiniDisplay = ({
+    artX,
+    artY,
+    artScale = 0.56,
+    artAngle = 0,
+    gridPreview,
+    flowPreview,
+}) => ({
+    artX,
+    artY,
+    artScale,
+    artAngle,
+    gridPreview: { ...gridPreview },
+    flowPreview: { ...flowPreview },
+});
+
+const DEFAULT_MACHINE_DAYS = Object.freeze([1]);
+const DEFAULT_MACHINE_PERIODS = Object.freeze([1, 2, 3]);
+
+const MACHINE_FLOW_CATALOG = Object.freeze({
+    assembler_alpha: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'EYES', 2: 'CPU' }, forbiddenCount: 0, previewTitle: 'FAB BUS' }),
+        createFlowPuzzleOption({ sourceRow: 1, outputs: { 1: 'CPU', 3: 'ARMS', 4: 'MEMORY' }, forbiddenCount: 1, previewTitle: 'LINE CTRL' }),
+    ]),
+    audit_drone: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 0: 'EYES', 2: 'CPU', 4: 'VOICE' }, forbiddenCount: 1, previewTitle: 'AUDIT LOOP' }),
+        createFlowPuzzleOption({ sourceRow: 3, outputs: { 1: 'MEMORY', 3: 'LIMBS' }, forbiddenCount: 0, previewTitle: 'LENS BUS' }),
+    ]),
+    courier_shell: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'VOICE', 2: 'CPU', 4: 'HATCH' }, forbiddenCount: 0, previewTitle: 'ROUTE BUS' }),
+        createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'TRACK', 2: 'MEMORY', 3: 'EYES' }, forbiddenCount: 1, previewTitle: 'COURIER IO' }),
+    ]),
+    sentry_frame: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 0: 'EYES', 2: 'TARGET', 4: 'LIMBS' }, forbiddenCount: 1, previewTitle: 'THREAT GRID' }),
+        createFlowPuzzleOption({ sourceRow: 3, outputs: { 1: 'ARMOR', 3: 'CPU', 4: 'VOICE' }, forbiddenCount: 2, previewTitle: 'PERIMETER' }),
+    ]),
+    breakroom_brewer: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'HEAT', 2: 'PUMP' }, forbiddenCount: 0, previewTitle: 'BREW LOOP' }),
+        createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'HEAT', 2: 'MEMORY', 4: 'NOZZLE' }, forbiddenCount: 1, previewTitle: 'CAF BUS' }),
+    ]),
+    mechanic_broom: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'BRUSH', 3: 'VAC', 4: 'SENSE' }, forbiddenCount: 1, previewTitle: 'CLEAN BUS' }),
+        createFlowPuzzleOption({ sourceRow: 3, outputs: { 0: 'MAG', 2: 'CPU', 4: 'WHEELS' }, forbiddenCount: 0, previewTitle: 'MAINT LOOP' }),
+    ]),
+    future_lounge_chair: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'RECLINE', 2: 'MEMORY', 4: 'HEAT' }, forbiddenCount: 0, previewTitle: 'COMFORT BUS' }),
+        createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'LUMBAR', 3: 'VOICE', 4: 'POWER' }, forbiddenCount: 1, previewTitle: 'REST GRID' }),
+    ]),
+});
+
+const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
+    assembler_alpha: createMiniDisplay({
+        artX: 104,
+        artY: 134,
+        artScale: 0.94,
+        gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+    }),
+    audit_drone: createMiniDisplay({
+        artX: 112,
+        artY: 130,
+        artScale: 0.96,
+        artAngle: -4,
+        gridPreview: { x: 138, y: 68, width: 54, height: 40, label: 'GRID' },
+        flowPreview: { x: 44, y: 112, width: 62, height: 36, label: 'FLOW' },
+    }),
+    courier_shell: createMiniDisplay({
+        artX: 102,
+        artY: 136,
+        artScale: 1.02,
+        artAngle: 2,
+        gridPreview: { x: 42, y: 70, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 134, y: 108, width: 60, height: 38, label: 'FLOW' },
+    }),
+    sentry_frame: createMiniDisplay({
+        artX: 108,
+        artY: 132,
+        artScale: 0.97,
+        gridPreview: { x: 136, y: 64, width: 56, height: 42, label: 'GRID' },
+        flowPreview: { x: 44, y: 114, width: 64, height: 36, label: 'FLOW' },
+    }),
+    breakroom_brewer: createMiniDisplay({
+        artX: 102,
+        artY: 136,
+        artScale: 0.98,
+        artAngle: -4,
+        gridPreview: { x: 42, y: 74, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 134, y: 108, width: 60, height: 38, label: 'FLOW' },
+    }),
+    mechanic_broom: createMiniDisplay({
+        artX: 104,
+        artY: 134,
+        artScale: 0.98,
+        artAngle: 6,
+        gridPreview: { x: 46, y: 70, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+    }),
+    future_lounge_chair: createMiniDisplay({
+        artX: 110,
+        artY: 140,
+        artScale: 1.02,
+        artAngle: -7,
+        gridPreview: { x: 136, y: 68, width: 56, height: 40, label: 'GRID' },
+        flowPreview: { x: 46, y: 114, width: 64, height: 36, label: 'FLOW' },
+    }),
+});
+
 const createMachineDefinition = ({
     id,
     name,
     spriteFileName,
     possibleGrids,
+    possibleCircuits = MACHINE_FLOW_CATALOG[id] || [],
+    miniDisplay = MACHINE_MINI_DISPLAY_CATALOG[id] || null,
+    availableDays = DEFAULT_MACHINE_DAYS,
+    availablePeriods = DEFAULT_MACHINE_PERIODS,
     openingDialogues,
     questionDialogues,
     communicationChance = 1,
@@ -41,14 +166,20 @@ const createMachineDefinition = ({
     name,
     sprite: createMachineSprite(id, spriteFileName),
     possibleGrids,
+    possibleCircuits,
+    miniDisplay,
+    availableDays,
+    availablePeriods,
     openingDialogues,
     questionDialogues,
     communicationChance,
 });
 
+const clampPipValue = (value) => Math.max(0, Math.min(4, Number.isFinite(value) ? value : 0));
+
 const createDomino = (firstOptionAmount, secondOptionAmount, extra = {}) => ({
-    firstOptionAmount,
-    secondOptionAmount,
+    firstOptionAmount: clampPipValue(firstOptionAmount),
+    secondOptionAmount: clampPipValue(secondOptionAmount),
     ...extra,
 });
 
@@ -63,16 +194,15 @@ export const MACHINE_CATALOG = Object.freeze([
             createGridOption({
                 grid: [
                     [1, 1, 1, 1, 1],
-                    [1, 2, 0, 3, 1],
-                    [1, 0, 4, 0, 1],
-                    [1, 5, 0, 2, 1],
+                    [1, 2, 3, 0, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 5, 2, 0, 1],
                     [1, 1, 1, 1, 1],
                 ],
                 dominos: [
                     createDomino(1, 2),
-                    createDomino(3, 1),
-                    createDomino(4, 0),
-                    createDomino(2, 5),
+                    createDomino(4, 1),
+                    createDomino(3, 0),
                 ],
                 impossible: false,
             }),
@@ -105,7 +235,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(2, 5),
                     createDomino(0, 2),
                 ],
-                impossible: false,
+                impossible: true,
             }),
         ],
         openingDialogues: [
@@ -161,7 +291,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(5, 1),
                     createDomino(3, 6),
                 ],
-                impossible: true,
+                impossible: false,
             }),
             createGridOption({
                 grid: [
@@ -178,7 +308,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(3, 5),
                     createDomino(0, 3),
                 ],
-                impossible: false,
+                impossible: true,
             }),
         ],
         openingDialogues: [
@@ -218,7 +348,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(1, 5),
                     createDomino(3, 3),
                 ],
-                impossible: false,
+                impossible: true,
             }),
             createGridOption({
                 grid: [
@@ -289,7 +419,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(1, 4),
                     createDomino(2, 2),
                 ],
-                impossible: false,
+                impossible: true,
             }),
             createGridOption({
                 grid: [
@@ -305,7 +435,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(5, 3),
                     createDomino(1, 6),
                 ],
-                impossible: true,
+                impossible: false,
             }),
             createGridOption({
                 grid: [
@@ -322,7 +452,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(3, 2),
                     createDomino(4, 0),
                 ],
-                impossible: false,
+                impossible: true,
             }),
         ],
         openingDialogues: [
@@ -352,15 +482,15 @@ export const MACHINE_CATALOG = Object.freeze([
             createGridOption({
                 grid: [
                     [1, 1, 1, 1, 1],
-                    [1, 0, 2, 0, 1],
-                    [1, 0, 3, 0, 1],
-                    [1, 0, 4, 0, 1],
+                    [1, 0, 2, 3, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 0, 4, 5, 1],
                     [1, 1, 1, 1, 1],
                 ],
                 dominos: [
-                    createDomino(1, 0),
-                    createDomino(2, 1),
-                    createDomino(4, 2),
+                    createDomino(1, 2),
+                    createDomino(3, 4),
+                    createDomino(0, 0),
                 ],
                 impossible: false,
             }),
@@ -393,7 +523,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(4, 0),
                     createDomino(1, 5),
                 ],
-                impossible: false,
+                impossible: true,
             }),
         ],
         openingDialogues: [
@@ -422,17 +552,18 @@ export const MACHINE_CATALOG = Object.freeze([
         possibleGrids: [
             createGridOption({
                 grid: [
-                    [1, 1, 1, 1, 1, 1, 1, 1],
-                    [1, 0, 2, 0, 0, 3, 0, 1],
-                    [1, 0, 0, 0, linkCell(3, 6), 0, 0, 1],
-                    [1, 4, 0, 0, 0, 0, linkCell(2, 4), 1],
-                    [1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 0, 5, 2, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
                 ],
                 dominos: [
-                    createDomino(2, 4),
+                    createDomino(1, 2),
+                    createDomino(4, 1),
+                    createDomino(2, 0),
                     createDomino(3, 3),
-                    createDomino(1, 0),
-                    createDomino(2, 2),
                 ],
                 impossible: false,
             }),
@@ -467,7 +598,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(2, 0),
                     createDomino(2, 3),
                 ],
-                impossible: false,
+                impossible: true,
             }),
         ],
         openingDialogues: [
@@ -497,17 +628,16 @@ export const MACHINE_CATALOG = Object.freeze([
             createGridOption({
                 grid: [
                     [1, 1, 1, 1, 1, 1],
-                    [1, 0, 2, 0, 0, 1],
-                    [1, 3, 0, linkCell(4, 4), 0, 1],
-                    [1, 0, 0, 4, 0, 1],
-                    [1, 0, 5, 0, linkCell(2, 3), 1],
+                    [1, 0, 2, 3, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 0, 4, 5, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
                     [1, 1, 1, 1, 1, 1],
                 ],
                 dominos: [
-                    createDomino(2, 3),
-                    createDomino(4, 1),
-                    createDomino(5, 0),
-                    createDomino(3, 3),
+                    createDomino(1, 2),
+                    createDomino(3, 4),
+                    createDomino(2, 2),
                 ],
                 impossible: false,
             }),
@@ -542,7 +672,7 @@ export const MACHINE_CATALOG = Object.freeze([
                     createDomino(4, 1),
                     createDomino(3, 5),
                 ],
-                impossible: false,
+                impossible: true,
             }),
         ],
         openingDialogues: [
@@ -607,6 +737,31 @@ function cloneGridOption(gridOption) {
                 ...domino,
             }))
             : [],
+    };
+}
+
+function cloneFlowPuzzleOption(flowPuzzleOption) {
+    if (!flowPuzzleOption) return null;
+
+    return {
+        ...flowPuzzleOption,
+        outputs: { ...(flowPuzzleOption.outputs || {}) },
+        tiles: Array.isArray(flowPuzzleOption.tiles)
+            ? flowPuzzleOption.tiles.map((row) => row.map((cell) => ({ ...cell })))
+            : undefined,
+        forbidden: Array.isArray(flowPuzzleOption.forbidden)
+            ? flowPuzzleOption.forbidden.map(([x, y]) => [x, y])
+            : undefined,
+    };
+}
+
+function cloneMiniDisplay(miniDisplay) {
+    if (!miniDisplay) return null;
+
+    return {
+        ...miniDisplay,
+        gridPreview: miniDisplay.gridPreview ? { ...miniDisplay.gridPreview } : null,
+        flowPreview: miniDisplay.flowPreview ? { ...miniDisplay.flowPreview } : null,
     };
 }
 
@@ -914,9 +1069,137 @@ export class MachinePuzzleState {
     }
 }
 
-export function createMachineVariant(randomFn = Math.random) {
-    const definition = pickRandomEntry(MACHINE_CATALOG, randomFn) || MACHINE_CATALOG[0];
-    const selectedGrid = cloneGridOption(pickRandomEntry(definition.possibleGrids, randomFn));
+const GRID_SOLVABILITY_CACHE = new WeakMap();
+
+function createPlacementCandidate(rotationIndex, row, col) {
+    const normalizedRotationIndex = normalizeRotationIndex(rotationIndex);
+    const orientation = getOrientationForRotationIndex(normalizedRotationIndex);
+
+    if (normalizedRotationIndex === 0) {
+        return {
+            anchor: { row, col },
+            cells: [
+                { row, col },
+                { row: row + 1, col },
+            ],
+            rotationIndex: normalizedRotationIndex,
+            orientation,
+        };
+    }
+
+    if (normalizedRotationIndex === 1) {
+        return {
+            anchor: { row, col },
+            cells: [
+                { row, col: col + 1 },
+                { row, col },
+            ],
+            rotationIndex: normalizedRotationIndex,
+            orientation,
+        };
+    }
+
+    if (normalizedRotationIndex === 2) {
+        return {
+            anchor: { row, col },
+            cells: [
+                { row: row + 1, col },
+                { row, col },
+            ],
+            rotationIndex: normalizedRotationIndex,
+            orientation,
+        };
+    }
+
+    return {
+        anchor: { row, col },
+        cells: [
+            { row, col },
+            { row, col: col + 1 },
+        ],
+        rotationIndex: normalizedRotationIndex,
+        orientation,
+    };
+}
+
+function canPlaceCandidate(state, candidate) {
+    return candidate.cells.every((cell) => (
+        cell.row >= 0
+        && cell.row < state.grid.length
+        && cell.col >= 0
+        && cell.col < (state.grid[cell.row]?.length ?? 0)
+        && state.canOccupyCell(cell.row, cell.col)
+    ));
+}
+
+function searchPuzzleSolution(state, dominoIndex = 0) {
+    if (state.getEvaluation().solved) return true;
+    if (dominoIndex >= state.dominoes.length) return false;
+
+    if (searchPuzzleSolution(state, dominoIndex + 1)) {
+        return true;
+    }
+
+    const domino = state.dominoes[dominoIndex];
+
+    for (let rotationIndex = 0; rotationIndex < 4; rotationIndex += 1) {
+        for (let row = 0; row < state.grid.length; row += 1) {
+            const rowLength = state.grid[row]?.length ?? 0;
+            for (let col = 0; col < rowLength; col += 1) {
+                const candidate = createPlacementCandidate(rotationIndex, row, col);
+                if (!canPlaceCandidate(state, candidate)) continue;
+
+                state.placeDomino(domino.id, candidate);
+                if (searchPuzzleSolution(state, dominoIndex + 1)) {
+                    state.clearDominoPlacement(domino.id);
+                    return true;
+                }
+
+                state.clearDominoPlacement(domino.id);
+            }
+        }
+    }
+
+    return false;
+}
+
+function isPlayableGridOption(gridOption) {
+    if (!gridOption || gridOption.impossible) return false;
+    if (GRID_SOLVABILITY_CACHE.has(gridOption)) {
+        return GRID_SOLVABILITY_CACHE.get(gridOption);
+    }
+
+    const state = new MachinePuzzleState({
+        ...gridOption,
+        impossible: false,
+    });
+    const isSolvable = searchPuzzleSolution(state, 0);
+
+    GRID_SOLVABILITY_CACHE.set(gridOption, isSolvable);
+    return isSolvable;
+}
+
+export function createMachineVariant(options = {}) {
+    const randomFn = typeof options === 'function'
+        ? options
+        : (options.randomFn || Math.random);
+    const targetDay = typeof options === 'function' ? null : (options.day ?? null);
+    const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
+
+    const eligibleMachines = MACHINE_CATALOG.filter((machine) => {
+        const dayMatches = targetDay === null || !Array.isArray(machine.availableDays) || machine.availableDays.includes(targetDay);
+        const periodMatches = targetPeriod === null || !Array.isArray(machine.availablePeriods) || machine.availablePeriods.includes(targetPeriod);
+        return dayMatches && periodMatches;
+    });
+
+    const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
+    const definition = pickRandomEntry(machinePool, randomFn) || machinePool[0] || MACHINE_CATALOG[0];
+    const playableGrids = Array.isArray(definition.possibleGrids)
+        ? definition.possibleGrids.filter((gridOption) => isPlayableGridOption(gridOption))
+        : [];
+    const gridPool = playableGrids.length > 0 ? playableGrids : definition.possibleGrids;
+    const selectedGrid = cloneGridOption(pickRandomEntry(gridPool, randomFn));
+    const selectedFlowPuzzle = cloneFlowPuzzleOption(pickRandomEntry(definition.possibleCircuits, randomFn));
     const puzzleState = new MachinePuzzleState(selectedGrid);
     const hasCommunication = randomFn() <= (definition.communicationChance ?? 1);
     const selectedQuestion = hasCommunication
@@ -933,6 +1216,10 @@ export function createMachineVariant(randomFn = Math.random) {
         spritePath: definition.sprite.path,
         fallbackKey: definition.sprite.fallbackKey,
         selectedGrid,
+        flowPuzzle: selectedFlowPuzzle,
+        miniDisplay: cloneMiniDisplay(definition.miniDisplay),
+        availableDays: Array.isArray(definition.availableDays) ? [...definition.availableDays] : [],
+        availablePeriods: Array.isArray(definition.availablePeriods) ? [...definition.availablePeriods] : [],
         puzzleState,
         shapeGrid: puzzleState.grid,
         dominoes: puzzleState.dominoes,

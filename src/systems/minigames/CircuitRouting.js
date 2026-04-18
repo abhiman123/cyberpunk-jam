@@ -1,4 +1,5 @@
 import MinigameBase from './MinigameBase.js';
+import { SOUND_ASSETS, SOUND_VOLUMES } from '../../constants/gameConstants.js';
 
 // Base connections [N, E, S, W]
 const TILE_BASE = {
@@ -289,6 +290,7 @@ export default class CircuitRouting extends MinigameBase {
         bg.on('pointerdown', () => {
             if (locked || tile.type === 'empty') return;
             tile.rotation = (tile.rotation + 1) % 4;
+            this._playWireTurnSound();
             this._updateAll();
         });
         bg.on('pointerover', () => {
@@ -301,6 +303,19 @@ export default class CircuitRouting extends MinigameBase {
         this.container.add([bg, pipe]);
         if (mark) this.container.add(mark);
         return { bg, pipe, cx, cy, isForbidden };
+    }
+
+    _playWireTurnSound() {
+        const preferred = this.scene.cache.audio.has(SOUND_ASSETS.fuseRotate.key)
+            ? SOUND_ASSETS.fuseRotate
+            : (this.scene.cache.audio.has(SOUND_ASSETS.inspectionReveal.key) ? SOUND_ASSETS.inspectionReveal : null);
+        if (!preferred) return;
+
+        const sound = this.scene.sound.add(preferred.key, {
+            volume: preferred === SOUND_ASSETS.fuseRotate ? SOUND_VOLUMES.puzzleRotate : SOUND_VOLUMES.reveal,
+        });
+        sound.once('complete', () => sound.destroy());
+        sound.play();
     }
 
     _drawTile(x, y, reached) {
