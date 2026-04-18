@@ -144,18 +144,31 @@ export default class CircuitRouting extends MinigameBase {
             tiles = circuit.tiles.map(row => row.map(c => ({ ...c })));
             forbiddenList = circuit.forbidden || [];
         } else {
-            // Check if we already generated a circuit for this case
-            if (circuit._generatedTiles && circuit._generatedForbidden) {
+            // Check if we already generated tiles for this case
+            if (circuit._generatedTiles) {
                 tiles = circuit._generatedTiles.map(row => row.map(c => ({ ...c })));
-                forbiddenList = [...circuit._generatedForbidden];
             } else {
-                // Generate new circuit and cache it
+                // Generate new circuit tiles and cache them
                 const gen = generateCircuit(circuit, this.rows, this.cols);
                 tiles = gen.tiles;
-                forbiddenList = gen.forbidden;
-                // Store the generated circuit for future use
+                // Store only the tiles for future use (forbidden cells will be random each time)
                 circuit._generatedTiles = tiles.map(row => row.map(c => ({ ...c })));
-                circuit._generatedForbidden = [...forbiddenList];
+            }
+
+            // Always generate fresh forbidden cells for randomization
+            const pathCells = [];
+            tiles.forEach((row, y) => row.forEach((cell, x) => {
+                if (cell.type !== 'empty' && !(x === 0 && y === this._sourceRow) && !(x === this.cols - 1 && Object.keys(this._outputs).map(Number).includes(y))) {
+                    pathCells.push([x, y]);
+                }
+            }));
+
+            forbiddenList = [];
+            const count = circuit.forbiddenCount || 0;
+            const pool = [...pathCells];
+            for (let i = 0; i < count && pool.length > 0; i++) {
+                const idx = Math.floor(Math.random() * pool.length);
+                forbiddenList.push(pool.splice(idx, 1)[0]);
             }
         }
         this._tiles = tiles;
