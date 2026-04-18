@@ -5,8 +5,9 @@ export default class SummaryScene extends Phaser.Scene {
     constructor() { super('Summary'); }
 
     init(data) {
-        this._mistakes         = data.mistakes        || 0;
-        this._paycheckDelta    = data.paycheckDelta   || 0;
+        this._mistakes         = data.mistakes         || 0;
+        this._paycheckDelta    = data.paycheckDelta    || 0;
+        this._casesProcessed   = data.casesProcessed   || 0;
         this._notificationText = data.notificationText || '';
     }
 
@@ -25,17 +26,11 @@ export default class SummaryScene extends Phaser.Scene {
         this.add.rectangle(cx, 0, W, 2, accentColor).setOrigin(0.5, 0);
 
         this.add.text(cx, 72, 'END OF SHIFT', {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#dddddd',
-            letterSpacing: 6,
+            fontFamily: 'monospace', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
         }).setOrigin(0.5);
 
         this.add.text(cx, 102, `PERIOD ${GameState.period}  ·  DAY ${GameState.day} OF 2`, {
-            fontFamily: 'monospace',
-            fontSize: '10px',
-            color: '#aaaaaa',
-            letterSpacing: 4,
+            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa', letterSpacing: 4,
         }).setOrigin(0.5);
 
         this._rule(140, 0x333333);
@@ -46,100 +41,94 @@ export default class SummaryScene extends Phaser.Scene {
             ? `${this._mistakes} VIOLATION${this._mistakes > 1 ? 'S' : ''} RECORDED`
             : 'NO VIOLATIONS';
 
-        this.add.text(cx, 188, 'QC ASSESSMENT', {
-            fontFamily: 'monospace',
-            fontSize: '10px',
-            color: '#bbbbbb',
-            letterSpacing: 5,
+        this.add.text(cx, 180, 'QC ASSESSMENT', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
         }).setOrigin(0.5);
 
-        this.add.text(cx, 224, statusText, {
-            fontFamily: 'monospace',
-            fontSize: '26px',
-            color: statusColor,
+        this.add.text(cx, 214, statusText, {
+            fontFamily: 'monospace', fontSize: '26px', color: statusColor,
         }).setOrigin(0.5);
 
-        this._rule(268, 0x333333);
-
-        this.add.text(cx, 300, 'COMPENSATION LOG', {
-            fontFamily: 'monospace',
-            fontSize: '10px',
-            color: '#bbbbbb',
-            letterSpacing: 5,
+        // Cases processed
+        this.add.text(cx, 258, `CASES PROCESSED: ${this._casesProcessed}`, {
+            fontFamily: 'monospace', fontSize: '12px', color: '#888888', letterSpacing: 2,
         }).setOrigin(0.5);
 
-        const deltaStr = `-$${Math.abs(this._paycheckDelta).toFixed(8)}`;
-        const totalStr = `$${Math.max(0, GameState.paycheckTotal).toFixed(8)}`;
+        this._rule(288, 0x333333);
 
-        this.add.text(cx - 80, 338, 'DEDUCTED', {
+        this.add.text(cx, 316, 'COMPENSATION LOG', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
+        }).setOrigin(0.5);
+
+        const deltaSign = this._paycheckDelta >= 0 ? '+' : '-';
+        const deltaStr  = `${deltaSign}$${Math.abs(this._paycheckDelta).toFixed(8)}`;
+        const totalStr  = `$${Math.max(0, GameState.paycheckTotal).toFixed(8)}`;
+
+        this.add.text(cx - 80, 352, 'THIS SHIFT', {
             fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa',
         }).setOrigin(1, 0.5);
-        this.add.text(cx - 64, 338, deltaStr, {
+        this.add.text(cx - 64, 352, deltaStr, {
             fontFamily: 'monospace', fontSize: '13px',
             color: hasViolations ? '#ff5555' : '#aaaaaa',
         }).setOrigin(0, 0.5);
 
-        this.add.text(cx - 80, 362, 'RUNNING', {
+        this.add.text(cx - 80, 376, 'RUNNING', {
             fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa',
         }).setOrigin(1, 0.5);
-        this.add.text(cx - 64, 362, totalStr, {
+        this.add.text(cx - 64, 376, totalStr, {
             fontFamily: 'monospace', fontSize: '13px', color: '#44cc88',
         }).setOrigin(0, 0.5);
 
         if (this._notificationText) {
-            this._rule(410, 0x333333);
+            this._rule(420, 0x333333);
 
-            const tagText = this.add.text(cx, 440, '// INCOMING TRANSMISSION', {
-                fontFamily: 'monospace',
-                fontSize: '10px',
-                color: '#55cc55',
-                letterSpacing: 3,
+            const tagText = this.add.text(cx, 450, '// INCOMING TRANSMISSION', {
+                fontFamily: 'monospace', fontSize: '10px', color: '#55cc55', letterSpacing: 3,
             }).setOrigin(0.5);
 
-            const msgText = this.add.text(cx, 490, this._notificationText, {
-                fontFamily: 'monospace',
-                fontSize: '14px',
-                color: '#aaddaa',
-                wordWrap: { width: 660 },
-                align: 'center',
-                lineSpacing: 8,
+            const msgText = this.add.text(cx, 496, this._notificationText, {
+                fontFamily: 'monospace', fontSize: '14px', color: '#aaddaa',
+                wordWrap: { width: 660 }, align: 'center', lineSpacing: 8,
             }).setOrigin(0.5);
-
 
             this._flicker(tagText);
             this._flicker(msgText, 80);
         }
 
-
         this._rule(600, 0x333333);
 
-        const btnY  = 648;
-        const btnBg = this.add.rectangle(cx, btnY, 200, 38, 0x0c0c0c)
+        // Music
+        this._music = null;
+        if (this.cache.audio.has('music_payday')) {
+            this._music = this.sound.add('music_payday', { loop: true, volume: 0 });
+            this._music.play();
+            this.tweens.add({ targets: this._music, volume: 0.7, duration: 800 });
+        }
+
+        // NEXT SHIFT button
+        const btnY    = 648;
+        const btnBg   = this.add.rectangle(cx, btnY, 200, 38, 0x0c0c0c)
             .setStrokeStyle(1, 0x555555)
             .setInteractive({ useHandCursor: true });
-
         const btnLabel = this.add.text(cx, btnY, 'NEXT SHIFT', {
-            fontFamily: 'monospace',
-            fontSize: '13px',
-            color: '#cccccc',
-            letterSpacing: 4,
+            fontFamily: 'monospace', fontSize: '13px', color: '#cccccc', letterSpacing: 4,
         }).setOrigin(0.5);
 
         let transitioning = false;
 
         btnBg.on('pointerover', () => {
             btnBg.setStrokeStyle(1, accentColor);
-            btnLabel.setColor(this._mistakes > 0 ? '#ff4444' : '#00cc66');
+            btnLabel.setColor(hasViolations ? '#ff4444' : '#00cc66');
         });
         btnBg.on('pointerout', () => {
             btnBg.setStrokeStyle(1, 0x555555);
-            btnLabel.setColor('#999999');
+            btnLabel.setColor('#cccccc');
         });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
             transitioning = true;
-            this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => {
+
+            const doTransition = () => {
                 const prevPeriod = GameState.period;
                 GameState.advanceDay();
                 if (GameState.period !== prevPeriod) {
@@ -147,12 +136,21 @@ export default class SummaryScene extends Phaser.Scene {
                 } else {
                     this.scene.start('Briefing');
                 }
-            });
+            };
+
+            if (this._music) {
+                this.tweens.add({
+                    targets: this._music, volume: 0, duration: 400,
+                    onComplete: () => { this._music.stop(); doTransition(); },
+                });
+            } else {
+                this.cameras.main.fade(400, 0, 0, 0);
+                this.time.delayedCall(400, () => doTransition());
+            }
         });
 
         this.cameras.main.fadeIn(500, 0, 0, 0);
     }
-
 
     _rule(y, color = 0x333333) {
         const g = this.add.graphics();
@@ -162,18 +160,14 @@ export default class SummaryScene extends Phaser.Scene {
 
     _flicker(obj, baseDelay = 0) {
         const tick = () => {
-            const delay  = baseDelay + Phaser.Math.Between(1800, 4200);
-            const alpha  = Phaser.Math.FloatBetween(0.55, 1.0);
-            const dur    = Phaser.Math.Between(40, 120);
+            const delay = baseDelay + Phaser.Math.Between(1800, 4200);
+            const alpha = Phaser.Math.FloatBetween(0.55, 1.0);
+            const dur   = Phaser.Math.Between(40, 120);
             this.time.delayedCall(delay, () => {
                 if (!obj.active) return;
                 this.tweens.add({
-                    targets: obj,
-                    alpha,
-                    duration: dur,
-                    yoyo: true,
-                    ease: 'Stepped',
-                    onComplete: tick,
+                    targets: obj, alpha, duration: dur,
+                    yoyo: true, ease: 'Stepped', onComplete: tick,
                 });
             });
         };

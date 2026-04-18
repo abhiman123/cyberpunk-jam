@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import BootScene from './src/scenes/Boot.js';
-import WorkshopScene from './src/scenes/Workshop.js';
-import StationScene from './src/scenes/Station.js';
+import TitleScene from './src/scenes/Title.js';
 import BriefingScene from './src/scenes/Briefing.js';
 import GameScene from './src/scenes/Game.js';
 import SummaryScene from './src/scenes/Summary.js';
@@ -13,7 +12,7 @@ const config = {
     width: 1280,
     height: 720,
     backgroundColor: '#0a0a0a',
-    scene: [BootScene, WorkshopScene, StationScene, BriefingScene, GameScene, SummaryScene, TransitionScene, EndScene],
+    scene: [BootScene, TitleScene, BriefingScene, GameScene, SummaryScene, TransitionScene, EndScene],
 };
 
 new Phaser.Game(config);

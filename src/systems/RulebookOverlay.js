@@ -42,7 +42,7 @@ export default class RulebookOverlay {
         this.scene.tweens.add({
             targets: this._objects,
             alpha: { from: 0, to: 1 },
-            duration: 150,
+            duration: 120,
         });
     }
 
