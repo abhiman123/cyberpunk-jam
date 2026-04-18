@@ -238,19 +238,25 @@ export default class GameScene extends Phaser.Scene {
 
         this._updateDeskDateText();
 
-        this._createDeskPhoto(182, 620, 'manager_human', {
+        this._createDeskPhoto('manager_human', 'manager_human', {
+            x: 182,
+            y: 620,
             angle: -18,
             portraitScale: 0.42,
             width: 66,
             height: 52,
         });
-        this._createDeskPhoto(216, 628, 'manager_robot', {
+        this._createDeskPhoto('manager_robot', 'manager_robot', {
+            x: 216,
+            y: 628,
             angle: -6,
             portraitScale: 0.42,
             width: 66,
             height: 52,
         });
-        this._createDeskPhoto(258, 622, 'family_photo', {
+        this._createDeskPhoto('family_photo', 'family_photo', {
+            x: 258,
+            y: 622,
             angle: 4,
             portraitScale: 1,
             width: 62,
@@ -261,11 +267,13 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer.add(this._deskContainer);
     }
 
-    _createDeskPhoto(x, y, textureKey, options = {}) {
+    _createDeskPhoto(photoId, textureKey, options = {}) {
         const width = options.width || 62;
         const height = options.height || 48;
         const portraitScale = options.portraitScale || 0.38;
-        const card = this.add.container(x, y).setAngle(options.angle || 0);
+        const savedLayout = GameState.deskPhotoLayout?.[photoId] || null;
+        const card = this.add.container(savedLayout?.x ?? options.x, savedLayout?.y ?? options.y)
+            .setAngle(savedLayout?.angle ?? (options.angle || 0));
         const shadow = this.add.rectangle(4, 5, width, height, 0x000000, 0.2);
         const frame = this.add.rectangle(0, 0, width, height, 0xf0e8db, 1)
             .setStrokeStyle(1, 0x5d5247, 0.68);
@@ -274,33 +282,47 @@ export default class GameScene extends Phaser.Scene {
         const portrait = this.add.image(0, -4, textureKey)
             .setScale(portraitScale)
             .setTint(options.tint || 0xf0f0f0);
+        const grabSurface = this.add.rectangle(0, 0, width + 10, height + 10, 0xffffff, 0.001)
+            .setInteractive({ useHandCursor: true });
 
-        card.add([shadow, frame, matte, portrait]);
+        card.add([shadow, frame, matte, portrait, grabSurface]);
         card.setSize(width, height);
-        card.setInteractive(
-            new Phaser.Geom.Rectangle(-(width / 2), -(height / 2), width, height),
-            Phaser.Geom.Rectangle.Contains,
-        );
 
-        this.input.setDraggable(card);
-        card.on('pointerdown', (pointer) => {
+        if (!GameState.deskPhotoLayout) {
+            GameState.deskPhotoLayout = {};
+        }
+
+        const savePhotoLayout = () => {
+            GameState.deskPhotoLayout[photoId] = {
+                x: card.x,
+                y: card.y,
+                angle: card.angle,
+            };
+        };
+
+        this.input.setDraggable(grabSurface);
+        grabSurface.on('pointerdown', (pointer) => {
             card._dragOffsetX = card.x - pointer.x;
             card._dragOffsetY = card.y - pointer.y;
             this._deskContainer.bringToTop(card);
         });
-        card.on('dragstart', (pointer) => {
+        grabSurface.on('dragstart', (pointer) => {
             card._dragOffsetX = card.x - pointer.x;
             card._dragOffsetY = card.y - pointer.y;
             this._deskContainer.bringToTop(card);
         });
-        card.on('drag', (pointer) => {
+        grabSurface.on('drag', (pointer) => {
             const bounds = this._deskPhotoBounds;
             const nextX = pointer.x + (card._dragOffsetX || 0);
             const nextY = pointer.y + (card._dragOffsetY || 0);
             const clampedX = Phaser.Math.Clamp(nextX, bounds.x + (width / 2), bounds.x + bounds.width - (width / 2));
             const clampedY = Phaser.Math.Clamp(nextY, bounds.y + (height / 2), bounds.y + bounds.height - (height / 2));
             card.setPosition(clampedX, clampedY);
+            savePhotoLayout();
         });
+        grabSurface.on('dragend', savePhotoLayout);
+
+        savePhotoLayout();
 
         this._deskContainer.add(card);
         return card;
@@ -1237,9 +1259,10 @@ export default class GameScene extends Phaser.Scene {
 
         this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID OR FLOW');
 
+        const controlsCenterX = 888;
         const rulingDefs = [
-            { action: 'scrap', x: 844, width: 164, label: 'SCRAP', subtitle: 'drop from the line', fillColor: 0x5b1815, strokeColor: 0xff7d77, textColor: '#ffd6d2' },
-            { action: 'approve', x: 1048, width: 164, label: 'ACCEPT', subtitle: 'send it onward', fillColor: 0x174b2a, strokeColor: 0x75ffaf, textColor: '#d4ffea' },
+            { action: 'scrap', x: 790, width: 164, label: 'SCRAP', subtitle: 'drop from the line', fillColor: 0x5b1815, strokeColor: 0xff7d77, textColor: '#ffd6d2' },
+            { action: 'approve', x: 986, width: 164, label: 'ACCEPT', subtitle: 'send it onward', fillColor: 0x174b2a, strokeColor: 0x75ffaf, textColor: '#d4ffea' },
         ];
 
         this._conveyorRulingButtons = {};
@@ -1300,13 +1323,13 @@ export default class GameScene extends Phaser.Scene {
             };
         });
 
-        this._conveyorDecisionHint = this.add.text(946, 596, 'OPEN THE GRID AND DECIDE FROM THE FACTORY FLOOR', {
+        this._conveyorDecisionHint = this.add.text(controlsCenterX, 596, 'OPEN THE GRID AND DECIDE FROM THE FACTORY FLOOR', {
             fontFamily: 'monospace', fontSize: '11px', color: '#8fc1cf', letterSpacing: 2,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5).setVisible(false);
         this._factoryControlsContainer.add(this._conveyorDecisionHint);
 
-        this._feedbackText = this.add.text(946, 562, '', {
+        this._feedbackText = this.add.text(controlsCenterX, 562, '', {
             fontFamily: 'monospace', fontSize: '12px', color: '#ff4444',
             stroke: '#000000', strokeThickness: 2, align: 'center',
             wordWrap: { width: 460 },
@@ -1516,7 +1539,12 @@ export default class GameScene extends Phaser.Scene {
         };
         const mainInspected = Boolean(machineVariant?._uiPuzzleOpened);
         const otherRequired = Boolean(machineVariant?._uiOtherPuzzleRequired);
-        const otherSolved = !otherRequired || Boolean(machineVariant?._uiOtherPuzzleSolved);
+        const flowState = this._getMachineFlowState(machineVariant);
+        const otherSolved = !otherRequired || Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
+
+        if (machineVariant && otherSolved) {
+            machineVariant._uiOtherPuzzleSolved = true;
+        }
         const mainReady = evaluation.solved || (evaluation.impossible && mainInspected);
 
         return {
@@ -1550,7 +1578,11 @@ export default class GameScene extends Phaser.Scene {
             };
         }
 
-        if (machineVariant._uiOtherPuzzleSolved) {
+        const flowState = this._getMachineFlowState(machineVariant);
+        const otherSolved = Boolean(machineVariant._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
+
+        if (otherSolved) {
+            machineVariant._uiOtherPuzzleSolved = true;
             return {
                 subtitle: 'CLEARED',
                 fillColor: 0x174b2a,
@@ -1560,7 +1592,7 @@ export default class GameScene extends Phaser.Scene {
             };
         }
 
-        if (machineVariant._uiOtherPuzzleEvidence?.forbiddenUsed) {
+        if (flowState?.forbiddenUsed) {
             return {
                 subtitle: 'MODIFIED',
                 fillColor: 0x5b1815,
@@ -1570,7 +1602,7 @@ export default class GameScene extends Phaser.Scene {
             };
         }
 
-        if (machineVariant._uiOtherPuzzleEvidence) {
+        if (flowState) {
             return {
                 subtitle: 'INCOMPLETE',
                 fillColor: 0x4b3520,
@@ -2152,7 +2184,8 @@ export default class GameScene extends Phaser.Scene {
         const gridEvaluation = machineVariant.puzzleState.getEvaluation();
         const flowOutputs = Object.keys(machineVariant.flowPuzzle?.outputs || {});
         const flowState = this._getMachineFlowState(machineVariant);
-        const flowConnected = machineVariant._uiOtherPuzzleSolved
+        const otherSolved = Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
+        const flowConnected = otherSolved
             ? flowOutputs.length
             : (flowState?.connected?.length || 0);
 
@@ -2163,7 +2196,7 @@ export default class GameScene extends Phaser.Scene {
                 : `GRID ${gridEvaluation.matchedChargeCells}/${gridEvaluation.totalChargeCells}`;
         const flowText = !machineVariant.flowPuzzle
             ? 'FLOW NONE'
-            : machineVariant._uiOtherPuzzleSolved
+            : otherSolved
                 ? 'FLOW CLEAR'
                 : flowState?.forbiddenUsed
                     ? 'FLOW MOD'

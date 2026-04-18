@@ -2,6 +2,7 @@ export const GameState = {
     period: 1,
     day: 1,
     calendarAnchorIso: null,
+    deskPhotoLayout: null,
     totalMistakes: 0,
     paycheckTotal: 0,
     casesProcessedThisShift: 0,
@@ -64,6 +65,7 @@ export const GameState = {
         this.period = 1;
         this.day = 1;
         this.calendarAnchorIso = null;
+        this.deskPhotoLayout = null;
         this.totalMistakes = 0;
         this.paycheckTotal = 0;
         this.casesProcessedThisShift = 0;
