@@ -110,7 +110,7 @@ export const MACHINE_PUZZLE = Object.freeze({
     messageDurationMs: 1150,
     inspectButtonX: 1118,
     inspectButtonY: 652,
-    debugCellFontSize: 15,
+    debugCellFontSize: 21,
     debugCellTextColor: '#f5f0d8',
 });
 

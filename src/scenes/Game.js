@@ -15,12 +15,12 @@ import {
     getShiftClockStepMs,
 } from '../constants/gameConstants.js';
 import { createMachineVariant, resolveMachineTexture } from '../data/machineCatalog.js';
-import { isMusicEnabled } from '../state/gameSettings.js';
+import { getMusicVolume } from '../state/gameSettings.js';
 
 import StateMachine from '../core/StateMachine.js';
 import CircuitRouting from '../systems/minigames/CircuitRouting.js';
 
-const PAYCHECK_DELTA = 0.00000003;
+const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
 
 export default class GameScene extends Phaser.Scene {
@@ -69,6 +69,17 @@ export default class GameScene extends Phaser.Scene {
         this._activeMusicKey = null;
         this._pendingExitAction = null;
         this._pendingUnsafeAcceptConfirmation = false;
+        this._shiftEnding = false;
+        this._shiftAwaitingFinalRuling = false;
+        this._otherPuzzleReturnPhoneState = null;
+        this._otherPuzzleReturnVoiceBroken = false;
+        this._machineWorklightFlickerEvent = null;
+        this._phoneBodyScrollOffset = 0;
+        this._phoneStickToBottom = true;
+        this._phoneScrollHover = false;
+        this._deskItems = [];
+        this._selectedDeskItem = null;
+        this._deskItemIntent = null;
 
         this._caseSM = new StateMachine('intake');
 
@@ -86,7 +97,10 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleOverlay.onClose = (evidence) => this._handleOtherPuzzleClosed(evidence);
 
         const newRuleIds = allRules.filter((rule) => rule.period === period).map((rule) => rule.id);
-        this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds);
+        this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds, {
+            onOpen: () => this._setGameplayPaused(true),
+            onClose: () => this._setGameplayPaused(false),
+        });
         this._settingsOverlay = new FactorySettingsOverlay(this, {
             onOpen: () => this._setGameplayPaused(true),
             onClose: () => this._setGameplayPaused(false),
@@ -97,6 +111,11 @@ export default class GameScene extends Phaser.Scene {
             this._clearPhoneTyping();
             this._nextCaseEvent?.remove(false);
             this._advanceCaseEvent?.remove(false);
+            this._machineWorklightFlickerEvent?.remove(false);
+            this.input.off('wheel', this._handlePhoneWheel, this);
+            this.input.off('pointermove', this._handleDeskItemPointerMove, this);
+            this.input.off('pointerup', this._handleDeskItemPointerUp, this);
+            this.input.off('gameout', this._handleDeskItemPointerUp, this);
             this._rulebook?.destroy();
             this._machinePuzzleOverlay.destroy();
             this._otherPuzzleOverlay.destroy();
@@ -123,7 +142,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     update(_time, delta) {
-        if (!this._shiftRunning || this._gameplayPaused) return;
+        if (!this._shiftRunning || this._gameplayPaused || this._shiftEnding) return;
 
         this._elapsed = Math.min(this._elapsed + delta, this._shiftDuration);
         const ratio = 1 - (this._elapsed / this._shiftDuration);
@@ -132,6 +151,11 @@ export default class GameScene extends Phaser.Scene {
         this._checkMusicPhase(ratio);
 
         if (this._elapsed >= this._shiftDuration) {
+            if (this._currentCase) {
+                this._armShiftAwaitingFinalRuling();
+                return;
+            }
+
             this._shiftRunning = false;
             this._endShift(false);
         }
@@ -164,8 +188,8 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5);
         this._hudContainer.add(this._hudCasesText);
 
-        this._hudPayText = this.add.text(1268, 14, this._fmtPay(), {
-            fontFamily: 'Courier New', fontSize: '11px', color: '#00cc88',
+        this._hudPayText = this.add.text(1268, 12, this._fmtPay(), {
+            fontFamily: 'Courier New', fontSize: '14px', color: '#4ff3a9',
         }).setOrigin(1, 0);
         this._hudContainer.add(this._hudPayText);
 
@@ -225,6 +249,9 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(1, 0.5).setAlpha(0.9);
 
         this._deskPhotoBounds = new Phaser.Geom.Rectangle(18, 568, 1244, 136);
+        this.input.on('pointermove', this._handleDeskItemPointerMove, this);
+        this.input.on('pointerup', this._handleDeskItemPointerUp, this);
+        this.input.on('gameout', this._handleDeskItemPointerUp, this);
 
         this._deskContainer.add([
             deskShadow,
@@ -263,6 +290,13 @@ export default class GameScene extends Phaser.Scene {
             height: 48,
             tint: 0xffffff,
         });
+        this._createDeskTablet('desk_tablet', {
+            x: 430,
+            y: 622,
+            angle: -8,
+            width: 118,
+            height: 76,
+        });
 
         this._hudContainer.add(this._deskContainer);
     }
@@ -271,61 +305,270 @@ export default class GameScene extends Phaser.Scene {
         const width = options.width || 62;
         const height = options.height || 48;
         const portraitScale = options.portraitScale || 0.38;
-        const savedLayout = GameState.deskPhotoLayout?.[photoId] || null;
-        const card = this.add.container(savedLayout?.x ?? options.x, savedLayout?.y ?? options.y)
+
+        return this._createDeskItem(photoId, {
+            ...options,
+            width,
+            height,
+            rotationStep: 12,
+            buildVisual: () => {
+                const liftShadow = this.add.rectangle(6, 8, width + 6, height + 6, 0x000000, 0.14);
+                const focusGlow = this.add.rectangle(0, 0, width + 16, height + 16, 0xfff8db, 0)
+                    .setStrokeStyle(2, 0xfffbe7, 0);
+                const shadow = this.add.rectangle(4, 5, width, height, 0x000000, 0.2);
+                const frame = this.add.rectangle(0, 0, width, height, 0xf0e8db, 1)
+                    .setStrokeStyle(1, 0x5d5247, 0.68);
+                const matte = this.add.rectangle(0, -4, width - 12, height - 16, 0x7b7368, 1)
+                    .setStrokeStyle(1, 0x443b32, 0.4);
+                const portrait = this.add.image(0, -4, textureKey)
+                    .setScale(portraitScale)
+                    .setTint(options.tint || 0xf0f0f0);
+
+                return {
+                    nodes: [liftShadow, focusGlow, shadow, frame, matte, portrait],
+                    frame,
+                    focusGlow,
+                    liftShadow,
+                };
+            },
+        });
+    }
+
+    _createDeskTablet(itemId, options = {}) {
+        const width = options.width || 118;
+        const height = options.height || 76;
+
+        return this._createDeskItem(itemId, {
+            ...options,
+            width,
+            height,
+            allowRotate: false,
+            selectedScale: 1.03,
+            dragScale: 1.1,
+            onActivate: () => this._toggleRulebookTablet(),
+            buildVisual: () => {
+                const liftShadow = this.add.ellipse(6, 9, width + 10, height - 12, 0x000000, 0.18);
+                const focusGlow = this.add.rectangle(0, 0, width + 16, height + 16, 0xb9fbff, 0)
+                    .setStrokeStyle(2, 0xe3feff, 0);
+                const shell = this.add.rectangle(0, 0, width, height, 0x1b1f24, 1)
+                    .setStrokeStyle(2, 0x7e878f, 0.72);
+                const glass = this.add.rectangle(0, 0, width - 12, height - 12, 0x0d151b, 1)
+                    .setStrokeStyle(1, 0x62b9c8, 0.55);
+                const glow = this.add.rectangle(0, 0, width - 20, height - 20, 0x173744, 0.96);
+                const topGloss = this.add.rectangle(0, -(height / 2) + 18, width - 18, 16, 0xffffff, 0.08);
+                const label = this.add.text(0, -8, 'RULES', {
+                    fontFamily: 'Courier New', fontSize: '17px', color: '#dffafe', letterSpacing: 2,
+                }).setOrigin(0.5);
+                const sublabel = this.add.text(0, 14, 'Tap to open tablet', {
+                    fontFamily: 'monospace', fontSize: '10px', color: '#79becc',
+                }).setOrigin(0.5);
+                const camera = this.add.circle(0, -(height / 2) + 8, 3, 0x32404d, 1)
+                    .setStrokeStyle(1, 0x8194a1, 0.55);
+
+                return {
+                    nodes: [liftShadow, focusGlow, shell, glass, glow, topGloss, label, sublabel, camera],
+                    frame: shell,
+                    focusGlow,
+                    liftShadow,
+                };
+            },
+        });
+    }
+
+    _createDeskItem(itemId, options = {}) {
+        const width = options.width || 62;
+        const height = options.height || 48;
+        const savedLayout = GameState.deskPhotoLayout?.[itemId] || null;
+        const container = this.add.container(savedLayout?.x ?? options.x, savedLayout?.y ?? options.y)
             .setAngle(savedLayout?.angle ?? (options.angle || 0));
-        const shadow = this.add.rectangle(4, 5, width, height, 0x000000, 0.2);
-        const frame = this.add.rectangle(0, 0, width, height, 0xf0e8db, 1)
-            .setStrokeStyle(1, 0x5d5247, 0.68);
-        const matte = this.add.rectangle(0, -4, width - 12, height - 16, 0x7b7368, 1)
-            .setStrokeStyle(1, 0x443b32, 0.4);
-        const portrait = this.add.image(0, -4, textureKey)
-            .setScale(portraitScale)
-            .setTint(options.tint || 0xf0f0f0);
-        const grabSurface = this.add.rectangle(0, 0, width + 10, height + 10, 0xffffff, 0.001)
+        const builtVisual = options.buildVisual?.() || { nodes: [] };
+        const inputZone = this.add.rectangle(0, 0, width + 16, height + 16, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
 
-        card.add([shadow, frame, matte, portrait, grabSurface]);
-        card.setSize(width, height);
+        container.add([...(builtVisual.nodes || []), inputZone]);
+        container.setSize(width, height);
+
+        const item = {
+            id: itemId,
+            container,
+            inputZone,
+            width,
+            height,
+            selected: false,
+            dragging: false,
+            allowRotate: options.allowRotate !== false,
+            rotationStep: options.rotationStep ?? 12,
+            selectedScale: options.selectedScale ?? 1.06,
+            dragScale: options.dragScale ?? 1.12,
+            onActivate: options.onActivate || null,
+            focusGlow: builtVisual.focusGlow || null,
+            liftShadow: builtVisual.liftShadow || null,
+            frame: builtVisual.frame || null,
+        };
 
         if (!GameState.deskPhotoLayout) {
             GameState.deskPhotoLayout = {};
         }
 
-        const savePhotoLayout = () => {
-            GameState.deskPhotoLayout[photoId] = {
-                x: card.x,
-                y: card.y,
-                angle: card.angle,
-            };
+        inputZone.on('pointerdown', (pointer) => this._beginDeskItemIntent(item, pointer));
+        inputZone.on('pointerover', () => {
+            if (item.dragging || item.selected) return;
+            item.focusGlow?.setAlpha(0.06);
+        });
+        inputZone.on('pointerout', () => {
+            if (item.dragging || item.selected) return;
+            item.focusGlow?.setAlpha(0);
+        });
+
+        this._deskContainer.add(container);
+        this._deskItems.push(item);
+        this._refreshDeskItemVisual(item, true);
+        this._saveDeskItemLayout(item);
+        return item;
+    }
+
+    _beginDeskItemIntent(item, pointer) {
+        if (!item || this._settingsOpen || this._rulebook?.isVisible()) return;
+        if (this._machinePuzzleOverlay?.isVisible() || this._otherPuzzleOverlay?.active) return;
+
+        const startedSelected = this._selectedDeskItem === item;
+        this._setDeskItemSelected(item, true);
+        this._deskContainer.bringToTop(item.container);
+
+        this._deskItemIntent = {
+            item,
+            pointerId: pointer.id,
+            startX: pointer.x,
+            startY: pointer.y,
+            offsetX: item.container.x - pointer.x,
+            offsetY: item.container.y - pointer.y,
+            startedSelected,
+            dragging: false,
         };
+    }
 
-        this.input.setDraggable(grabSurface);
-        grabSurface.on('pointerdown', (pointer) => {
-            card._dragOffsetX = card.x - pointer.x;
-            card._dragOffsetY = card.y - pointer.y;
-            this._deskContainer.bringToTop(card);
-        });
-        grabSurface.on('dragstart', (pointer) => {
-            card._dragOffsetX = card.x - pointer.x;
-            card._dragOffsetY = card.y - pointer.y;
-            this._deskContainer.bringToTop(card);
-        });
-        grabSurface.on('drag', (pointer) => {
-            const bounds = this._deskPhotoBounds;
-            const nextX = pointer.x + (card._dragOffsetX || 0);
-            const nextY = pointer.y + (card._dragOffsetY || 0);
-            const clampedX = Phaser.Math.Clamp(nextX, bounds.x + (width / 2), bounds.x + bounds.width - (width / 2));
-            const clampedY = Phaser.Math.Clamp(nextY, bounds.y + (height / 2), bounds.y + bounds.height - (height / 2));
-            card.setPosition(clampedX, clampedY);
-            savePhotoLayout();
-        });
-        grabSurface.on('dragend', savePhotoLayout);
+    _handleDeskItemPointerMove(pointer) {
+        const intent = this._deskItemIntent;
+        if (!intent || pointer.id !== intent.pointerId) return;
 
-        savePhotoLayout();
+        if (!intent.dragging) {
+            const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, intent.startX, intent.startY);
+            if (distance < 8) return;
+            intent.dragging = true;
+            intent.item.dragging = true;
+            this._refreshDeskItemVisual(intent.item);
+        }
 
-        this._deskContainer.add(card);
-        return card;
+        const bounds = this._deskPhotoBounds;
+        const nextX = pointer.x + intent.offsetX;
+        const nextY = pointer.y + intent.offsetY;
+        const clampedX = Phaser.Math.Clamp(nextX, bounds.x + (intent.item.width / 2), bounds.x + bounds.width - (intent.item.width / 2));
+        const clampedY = Phaser.Math.Clamp(nextY, bounds.y + (intent.item.height / 2), bounds.y + bounds.height - (intent.item.height / 2));
+        intent.item.container.setPosition(clampedX, clampedY);
+    }
+
+    _handleDeskItemPointerUp(pointer) {
+        const intent = this._deskItemIntent;
+        if (!intent) return;
+        if (pointer?.id !== undefined && pointer.id !== intent.pointerId) return;
+
+        this._deskItemIntent = null;
+
+        if (intent.dragging) {
+            intent.item.dragging = false;
+            this._refreshDeskItemVisual(intent.item);
+            this._saveDeskItemLayout(intent.item);
+            return;
+        }
+
+        intent.item.dragging = false;
+        if (intent.item.onActivate) {
+            this._setDeskItemSelected(intent.item, false);
+            intent.item.onActivate();
+            return;
+        }
+
+        if (intent.startedSelected && intent.item.allowRotate) {
+            this._rotateDeskItem(intent.item);
+            return;
+        }
+
+        this._refreshDeskItemVisual(intent.item);
+        this._saveDeskItemLayout(intent.item);
+    }
+
+    _setDeskItemSelected(item, selected) {
+        if (!item) return;
+
+        if (selected && this._selectedDeskItem && this._selectedDeskItem !== item) {
+            this._selectedDeskItem.selected = false;
+            this._selectedDeskItem.dragging = false;
+            this._refreshDeskItemVisual(this._selectedDeskItem);
+        }
+
+        item.selected = selected;
+        if (!selected) {
+            item.dragging = false;
+        }
+        this._selectedDeskItem = selected ? item : (this._selectedDeskItem === item ? null : this._selectedDeskItem);
+        if (selected) this._deskContainer.bringToTop(item.container);
+        this._refreshDeskItemVisual(item);
+    }
+
+    _refreshDeskItemVisual(item, immediate = false) {
+        if (!item) return;
+
+        const targetScale = item.dragging ? item.dragScale : item.selected ? item.selectedScale : 1;
+        this.tweens.killTweensOf(item.container);
+        if (immediate) {
+            item.container.setScale(targetScale);
+        } else {
+            this.tweens.add({
+                targets: item.container,
+                scaleX: targetScale,
+                scaleY: targetScale,
+                duration: 140,
+                ease: 'Cubic.Out',
+            });
+        }
+
+        item.focusGlow?.setAlpha(item.dragging ? 0.22 : item.selected ? 0.12 : 0);
+        if (item.frame) {
+            item.frame.setStrokeStyle(
+                item.frame.lineWidth || 1,
+                item.dragging || item.selected ? 0xf3f6dc : 0x5d5247,
+                item.dragging ? 0.94 : item.selected ? 0.82 : 0.68,
+            );
+        }
+        if (item.liftShadow) {
+            item.liftShadow.setAlpha(item.dragging ? 0.3 : item.selected ? 0.2 : 0.14);
+            item.liftShadow.setPosition(item.dragging ? 8 : 6, item.dragging ? 10 : 8);
+        }
+    }
+
+    _rotateDeskItem(item) {
+        if (!item) return;
+        this.tweens.killTweensOf(item.container);
+        this.tweens.add({
+            targets: item.container,
+            angle: item.container.angle + item.rotationStep,
+            duration: 150,
+            ease: 'Cubic.Out',
+            onComplete: () => this._saveDeskItemLayout(item),
+        });
+    }
+
+    _saveDeskItemLayout(item) {
+        if (!item) return;
+        if (!GameState.deskPhotoLayout) {
+            GameState.deskPhotoLayout = {};
+        }
+
+        GameState.deskPhotoLayout[item.id] = {
+            x: item.container.x,
+            y: item.container.y,
+            angle: item.container.angle,
+        };
     }
 
     _updateDeskDateText() {
@@ -591,13 +834,13 @@ export default class GameScene extends Phaser.Scene {
         });
         this._phoneBodyText = this.add.text(36, 70, '', {
             fontFamily: 'Arial', fontSize: '18px', color: '#101010',
-            wordWrap: { width: 224 }, lineSpacing: 7,
+            wordWrap: { width: 216 }, lineSpacing: 7,
         });
         this._phoneStatusText = this.add.text(36, 184, 'CHANNEL IDLE', {
             fontFamily: 'Arial', fontSize: '12px', color: '#15313a',
         });
 
-        this._phoneBodyViewport = { x: 36, y: 70, width: 224, height: 104 };
+        this._phoneBodyViewport = { x: 36, y: 70, width: 216, height: 60 };
         const phoneBodyMaskGraphics = this.make.graphics({ x: panelX, y: panelY, add: false });
         phoneBodyMaskGraphics.fillStyle(0xffffff, 1);
         phoneBodyMaskGraphics.fillRect(
@@ -608,6 +851,22 @@ export default class GameScene extends Phaser.Scene {
         );
         this._phoneBodyMaskSource = phoneBodyMaskGraphics;
         this._phoneBodyText.setMask(phoneBodyMaskGraphics.createGeometryMask());
+        this._phoneBodyScrollZone = this.add.rectangle(
+            this._phoneBodyViewport.x + (this._phoneBodyViewport.width / 2),
+            this._phoneBodyViewport.y + (this._phoneBodyViewport.height / 2),
+            this._phoneBodyViewport.width + 12,
+            this._phoneBodyViewport.height,
+            0xffffff,
+            0.001,
+        ).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        this._phoneBodyScrollZone.on('pointerover', () => { this._phoneScrollHover = true; });
+        this._phoneBodyScrollZone.on('pointerout', () => { this._phoneScrollHover = false; });
+        this._phoneScrollTrack = this.add.rectangle(264, this._phoneBodyViewport.y, 5, this._phoneBodyViewport.height, 0x3d7c88, 0.22)
+            .setOrigin(0.5, 0);
+        this._phoneScrollThumb = this.add.rectangle(264, this._phoneBodyViewport.y, 5, 20, 0x14313a, 0.56)
+            .setOrigin(0.5, 0)
+            .setStrokeStyle(1, 0xe8ffff, 0.24);
+        this.input.on('wheel', this._handlePhoneWheel, this);
 
         this._settingsButtonBg = this.add.rectangle(366, 46, 40, 42, 0x314250, 1)
             .setStrokeStyle(2, 0x6db7e1, 0.8)
@@ -658,6 +917,9 @@ export default class GameScene extends Phaser.Scene {
             scanlines,
             this._phoneHeaderText,
             this._phoneBodyText,
+            this._phoneBodyScrollZone,
+            this._phoneScrollTrack,
+            this._phoneScrollThumb,
             this._phoneStatusText,
             this._settingsButtonBg,
             this._settingsButtonLabel,
@@ -680,7 +942,40 @@ export default class GameScene extends Phaser.Scene {
         if (!this._phoneBodyText || !this._phoneBodyViewport) return;
 
         const overflow = Math.max(0, this._phoneBodyText.height - this._phoneBodyViewport.height);
-        this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y - overflow);
+        if (this._phoneStickToBottom || this._phoneBodyScrollOffset > overflow) {
+            this._phoneBodyScrollOffset = overflow;
+        }
+
+        this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y - this._phoneBodyScrollOffset);
+
+        if (!this._phoneScrollTrack || !this._phoneScrollThumb) return;
+        if (overflow <= 0) {
+            this._phoneScrollTrack.setVisible(false);
+            this._phoneScrollThumb.setVisible(false);
+            return;
+        }
+
+        this._phoneScrollTrack.setVisible(true);
+        this._phoneScrollThumb.setVisible(true);
+        const thumbHeight = Math.max(16, (this._phoneBodyViewport.height / this._phoneBodyText.height) * this._phoneBodyViewport.height);
+        const travel = this._phoneBodyViewport.height - thumbHeight;
+        const progress = overflow <= 0 ? 0 : this._phoneBodyScrollOffset / overflow;
+        this._phoneScrollThumb.height = thumbHeight;
+        this._phoneScrollThumb.y = this._phoneBodyViewport.y + (travel * progress);
+    }
+
+    _handlePhoneWheel(_pointer, _gameObjects, _deltaX, deltaY) {
+        if (!this._phoneScrollHover || !this._phonePanel?.visible || !this._phoneBodyText || !this._phoneBodyViewport) return;
+
+        const overflow = Math.max(0, this._phoneBodyText.height - this._phoneBodyViewport.height);
+        if (overflow <= 0) return;
+
+        this._phoneStickToBottom = false;
+        this._phoneBodyScrollOffset = Phaser.Math.Clamp(this._phoneBodyScrollOffset + (deltaY * 0.45), 0, overflow);
+        if (this._phoneBodyScrollOffset >= overflow - 1) {
+            this._phoneStickToBottom = true;
+        }
+        this._syncPhoneBodyLayout();
     }
 
     _createPhoneButton(x, y, text, inactiveFill, activeFill, inactiveText, activeText, options = {}) {
@@ -789,6 +1084,7 @@ export default class GameScene extends Phaser.Scene {
     _setPhoneMessage(header, body, status = this._phoneStatusText?.text || '') {
         this._phoneHeaderText.setText(header || '');
         this._phoneBodyText.setText(body || '');
+        this._phoneStickToBottom = true;
         this._syncPhoneBodyLayout();
         if (this._phoneStatusText) this._phoneStatusText.setText(status || '');
     }
@@ -797,6 +1093,19 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneMessage(header, body, status);
         this._phonePanel.setVisible(true);
         this._phonePanel.setAlpha(1);
+    }
+
+    _capturePhonePanelState() {
+        return {
+            header: this._phoneHeaderText?.text || '',
+            body: this._phoneBodyText?.text || '',
+            status: this._phoneStatusText?.text || '',
+        };
+    }
+
+    _restorePhonePanelState(snapshot) {
+        if (!snapshot) return;
+        this._showPhonePanel(snapshot.header, snapshot.body, snapshot.status);
     }
 
     _hidePhonePanel() {
@@ -812,6 +1121,31 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel('FACTORY LINK', message, status);
     }
 
+    _showShiftPendingDecisionNotice() {
+        const header = this._currentMachineVariant
+            ? this._getMachineLinkHeader(this._currentMachineVariant)
+            : 'SHIFT END PENDING';
+
+        this._showPhonePanel(
+            header,
+            '6:00 AM reached. Waiting for you to ACCEPT or SCRAP the current unit before the shift ends.',
+            'LAST UNIT ON LINE'
+        );
+        this._showFeedback('SHIFT OVER // FILE THE LAST RULING', '#ffd685');
+    }
+
+    _armShiftAwaitingFinalRuling() {
+        if (this._shiftAwaitingFinalRuling || this._shiftEnding) return;
+
+        this._shiftAwaitingFinalRuling = true;
+        this._shiftRunning = false;
+        this._nextCaseEvent?.remove(false);
+        this._nextCaseEvent = null;
+        this._updateConveyorDecisionHint();
+        this._refreshFactoryActionButtons();
+        this._showShiftPendingDecisionNotice();
+    }
+
     _clearPhoneTyping() {
         this._commTypingEvent?.remove(false);
         this._commTypingEvent = null;
@@ -824,6 +1158,7 @@ export default class GameScene extends Phaser.Scene {
 
         const prefix = append ? this._phoneBodyText.text : '';
         if (!append) this._phoneBodyText.setText('');
+        this._phoneStickToBottom = true;
 
         if (!text) {
             onComplete?.();
@@ -1105,9 +1440,20 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        this._rulebook?.hide(true);
         this._machinePuzzleOverlay?.close(true);
         this._otherPuzzleOverlay?.hide();
         this._settingsOverlay?.open();
+    }
+
+    _toggleRulebookTablet() {
+        if (this._settingsOverlay?.isVisible()) {
+            this._settingsOverlay.close(true);
+        }
+
+        this._machinePuzzleOverlay?.close(true);
+        this._otherPuzzleOverlay?.hide();
+        this._rulebook?.toggle();
     }
 
     _setGameplayPaused(paused) {
@@ -1233,6 +1579,25 @@ export default class GameScene extends Phaser.Scene {
         this._machineBlueprintLabelContainer = this.add.container(0, 0).setVisible(false);
         this._conveyorContainer.add(this._machineBlueprintLabelContainer);
 
+        this._machineBayLightContainer = this.add.container(MACHINE_PRESENTATION.conveyorTargetX, 420).setDepth(14);
+        this._unitWorklightCone = this.add.graphics();
+        this._unitWorklightCone.fillStyle(0xffe4aa, 0.13);
+        this._unitWorklightCone.fillTriangle(-170, -146, 170, -146, 0, 62);
+        this._unitWorklightGlow = this.add.ellipse(0, -26, 248, 132, 0xffdc96, 0.14);
+        this._unitWorklightHalo = this.add.ellipse(0, -172, 84, 30, 0xffefc7, 0.16);
+        this._unitWorklightHousing = this.add.rectangle(0, -190, 126, 16, 0x2e3439, 1)
+            .setStrokeStyle(2, 0x707a82, 0.82);
+        this._unitWorklightBulb = this.add.rectangle(0, -178, 52, 14, 0xfff0c6, 0.96)
+            .setStrokeStyle(1, 0xfffed9, 0.64);
+        this._machineBayLightContainer.add([
+            this._unitWorklightCone,
+            this._unitWorklightGlow,
+            this._unitWorklightHalo,
+            this._unitWorklightHousing,
+            this._unitWorklightBulb,
+        ]);
+        this._conveyorContainer.add(this._machineBayLightContainer);
+
         this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 420).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText = this.add.text(0, 115, '', {
@@ -1243,8 +1608,13 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'Courier New', fontSize: '10px', color: '#778899',
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5);
-        this._unitContainer.add([this._conveyorUnitSprite, this._unitNameText, this._unitIdText]);
+        this._unitContainer.add([
+            this._conveyorUnitSprite,
+            this._unitNameText,
+            this._unitIdText,
+        ]);
         this._unitContainer.setVisible(false);
+        this._setMachineWorklightVisible(false);
 
         this._conveyorUnitSprite.setInteractive({ useHandCursor: true });
         this._conveyorUnitSprite.on('pointerover', () => this._conveyorUnitSprite.setTint(0xaabbdd));
@@ -1259,10 +1629,10 @@ export default class GameScene extends Phaser.Scene {
 
         this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID OR FLOW');
 
-        const controlsCenterX = 888;
+        const controlsCenterX = 840;
         const rulingDefs = [
-            { action: 'scrap', x: 790, width: 164, label: 'SCRAP', subtitle: 'drop from the line', fillColor: 0x5b1815, strokeColor: 0xff7d77, textColor: '#ffd6d2' },
-            { action: 'approve', x: 986, width: 164, label: 'ACCEPT', subtitle: 'send it onward', fillColor: 0x174b2a, strokeColor: 0x75ffaf, textColor: '#d4ffea' },
+            { action: 'scrap', x: 742, width: 164, label: 'SCRAP', subtitle: 'drop from the line', fillColor: 0x5b1815, strokeColor: 0xff7d77, textColor: '#ffd6d2' },
+            { action: 'approve', x: 938, width: 164, label: 'ACCEPT', subtitle: 'send it onward', fillColor: 0x174b2a, strokeColor: 0x75ffaf, textColor: '#d4ffea' },
         ];
 
         this._conveyorRulingButtons = {};
@@ -1341,8 +1711,11 @@ export default class GameScene extends Phaser.Scene {
 
     _setFactoryIdleState(message) {
         this._clearUnsafeAcceptConfirmation();
+        this._shiftAwaitingFinalRuling = false;
+        this._otherPuzzleReturnPhoneState = null;
         if (this._monitorText) this._monitorText.setText(message);
         if (this._unitContainer) this._unitContainer.setVisible(false);
+        this._setMachineWorklightVisible(false);
         if (this._machineDialogueText) this._machineDialogueText.setText('');
         this._clearMachineGridDisplays();
         if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
@@ -1438,6 +1811,15 @@ export default class GameScene extends Phaser.Scene {
         const { evaluation, mainInspected, mainReady, otherRequired, otherSolved } = gateState;
 
         if (!this._currentMachineVariant) {
+            this._conveyorDecisionHint.setText(text).setColor(color);
+            return;
+        }
+
+        if (this._shiftAwaitingFinalRuling) {
+            text = this._actionLocked
+                ? 'SHIFT OVER // CLEARING THE LAST UNIT'
+                : 'SHIFT OVER // ACCEPT OR SCRAP THE LAST UNIT';
+            color = '#ffd685';
             this._conveyorDecisionHint.setText(text).setColor(color);
             return;
         }
@@ -1668,6 +2050,8 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._clearUnsafeAcceptConfirmation();
+        this._otherPuzzleReturnPhoneState = this._capturePhonePanelState();
+        this._otherPuzzleReturnVoiceBroken = this._hasBrokenVoiceBox(this._currentMachineVariant);
         this._machinePuzzleOverlay?.close(true);
         this._showMiniMachinePanel();
         this._otherPuzzleOverlay.show({
@@ -1681,6 +2065,10 @@ export default class GameScene extends Phaser.Scene {
         if (!this._currentMachineVariant) return;
 
         this._clearUnsafeAcceptConfirmation();
+        const returnPhoneState = this._otherPuzzleReturnPhoneState;
+        const voiceWasBroken = this._otherPuzzleReturnVoiceBroken;
+        this._otherPuzzleReturnPhoneState = null;
+        this._otherPuzzleReturnVoiceBroken = false;
         this._currentMachineVariant._uiOtherPuzzleEvidence = evidence || null;
         if (this._currentMachineVariant.flowPuzzle && evidence) {
             this._currentMachineVariant.flowPuzzle.progress = evidence;
@@ -1695,6 +2083,9 @@ export default class GameScene extends Phaser.Scene {
         this._refreshOtherPuzzleButton();
         this._refreshFactoryActionButtons();
 
+        const voiceBrokenNow = this._hasBrokenVoiceBox(this._currentMachineVariant);
+        const voiceRestoredNow = voiceWasBroken && !voiceBrokenNow;
+
         if (evidence?.completed) {
             const gateState = this._getPuzzleGateState();
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
@@ -1702,37 +2093,57 @@ export default class GameScene extends Phaser.Scene {
                 gateState.mainReady ? 'BOTH PUZZLES CLEARED // FILE YOUR RULING' : 'OTHER PUZZLE CLEARED // FINISH MAIN PUZZLE',
                 '#c7ff86'
             );
-            this._showPhonePanel(
-                header,
-                repairedTargets.length > 0
-                    ? `Secondary diagnostic cleared. Restored: ${repairedTargets.join(', ')}.`
-                    : 'Secondary diagnostic cleared. Routing report logged.',
-                'OTHER PUZZLE CLEAR'
-            );
+            if (voiceRestoredNow) {
+                this._showPhonePanel(
+                    header,
+                    repairedTargets.length > 0
+                        ? `Voice box stabilized. Restored: ${repairedTargets.join(', ')}.`
+                        : 'Voice box stabilized. Signal is clear again.',
+                    'VOICE RESTORED'
+                );
+            } else if (returnPhoneState) {
+                this._restorePhonePanelState(returnPhoneState);
+            } else {
+                this._showPhonePanel(
+                    header,
+                    repairedTargets.length > 0
+                        ? `Secondary diagnostic cleared. Restored: ${repairedTargets.join(', ')}.`
+                        : 'Secondary diagnostic cleared. Routing report logged.',
+                    'OTHER PUZZLE CLEAR'
+                );
+            }
             return;
         }
 
         if (evidence?.forbiddenUsed) {
             glitchBurst(this, this._cmFilter, 320);
             this._showFeedback('OTHER PUZZLE FAILED // UNAUTHORIZED MODIFICATION', '#ff7f73');
-            this._showPhonePanel(
-                header,
-                brokenTargets.length > 0
-                    ? `Unauthorized modification detected. Still offline: ${brokenTargets.join(', ')}.`
-                    : 'Unauthorized modification detected in the secondary diagnostic.',
-                'OTHER PUZZLE MODIFIED'
-            );
+            if (returnPhoneState) {
+                this._restorePhonePanelState(returnPhoneState);
+            } else {
+                this._showPhonePanel(
+                    header,
+                    brokenTargets.length > 0
+                        ? `Unauthorized modification detected. Still offline: ${brokenTargets.join(', ')}.`
+                        : 'Unauthorized modification detected in the secondary diagnostic.',
+                    'OTHER PUZZLE MODIFIED'
+                );
+            }
             return;
         }
 
         this._showFeedback('OTHER PUZZLE INCOMPLETE // OUTPUTS UNREACHED', '#ffd685');
-        this._showPhonePanel(
-            header,
-            brokenTargets.length > 0
-                ? `Secondary diagnostic incomplete. Still offline: ${brokenTargets.join(', ')}.`
-                : 'Secondary diagnostic incomplete. Required outputs remain offline.',
-            'OTHER PUZZLE INCOMPLETE'
-        );
+        if (returnPhoneState) {
+            this._restorePhonePanelState(returnPhoneState);
+        } else {
+            this._showPhonePanel(
+                header,
+                brokenTargets.length > 0
+                    ? `Secondary diagnostic incomplete. Still offline: ${brokenTargets.join(', ')}.`
+                    : 'Secondary diagnostic incomplete. Required outputs remain offline.',
+                'OTHER PUZZLE INCOMPLETE'
+            );
+        }
     }
 
     _clearUnsafeAcceptConfirmation() {
@@ -1912,6 +2323,7 @@ export default class GameScene extends Phaser.Scene {
         this._applyMachineSprite(this._conveyorUnitSprite, 1.0);
 
         this._unitContainer.setVisible(true);
+        this._setMachineWorklightVisible(true);
         this._unitContainer.x = MACHINE_PRESENTATION.conveyorEntryX;
         this._unitContainer.y = 420;
         this._unitContainer.setAngle(0);
@@ -1976,6 +2388,7 @@ export default class GameScene extends Phaser.Scene {
 
         const clearUnitPresentation = () => {
             this._unitContainer.setVisible(false);
+            this._setMachineWorklightVisible(false);
             this._unitContainer.setAngle(0);
             this._unitContainer.setAlpha(1);
             this._unitContainer.setY(420);
@@ -2004,6 +2417,11 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        if (this._shiftAwaitingFinalRuling) {
+            this.time.delayedCall(620, () => this._endShift(false));
+            return;
+        }
+
         this._queueIndex++;
         if (this._queueIndex >= this._queue.length) {
             this._queue = [...this._baseQueue].sort(() => Math.random() - 0.5);
@@ -2016,6 +2434,14 @@ export default class GameScene extends Phaser.Scene {
     // ── Shift end ─────────────────────────────────────────────────────────────
 
     _endShift(fromFinalCase) {
+        if (this._shiftEnding) return;
+
+        this._shiftEnding = true;
+        this._shiftAwaitingFinalRuling = false;
+        this._shiftRunning = false;
+        this._gameplayPaused = true;
+        this._actionLocked = true;
+        this._setMachineWorklightVisible(false);
         this._clearUnsafeAcceptConfirmation();
         this._machinePuzzleOverlay?.close(true);
         this._otherPuzzleOverlay?.hide();
@@ -2044,13 +2470,69 @@ export default class GameScene extends Phaser.Scene {
             notificationText: notif ? notif.text : '',
         };
 
-        this.time.delayedCall(260, () => {
+        this.time.delayedCall(220, () => {
             if (fromFinalCase && GameState.isLastDay()) {
                 this.scene.start('End');
                 return;
             }
 
             this.scene.start('Summary', nextScenePayload);
+        });
+    }
+
+    _setMachineWorklightVisible(visible) {
+        const isVisible = Boolean(visible);
+        const lightParts = [
+            this._unitWorklightCone,
+            this._unitWorklightGlow,
+            this._unitWorklightHalo,
+            this._unitWorklightHousing,
+            this._unitWorklightBulb,
+        ].filter(Boolean);
+
+        lightParts.forEach((part) => part.setVisible(true));
+        this._machineBayLightContainer?.setVisible(true);
+        this._machineWorklightFlickerEvent?.remove(false);
+        this._machineWorklightFlickerEvent = null;
+        this.tweens.killTweensOf(lightParts);
+
+        if (!isVisible) {
+            this._applyMachineWorklightIntensity(0.28);
+            return;
+        }
+
+        this._applyMachineWorklightIntensity(1);
+        this._queueMachineWorklightFlicker();
+    }
+
+    _applyMachineWorklightIntensity(intensity) {
+        const safeIntensity = Phaser.Math.Clamp(intensity, 0, 1.35);
+        this._unitWorklightCone?.setAlpha(0.08 + (safeIntensity * 0.1));
+        this._unitWorklightGlow?.setAlpha(0.07 + (safeIntensity * 0.12));
+        this._unitWorklightHalo?.setAlpha(0.09 + (safeIntensity * 0.16));
+        this._unitWorklightBulb?.setAlpha(0.65 + (safeIntensity * 0.35));
+        this._unitWorklightHousing?.setAlpha(0.9);
+    }
+
+    _queueMachineWorklightFlicker() {
+        this._machineWorklightFlickerEvent?.remove(false);
+        this._machineWorklightFlickerEvent = this.time.delayedCall(Phaser.Math.Between(1200, 3200), () => {
+            if (!this._currentCase || this._shiftEnding) return;
+
+            const flickerState = { intensity: 1 };
+            this.tweens.add({
+                targets: flickerState,
+                intensity: 0.48,
+                duration: Phaser.Math.Between(36, 72),
+                yoyo: true,
+                repeat: Phaser.Math.Between(1, 3),
+                ease: 'Stepped',
+                onUpdate: () => this._applyMachineWorklightIntensity(flickerState.intensity),
+                onComplete: () => {
+                    this._applyMachineWorklightIntensity(1);
+                    this._queueMachineWorklightFlicker();
+                },
+            });
         });
     }
 
@@ -2079,6 +2561,7 @@ export default class GameScene extends Phaser.Scene {
 
     _crossfadeTo(key) {
         this._activeMusicKey = key;
+        const targetVolume = this._getConfiguredMusicVolume();
 
         const outgoing = this._currentMusic;
         if (outgoing) {
@@ -2095,12 +2578,12 @@ export default class GameScene extends Phaser.Scene {
 
         this._currentMusic = null;
 
-        if (this.cache.audio.has(key)) {
+        if (targetVolume > 0 && this.cache.audio.has(key)) {
             const incoming = this.sound.add(key, { loop: true, volume: 0 });
             incoming.play();
             this.tweens.add({
                 targets: incoming,
-                volume: isMusicEnabled() ? SOUND_VOLUMES.music : 0,
+                volume: targetVolume,
                 duration: 2000,
             });
             this._currentMusic = incoming;
@@ -2108,9 +2591,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _applyMusicSettingChange() {
+        const targetVolume = this._getConfiguredMusicVolume();
         if (!this._activeMusicKey) return;
 
-        if (!isMusicEnabled()) {
+        if (targetVolume <= 0) {
             if (!this._currentMusic) return;
 
             this.tweens.add({
@@ -2124,7 +2608,7 @@ export default class GameScene extends Phaser.Scene {
         if (this._currentMusic?.key === this._activeMusicKey) {
             this.tweens.add({
                 targets: this._currentMusic,
-                volume: SOUND_VOLUMES.music,
+                volume: targetVolume,
                 duration: 260,
             });
             return;
@@ -2135,7 +2619,7 @@ export default class GameScene extends Phaser.Scene {
         const outgoing = this._currentMusic;
         const incoming = this.sound.add(this._activeMusicKey, { loop: true, volume: 0 });
         incoming.play();
-        this.tweens.add({ targets: incoming, volume: SOUND_VOLUMES.music, duration: 360 });
+        this.tweens.add({ targets: incoming, volume: targetVolume, duration: 360 });
 
         if (outgoing) {
             this.tweens.add({
@@ -2150,6 +2634,10 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._currentMusic = incoming;
+    }
+
+    _getConfiguredMusicVolume() {
+        return SOUND_VOLUMES.music * getMusicVolume();
     }
 
     _playOneShot(soundAsset, config = {}) {
@@ -2667,6 +3155,6 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _fmtPay() {
-        return `$${Math.max(0, GameState.paycheckTotal).toFixed(8)}`;
+        return `PAY $${Math.max(0, GameState.paycheckTotal).toFixed(2)}`;
     }
 }

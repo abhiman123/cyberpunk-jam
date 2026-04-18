@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
 import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
-import { isMusicEnabled } from '../state/gameSettings.js';
+import { getMusicVolume } from '../state/gameSettings.js';
 
 export default class SummaryScene extends Phaser.Scene {
     constructor() { super('Summary'); }
@@ -66,8 +66,8 @@ export default class SummaryScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         const deltaSign = this._paycheckDelta >= 0 ? '+' : '-';
-        const deltaStr  = `${deltaSign}$${Math.abs(this._paycheckDelta).toFixed(8)}`;
-        const totalStr  = `$${Math.max(0, GameState.paycheckTotal).toFixed(8)}`;
+        const deltaStr  = `${deltaSign}$${Math.abs(this._paycheckDelta).toFixed(2)}`;
+        const totalStr  = `$${Math.max(0, GameState.paycheckTotal).toFixed(2)}`;
 
         this.add.text(cx - 80, 352, 'THIS SHIFT', {
             fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa',
@@ -104,10 +104,11 @@ export default class SummaryScene extends Phaser.Scene {
 
         // Music
         this._music = null;
-        if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.paydayMusic.key)) {
+        const musicVolume = getMusicVolume();
+        if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.paydayMusic.key)) {
             this._music = this.sound.add(SOUND_ASSETS.paydayMusic.key, { loop: true, volume: 0 });
             this._music.play();
-            this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music, duration: 800 });
+            this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music * musicVolume, duration: 800 });
         }
 
         // NEXT SHIFT button

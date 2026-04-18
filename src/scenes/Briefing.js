@@ -3,7 +3,7 @@ import { GameState } from '../GameState.js';
 import Animations from '../fx/Animations.js';
 import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
-import { isMusicEnabled } from '../state/gameSettings.js';
+import { getMusicVolume } from '../state/gameSettings.js';
 
 const PERIOD_BG     = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
 const PERIOD_ACCENT = { 1: 0x886644, 2: 0x446688, 3: 0x2244aa };
@@ -75,10 +75,11 @@ export default class BriefingScene extends Phaser.Scene {
 
         // Music
         this._music = null;
-        if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
+        const musicVolume = getMusicVolume();
+        if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
             this._music = this.sound.add(SOUND_ASSETS.managerMusic.key, { loop: true, volume: 0 });
             this._music.play();
-            this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music, duration: 800 });
+            this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music * musicVolume, duration: 800 });
         }
 
         // ACKNOWLEDGED button

@@ -30,6 +30,12 @@ const createGridOption = ({ grid, dominos, impossible = false }) => ({
 
 const FLOW_TILE_ROWS = 5;
 const FLOW_TILE_COLS = 5;
+const FLOW_CARDINAL_STEPS = Object.freeze([
+    { dir: 'N', dx: 0, dy: -1, opposite: 'S' },
+    { dir: 'E', dx: 1, dy: 0, opposite: 'W' },
+    { dir: 'S', dx: 0, dy: 1, opposite: 'N' },
+    { dir: 'W', dx: -1, dy: 0, opposite: 'E' },
+]);
 
 const FLOW_TARGET_METADATA = Object.freeze({
     ARMS: { displayName: 'Armature Relay', brokenLabel: 'Armature relay offline.', fixedLabel: 'Armature relay stable.' },
@@ -137,6 +143,220 @@ function carveFlowPath(tiles, sourceRow, outRow, cols, branchCol) {
     add(cols - 1, outRow, 'E');
 }
 
+function getFlowCellKey(x, y) {
+    return `${x},${y}`;
+}
+
+function isFlowCellInBounds(x, y) {
+    return x >= 0 && x < FLOW_TILE_COLS && y >= 0 && y < FLOW_TILE_ROWS;
+}
+
+function addFlowConnection(tiles, fromX, fromY, toX, toY) {
+    const step = FLOW_CARDINAL_STEPS.find((candidate) => fromX + candidate.dx === toX && fromY + candidate.dy === toY);
+    if (!step) return;
+
+    tiles[fromY][fromX]._dirs.add(step.dir);
+    tiles[toY][toX]._dirs.add(step.opposite);
+}
+
+function addStandardFlowServiceLoop(tiles) {
+    const loopPath = [
+        [1, 1],
+        [2, 1],
+        [3, 1],
+        [3, 2],
+        [3, 3],
+        [2, 3],
+        [1, 3],
+        [1, 2],
+        [1, 1],
+    ];
+
+    for (let index = 0; index < loopPath.length - 1; index += 1) {
+        addFlowConnection(
+            tiles,
+            loopPath[index][0],
+            loopPath[index][1],
+            loopPath[index + 1][0],
+            loopPath[index + 1][1],
+        );
+    }
+}
+
+function getFlowConnectedNeighbors(tiles, x, y) {
+    const cell = tiles[y]?.[x];
+    if (!cell) return [];
+
+    return FLOW_CARDINAL_STEPS
+        .filter((step) => cell._dirs.has(step.dir) && isFlowCellInBounds(x + step.dx, y + step.dy))
+        .map((step) => ({ x: x + step.dx, y: y + step.dy }));
+}
+
+function cloneFlowDirGrid(tiles) {
+    return tiles.map((row) => row.map((cell) => new Set(cell._dirs)));
+}
+
+function restoreFlowDirGrid(tiles, snapshot) {
+    tiles.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
+        cell._dirs = new Set(snapshot[rowIndex][colIndex]);
+    }));
+}
+
+function getFlowCandidateCells(tiles, sourceRow, outputRows, blockedSet) {
+    const outputSet = new Set(outputRows);
+    const candidates = [];
+
+    tiles.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
+        const cellKey = getFlowCellKey(colIndex, rowIndex);
+        if (blockedSet.has(cellKey)) return;
+        if (colIndex === 0 && rowIndex === sourceRow) return;
+        if (colIndex === FLOW_TILE_COLS - 1 && outputSet.has(rowIndex)) return;
+        if (colIndex === 0 || colIndex === FLOW_TILE_COLS - 1) return;
+        candidates.push({ x: colIndex, y: rowIndex, active: cell._dirs.size > 0 });
+    }));
+
+    return candidates;
+}
+
+function areFlowOutputsReachable(tiles, sourceRow, outputRows, blockedSet) {
+    const startKey = getFlowCellKey(0, sourceRow);
+    if (blockedSet.has(startKey)) return false;
+
+    const queue = [{ x: 0, y: sourceRow }];
+    const visited = new Set([startKey]);
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        getFlowConnectedNeighbors(tiles, current.x, current.y).forEach((neighbor) => {
+            const neighborKey = getFlowCellKey(neighbor.x, neighbor.y);
+            if (blockedSet.has(neighborKey) || visited.has(neighborKey)) return;
+            visited.add(neighborKey);
+            queue.push(neighbor);
+        });
+    }
+
+    return outputRows.every((row) => visited.has(getFlowCellKey(FLOW_TILE_COLS - 1, row)));
+}
+
+function findFlowBypassPath(startCell, endCell, blockedSet) {
+    const startKey = getFlowCellKey(startCell.x, startCell.y);
+    const endKey = getFlowCellKey(endCell.x, endCell.y);
+    const queue = [startCell];
+    const visited = new Set([startKey]);
+    const previous = new Map();
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const currentKey = getFlowCellKey(current.x, current.y);
+        if (currentKey === endKey) break;
+
+        const neighbors = FLOW_CARDINAL_STEPS
+            .map((step) => ({ x: current.x + step.dx, y: current.y + step.dy }))
+            .filter((neighbor) => isFlowCellInBounds(neighbor.x, neighbor.y))
+            .sort((left, right) => {
+                const leftDistance = Math.abs(left.x - endCell.x) + Math.abs(left.y - endCell.y);
+                const rightDistance = Math.abs(right.x - endCell.x) + Math.abs(right.y - endCell.y);
+                return leftDistance - rightDistance;
+            });
+
+        neighbors.forEach((neighbor) => {
+            const neighborKey = getFlowCellKey(neighbor.x, neighbor.y);
+            if (blockedSet.has(neighborKey) || visited.has(neighborKey)) return;
+            visited.add(neighborKey);
+            previous.set(neighborKey, currentKey);
+            queue.push(neighbor);
+        });
+    }
+
+    if (!visited.has(endKey)) return null;
+
+    const path = [];
+    let currentKey = endKey;
+    while (currentKey) {
+        const [x, y] = currentKey.split(',').map(Number);
+        path.unshift({ x, y });
+        currentKey = previous.get(currentKey) || null;
+    }
+
+    return path;
+}
+
+function addFlowBypassForCandidate(tiles, candidate, blockedSet, sourceRow, outputRows) {
+    const candidateKey = getFlowCellKey(candidate.x, candidate.y);
+    const blockedWithCandidate = new Set(blockedSet);
+    blockedWithCandidate.add(candidateKey);
+
+    if (areFlowOutputsReachable(tiles, sourceRow, outputRows, blockedWithCandidate)) {
+        return true;
+    }
+
+    const neighbors = getFlowConnectedNeighbors(tiles, candidate.x, candidate.y);
+    if (neighbors.length !== 2) return false;
+
+    const bypassPath = findFlowBypassPath(neighbors[0], neighbors[1], blockedWithCandidate);
+    if (!bypassPath || bypassPath.length < 2) return false;
+
+    for (let index = 0; index < bypassPath.length - 1; index += 1) {
+        addFlowConnection(
+            tiles,
+            bypassPath[index].x,
+            bypassPath[index].y,
+            bypassPath[index + 1].x,
+            bypassPath[index + 1].y,
+        );
+    }
+
+    return areFlowOutputsReachable(tiles, sourceRow, outputRows, blockedWithCandidate);
+}
+
+function buildSafeForbiddenCells(tiles, sourceRow, outputRows, forbiddenCount, seededRandom) {
+    const forbidden = [];
+    const blockedSet = new Set();
+
+    while (forbidden.length < forbiddenCount) {
+        const candidates = getFlowCandidateCells(tiles, sourceRow, outputRows, blockedSet);
+        if (candidates.length === 0) break;
+
+        const orderedCandidates = [...candidates];
+        for (let index = orderedCandidates.length - 1; index > 0; index -= 1) {
+            const swapIndex = Math.floor(seededRandom() * (index + 1));
+            [orderedCandidates[index], orderedCandidates[swapIndex]] = [orderedCandidates[swapIndex], orderedCandidates[index]];
+        }
+        orderedCandidates.sort((left, right) => Number(right.active) - Number(left.active));
+
+        let placedCandidate = false;
+        for (const candidate of orderedCandidates) {
+            const dirSnapshot = cloneFlowDirGrid(tiles);
+            if (!addFlowBypassForCandidate(tiles, candidate, blockedSet, sourceRow, outputRows)) {
+                restoreFlowDirGrid(tiles, dirSnapshot);
+                continue;
+            }
+
+            const candidateKey = getFlowCellKey(candidate.x, candidate.y);
+            const blockedWithCandidate = new Set(blockedSet);
+            blockedWithCandidate.add(candidateKey);
+            if (!areFlowOutputsReachable(tiles, sourceRow, outputRows, blockedWithCandidate)) {
+                restoreFlowDirGrid(tiles, dirSnapshot);
+                continue;
+            }
+            const forbiddenCells = [...forbidden, [candidate.x, candidate.y]];
+            if (!flowHasForbiddenBypassSolution(tiles, sourceRow, outputRows, forbiddenCells)) {
+                restoreFlowDirGrid(tiles, dirSnapshot);
+                continue;
+            }
+
+            blockedSet.add(candidateKey);
+            forbidden.push([candidate.x, candidate.y]);
+            placedCandidate = true;
+            break;
+        }
+
+        if (!placedCandidate) break;
+    }
+
+    return forbidden;
+}
+
 function finalizeFlowTile(cell) {
     const dirs = cell._dirs;
     const bits = [dirs.has('N') ? 1 : 0, dirs.has('E') ? 1 : 0, dirs.has('S') ? 1 : 0, dirs.has('W') ? 1 : 0];
@@ -181,11 +401,168 @@ function finalizeFlowTile(cell) {
     cell.rotation = (bits[0] || bits[2]) ? 0 : 1;
 }
 
+function getFlowOrientationSets(type) {
+    switch (type) {
+    case 'straight':
+        return [new Set(['N', 'S']), new Set(['E', 'W'])];
+    case 'curve':
+        return [
+            new Set(['N', 'E']),
+            new Set(['E', 'S']),
+            new Set(['S', 'W']),
+            new Set(['W', 'N']),
+        ];
+    case 'tee':
+        return [
+            new Set(['N', 'E', 'S']),
+            new Set(['E', 'S', 'W']),
+            new Set(['S', 'W', 'N']),
+            new Set(['W', 'N', 'E']),
+        ];
+    case 'cross':
+        return [new Set(['N', 'E', 'S', 'W'])];
+    default:
+        return [new Set()];
+    }
+}
+
+function buildSolvedFlowTypeGrid(tiles) {
+    return tiles.map((row) => row.map((cell) => {
+        const solvedCell = {
+            type: 'empty',
+            rotation: 0,
+            _dirs: new Set(cell._dirs),
+        };
+        finalizeFlowTile(solvedCell);
+        return { type: solvedCell.type };
+    }));
+}
+
+function isFlowOrientationBoundaryValid(dirs, x, y, sourceRow, outputRows) {
+    const outputSet = new Set(outputRows);
+
+    for (const step of FLOW_CARDINAL_STEPS) {
+        if (!dirs.has(step.dir)) continue;
+        const nx = x + step.dx;
+        const ny = y + step.dy;
+
+        if (nx < 0) {
+            if (!(x === 0 && y === sourceRow && step.dir === 'W')) return false;
+            continue;
+        }
+        if (nx >= FLOW_TILE_COLS) {
+            if (!(x === FLOW_TILE_COLS - 1 && outputSet.has(y) && step.dir === 'E')) return false;
+            continue;
+        }
+        if (ny < 0 || ny >= FLOW_TILE_ROWS) return false;
+    }
+
+    return true;
+}
+
+function flowHasForbiddenBypassSolution(tiles, sourceRow, outputRows, forbiddenCells) {
+    const solvedTypes = buildSolvedFlowTypeGrid(tiles);
+    const forbiddenSet = new Set((forbiddenCells || []).map(([x, y]) => getFlowCellKey(x, y)));
+    const assignment = new Map();
+    const domains = new Map();
+    const cells = [];
+
+    for (let y = 0; y < FLOW_TILE_ROWS; y += 1) {
+        for (let x = 0; x < FLOW_TILE_COLS; x += 1) {
+            const cellKey = getFlowCellKey(x, y);
+            const domain = forbiddenSet.has(cellKey)
+                ? [new Set()]
+                : getFlowOrientationSets(solvedTypes[y][x].type)
+                    .filter((dirs) => isFlowOrientationBoundaryValid(dirs, x, y, sourceRow, outputRows));
+
+            if (domain.length === 0) return false;
+            domains.set(cellKey, domain);
+            cells.push({ x, y, cellKey });
+        }
+    }
+
+    function neighborCanSupport(nx, ny, opposite) {
+        const neighborKey = getFlowCellKey(nx, ny);
+        const assignedDirs = assignment.get(neighborKey);
+        if (assignedDirs) return assignedDirs.has(opposite);
+        return domains.get(neighborKey).some((dirs) => dirs.has(opposite));
+    }
+
+    function search(index) {
+        if (index >= cells.length) {
+            const startKey = getFlowCellKey(0, sourceRow);
+            const startDirs = assignment.get(startKey);
+            if (!startDirs || !startDirs.has('W')) return false;
+
+            const queue = [{ x: 0, y: sourceRow }];
+            const visited = new Set([startKey]);
+            while (queue.length > 0) {
+                const current = queue.shift();
+                const currentDirs = assignment.get(getFlowCellKey(current.x, current.y)) || new Set();
+                FLOW_CARDINAL_STEPS.forEach((step) => {
+                    if (!currentDirs.has(step.dir)) return;
+
+                    const nx = current.x + step.dx;
+                    const ny = current.y + step.dy;
+                    if (!isFlowCellInBounds(nx, ny)) return;
+
+                    const neighborKey = getFlowCellKey(nx, ny);
+                    if (visited.has(neighborKey)) return;
+
+                    const neighborDirs = assignment.get(neighborKey) || new Set();
+                    if (!neighborDirs.has(step.opposite)) return;
+
+                    visited.add(neighborKey);
+                    queue.push({ x: nx, y: ny });
+                });
+            }
+
+            return outputRows.every((row) => {
+                const edgeKey = getFlowCellKey(FLOW_TILE_COLS - 1, row);
+                return visited.has(edgeKey) && (assignment.get(edgeKey)?.has('E'));
+            });
+        }
+
+        const { x, y, cellKey } = cells[index];
+        const domain = domains.get(cellKey);
+        for (const dirs of domain) {
+            const leftDirs = x > 0 ? assignment.get(getFlowCellKey(x - 1, y)) : null;
+            const topDirs = y > 0 ? assignment.get(getFlowCellKey(x, y - 1)) : null;
+            if (leftDirs && leftDirs.has('E') !== dirs.has('W')) continue;
+            if (topDirs && topDirs.has('S') !== dirs.has('N')) continue;
+
+            let futureOk = true;
+            for (const step of FLOW_CARDINAL_STEPS) {
+                if (!dirs.has(step.dir)) continue;
+
+                const nx = x + step.dx;
+                const ny = y + step.dy;
+                if (!isFlowCellInBounds(nx, ny)) continue;
+                if (!neighborCanSupport(nx, ny, step.opposite)) {
+                    futureOk = false;
+                    break;
+                }
+            }
+
+            if (!futureOk) continue;
+
+            assignment.set(cellKey, dirs);
+            if (search(index + 1)) return true;
+            assignment.delete(cellKey);
+        }
+
+        return false;
+    }
+
+    return search(0);
+}
+
 function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, previewTitle = 'POWER BUS' }) {
     const tiles = Array.from({ length: FLOW_TILE_ROWS }, () => (
         Array.from({ length: FLOW_TILE_COLS }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     ));
     const outputRows = Object.keys(outputs || {}).map(Number).sort((left, right) => left - right);
+    const seededRandom = createSeededRandom(`${previewTitle}:${sourceRow}:${outputRows.join(',')}`);
 
     outputRows.forEach((outRow, index) => {
         const branchCol = outRow === sourceRow
@@ -194,21 +571,17 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
         carveFlowPath(tiles, sourceRow, outRow, FLOW_TILE_COLS, branchCol);
     });
 
-    const pathCells = [];
-    tiles.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
-        if (cell._dirs.size > 0
-            && !(colIndex === 0 && rowIndex === sourceRow)
-            && !(colIndex === FLOW_TILE_COLS - 1 && outputRows.includes(rowIndex))) {
-            pathCells.push([colIndex, rowIndex]);
-        }
-    }));
+    if (forbiddenCount > 0) {
+        addStandardFlowServiceLoop(tiles);
+    }
+
+    const forbidden = buildSafeForbiddenCells(tiles, sourceRow, outputRows, forbiddenCount, seededRandom);
 
     tiles.forEach((row) => row.forEach((cell) => {
         finalizeFlowTile(cell);
         delete cell._dirs;
     }));
 
-    const seededRandom = createSeededRandom(`${previewTitle}:${sourceRow}:${outputRows.join(',')}`);
     tiles.forEach((row) => row.forEach((cell) => {
         if (cell.type === 'empty' || cell.type === 'cross') return;
         if (cell.type === 'straight') {
@@ -218,13 +591,6 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
 
         cell.rotation = (cell.rotation + 1 + Math.floor(seededRandom() * 3)) % 4;
     }));
-
-    const forbidden = [];
-    const pool = [...pathCells];
-    for (let index = 0; index < forbiddenCount && pool.length > 0; index += 1) {
-        const pickIndex = Math.floor(seededRandom() * pool.length);
-        forbidden.push(pool.splice(pickIndex, 1)[0]);
-    }
 
     return {
         tiles: cloneFlowTiles(tiles),
