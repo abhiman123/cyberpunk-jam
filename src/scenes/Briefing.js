@@ -68,11 +68,6 @@ export default class BriefingScene extends Phaser.Scene {
             });
         }
 
-        // Scanlines
-        const scan = this.add.graphics();
-        scan.fillStyle(0x000000, 0.3);
-        for (let y = 0; y < H; y += 4) scan.fillRect(0, y, W, 2);
-
         // Music
         this._music = null;
         if (this.cache.audio.has('music_manager')) {
@@ -129,6 +124,11 @@ export default class BriefingScene extends Phaser.Scene {
 
         const fullText = briefing.text;
         const typeEvent = Animations.typewriter(this, this._typewriterText, fullText, 38, markTextDone);
+
+        // Scanlines
+        const scan = this.add.graphics();
+        scan.fillStyle(0x000000, 0.3);
+        for (let y = 0; y < H; y += 4) scan.fillRect(0, y, W, 2);
 
         this.cameras.main.fadeIn(400, 0, 0, 0);
     }

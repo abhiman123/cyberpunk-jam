@@ -9,11 +9,6 @@ export default class TitleScene extends Phaser.Scene {
         // Background
         this.cameras.main.setBackgroundColor('#0f140e');
 
-        // Top tagline
-        // this.add.text(cx, 80, '// a bureaucratic horror game', {
-        //     fontFamily: 'monospace', fontSize: '13px', color: '#33ff00', letterSpacing: 2,
-        // }).setOrigin(0.5);
-
         // Main title
         this.add.text(cx, 280, "YOU'RE JUST\nA MACHINE", {
             fontFamily: 'Courier New', fontSize: '64px', color: '#33ff00', align: 'center'
