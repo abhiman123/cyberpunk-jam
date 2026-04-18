@@ -105,6 +105,15 @@ export default class ChassisBay {
         this._caseData = caseData;
         this._header.setText(`CHASSIS BAY — ${caseData.id} / ${caseData.name}`);
         this._diagBtn.setVisible(!!caseData.circuit);
+
+        // Reset diagnostic button to initial state
+        if (this._diagBtn.visible) {
+            const bg = this._diagBtn.list[0];
+            const txt = this._diagBtn.list[1];
+            bg.setFillStyle(0x003344, 0.85).setStrokeStyle(1, 0x00cccc, 0.9);
+            txt.setText('OPEN DIAGNOSTIC PORT').setColor('#00eeee');
+        }
+
         // Reset panel visuals
         this._opened.clear();
         Object.values(this._panelObjs).forEach(({ rect, lbl, panel }) => {

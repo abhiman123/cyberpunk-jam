@@ -55,6 +55,7 @@ export default class TitleScene extends Phaser.Scene {
         });
 
         btnBg.on('pointerdown', () => {
+            if (!ready) return;
             btnBg.setStrokeStyle(1, 0xff0000);
             btnLabel.setColor('#ff0000');
         });

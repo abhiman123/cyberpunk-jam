@@ -54,17 +54,14 @@ export default class StampPress {
             const y = 130;
             const body = this.scene.add.rectangle(x, y, 130, 100, 0x1a1a1a, 1)
                 .setStrokeStyle(2, s.color, 1);
-            const handle = this.scene.add.rectangle(x, y - 34, 34, 34, s.color, 1)
-                .setStrokeStyle(1, 0x000000, 1);
             const lbl = this.scene.add.text(x, y, s.label, {
                 fontFamily: 'monospace', fontSize: '14px', color: '#ffffff',
                 stroke: '#000000', strokeThickness: 2,
             }).setOrigin(0.5);
 
             body.setInteractive({ useHandCursor: true });
-            handle.setInteractive({ useHandCursor: true });
 
-            const hitTargets = [body, handle];
+            const hitTargets = [body];
             hitTargets.forEach(t => {
                 t.on('pointerover', () => {
                     if (!this._enabled || this._locked) return;
@@ -76,8 +73,8 @@ export default class StampPress {
                 t.on('pointerdown', () => this._press(s));
             });
 
-            this.container.add([body, handle, lbl]);
-            this._stamps.push({ body, handle, lbl, def: s });
+            this.container.add([body, lbl]);
+            this._stamps.push({ body, lbl, def: s });
         });
     }
 
@@ -90,9 +87,9 @@ export default class StampPress {
         this._locked = true;
 
         const stamp = this._stamps.find(s => s.def.action === stampDef.action);
-        // Slam animation on the handle
+        // Slam animation on the stamp
         this.scene.tweens.add({
-            targets: [stamp.handle, stamp.body, stamp.lbl],
+            targets: [stamp.body, stamp.lbl],
             y: '+=24',
             duration: 90,
             ease: 'Cubic.In',
@@ -130,7 +127,6 @@ export default class StampPress {
         const tint = g ? 0.4 : 1;
         this._stamps.forEach(s => {
             s.body.setAlpha(tint);
-            s.handle.setAlpha(tint);
             s.lbl.setAlpha(tint);
         });
     }

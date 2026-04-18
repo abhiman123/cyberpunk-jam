@@ -144,9 +144,19 @@ export default class CircuitRouting extends MinigameBase {
             tiles = circuit.tiles.map(row => row.map(c => ({ ...c })));
             forbiddenList = circuit.forbidden || [];
         } else {
-            const gen = generateCircuit(circuit, this.rows, this.cols);
-            tiles = gen.tiles;
-            forbiddenList = gen.forbidden;
+            // Check if we already generated a circuit for this case
+            if (circuit._generatedTiles && circuit._generatedForbidden) {
+                tiles = circuit._generatedTiles.map(row => row.map(c => ({ ...c })));
+                forbiddenList = [...circuit._generatedForbidden];
+            } else {
+                // Generate new circuit and cache it
+                const gen = generateCircuit(circuit, this.rows, this.cols);
+                tiles = gen.tiles;
+                forbiddenList = gen.forbidden;
+                // Store the generated circuit for future use
+                circuit._generatedTiles = tiles.map(row => row.map(c => ({ ...c })));
+                circuit._generatedForbidden = [...forbiddenList];
+            }
         }
         this._tiles = tiles;
         this._forbidden = new Set(forbiddenList.map(([x, y]) => `${x},${y}`));
