@@ -31,6 +31,8 @@ export default class MachinePuzzleOverlay {
         this._dragState = null;
         this._floatingDominoView = null;
         this._tableBounds = null;
+        this._currentPulseTween = null;
+        this._currentPulseState = null;
 
         this._handlePointerMove = this._handlePointerMove.bind(this);
         this._handlePointerUp = this._handlePointerUp.bind(this);
@@ -81,6 +83,7 @@ export default class MachinePuzzleOverlay {
         this._gridBoardGfx = this.scene.add.graphics();
         this._equalLinkGfx = this.scene.add.graphics();
         this._tableGfx = this.scene.add.graphics();
+        this._currentPulseGfx = this.scene.add.graphics();
         this._gridLayer = this.scene.add.container(0, 0);
         this._dominoLayer = this.scene.add.container(0, 0);
 
@@ -117,6 +120,7 @@ export default class MachinePuzzleOverlay {
             this._gridBoardGfx,
             this._equalLinkGfx,
             this._tableGfx,
+            this._currentPulseGfx,
             this._gridLayer,
             this._dominoLayer,
             this._messageText,
@@ -190,6 +194,13 @@ export default class MachinePuzzleOverlay {
         this._gridBoardGfx.clear();
         this._equalLinkGfx.clear();
         this._tableGfx.clear();
+        this.scene.tweens.killTweensOf(this._currentPulseGfx);
+        if (this._currentPulseTween) {
+            this._currentPulseTween.stop();
+            this._currentPulseTween = null;
+        }
+        this._currentPulseState = null;
+        this._currentPulseGfx.setAlpha(1).clear();
         this._messageText.setAlpha(0).setText('');
         this._tableBounds = null;
 
@@ -772,6 +783,7 @@ export default class MachinePuzzleOverlay {
         const solvedNow = nextEvaluation.solved && !previousEvaluation.solved;
 
         this._flashPlacement(candidate.cells);
+        this._playPlacementCurrent(candidate.cells, { boosted: hasNewCharge || hasNewEquality || solvedNow });
         this._notifyGridChanged();
         this._playPuzzleSound(SOUND_ASSETS.circuitLock, SOUND_ASSETS.inspectionReveal, SOUND_VOLUMES.puzzleLock);
         if (hasNewCharge || solvedNow) {
@@ -1064,6 +1076,66 @@ export default class MachinePuzzleOverlay {
                 duration: 220,
                 ease: 'Quad.Out',
             });
+        });
+    }
+
+    _playPlacementCurrent(cells, { boosted = false } = {}) {
+        if (!Array.isArray(cells) || cells.length === 0 || !this._currentPulseGfx) return;
+
+        const points = cells.map((cell) => this._getCellCenter(cell.row, cell.col));
+        if (points.length === 0) return;
+
+        const start = points[0];
+        const end = points[points.length - 1];
+
+        this.scene.tweens.killTweensOf(this._currentPulseGfx);
+        if (this._currentPulseTween) {
+            this._currentPulseTween.stop();
+        }
+
+        this._currentPulseGfx.setAlpha(1).clear();
+        this._currentPulseState = { progress: 0 };
+        this._currentPulseTween = this.scene.tweens.add({
+            targets: this._currentPulseState,
+            progress: 1,
+            duration: boosted ? 420 : 320,
+            ease: 'Sine.Out',
+            onUpdate: () => {
+                const progress = this._currentPulseState?.progress ?? 0;
+                const travelX = Phaser.Math.Linear(start.x, end.x, progress);
+                const travelY = Phaser.Math.Linear(start.y, end.y, progress);
+                const glowColor = boosted ? 0xfff2b8 : 0x8efbe0;
+                const pulseColor = boosted ? 0xfffcdb : 0xd9ffe4;
+                const lineWidth = boosted ? 5 : 4;
+
+                this._currentPulseGfx.clear();
+                this._currentPulseGfx.lineStyle(lineWidth + 5, glowColor, boosted ? 0.2 : 0.14);
+                this._currentPulseGfx.lineBetween(start.x, start.y, end.x, end.y);
+                this._currentPulseGfx.lineStyle(lineWidth, pulseColor, 0.92);
+                this._currentPulseGfx.lineBetween(start.x, start.y, travelX, travelY);
+                this._currentPulseGfx.fillStyle(pulseColor, 0.95);
+                this._currentPulseGfx.fillCircle(travelX, travelY, boosted ? 8 : 6);
+
+                points.forEach((point, index) => {
+                    const intensity = index === 0 ? 0.36 : Math.max(0, progress - 0.22);
+                    if (intensity <= 0) return;
+                    this._currentPulseGfx.fillStyle(glowColor, intensity * 0.42);
+                    this._currentPulseGfx.fillCircle(point.x, point.y, boosted ? 10 + (progress * 6) : 8 + (progress * 4));
+                });
+            },
+            onComplete: () => {
+                this._currentPulseTween = null;
+                this.scene.tweens.add({
+                    targets: this._currentPulseGfx,
+                    alpha: 0,
+                    duration: 120,
+                    ease: 'Quad.Out',
+                    onComplete: () => {
+                        this._currentPulseGfx.clear();
+                        this._currentPulseGfx.setAlpha(1);
+                    },
+                });
+            },
         });
     }
 

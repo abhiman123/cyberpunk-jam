@@ -1,6 +1,7 @@
 export const GameState = {
     period: 1,
     day: 1,
+    calendarAnchorIso: null,
     totalMistakes: 0,
     paycheckTotal: 0,
     casesProcessedThisShift: 0,
@@ -10,6 +11,41 @@ export const GameState = {
 
     isLastDay() {
         return this.period === 3 && this.day === 2;
+    },
+
+    _getTodayIso() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    },
+
+    ensureCalendarAnchor() {
+        if (!this.calendarAnchorIso) {
+            this.calendarAnchorIso = this._getTodayIso();
+        }
+
+        return this.calendarAnchorIso;
+    },
+
+    getShiftSequenceIndex() {
+        return (Math.max(1, this.period) - 1) * 2 + (Math.max(1, this.day) - 1);
+    },
+
+    getCurrentShiftDate() {
+        const [year, month, day] = this.ensureCalendarAnchor().split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        date.setDate(date.getDate() + this.getShiftSequenceIndex());
+        return date;
+    },
+
+    formatCurrentShiftDate() {
+        const date = this.getCurrentShiftDate();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const year = String(date.getFullYear()).slice(-2);
+        return `${month}.${day}.${year}`;
     },
 
     advanceDay() {
@@ -27,6 +63,7 @@ export const GameState = {
     reset() {
         this.period = 1;
         this.day = 1;
+        this.calendarAnchorIso = null;
         this.totalMistakes = 0;
         this.paycheckTotal = 0;
         this.casesProcessedThisShift = 0;

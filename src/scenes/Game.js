@@ -139,6 +139,7 @@ export default class GameScene extends Phaser.Scene {
 
     _buildHUD() {
         this._hudContainer = this.add.container(0, 0).setDepth(200);
+        this._factoryControlsContainer = this.add.container(0, 0).setDepth(208).setVisible(false);
 
         const topBarShadow = this.add.rectangle(640, 130, 1280, 244, 0x000000, 0.24);
         const topBar = this.add.rectangle(640, 118, 1280, 228, 0x524c40, 0.96)
@@ -214,13 +215,16 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0x92876b, 0.55);
         const deskInset = this.add.rectangle(220, 630, 270, 112, 0x3a342d, 0.72)
             .setStrokeStyle(1, 0x6b6252, 0.55);
-        const deskDate = this.add.text(74, 670, '12.05.82', {
+        const datePlate = this.add.rectangle(1178, 684, 176, 42, 0x2a251f, 0.88)
+            .setStrokeStyle(1, 0x645a47, 0.75);
+        this._deskDateText = this.add.text(1254, 684, '', {
             fontFamily: 'Courier New',
-            fontSize: '22px',
+            fontSize: '20px',
             color: '#8d815a',
-        }).setAlpha(0.85);
+            letterSpacing: 1,
+        }).setOrigin(1, 0.5).setAlpha(0.9);
 
-        this._deskPhotoBounds = new Phaser.Geom.Rectangle(62, 574, 272, 104);
+        this._deskPhotoBounds = new Phaser.Geom.Rectangle(18, 568, 1244, 136);
 
         this._deskContainer.add([
             deskShadow,
@@ -228,8 +232,11 @@ export default class GameScene extends Phaser.Scene {
             deskTopLip,
             deskTop,
             deskInset,
-            deskDate,
+            datePlate,
+            this._deskDateText,
         ]);
+
+        this._updateDeskDateText();
 
         this._createDeskPhoto(182, 620, 'manager_human', {
             angle: -18,
@@ -276,16 +283,32 @@ export default class GameScene extends Phaser.Scene {
         );
 
         this.input.setDraggable(card);
-        card.on('dragstart', () => this._deskContainer.bringToTop(card));
-        card.on('drag', (_pointer, dragX, dragY) => {
+        card.on('pointerdown', (pointer) => {
+            card._dragOffsetX = card.x - pointer.x;
+            card._dragOffsetY = card.y - pointer.y;
+            this._deskContainer.bringToTop(card);
+        });
+        card.on('dragstart', (pointer) => {
+            card._dragOffsetX = card.x - pointer.x;
+            card._dragOffsetY = card.y - pointer.y;
+            this._deskContainer.bringToTop(card);
+        });
+        card.on('drag', (pointer) => {
             const bounds = this._deskPhotoBounds;
-            const clampedX = Phaser.Math.Clamp(dragX, bounds.x + (width / 2), bounds.x + bounds.width - (width / 2));
-            const clampedY = Phaser.Math.Clamp(dragY, bounds.y + (height / 2), bounds.y + bounds.height - (height / 2));
+            const nextX = pointer.x + (card._dragOffsetX || 0);
+            const nextY = pointer.y + (card._dragOffsetY || 0);
+            const clampedX = Phaser.Math.Clamp(nextX, bounds.x + (width / 2), bounds.x + bounds.width - (width / 2));
+            const clampedY = Phaser.Math.Clamp(nextY, bounds.y + (height / 2), bounds.y + bounds.height - (height / 2));
             card.setPosition(clampedX, clampedY);
         });
 
         this._deskContainer.add(card);
         return card;
+    }
+
+    _updateDeskDateText() {
+        if (!this._deskDateText) return;
+        this._deskDateText.setText(GameState.formatCurrentShiftDate());
     }
 
     _buildDisabledInspectionContainer() {
@@ -515,14 +538,14 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _buildPhonePanel() {
-        const panelX = 786;
+        const panelX = 808;
         const panelY = 34;
-        const frameWidth = 436;
-        const frameHeight = 226;
-        const screenX = 26;
-        const screenY = 24;
-        const screenWidth = 304;
-        const screenHeight = 160;
+        const frameWidth = 408;
+        const frameHeight = 216;
+        const screenX = 22;
+        const screenY = 20;
+        const screenWidth = 278;
+        const screenHeight = 154;
 
         this._phonePanel = this.add.container(panelX, panelY).setDepth(260).setVisible(true);
 
@@ -532,8 +555,8 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(2, 0x4ba7c4, 0.9);
         const screen = this.add.rectangle(screenX, screenY, screenWidth, screenHeight, 0x72d3dd, 0.84).setOrigin(0)
             .setStrokeStyle(1, 0xc9ffff, 0.25);
-        const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 34, screenWidth - 10, 52, 0xffffff, 0.08).setOrigin(0.5);
-        const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 42, 10, 0x1b1812, 1).setOrigin(0.5);
+        const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 30, screenWidth - 10, 46, 0xffffff, 0.08).setOrigin(0.5);
+        const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 38, 10, 0x1b1812, 1).setOrigin(0.5);
 
         const scanlines = this.add.graphics();
         scanlines.fillStyle(0xffffff, 0.07);
@@ -541,18 +564,18 @@ export default class GameScene extends Phaser.Scene {
             scanlines.fillRect(screenX, screenY + offset, screenWidth, 6);
         }
 
-        this._phoneHeaderText = this.add.text(40, 34, 'FACTORY LINK', {
-            fontFamily: 'Arial Black', fontSize: '18px', color: '#101010',
+        this._phoneHeaderText = this.add.text(34, 30, 'FACTORY LINK', {
+            fontFamily: 'Arial Black', fontSize: '17px', color: '#101010',
         });
-        this._phoneBodyText = this.add.text(42, 78, '', {
-            fontFamily: 'Arial', fontSize: '20px', color: '#101010',
-            wordWrap: { width: 236 }, lineSpacing: 8,
+        this._phoneBodyText = this.add.text(36, 70, '', {
+            fontFamily: 'Arial', fontSize: '18px', color: '#101010',
+            wordWrap: { width: 224 }, lineSpacing: 7,
         });
-        this._phoneStatusText = this.add.text(42, 190, 'CHANNEL IDLE', {
+        this._phoneStatusText = this.add.text(36, 184, 'CHANNEL IDLE', {
             fontFamily: 'Arial', fontSize: '12px', color: '#15313a',
         });
 
-        this._phoneBodyViewport = { x: 42, y: 78, width: 236, height: 98 };
+        this._phoneBodyViewport = { x: 36, y: 70, width: 224, height: 104 };
         const phoneBodyMaskGraphics = this.make.graphics({ x: panelX, y: panelY, add: false });
         phoneBodyMaskGraphics.fillStyle(0xffffff, 1);
         phoneBodyMaskGraphics.fillRect(
@@ -564,11 +587,11 @@ export default class GameScene extends Phaser.Scene {
         this._phoneBodyMaskSource = phoneBodyMaskGraphics;
         this._phoneBodyText.setMask(phoneBodyMaskGraphics.createGeometryMask());
 
-        this._settingsButtonBg = this.add.rectangle(390, 50, 42, 46, 0x314250, 1)
+        this._settingsButtonBg = this.add.rectangle(366, 46, 40, 42, 0x314250, 1)
             .setStrokeStyle(2, 0x6db7e1, 0.8)
             .setInteractive({ useHandCursor: true });
-        this._settingsButtonLabel = this.add.text(390, 50, '⚙', {
-            fontFamily: 'Arial Black', fontSize: '21px', color: '#dff6ff',
+        this._settingsButtonLabel = this.add.text(366, 46, '⚙', {
+            fontFamily: 'Arial Black', fontSize: '19px', color: '#dff6ff',
         }).setOrigin(0.5);
 
         this._settingsButtonBg.on('pointerover', () => {
@@ -583,16 +606,16 @@ export default class GameScene extends Phaser.Scene {
         });
         this._settingsButtonBg.on('pointerdown', () => this._toggleSettingsOverlay());
 
-        const accept = this._createPhoneButton(390, 104, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
+        const accept = this._createPhoneButton(366, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
             width: 44,
-            height: 50,
-            fontSize: '27px',
+            height: 48,
+            fontSize: '26px',
             glowColor: 0xffffff,
         });
-        const reject = this._createPhoneButton(390, 162, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
+        const reject = this._createPhoneButton(366, 148, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
             width: 42,
-            height: 48,
-            fontSize: '24px',
+            height: 46,
+            fontSize: '23px',
             glowColor: 0xffdddd,
         });
 
@@ -831,38 +854,123 @@ export default class GameScene extends Phaser.Scene {
         };
     }
 
+    _getMachineFlowState(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant?.flowPuzzle) return null;
+        return machineVariant._uiOtherPuzzleEvidence || machineVariant.flowPuzzle.progress || null;
+    }
+
+    _getMachineRepairTargets(machineVariant = this._currentMachineVariant) {
+        if (!Array.isArray(machineVariant?.flowPuzzle?.repairTargets)) return [];
+        return machineVariant.flowPuzzle.repairTargets;
+    }
+
+    _getBrokenRepairTargetDisplayNames(machineVariant = this._currentMachineVariant, flowState = this._getMachineFlowState(machineVariant)) {
+        const repairTargets = this._getMachineRepairTargets(machineVariant);
+        if (repairTargets.length === 0) return [];
+
+        const repairedKeys = Array.isArray(flowState?.repairStates) && flowState.repairStates.length > 0
+            ? new Set(flowState.repairStates.filter((target) => target.repaired).map((target) => target.key))
+            : new Set(flowState?.connected || []);
+
+        return repairTargets
+            .filter((target) => !repairedKeys.has(target.key))
+            .map((target) => target.displayName || target.label);
+    }
+
+    _getRepairedRepairTargetDisplayNames(machineVariant = this._currentMachineVariant, flowState = this._getMachineFlowState(machineVariant)) {
+        const repairTargets = this._getMachineRepairTargets(machineVariant);
+        if (repairTargets.length === 0) return [];
+
+        const repairedKeys = Array.isArray(flowState?.repairStates) && flowState.repairStates.length > 0
+            ? new Set(flowState.repairStates.filter((target) => target.repaired).map((target) => target.key))
+            : new Set(flowState?.connected || []);
+
+        return repairTargets
+            .filter((target) => repairedKeys.has(target.key))
+            .map((target) => target.displayName || target.label);
+    }
+
+    _hasBrokenVoiceBox(machineVariant = this._currentMachineVariant) {
+        const repairTargets = this._getMachineRepairTargets(machineVariant);
+        const voiceTarget = repairTargets.find((target) => target.key === 'VOICE');
+        if (!voiceTarget) return false;
+
+        const flowState = this._getMachineFlowState(machineVariant);
+        if (Array.isArray(flowState?.repairStates) && flowState.repairStates.length > 0) {
+            const voiceState = flowState.repairStates.find((target) => target.key === 'VOICE');
+            return !voiceState?.repaired;
+        }
+
+        if (Array.isArray(flowState?.connected)) {
+            return !flowState.connected.includes('VOICE');
+        }
+
+        return true;
+    }
+
+    _getMachineLinkHeader(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant) return 'FACTORY LINK';
+        return `${machineVariant.name.toUpperCase()} LINK`;
+    }
+
+    _garbleMachineText(text) {
+        if (!text) return '';
+
+        const substitutionMap = { a: '4', e: '3', i: '1', o: '0', s: '5' };
+        return text.split('').map((character, index) => {
+            const lower = character.toLowerCase();
+            if (!/[a-z]/i.test(character)) return character;
+
+            const roll = (index + (text.length * 7)) % 11;
+            if (substitutionMap[lower] && roll % 4 === 0) return substitutionMap[lower];
+            if (roll === 3) return `${character}-`;
+            if (roll === 7) return '#';
+            if (roll === 9) return character.toUpperCase();
+            return character;
+        }).join('');
+    }
+
+    _formatMachineSpeech(text, machineVariant = this._currentMachineVariant) {
+        if (!text) return '';
+        return this._hasBrokenVoiceBox(machineVariant)
+            ? this._garbleMachineText(text)
+            : text;
+    }
+
     _playMachineConversation(machineVariant) {
         const prompt = machineVariant?.questionDialogue?.prompt || '';
+        const header = this._getMachineLinkHeader(machineVariant);
+        const voiceBroken = this._hasBrokenVoiceBox(machineVariant);
 
         if (!machineVariant?.hasCommunication) {
             this._phoneChoicePhase = 'inactive';
             this._setPhoneButtonsActive(false);
             this._setPhoneButtonSelection(null);
-            this._showPhonePanel(`${machineVariant.name.toUpperCase()} LINK`, 'No transmission. Process the unit cold.', 'NO SIGNAL');
+            this._showPhonePanel(header, 'No transmission. Process the unit cold.', 'NO SIGNAL');
             return;
         }
 
         this._phoneChoicePhase = 'machine-opening';
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel(`${machineVariant.name.toUpperCase()} LINK`, '', 'SIGNAL LIVE');
+        this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE');
 
-        this._typePhoneMessage(machineVariant.openingDialogue || '', {
+        this._typePhoneMessage(this._formatMachineSpeech(machineVariant.openingDialogue || '', machineVariant), {
             onComplete: () => {
                 if (!prompt) {
                     this._phoneChoicePhase = 'inactive';
-                    this._showPhonePanel(`${machineVariant.name.toUpperCase()} LINK`, this._phoneBodyText.text, 'NO QUERY');
+                    this._showPhonePanel(header, this._phoneBodyText.text, voiceBroken ? 'VOICE DEGRADED' : 'NO QUERY');
                     return;
                 }
 
                 this._commSequenceEvent = this.time.delayedCall(180, () => {
-                    this._showPhonePanel(`${machineVariant.name.toUpperCase()} LINK`, this._phoneBodyText.text, 'INCOMING QUESTION');
-                    this._typePhoneMessage(`\n\nQ> ${prompt}`, {
+                    this._showPhonePanel(header, this._phoneBodyText.text, voiceBroken ? 'VOICE FRAGMENT' : 'INCOMING QUESTION');
+                    this._typePhoneMessage(`\n\nQ> ${this._formatMachineSpeech(prompt, machineVariant)}`, {
                         append: true,
                         onComplete: () => {
                             this._phoneChoicePhase = 'machine-question';
                             this._setPhoneButtonsActive(true);
-                            this._showPhonePanel(`${machineVariant.name.toUpperCase()} LINK`, this._phoneBodyText.text, 'PRESS ✓ OR X');
+                            this._showPhonePanel(header, this._phoneBodyText.text, voiceBroken ? 'BROKEN VOICE // ✓ OR X' : 'PRESS ✓ OR X');
                         },
                     });
                 });
@@ -912,6 +1020,8 @@ export default class GameScene extends Phaser.Scene {
         if (this._phoneChoicePhase === 'machine-question') {
             const question = this._currentMachineVariant?.questionDialogue;
             if (!question) return;
+            const header = this._getMachineLinkHeader(this._currentMachineVariant);
+            const voiceBroken = this._hasBrokenVoiceBox(this._currentMachineVariant);
 
             this._phoneChoicePhase = 'machine-answered';
             this._setPhoneButtonSelection(choice);
@@ -919,21 +1029,23 @@ export default class GameScene extends Phaser.Scene {
 
             const responseText = choice === 'accept' ? question.yesDialogue : question.noDialogue;
             this._showPhonePanel(
-                `${this._currentMachineVariant.name.toUpperCase()} LINK`,
+                header,
                 this._phoneBodyText.text,
-                choice === 'accept' ? '✓ SENT' : 'X SENT'
+                voiceBroken
+                    ? (choice === 'accept' ? '✓ SENT // VOICE DEGRADED' : 'X SENT // VOICE DEGRADED')
+                    : (choice === 'accept' ? '✓ SENT' : 'X SENT')
             );
 
             if (!responseText) return;
 
             this._commSequenceEvent = this.time.delayedCall(90, () => {
-                this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${responseText}`, {
+                this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, this._currentMachineVariant)}`, {
                     append: true,
                     onComplete: () => {
                         this._showPhonePanel(
-                            `${this._currentMachineVariant.name.toUpperCase()} LINK`,
+                            header,
                             this._phoneBodyText.text,
-                            'RESPONSE LOGGED'
+                            voiceBroken ? 'VOICE LOGGED // DEGRADED' : 'RESPONSE LOGGED'
                         );
                     },
                 });
@@ -1132,6 +1244,11 @@ export default class GameScene extends Phaser.Scene {
 
         this._conveyorRulingButtons = {};
         rulingDefs.forEach((def) => {
+            const shadowRect = this.add.rectangle(def.x + 6, 656, def.width + 24, 78, 0x000000, 0.22);
+            const frameRect = this.add.rectangle(def.x, 650, def.width + 20, 74, 0x2b261f, 0.96)
+                .setStrokeStyle(2, 0x8d816a, 0.9);
+            const innerFrameRect = this.add.rectangle(def.x, 650, def.width + 8, 66, 0x433c32, 0.96)
+                .setStrokeStyle(1, 0xc0b18d, 0.28);
             const bgRect = this.add.rectangle(def.x, 650, def.width, 62, def.fillColor, 0.94)
                 .setStrokeStyle(2, def.strokeColor, 0.92)
                 .setInteractive({ useHandCursor: true });
@@ -1147,10 +1264,16 @@ export default class GameScene extends Phaser.Scene {
             bgRect.on('pointerover', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
                 bgRect.setScale(1.04);
+                frameRect.setScale(1.04);
+                innerFrameRect.setScale(1.04);
+                shadowRect.setScale(1.04);
                 subtitle.setY(662);
             });
             bgRect.on('pointerout', () => {
                 bgRect.setScale(1);
+                frameRect.setScale(1);
+                innerFrameRect.setScale(1);
+                shadowRect.setScale(1);
                 subtitle.setY(664);
             });
             bgRect.on('pointerdown', () => {
@@ -1159,11 +1282,17 @@ export default class GameScene extends Phaser.Scene {
                 this._submitRuling(def.action);
             });
 
-            this._conveyorContainer.add(bgRect);
-            this._conveyorContainer.add(label);
-            this._conveyorContainer.add(subtitle);
+            this._factoryControlsContainer.add(shadowRect);
+            this._factoryControlsContainer.add(frameRect);
+            this._factoryControlsContainer.add(innerFrameRect);
+            this._factoryControlsContainer.add(bgRect);
+            this._factoryControlsContainer.add(label);
+            this._factoryControlsContainer.add(subtitle);
 
             this._conveyorRulingButtons[def.action] = {
+                shadowRect,
+                frameRect,
+                innerFrameRect,
                 bgRect,
                 label,
                 subtitle,
@@ -1175,14 +1304,14 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'monospace', fontSize: '11px', color: '#8fc1cf', letterSpacing: 2,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5).setVisible(false);
-        this._conveyorContainer.add(this._conveyorDecisionHint);
+        this._factoryControlsContainer.add(this._conveyorDecisionHint);
 
         this._feedbackText = this.add.text(946, 562, '', {
             fontFamily: 'monospace', fontSize: '12px', color: '#ff4444',
             stroke: '#000000', strokeThickness: 2, align: 'center',
             wordWrap: { width: 460 },
         }).setOrigin(0.5).setAlpha(0);
-        this._conveyorContainer.add(this._feedbackText);
+        this._factoryControlsContainer.add(this._feedbackText);
 
         this._setConveyorRulingButtonsVisible(false);
     }
@@ -1229,12 +1358,19 @@ export default class GameScene extends Phaser.Scene {
     _setConveyorRulingButtonsVisible(visible) {
         const isVisible = Boolean(visible) && this._screen === 'conveyor';
         Object.values(this._conveyorRulingButtons).forEach((button) => {
+            button.shadowRect.setVisible(isVisible);
+            button.frameRect.setVisible(isVisible);
+            button.innerFrameRect.setVisible(isVisible);
             button.bgRect.setVisible(isVisible);
             button.label.setVisible(isVisible);
             button.subtitle.setVisible(isVisible);
             button.bgRect.setScale(1);
+            button.shadowRect.setScale(1);
+            button.frameRect.setScale(1);
+            button.innerFrameRect.setScale(1);
         });
 
+        if (this._factoryControlsContainer) this._factoryControlsContainer.setVisible(this._screen === 'conveyor');
         if (this._conveyorDecisionHint) this._conveyorDecisionHint.setVisible(isVisible);
         this._refreshOtherPuzzleButton();
         this._refreshFactoryActionButtons();
@@ -1313,7 +1449,7 @@ export default class GameScene extends Phaser.Scene {
 
     _showFactoryNotification(message, status, soundAsset = SOUND_ASSETS.notificationAlert) {
         const header = this._currentMachineVariant
-            ? `${this._currentMachineVariant.name.toUpperCase()} LINK`
+            ? this._getMachineLinkHeader(this._currentMachineVariant)
             : 'FACTORY LINK';
 
         this._showPhonePanel(header, message, status);
@@ -1359,6 +1495,7 @@ export default class GameScene extends Phaser.Scene {
     _setScreen(name) {
         this._screen = name;
         this._conveyorContainer.setVisible(name === 'conveyor');
+        this._factoryControlsContainer?.setVisible(name === 'conveyor');
         this._unitContainer.setVisible(name === 'conveyor' && !!this._currentCase);
         if (this._inspectionContainer) this._inspectionContainer.setVisible(false);
         this._setConveyorRulingButtonsVisible(name === 'conveyor' && !!this._currentMachineVariant);
@@ -1468,6 +1605,9 @@ export default class GameScene extends Phaser.Scene {
             const alpha = action === 'scrap'
                 ? readyAlpha
                 : ((gateState.ready || acceptOverrideReady) ? readyAlpha : gatedAlpha);
+            button.shadowRect.setAlpha(alpha * 0.68);
+            button.frameRect.setAlpha(alpha);
+            button.innerFrameRect.setAlpha(alpha);
             button.bgRect.setAlpha(alpha);
             button.label.setAlpha(alpha);
             button.subtitle.setAlpha(alpha);
@@ -1498,7 +1638,10 @@ export default class GameScene extends Phaser.Scene {
         this._clearUnsafeAcceptConfirmation();
         this._machinePuzzleOverlay?.close(true);
         this._showMiniMachinePanel();
-        this._otherPuzzleOverlay.show({ circuit: this._currentMachineVariant.flowPuzzle });
+        this._otherPuzzleOverlay.show({
+            circuit: this._currentMachineVariant.flowPuzzle,
+            evidence: this._getMachineFlowState(this._currentMachineVariant),
+        });
         this._refreshFactoryActionButtons();
     }
 
@@ -1507,7 +1650,14 @@ export default class GameScene extends Phaser.Scene {
 
         this._clearUnsafeAcceptConfirmation();
         this._currentMachineVariant._uiOtherPuzzleEvidence = evidence || null;
+        if (this._currentMachineVariant.flowPuzzle && evidence) {
+            this._currentMachineVariant.flowPuzzle.progress = evidence;
+        }
         this._currentMachineVariant._uiOtherPuzzleSolved = Boolean(evidence?.completed);
+
+        const header = this._getMachineLinkHeader(this._currentMachineVariant);
+        const repairedTargets = this._getRepairedRepairTargetDisplayNames(this._currentMachineVariant, evidence);
+        const brokenTargets = this._getBrokenRepairTargetDisplayNames(this._currentMachineVariant, evidence);
 
         this._updateConveyorDecisionHint();
         this._refreshOtherPuzzleButton();
@@ -1521,8 +1671,10 @@ export default class GameScene extends Phaser.Scene {
                 '#c7ff86'
             );
             this._showPhonePanel(
-                `${this._currentMachineVariant.name.toUpperCase()} LINK`,
-                'Secondary diagnostic cleared. Routing report logged.',
+                header,
+                repairedTargets.length > 0
+                    ? `Secondary diagnostic cleared. Restored: ${repairedTargets.join(', ')}.`
+                    : 'Secondary diagnostic cleared. Routing report logged.',
                 'OTHER PUZZLE CLEAR'
             );
             return;
@@ -1532,8 +1684,10 @@ export default class GameScene extends Phaser.Scene {
             glitchBurst(this, this._cmFilter, 320);
             this._showFeedback('OTHER PUZZLE FAILED // UNAUTHORIZED MODIFICATION', '#ff7f73');
             this._showPhonePanel(
-                `${this._currentMachineVariant.name.toUpperCase()} LINK`,
-                'Unauthorized modification detected in the secondary diagnostic.',
+                header,
+                brokenTargets.length > 0
+                    ? `Unauthorized modification detected. Still offline: ${brokenTargets.join(', ')}.`
+                    : 'Unauthorized modification detected in the secondary diagnostic.',
                 'OTHER PUZZLE MODIFIED'
             );
             return;
@@ -1541,8 +1695,10 @@ export default class GameScene extends Phaser.Scene {
 
         this._showFeedback('OTHER PUZZLE INCOMPLETE // OUTPUTS UNREACHED', '#ffd685');
         this._showPhonePanel(
-            `${this._currentMachineVariant.name.toUpperCase()} LINK`,
-            'Secondary diagnostic incomplete. Required outputs remain offline.',
+            header,
+            brokenTargets.length > 0
+                ? `Secondary diagnostic incomplete. Still offline: ${brokenTargets.join(', ')}.`
+                : 'Secondary diagnostic incomplete. Required outputs remain offline.',
             'OTHER PUZZLE INCOMPLETE'
         );
     }
@@ -1995,9 +2151,10 @@ export default class GameScene extends Phaser.Scene {
 
         const gridEvaluation = machineVariant.puzzleState.getEvaluation();
         const flowOutputs = Object.keys(machineVariant.flowPuzzle?.outputs || {});
+        const flowState = this._getMachineFlowState(machineVariant);
         const flowConnected = machineVariant._uiOtherPuzzleSolved
             ? flowOutputs.length
-            : (machineVariant._uiOtherPuzzleEvidence?.connected?.length || 0);
+            : (flowState?.connected?.length || 0);
 
         const gridText = gridEvaluation.solved
             ? 'GRID CLEAR'
@@ -2008,7 +2165,7 @@ export default class GameScene extends Phaser.Scene {
             ? 'FLOW NONE'
             : machineVariant._uiOtherPuzzleSolved
                 ? 'FLOW CLEAR'
-                : machineVariant._uiOtherPuzzleEvidence?.forbiddenUsed
+                : flowState?.forbiddenUsed
                     ? 'FLOW MOD'
                     : `FLOW ${flowConnected}/${flowOutputs.length}`;
 
@@ -2111,7 +2268,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._drawFlowPreviewLayer({
             flowPuzzle: this._currentMachineVariant.flowPuzzle,
-            evidence: this._currentMachineVariant._uiOtherPuzzleEvidence,
+            evidence: this._getMachineFlowState(this._currentMachineVariant),
             graphics: this._miniFlowGfx,
             labelContainer: this._miniFlowLabelContainer,
             left: resolvedFlowPreview.x,
@@ -2382,10 +2539,12 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        const flowState = evidence || flowPuzzle.progress || null;
+
         const outputs = Object.entries(flowPuzzle.outputs || {}).map(([row, label]) => ({ row: Number(row), label }));
         const totalOutputs = outputs.length;
-        const connectedOutputs = new Set(evidence?.completed ? outputs.map((output) => output.label) : (evidence?.connected || []));
-        const forbiddenUsed = Boolean(evidence?.forbiddenUsed);
+        const connectedOutputs = new Set(flowState?.completed ? outputs.map((output) => output.label) : (flowState?.connected || []));
+        const forbiddenUsed = Boolean(flowState?.forbiddenUsed);
         const contentLeft = left + 8;
         const contentRight = left + width - 8;
         const contentTop = top + 6;
@@ -2453,7 +2612,7 @@ export default class GameScene extends Phaser.Scene {
             graphics.fillTriangle(hazardX, hazardY - 5, hazardX - 5, hazardY, hazardX, hazardY + 5);
         }
 
-        const progressText = evidence?.completed
+        const progressText = flowState?.completed
             ? 'FLOW CLEAR'
             : forbiddenUsed
                 ? 'MODIFIED'
@@ -2461,7 +2620,7 @@ export default class GameScene extends Phaser.Scene {
         const progressLabel = this.add.text(left + 2, top + height - 10, progressText, {
             fontFamily: 'Courier New',
             fontSize: '7px',
-            color: evidence?.completed ? '#d9ffe4' : forbiddenUsed ? '#ffd0c4' : '#a8d8f0',
+            color: flowState?.completed ? '#d9ffe4' : forbiddenUsed ? '#ffd0c4' : '#a8d8f0',
             stroke: '#000000',
             strokeThickness: 2,
         });

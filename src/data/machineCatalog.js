@@ -28,19 +28,275 @@ const createGridOption = ({ grid, dominos, impossible = false }) => ({
     impossible,
 });
 
+const FLOW_TILE_ROWS = 5;
+const FLOW_TILE_COLS = 5;
+
+const FLOW_TARGET_METADATA = Object.freeze({
+    ARMS: { displayName: 'Armature Relay', brokenLabel: 'Armature relay offline.', fixedLabel: 'Armature relay stable.' },
+    LIMBS: { displayName: 'Limb Actuators', brokenLabel: 'Limb actuators disconnected.', fixedLabel: 'Limb actuators restored.' },
+    EYES: { displayName: 'Optic Cluster', brokenLabel: 'Optic cluster offline.', fixedLabel: 'Optic cluster restored.' },
+    VOICE: { displayName: 'Voice Box', brokenLabel: 'Broken voice box.', fixedLabel: 'Voice box stabilized.', affectsDialogue: true },
+    CPU: { displayName: 'Core Logic', brokenLabel: 'Core logic unreachable.', fixedLabel: 'Core logic online.' },
+    MEMORY: { displayName: 'Memory Bank', brokenLabel: 'Memory bank severed.', fixedLabel: 'Memory bank linked.' },
+    HATCH: { displayName: 'Cargo Hatch', brokenLabel: 'Cargo hatch actuator offline.', fixedLabel: 'Cargo hatch unlocked.' },
+    TRACK: { displayName: 'Routing Track', brokenLabel: 'Routing track sensor lost.', fixedLabel: 'Routing track aligned.' },
+    TARGET: { displayName: 'Targeting Core', brokenLabel: 'Targeting core dark.', fixedLabel: 'Targeting core calibrated.' },
+    ARMOR: { displayName: 'Armor Plating', brokenLabel: 'Armor plating servo offline.', fixedLabel: 'Armor plating responsive.' },
+    HEAT: { displayName: 'Heat Coil', brokenLabel: 'Heat coil cold.', fixedLabel: 'Heat coil primed.' },
+    PUMP: { displayName: 'Pump Drive', brokenLabel: 'Pump drive stalled.', fixedLabel: 'Pump drive primed.' },
+    NOZZLE: { displayName: 'Pour Nozzle', brokenLabel: 'Pour nozzle stuck.', fixedLabel: 'Pour nozzle cleared.' },
+    BRUSH: { displayName: 'Brush Head', brokenLabel: 'Brush head jammed.', fixedLabel: 'Brush head spinning.' },
+    VAC: { displayName: 'Vacuum Intake', brokenLabel: 'Vacuum intake blocked.', fixedLabel: 'Vacuum intake clear.' },
+    SENSE: { displayName: 'Dust Sensor', brokenLabel: 'Dust sensor blind.', fixedLabel: 'Dust sensor calibrated.' },
+    MAG: { displayName: 'Mag Clamp', brokenLabel: 'Mag clamp offline.', fixedLabel: 'Mag clamp energized.' },
+    WHEELS: { displayName: 'Wheel Drive', brokenLabel: 'Wheel drive stalled.', fixedLabel: 'Wheel drive rolling.' },
+    RECLINE: { displayName: 'Recline Motor', brokenLabel: 'Recline motor locked.', fixedLabel: 'Recline motor smooth.' },
+    LUMBAR: { displayName: 'Lumbar Support', brokenLabel: 'Lumbar support collapsed.', fixedLabel: 'Lumbar support engaged.' },
+    POWER: { displayName: 'Power Regulator', brokenLabel: 'Power regulator unstable.', fixedLabel: 'Power regulator balanced.' },
+});
+
+function cloneFlowTiles(tiles) {
+    if (!Array.isArray(tiles)) return [];
+    return tiles.map((row) => row.map((cell) => ({ ...cell })));
+}
+
+function cloneForbiddenCells(forbidden) {
+    if (!Array.isArray(forbidden)) return [];
+    return forbidden.map(([x, y]) => [x, y]);
+}
+
+function cloneRepairTargets(repairTargets) {
+    if (!Array.isArray(repairTargets)) return [];
+    return repairTargets.map((target) => ({ ...target }));
+}
+
+function humanizeFlowLabel(label) {
+    return String(label || '')
+        .toLowerCase()
+        .split('_')
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function createRepairTarget(label, row) {
+    const metadata = FLOW_TARGET_METADATA[label] || {};
+    return {
+        key: label,
+        label,
+        row,
+        displayName: metadata.displayName || humanizeFlowLabel(label),
+        brokenLabel: metadata.brokenLabel || `${humanizeFlowLabel(label)} offline.`,
+        fixedLabel: metadata.fixedLabel || `${humanizeFlowLabel(label)} restored.`,
+        affectsDialogue: Boolean(metadata.affectsDialogue),
+    };
+}
+
+function createSeededRandom(seedText) {
+    let seed = 0;
+    const text = String(seedText || 'flow-seed');
+
+    for (let index = 0; index < text.length; index += 1) {
+        seed = ((seed * 31) + text.charCodeAt(index)) >>> 0;
+    }
+
+    return () => {
+        seed = ((seed * 1664525) + 1013904223) >>> 0;
+        return seed / 0x100000000;
+    };
+}
+
+function carveFlowPath(tiles, sourceRow, outRow, cols, branchCol) {
+    const add = (x, y, dir) => tiles[y][x]._dirs.add(dir);
+
+    add(0, sourceRow, 'W');
+    for (let x = 0; x < branchCol; x += 1) {
+        add(x, sourceRow, 'E');
+        add(x + 1, sourceRow, 'W');
+    }
+
+    if (outRow !== sourceRow) {
+        const step = outRow < sourceRow ? -1 : 1;
+        const verticalDir = outRow < sourceRow ? 'N' : 'S';
+        const reverseDir = outRow < sourceRow ? 'S' : 'N';
+
+        add(branchCol, sourceRow, verticalDir);
+        let currentRow = sourceRow;
+        while (currentRow + step !== outRow) {
+            add(branchCol, currentRow + step, reverseDir);
+            add(branchCol, currentRow + step, verticalDir);
+            currentRow += step;
+        }
+        add(branchCol, outRow, reverseDir);
+    }
+
+    for (let x = branchCol; x < cols - 1; x += 1) {
+        add(x, outRow, 'E');
+        add(x + 1, outRow, 'W');
+    }
+    add(cols - 1, outRow, 'E');
+}
+
+function finalizeFlowTile(cell) {
+    const dirs = cell._dirs;
+    const bits = [dirs.has('N') ? 1 : 0, dirs.has('E') ? 1 : 0, dirs.has('S') ? 1 : 0, dirs.has('W') ? 1 : 0];
+    const count = bits.reduce((total, value) => total + value, 0);
+
+    if (count === 0) {
+        cell.type = 'empty';
+        cell.rotation = 0;
+        return;
+    }
+
+    if (count === 4) {
+        cell.type = 'cross';
+        cell.rotation = 0;
+        return;
+    }
+
+    if (count === 3) {
+        cell.type = 'tee';
+        if (!bits[3]) cell.rotation = 0;
+        else if (!bits[0]) cell.rotation = 1;
+        else if (!bits[1]) cell.rotation = 2;
+        else cell.rotation = 3;
+        return;
+    }
+
+    if (count === 2) {
+        if ((bits[0] && bits[2]) || (bits[1] && bits[3])) {
+            cell.type = 'straight';
+            cell.rotation = bits[0] ? 0 : 1;
+        } else {
+            cell.type = 'curve';
+            if (bits[0] && bits[1]) cell.rotation = 0;
+            else if (bits[1] && bits[2]) cell.rotation = 1;
+            else if (bits[2] && bits[3]) cell.rotation = 2;
+            else cell.rotation = 3;
+        }
+        return;
+    }
+
+    cell.type = 'straight';
+    cell.rotation = (bits[0] || bits[2]) ? 0 : 1;
+}
+
+function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, previewTitle = 'POWER BUS' }) {
+    const tiles = Array.from({ length: FLOW_TILE_ROWS }, () => (
+        Array.from({ length: FLOW_TILE_COLS }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
+    ));
+    const outputRows = Object.keys(outputs || {}).map(Number).sort((left, right) => left - right);
+
+    outputRows.forEach((outRow, index) => {
+        const branchCol = outRow === sourceRow
+            ? FLOW_TILE_COLS - 1
+            : Math.min(1 + index, FLOW_TILE_COLS - 2);
+        carveFlowPath(tiles, sourceRow, outRow, FLOW_TILE_COLS, branchCol);
+    });
+
+    const pathCells = [];
+    tiles.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
+        if (cell._dirs.size > 0
+            && !(colIndex === 0 && rowIndex === sourceRow)
+            && !(colIndex === FLOW_TILE_COLS - 1 && outputRows.includes(rowIndex))) {
+            pathCells.push([colIndex, rowIndex]);
+        }
+    }));
+
+    tiles.forEach((row) => row.forEach((cell) => {
+        finalizeFlowTile(cell);
+        delete cell._dirs;
+    }));
+
+    const seededRandom = createSeededRandom(`${previewTitle}:${sourceRow}:${outputRows.join(',')}`);
+    tiles.forEach((row) => row.forEach((cell) => {
+        if (cell.type === 'empty' || cell.type === 'cross') return;
+        if (cell.type === 'straight') {
+            cell.rotation = (cell.rotation + 1) % 4;
+            return;
+        }
+
+        cell.rotation = (cell.rotation + 1 + Math.floor(seededRandom() * 3)) % 4;
+    }));
+
+    const forbidden = [];
+    const pool = [...pathCells];
+    for (let index = 0; index < forbiddenCount && pool.length > 0; index += 1) {
+        const pickIndex = Math.floor(seededRandom() * pool.length);
+        forbidden.push(pool.splice(pickIndex, 1)[0]);
+    }
+
+    return {
+        tiles: cloneFlowTiles(tiles),
+        forbidden: cloneForbiddenCells(forbidden),
+    };
+}
+
+function createFlowProgress(flowPuzzleOption) {
+    const repairTargets = cloneRepairTargets(flowPuzzleOption?.repairTargets || []);
+    const brokenTargets = repairTargets.map((target) => target.key);
+
+    return {
+        tiles: cloneFlowTiles(flowPuzzleOption?.tiles),
+        connected: [],
+        missing: [...brokenTargets],
+        repairedTargets: [],
+        brokenTargets,
+        repairStates: repairTargets.map((target) => ({ ...target, repaired: false })),
+        forbiddenUsed: false,
+        completed: false,
+        symptoms: repairTargets.map((target) => target.brokenLabel),
+        flags: [],
+    };
+}
+
+function cloneFlowProgress(progress) {
+    if (!progress) return null;
+
+    return {
+        ...progress,
+        tiles: cloneFlowTiles(progress.tiles),
+        connected: Array.isArray(progress.connected) ? [...progress.connected] : [],
+        missing: Array.isArray(progress.missing) ? [...progress.missing] : [],
+        repairedTargets: Array.isArray(progress.repairedTargets) ? [...progress.repairedTargets] : [],
+        brokenTargets: Array.isArray(progress.brokenTargets) ? [...progress.brokenTargets] : [],
+        repairStates: cloneRepairTargets(progress.repairStates),
+        symptoms: Array.isArray(progress.symptoms) ? [...progress.symptoms] : [],
+        flags: Array.isArray(progress.flags) ? [...progress.flags] : [],
+    };
+}
+
 const createFlowPuzzleOption = ({
     sourceRow,
     outputs,
     forbiddenCount = 0,
     impossible = false,
     previewTitle = 'POWER BUS',
-}) => ({
-    sourceRow,
-    outputs,
-    forbiddenCount,
-    impossible,
-    previewTitle,
-});
+    tiles = null,
+    forbidden = null,
+    repairTargets = null,
+}) => {
+    const resolvedLayout = Array.isArray(tiles)
+        ? {
+            tiles: cloneFlowTiles(tiles),
+            forbidden: cloneForbiddenCells(forbidden),
+        }
+        : buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount, previewTitle });
+    const resolvedRepairTargets = Array.isArray(repairTargets) && repairTargets.length > 0
+        ? cloneRepairTargets(repairTargets)
+        : Object.entries(outputs || {}).map(([row, label]) => createRepairTarget(label, Number(row)));
+
+    return {
+        sourceRow,
+        outputs,
+        forbiddenCount,
+        impossible,
+        previewTitle,
+        tiles: resolvedLayout.tiles,
+        forbidden: resolvedLayout.forbidden,
+        repairTargets: resolvedRepairTargets,
+    };
+};
 
 const createMiniDisplay = ({
     artX,
@@ -752,6 +1008,8 @@ function cloneFlowPuzzleOption(flowPuzzleOption) {
         forbidden: Array.isArray(flowPuzzleOption.forbidden)
             ? flowPuzzleOption.forbidden.map(([x, y]) => [x, y])
             : undefined,
+        repairTargets: cloneRepairTargets(flowPuzzleOption.repairTargets),
+        progress: cloneFlowProgress(flowPuzzleOption.progress),
     };
 }
 
@@ -1200,6 +1458,9 @@ export function createMachineVariant(options = {}) {
     const gridPool = playableGrids.length > 0 ? playableGrids : definition.possibleGrids;
     const selectedGrid = cloneGridOption(pickRandomEntry(gridPool, randomFn));
     const selectedFlowPuzzle = cloneFlowPuzzleOption(pickRandomEntry(definition.possibleCircuits, randomFn));
+    if (selectedFlowPuzzle) {
+        selectedFlowPuzzle.progress = createFlowProgress(selectedFlowPuzzle);
+    }
     const puzzleState = new MachinePuzzleState(selectedGrid);
     const hasCommunication = randomFn() <= (definition.communicationChance ?? 1);
     const selectedQuestion = hasCommunication

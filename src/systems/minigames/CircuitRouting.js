@@ -17,6 +17,20 @@ const DIRS = [
     { dx: -1, dy:  0, idx: 3, opp: 1 }, // W
 ];
 
+function cloneCircuitTiles(tiles) {
+    if (!Array.isArray(tiles)) return [];
+    return tiles.map((row) => row.map((cell) => ({ ...cell })));
+}
+
+function humanizeTargetLabel(label) {
+    return String(label || '')
+        .toLowerCase()
+        .split('_')
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
 function rotatedConnections(type, rotation) {
     const base = TILE_BASE[type] || TILE_BASE.empty;
     const out = [0, 0, 0, 0];
@@ -139,21 +153,26 @@ export default class CircuitRouting extends MinigameBase {
         this._circuit = circuit;
         this._outputs = circuit.outputs || {};
         this._sourceRow = circuit.sourceRow ?? 2;
+        this._repairTargets = this._resolveRepairTargets(circuit);
+        this._repairTargetViews = [];
 
         let tiles, forbiddenList;
-        if (circuit.tiles) {
-            tiles = circuit.tiles.map(row => row.map(c => ({ ...c })));
+        if (Array.isArray(circuit.progress?.tiles) && circuit.progress.tiles.length > 0) {
+            tiles = cloneCircuitTiles(circuit.progress.tiles);
+            forbiddenList = circuit.forbidden || [];
+        } else if (circuit.tiles) {
+            tiles = cloneCircuitTiles(circuit.tiles);
             forbiddenList = circuit.forbidden || [];
         } else {
             // Check if we already generated tiles for this case
             if (circuit._generatedTiles) {
-                tiles = circuit._generatedTiles.map(row => row.map(c => ({ ...c })));
+                tiles = cloneCircuitTiles(circuit._generatedTiles);
             } else {
                 // Generate new circuit tiles and cache them
                 const gen = generateCircuit(circuit, this.rows, this.cols);
                 tiles = gen.tiles;
                 // Store only the tiles for future use (forbidden cells will be random each time)
-                circuit._generatedTiles = tiles.map(row => row.map(c => ({ ...c })));
+                circuit._generatedTiles = cloneCircuitTiles(tiles);
             }
 
             // Always generate fresh forbidden cells for randomization
@@ -237,6 +256,8 @@ export default class CircuitRouting extends MinigameBase {
             this._outputDots[y] = { dot, lbl };
         }
 
+        this._buildRepairTargetPanel(depth + 2);
+
         // Tiles
         for (let y = 0; y < this.rows; y++) {
             this._tileGfx[y] = [];
@@ -264,6 +285,54 @@ export default class CircuitRouting extends MinigameBase {
         this._escKey.on('down', this._escHandler);
 
         this._updateAll();
+    }
+
+    _resolveRepairTargets(circuit) {
+        if (Array.isArray(circuit?.repairTargets) && circuit.repairTargets.length > 0) {
+            return circuit.repairTargets.map((target) => ({ ...target }));
+        }
+
+        return Object.entries(circuit?.outputs || {}).map(([row, label]) => ({
+            key: label,
+            label,
+            row: Number(row),
+            displayName: humanizeTargetLabel(label),
+            brokenLabel: `${humanizeTargetLabel(label)} offline.`,
+            fixedLabel: `${humanizeTargetLabel(label)} restored.`,
+            affectsDialogue: false,
+        }));
+    }
+
+    _buildRepairTargetPanel(depth) {
+        const panelHeight = Math.max(132, 84 + (this._repairTargets.length * 42));
+        const panel = this.scene.add.container(1032, 236).setDepth(depth);
+        const bg = this.scene.add.rectangle(0, 0, 216, panelHeight, 0x04161a, 0.9)
+            .setStrokeStyle(1, 0x1bbfcb, 0.7);
+        const title = this.scene.add.text(-90, -(panelHeight / 2) + 16, 'REPAIR TARGETS', {
+            fontFamily: 'monospace', fontSize: '12px', color: '#8ffcff', letterSpacing: 1,
+        }).setOrigin(0, 0.5);
+        const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, 'Route power to restore each subsystem.', {
+            fontFamily: 'monospace', fontSize: '9px', color: '#6da4ad', wordWrap: { width: 178 },
+        }).setOrigin(0, 0.5);
+
+        panel.add([bg, title, hint]);
+
+        this._repairTargetViews = this._repairTargets.map((target, index) => {
+            const y = -(panelHeight / 2) + 48 + (index * 42);
+            const dot = this.scene.add.circle(-88, y, 7, 0x2f4a57, 1)
+                .setStrokeStyle(1, 0x7aa8b7, 0.8);
+            const nameText = this.scene.add.text(-72, y - 8, target.displayName || target.label, {
+                fontFamily: 'monospace', fontSize: '11px', color: '#b8dbe1',
+            }).setOrigin(0, 0.5);
+            const statusText = this.scene.add.text(-72, y + 9, 'BROKEN', {
+                fontFamily: 'monospace', fontSize: '9px', color: '#ffb695',
+            }).setOrigin(0, 0.5);
+
+            panel.add([dot, nameText, statusText]);
+            return { target, dot, nameText, statusText };
+        });
+
+        this.container.add(panel);
     }
 
     _buildTile(x, y, depth) {
@@ -316,6 +385,53 @@ export default class CircuitRouting extends MinigameBase {
         });
         sound.once('complete', () => sound.destroy());
         sound.play();
+    }
+
+    _buildProgressSnapshot(result = this._lastResult) {
+        const connected = Array.from(new Set(result?.reachedOutputs || []));
+        const connectedSet = new Set(connected);
+        const forbiddenUsed = (result?.forbiddenHit ?? []).length > 0;
+        const repairStates = this._repairTargets.map((target) => ({
+            ...target,
+            repaired: connectedSet.has(target.key),
+        }));
+        const repairedTargets = repairStates.filter((target) => target.repaired).map((target) => target.key);
+        const brokenTargets = repairStates.filter((target) => !target.repaired).map((target) => target.key);
+
+        return {
+            tiles: cloneCircuitTiles(this._tiles),
+            connected,
+            missing: [...brokenTargets],
+            repairedTargets,
+            brokenTargets,
+            repairStates,
+            forbiddenUsed,
+            completed: brokenTargets.length === 0 && !forbiddenUsed,
+            symptoms: repairStates.filter((target) => !target.repaired).map((target) => target.brokenLabel),
+            flags: forbiddenUsed ? ['UNAUTHORIZED MODIFICATION DETECTED'] : [],
+        };
+    }
+
+    _syncCircuitProgress(result = this._lastResult) {
+        if (!this._circuit) return null;
+
+        const snapshot = this._buildProgressSnapshot(result);
+        this._circuit.progress = snapshot;
+        return snapshot;
+    }
+
+    _refreshRepairTargets(connectedOutputs, forbiddenUsed) {
+        const connectedSet = new Set(connectedOutputs || []);
+
+        this._repairTargetViews.forEach(({ target, dot, nameText, statusText }) => {
+            const repaired = connectedSet.has(target.key);
+            dot.setFillStyle(repaired ? 0x62ffb0 : 0x2f4a57, 1);
+            dot.setStrokeStyle(1, repaired ? 0xe8fff1 : 0x7aa8b7, 0.88);
+            nameText.setColor(repaired ? '#ddffed' : '#b8dbe1');
+            statusText
+                .setText(repaired ? 'REPAIRED' : (forbiddenUsed ? 'BROKEN // MOD' : 'BROKEN'))
+                .setColor(repaired ? '#7dffb6' : (forbiddenUsed ? '#ffd0c4' : '#ffb695'));
+        });
     }
 
     _drawTile(x, y, reached) {
@@ -400,33 +516,14 @@ export default class CircuitRouting extends MinigameBase {
                 lbl.setColor('#556666');
             }
         });
+        this._refreshRepairTargets(reachedOutputs, forbiddenHit.length > 0);
         this._lastResult = { reachedOutputs, forbiddenHit };
+        this._syncCircuitProgress(this._lastResult);
     }
 
     _finalizeAndClose() {
-        const required = Object.values(this._outputs);
-        const reached = this._lastResult?.reachedOutputs ?? [];
-        const missing = required.filter(o => !reached.includes(o));
-        const forbiddenUsed = (this._lastResult?.forbiddenHit ?? []).length > 0;
-
-        const symptoms = [];
-        if (missing.includes('VOICE'))  symptoms.push('Voice module unresponsive.');
-        if (missing.includes('EYES'))   symptoms.push('Optical sensors offline.');
-        if (missing.includes('LIMBS'))  symptoms.push('Actuator bus disconnected.');
-        if (missing.includes('MEMORY'))symptoms.push('Memory channel severed.');
-        if (missing.includes('CPU'))    symptoms.push('Core logic unreachable.');
-
-        const flags = [];
-        if (forbiddenUsed) flags.push('UNAUTHORIZED MODIFICATION DETECTED');
-
-        this.emitEvidence({
-            completed: missing.length === 0 && !forbiddenUsed,
-            connected: reached,
-            missing,
-            forbiddenUsed,
-            symptoms,
-            flags,
-        });
+        const snapshot = this._syncCircuitProgress(this._lastResult) || this._buildProgressSnapshot(this._lastResult);
+        this.emitEvidence(snapshot);
         this.close();
     }
 
