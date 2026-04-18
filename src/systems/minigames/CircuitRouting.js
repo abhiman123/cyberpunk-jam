@@ -140,6 +140,10 @@ export default class CircuitRouting extends MinigameBase {
         this.cols = 5;
         this.boardX = 640 - (this.cols * this.cellSize) / 2;
         this.boardY = 360 - (this.rows * this.cellSize) / 2;
+        this._energyPhase = 0;
+        this._energyTickEvent = null;
+        this._lastCircuitRenderState = null;
+        this._sourceFlowGfx = null;
     }
 
     _build(caseData) {
@@ -239,6 +243,10 @@ export default class CircuitRouting extends MinigameBase {
         const srcLbl = this.scene.add.text(srcX - 10, srcY, 'PWR', {
             fontFamily: 'monospace', fontSize: '10px', color: '#ffcc44',
         }).setOrigin(1, 0.5).setDepth(depth + 2);
+        this._sourceDot = srcDot;
+        this._sourcePulse = srcPulse;
+        this._sourceFlowGfx = this.scene.add.graphics().setDepth(depth + 1);
+        this.container.add(this._sourceFlowGfx);
         this.container.add([srcDot, srcPulse, srcLbl]);
 
         // Output indicators
@@ -285,6 +293,7 @@ export default class CircuitRouting extends MinigameBase {
         this._escKey.on('down', this._escHandler);
 
         this._updateAll();
+        this._startCircuitAnimationLoop();
     }
 
     _resolveRepairTargets(circuit) {
@@ -339,27 +348,42 @@ export default class CircuitRouting extends MinigameBase {
         const cx = this.boardX + x * this.cellSize + this.cellSize / 2;
         const cy = this.boardY + y * this.cellSize + this.cellSize / 2;
         const isForbidden = this._forbidden.has(`${x},${y}`);
-
-        const bg = this.scene.add.rectangle(cx, cy, this.cellSize - 4, this.cellSize - 4,
-            isForbidden ? 0x2a1e00 : 0x001f22, 0.9)
-            .setStrokeStyle(1, isForbidden ? 0xddaa33 : 0x225566, 0.8)
-            .setInteractive({ useHandCursor: true })
-            .setDepth(depth);
-
-        const pipe = this.scene.add.graphics().setDepth(depth + 1);
-        const mark = isForbidden
-            ? this.scene.add.text(cx + this.cellSize / 2 - 10, cy - this.cellSize / 2 + 8, '?', {
-                fontFamily: 'monospace', fontSize: '12px', color: '#ffcc44',
-              }).setOrigin(1, 0).setDepth(depth + 2)
-            : null;
-
         const tile = this._tiles[y][x];
         const locked = tile.locked === true;
 
+        const tileContainer = this.scene.add.container(cx, cy).setDepth(depth);
+
+        const bg = this.scene.add.rectangle(0, 0, this.cellSize - 4, this.cellSize - 4,
+            isForbidden ? 0x2a1e00 : 0x001f22, 0.9)
+            .setStrokeStyle(1, isForbidden ? 0xddaa33 : 0x225566, 0.8)
+            .setInteractive({ useHandCursor: true });
+
+        const energy = this.scene.add.graphics();
+        const pipe = this.scene.add.graphics();
+        const mark = isForbidden
+            ? this.scene.add.text(cx + this.cellSize / 2 - 10, cy - this.cellSize / 2 + 8, '?', {
+                fontFamily: 'monospace', fontSize: '12px', color: '#ffcc44',
+              }).setOrigin(1, 0).setDepth(depth + 1)
+            : null;
+
+        const tileView = {
+            container: tileContainer,
+            bg,
+            energy,
+            pipe,
+            mark,
+            isForbidden,
+            rotationTween: null,
+        };
+
+        tileContainer.angle = tile.rotation * 90;
+
         bg.on('pointerdown', () => {
             if (locked || tile.type === 'empty') return;
-            tile.rotation = (tile.rotation + 1) % 4;
+            const nextRotation = (tile.rotation + 1) % 4;
+            tile.rotation = nextRotation;
             this._playWireTurnSound();
+            this._animateTileRotation(tileView, nextRotation);
             this._updateAll();
         });
         bg.on('pointerover', () => {
@@ -369,9 +393,29 @@ export default class CircuitRouting extends MinigameBase {
             bg.setStrokeStyle(1, isForbidden ? 0xddaa33 : 0x225566, 0.8);
         });
 
-        this.container.add([bg, pipe]);
+        tileContainer.add([bg, energy, pipe]);
+        this.container.add(tileContainer);
         if (mark) this.container.add(mark);
-        return { bg, pipe, cx, cy, isForbidden };
+        return tileView;
+    }
+
+    _animateTileRotation(tileView, targetRotation) {
+        if (!tileView?.container) return;
+
+        tileView.rotationTween?.stop();
+        this.scene.tweens.killTweensOf(tileView.container);
+
+        const finalAngle = targetRotation * 90;
+        tileView.rotationTween = this.scene.tweens.add({
+            targets: tileView.container,
+            angle: tileView.container.angle + 90,
+            duration: 170,
+            ease: 'Sine.Out',
+            onComplete: () => {
+                tileView.rotationTween = null;
+                tileView.container.angle = finalAngle;
+            },
+        });
     }
 
     _playWireTurnSound() {
@@ -437,10 +481,13 @@ export default class CircuitRouting extends MinigameBase {
     _drawTile(x, y, reached) {
         const gfx = this._tileGfx[y][x];
         const tile = this._tiles[y][x];
-        const conns = rotatedConnections(tile.type, tile.rotation);
-        const { pipe, cx, cy, isForbidden } = gfx;
+        const conns = TILE_BASE[tile.type] || TILE_BASE.empty;
+        const { pipe, container, isForbidden } = gfx;
 
         pipe.clear();
+        if (!gfx.rotationTween) {
+            container.angle = tile.rotation * 90;
+        }
         if (tile.type === 'empty') return;
 
         const color = isForbidden && reached ? 0xffaa00
@@ -450,27 +497,65 @@ export default class CircuitRouting extends MinigameBase {
         pipe.lineStyle(width, color, 1);
 
         const half = this.cellSize / 2 - 2;
-        if (conns[0]) pipe.lineBetween(cx, cy, cx, cy - half);
-        if (conns[1]) pipe.lineBetween(cx, cy, cx + half, cy);
-        if (conns[2]) pipe.lineBetween(cx, cy, cx, cy + half);
-        if (conns[3]) pipe.lineBetween(cx, cy, cx - half, cy);
+        if (conns[0]) pipe.lineBetween(0, 0, 0, -half);
+        if (conns[1]) pipe.lineBetween(0, 0, half, 0);
+        if (conns[2]) pipe.lineBetween(0, 0, 0, half);
+        if (conns[3]) pipe.lineBetween(0, 0, -half, 0);
 
         pipe.fillStyle(color, 1);
-        pipe.fillCircle(cx, cy, width * 0.7);
+        pipe.fillCircle(0, 0, width * 0.7);
+    }
+
+    _drawTileEnergy(x, y, reached, energyActive) {
+        const gfx = this._tileGfx[y][x];
+        const tile = this._tiles[y][x];
+        const conns = TILE_BASE[tile.type] || TILE_BASE.empty;
+        const energy = gfx.energy;
+
+        energy.clear();
+        if (!energyActive || !reached || tile.type === 'empty') return;
+
+        const half = this.cellSize / 2 - 2;
+        const dashLength = 14;
+        const directionVectors = [
+            { x: 0, y: -1 },
+            { x: 1, y: 0 },
+            { x: 0, y: 1 },
+            { x: -1, y: 0 },
+        ];
+        const phase = (this._energyPhase + (((x * 0.09) + (y * 0.13)) % 1)) % 1;
+        const dashHead = phase * (half + dashLength + 4);
+        const dashTail = Math.max(0, dashHead - dashLength);
+
+        energy.lineStyle(7, 0x7dfdff, 0.18);
+        energy.fillStyle(0xe7fffb, 0.2);
+        directionVectors.forEach((vector, index) => {
+            if (!conns[index]) return;
+
+            const tail = Math.min(half, dashTail);
+            const head = Math.min(half, dashHead);
+            energy.lineBetween(vector.x * tail, vector.y * tail, vector.x * head, vector.y * head);
+            energy.fillCircle(vector.x * head, vector.y * head, 4.5);
+        });
+
+        energy.fillStyle(0xd9fff2, 0.38);
+        energy.fillCircle(0, 0, 5.5);
     }
 
     _computeReached() {
         const reached = new Set();
         const reachedOutputs = [];
         const forbiddenHit = [];
+        const flowSegments = [];
 
         const startX = 0, startY = this._sourceRow;
         const startTile = this._tiles[startY][startX];
         const startConns = rotatedConnections(startTile.type, startTile.rotation);
-        if (!startConns[3]) return { reached, reachedOutputs, forbiddenHit };
+        if (!startConns[3]) return { reached, reachedOutputs, forbiddenHit, flowSegments };
 
         const queue = [[startX, startY]];
         reached.add(`${startX},${startY}`);
+        flowSegments.push({ from: { x: -1, y: startY }, to: { x: startX, y: startY } });
 
         while (queue.length) {
             const [x, y] = queue.shift();
@@ -483,7 +568,10 @@ export default class CircuitRouting extends MinigameBase {
                 if (!conns[d.idx]) continue;
                 const nx = x + d.dx, ny = y + d.dy;
                 if (nx === this.cols && this._outputs[y]) {
-                    if (d.idx === 1) reachedOutputs.push(this._outputs[y]);
+                    if (d.idx === 1) {
+                        reachedOutputs.push(this._outputs[y]);
+                        flowSegments.push({ from: { x, y }, to: { x: this.cols, y } });
+                    }
                     continue;
                 }
                 if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
@@ -493,14 +581,113 @@ export default class CircuitRouting extends MinigameBase {
                 const k = `${nx},${ny}`;
                 if (reached.has(k)) continue;
                 reached.add(k);
+                flowSegments.push({ from: { x, y }, to: { x: nx, y: ny } });
                 queue.push([nx, ny]);
             }
         }
-        return { reached, reachedOutputs, forbiddenHit };
+        return { reached, reachedOutputs, forbiddenHit, flowSegments };
+    }
+
+    _getFlowLinkPosition(node) {
+        const y = this.boardY + node.y * this.cellSize + this.cellSize / 2;
+
+        if (node.x === -1) {
+            return { x: this.boardX - 40, y };
+        }
+
+        if (node.x === this.cols) {
+            return { x: this.boardX + this.cols * this.cellSize + 40, y };
+        }
+
+        return {
+            x: this.boardX + node.x * this.cellSize + this.cellSize / 2,
+            y,
+        };
+    }
+
+    _drawSourceFlowBlock(flowSegments) {
+        if (!this._sourceFlowGfx) return;
+
+        this._sourceFlowGfx.clear();
+        if (!Array.isArray(flowSegments) || flowSegments.length === 0) return;
+
+        const segments = flowSegments.map((segment) => {
+            const from = this._getFlowLinkPosition(segment.from);
+            const to = this._getFlowLinkPosition(segment.to);
+            return {
+                from,
+                to,
+                length: Phaser.Math.Distance.Between(from.x, from.y, to.x, to.y),
+            };
+        }).filter((segment) => segment.length > 0);
+
+        if (segments.length === 0) return;
+
+        const totalLength = segments.reduce((sum, segment) => sum + segment.length, 0);
+        let remaining = (this._energyPhase * 1.35 % 1) * totalLength;
+        let activeSegment = segments[segments.length - 1];
+
+        for (const segment of segments) {
+            if (remaining <= segment.length) {
+                activeSegment = segment;
+                break;
+            }
+            remaining -= segment.length;
+        }
+
+        const progress = activeSegment.length <= 0 ? 0 : remaining / activeSegment.length;
+        const x = Phaser.Math.Linear(activeSegment.from.x, activeSegment.to.x, progress);
+        const y = Phaser.Math.Linear(activeSegment.from.y, activeSegment.to.y, progress);
+
+        this._sourceFlowGfx.fillStyle(0xc7fff9, 0.22);
+        this._sourceFlowGfx.fillCircle(x, y, 13);
+        this._sourceFlowGfx.fillStyle(0xf6fff8, 0.95);
+        this._sourceFlowGfx.fillRoundedRect(x - 6, y - 6, 12, 12, 3);
+    }
+
+    _refreshAnimatedCircuitEffects() {
+        const renderState = this._lastCircuitRenderState;
+        const reached = renderState?.reached || new Set();
+        const energyActive = Boolean(renderState?.completed);
+
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+                this._drawTileEnergy(x, y, reached.has(`${x},${y}`), energyActive);
+            }
+        }
+
+        if (energyActive) {
+            this._drawSourceFlowBlock(renderState.flowSegments);
+            this._sourcePulse?.setAlpha(0.14 + (Math.sin(this._energyPhase * Math.PI * 2) * 0.08) + 0.16);
+            this._sourceDot?.setFillStyle(0xe9fff3, 1);
+        } else {
+            this._sourceFlowGfx?.clear();
+            this._sourcePulse?.setAlpha(0.3);
+            this._sourceDot?.setFillStyle(0xffcc00, 1);
+        }
+    }
+
+    _startCircuitAnimationLoop() {
+        this._stopCircuitAnimationLoop();
+        this._energyTickEvent = this.scene.time.addEvent({
+            delay: 60,
+            loop: true,
+            callback: () => {
+                if (!this.active) return;
+                this._energyPhase = (this._energyPhase + 0.08) % 1;
+                this._refreshAnimatedCircuitEffects();
+            },
+        });
+    }
+
+    _stopCircuitAnimationLoop() {
+        this._energyTickEvent?.remove(false);
+        this._energyTickEvent = null;
     }
 
     _updateAll() {
-        const { reached, reachedOutputs, forbiddenHit } = this._computeReached();
+        const { reached, reachedOutputs, forbiddenHit, flowSegments } = this._computeReached();
+        const completed = reachedOutputs.length === this._repairTargets.length && forbiddenHit.length === 0;
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
                 this._drawTile(x, y, reached.has(`${x},${y}`));
@@ -518,6 +705,8 @@ export default class CircuitRouting extends MinigameBase {
         });
         this._refreshRepairTargets(reachedOutputs, forbiddenHit.length > 0);
         this._lastResult = { reachedOutputs, forbiddenHit };
+        this._lastCircuitRenderState = { reached, flowSegments, completed };
+        this._refreshAnimatedCircuitEffects();
         this._syncCircuitProgress(this._lastResult);
     }
 
@@ -528,6 +717,11 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     hide() {
+        this._stopCircuitAnimationLoop();
+        this._lastCircuitRenderState = null;
+        this._sourceFlowGfx = null;
+        this._sourceDot = null;
+        this._sourcePulse = null;
         if (this._escKey && this._escHandler) {
             this._escKey.off('down', this._escHandler);
         }

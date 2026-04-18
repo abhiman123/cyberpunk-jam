@@ -33,6 +33,7 @@ export default class MachinePuzzleOverlay {
         this._tableBounds = null;
         this._currentPulseTween = null;
         this._currentPulseState = null;
+        this._powerEffectsSuspended = false;
 
         this._handlePointerMove = this._handlePointerMove.bind(this);
         this._handlePointerUp = this._handlePointerUp.bind(this);
@@ -200,6 +201,7 @@ export default class MachinePuzzleOverlay {
             this._currentPulseTween = null;
         }
         this._currentPulseState = null;
+        this._powerEffectsSuspended = false;
         this._currentPulseGfx.setAlpha(1).clear();
         this._messageText.setAlpha(0).setText('');
         this._tableBounds = null;
@@ -484,9 +486,9 @@ export default class MachinePuzzleOverlay {
         const secondCell = dominoView.dominoState.placedCells.find((cell) => cell.half === 'second');
 
         return {
-            firstGlow: Boolean(firstCell?.matchesCharge || firstCell?.matchesEquality),
-            secondGlow: Boolean(secondCell?.matchesCharge || secondCell?.matchesEquality),
-            globalGlow: evaluation.solved || dominoView.dominoState.isFullyGlowing,
+            firstGlow: !this._powerEffectsSuspended && Boolean(firstCell?.matchesCharge || firstCell?.matchesEquality),
+            secondGlow: !this._powerEffectsSuspended && Boolean(secondCell?.matchesCharge || secondCell?.matchesEquality),
+            globalGlow: !this._powerEffectsSuspended && (evaluation.solved || dominoView.dominoState.isFullyGlowing),
         };
     }
 
@@ -520,6 +522,8 @@ export default class MachinePuzzleOverlay {
     _beginPointerIntent(dominoView, pointer) {
         if (!this.isVisible()) return;
         if (this._dragState && this._dragState.pointerId !== pointer.id) return;
+
+        this._snapDominoRotationToClosestAngle(dominoView);
 
         if (this._floatingDominoView && this._floatingDominoView !== dominoView) {
             this._restoreDomino(this._floatingDominoView);
@@ -609,6 +613,7 @@ export default class MachinePuzzleOverlay {
         };
 
         if (dominoView.dominoState.placedCells.length > 0) {
+            this._setPowerEffectsSuspended(true);
             this._clearDominoPlacement(dominoView);
         }
 
@@ -621,6 +626,8 @@ export default class MachinePuzzleOverlay {
     }
 
     _beginDominoDrag(dominoView) {
+        this._snapDominoRotationToClosestAngle(dominoView);
+
         if (!dominoView.previousState) {
             dominoView.previousState = {
                 x: dominoView.container.x,
@@ -634,6 +641,7 @@ export default class MachinePuzzleOverlay {
         }
 
         if (dominoView.dominoState.placedCells.length > 0) {
+            this._setPowerEffectsSuspended(true);
             this._clearDominoPlacement(dominoView);
         }
 
@@ -679,12 +687,15 @@ export default class MachinePuzzleOverlay {
         this._clearPreview();
 
         if (candidate?.valid) {
+            this._setPowerEffectsSuspended(false);
             this._placeDomino(dominoView, candidate, true);
             this._showMessage('Domino locked into the grid.');
         } else if (droppedOnTable) {
+            this._setPowerEffectsSuspended(false);
             this._returnDominoToTable(dominoView);
             this._showMessage('Domino returned to the rack.');
         } else {
+            this._setPowerEffectsSuspended(false);
             this._restoreDomino(dominoView);
             const errorMessage = candidate?.reason === 'occupied'
                 ? 'That placement overlaps another live cell.'
@@ -931,9 +942,9 @@ export default class MachinePuzzleOverlay {
         const baseValue = this._puzzleState.getBaseCellValue(cellView.row, cellView.col);
         const value = this._puzzleState.getCurrentCellValue(cellView.row, cellView.col);
         const chargeLevel = this._puzzleState.getChargeLevel(cellView.row, cellView.col);
-        const isMatchedCharge = this._puzzleState.isChargeMatched(cellView.row, cellView.col);
+        const isMatchedCharge = !this._powerEffectsSuspended && this._puzzleState.isChargeMatched(cellView.row, cellView.col);
         const hasEqualLink = this._puzzleState.isEqualLinkCell(cellView.row, cellView.col);
-        const isMatchedEqualLink = this._puzzleState.isEqualMatched(cellView.row, cellView.col);
+        const isMatchedEqualLink = !this._powerEffectsSuspended && this._puzzleState.isEqualMatched(cellView.row, cellView.col);
         const isPlaced = isPlacedCode(value);
 
         let fillColor = 0x2c241f;
@@ -1002,18 +1013,19 @@ export default class MachinePuzzleOverlay {
         this._equalLinkGfx.clear();
 
         this._puzzleState.getEqualLinkPairs().forEach((pair) => {
+            const isMatched = !this._powerEffectsSuspended && pair.matched;
             const start = this._getCellCenter(pair.a.row, pair.a.col);
             const end = this._getCellCenter(pair.b.row, pair.b.col);
-            const lineColor = pair.matched ? 0xfff2b8 : 0xe4d06b;
-            const glowColor = pair.matched ? 0xfff8cf : 0xf0db86;
+            const lineColor = isMatched ? 0xfff2b8 : 0xe4d06b;
+            const glowColor = isMatched ? 0xfff8cf : 0xf0db86;
 
-            this._equalLinkGfx.lineStyle(pair.matched ? 4 : 2, glowColor, pair.matched ? 0.65 : 0.24);
+            this._equalLinkGfx.lineStyle(isMatched ? 4 : 2, glowColor, isMatched ? 0.65 : 0.24);
             this._equalLinkGfx.beginPath();
             this._equalLinkGfx.moveTo(start.x, start.y);
             this._equalLinkGfx.lineTo(end.x, end.y);
             this._equalLinkGfx.strokePath();
 
-            this._equalLinkGfx.lineStyle(pair.matched ? 2 : 1, lineColor, pair.matched ? 0.95 : 0.82);
+            this._equalLinkGfx.lineStyle(isMatched ? 2 : 1, lineColor, isMatched ? 0.95 : 0.82);
             this._equalLinkGfx.beginPath();
             this._equalLinkGfx.moveTo(start.x, start.y);
             this._equalLinkGfx.lineTo(end.x, end.y);
@@ -1080,7 +1092,7 @@ export default class MachinePuzzleOverlay {
     }
 
     _playPlacementCurrent(cells, { boosted = false } = {}) {
-        if (!Array.isArray(cells) || cells.length === 0 || !this._currentPulseGfx) return;
+        if (this._powerEffectsSuspended || !Array.isArray(cells) || cells.length === 0 || !this._currentPulseGfx) return;
 
         const points = cells.map((cell) => this._getCellCenter(cell.row, cell.col));
         if (points.length === 0) return;
@@ -1204,6 +1216,32 @@ export default class MachinePuzzleOverlay {
         const normalizedRotationIndex = normalizeRotationIndex(rotationIndex);
         dominoView.dominoState.rotationIndex = normalizedRotationIndex;
         dominoView.dominoState.orientation = getOrientationForRotationIndex(normalizedRotationIndex);
+    }
+
+    _setPowerEffectsSuspended(suspended) {
+        this._powerEffectsSuspended = Boolean(suspended);
+        if (this._powerEffectsSuspended) {
+            this.scene.tweens.killTweensOf(this._currentPulseGfx);
+            if (this._currentPulseTween) {
+                this._currentPulseTween.stop();
+                this._currentPulseTween = null;
+            }
+            this._currentPulseState = null;
+            this._currentPulseGfx?.clear();
+        }
+
+        this._refreshAllCells();
+        this._refreshAllDominoViews();
+    }
+
+    _snapDominoRotationToClosestAngle(dominoView) {
+        if (!dominoView?.container) return;
+
+        this.scene.tweens.killTweensOf(dominoView.container);
+        const snappedRotationIndex = normalizeRotationIndex(Math.round(dominoView.container.angle / 90));
+        this._setDominoRotation(dominoView, snappedRotationIndex);
+        dominoView.container.angle = this._getDominoTargetAngle(snappedRotationIndex);
+        this._drawDomino(dominoView);
     }
 
     _getDominoTargetAngle(rotationIndex) {

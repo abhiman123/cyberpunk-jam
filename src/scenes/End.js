@@ -3,7 +3,7 @@ import { GameState } from '../GameState.js';
 import Animations from '../fx/Animations.js';
 import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
-import { isMusicEnabled } from '../state/gameSettings.js';
+import { getMusicVolume } from '../state/gameSettings.js';
 
 const DIALOGUE_LINES = [
     "You've been a reliable unit, #492240182.",
@@ -86,10 +86,11 @@ export default class EndScene extends Phaser.Scene {
             duration: 900,
             ease: 'Cubic.Out',
             onComplete: () => {
-                if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
+                const musicVolume = getMusicVolume();
+                if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
                     this._music = this.sound.add(SOUND_ASSETS.managerMusic.key, { loop: true, volume: 0 });
                     this._music.play();
-                    this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music, duration: 600 });
+                    this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music * musicVolume, duration: 600 });
                 }
                 this._step4();
             },
@@ -174,10 +175,11 @@ export default class EndScene extends Phaser.Scene {
         this.cameras.main.rotation = 0;
         this.cameras.main.fadeIn(800, 0, 0, 0);
 
-        if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.firedMusic.key)) {
+        const musicVolume = getMusicVolume();
+        if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.firedMusic.key)) {
             const endMusic = this.sound.add(SOUND_ASSETS.firedMusic.key, { loop: false, volume: 0 });
             endMusic.play();
-            this.tweens.add({ targets: endMusic, volume: 0.6, duration: 1200 });
+            this.tweens.add({ targets: endMusic, volume: 0.6 * musicVolume, duration: 1200 });
         }
 
         // Hide dialogue-phase objects
