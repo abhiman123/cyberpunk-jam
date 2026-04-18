@@ -14,18 +14,18 @@ export default class TitleScene extends Phaser.Scene {
         this.cameras.main.setBackgroundColor('#0f140e');
 
         // Main title
-        this.add.text(cx, 280, "YOU'RE JUST\nA MACHINE", {
+        this.add.text(cx, 270, "YOU'RE JUST\nA MACHINE", {
             fontFamily: 'Courier New', fontSize: '64px', color: '#33ff00', align: 'center'
         }).setOrigin(0.5);
 
         // Divider
         const g = this.add.graphics();
-        g.lineStyle(1, 0x334455, 1);
-        g.lineBetween(350, 355, 930, 355);
+        g.lineStyle(3, 0x33ff00, 1);
+        g.lineBetween(350, 345, 930, 345);
 
         // Description
-        this.add.text(cx, 405,
-            'Approve the compliant. Scrap the defective. Repair the redeemable.\nDo not ask questions.',
+        this.add.text(cx, 395,
+            'Approve the compliant. Scrap the defective. Repair the redeemable.\nRinse and repeat.',
             {
                 fontFamily: 'Courier New', fontSize: '14px', color: '#33ff00',
                 align: 'center', lineSpacing: 8,
@@ -34,20 +34,13 @@ export default class TitleScene extends Phaser.Scene {
 
         // Begin Shift button
         let ready = false;
-        let transitioning = false;
-        const btnBg = this.add.rectangle(cx, 510, 200, 44, 0x0a0a0a)
+        const btnBg = this.add.rectangle(cx, 500, 200, 44, 0x0a0a0a)
             .setStrokeStyle(1, 0x334455)
             .setAlpha(0)
             .setInteractive({ useHandCursor: true });
-        const btnLabel = this.add.text(cx, 510, 'BEGIN SHIFT', {
+        const btnLabel = this.add.text(cx, 500, 'BEGIN SHIFT', {
             fontFamily: 'Courier New', fontSize: '15px', color: '#dddd', letterSpacing: 3,
         }).setOrigin(0.5).setAlpha(0);
-
-        // Flicker the button in after 1.5s
-        this.time.delayedCall(1500, () => {
-            ready = true;
-            this.tweens.add({ targets: [btnBg, btnLabel], alpha: { from: 0, to: 1 }, duration: 400 });
-        });
 
         btnBg.on('pointerover', () => {
             if (!ready) return;
@@ -67,13 +60,18 @@ export default class TitleScene extends Phaser.Scene {
         });
 
         btnBg.on('pointerup', () => {
-            if (!ready || transitioning) return;
-            transitioning = true;
+            if (!ready) return;
             if (this.cache.audio.has(SOUND_ASSETS.titlePlay.key)) {
                 this.sound.play(SOUND_ASSETS.titlePlay.key, { volume: SOUND_VOLUMES.ui });
             }
             this.cameras.main.fadeOut(400, 0, 0, 0);
             this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Game'));
+        });
+
+        // Show the button after 1.5s
+        this.time.delayedCall(1500, () => {
+            ready = true;
+            this.tweens.add({ targets: [btnBg, btnLabel], alpha: { from: 0, to: 1 }, duration: 400 });
         });
 
         // Scanlines
