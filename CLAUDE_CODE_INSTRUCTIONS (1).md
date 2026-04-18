@@ -97,7 +97,7 @@ Methods:
 
 1. Show a simple loading bar while assets load
 2. Load all 5 JSON files from `src/data/`
-3. Attempt to load audio files from `assets/audio/`. All optional — missing files must not crash the game. Keys to load:
+3. Attempt to load audio files from `assets/sounds/`. All optional — missing files must not crash the game. Keys to load:
    - `sfx_approve`, `sfx_scrap`, `sfx_repair` — ruling action sounds
    - `sfx_error` — incorrect ruling
    - `sfx_reveal` — zone inspection reveal
@@ -107,6 +107,7 @@ Methods:
    - `music_cutting_it_close` — end of shift (final third of timer) — Julien's "Cutting it Close" composition
    - `music_payday` — Summary screen between shifts — Julien's "Corporate" composition, loops
    - `music_fired` — End scene title card only — should be silence or near-silence per sound doc
+   - `ui_title_play`, `phone_ring`, `phone_voice_intro` — title confirmation and opening phone call flow
 4. Generate all placeholder textures procedurally using Phaser graphics calls:
    - `bg_p1`, `bg_p2`, `bg_p3` — 1280×720, progressively colder colors (warm brown → cool gray → cold blue)
    - `unit_placeholder` — the unit sprite

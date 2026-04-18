@@ -1,6 +1,9 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
 import Animations from '../fx/Animations.js';
+import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
+import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
+import { isMusicEnabled } from '../state/gameSettings.js';
 
 const PERIOD_BG     = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
 const PERIOD_ACCENT = { 1: 0x886644, 2: 0x446688, 3: 0x2244aa };
@@ -12,6 +15,8 @@ export default class BriefingScene extends Phaser.Scene {
         const { period, day } = GameState;
         const allBriefings = this.cache.json.get('briefings');
         const allRules     = this.cache.json.get('rules');
+
+        applyCyberpunkLook(this);
 
         const briefing = allBriefings.find(b => b.period === period && b.day === day)
             || { managerType: 'human', text: 'No directives. Complete your shift.' };
@@ -70,10 +75,10 @@ export default class BriefingScene extends Phaser.Scene {
 
         // Music
         this._music = null;
-        if (this.cache.audio.has('music_manager')) {
-            this._music = this.sound.add('music_manager', { loop: true, volume: 0 });
+        if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
+            this._music = this.sound.add(SOUND_ASSETS.managerMusic.key, { loop: true, volume: 0 });
             this._music.play();
-            this.tweens.add({ targets: this._music, volume: 0.7, duration: 800 });
+            this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music, duration: 800 });
         }
 
         // ACKNOWLEDGED button

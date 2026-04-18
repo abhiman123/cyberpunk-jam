@@ -1,6 +1,9 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
 import Animations from '../fx/Animations.js';
+import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
+import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
+import { isMusicEnabled } from '../state/gameSettings.js';
 
 const DIALOGUE_LINES = [
     "You've been a reliable unit, #492240182.",
@@ -13,6 +16,8 @@ export default class EndScene extends Phaser.Scene {
 
     create() {
         this._music = null;
+
+        applyCyberpunkLook(this);
 
         // ── Stage 1: Scene setup ───────────────────────��─────────────────────
         this.add.image(640, 360, 'bg_p3').setDisplaySize(1280, 720).setDepth(0);
@@ -62,7 +67,7 @@ export default class EndScene extends Phaser.Scene {
         this._playAgainBg.on('pointerdown', () => {
             GameState.reset();
             this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => this.scene.start('Briefing'));
+            this.time.delayedCall(400, () => this.scene.start('Title'));
         });
 
         // ── Step 1-2: Fade in, 2s silence, then manager enters ───────────────
@@ -81,10 +86,10 @@ export default class EndScene extends Phaser.Scene {
             duration: 900,
             ease: 'Cubic.Out',
             onComplete: () => {
-                if (this.cache.audio.has('music_manager')) {
-                    this._music = this.sound.add('music_manager', { loop: true, volume: 0 });
+                if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
+                    this._music = this.sound.add(SOUND_ASSETS.managerMusic.key, { loop: true, volume: 0 });
                     this._music.play();
-                    this.tweens.add({ targets: this._music, volume: 0.7, duration: 600 });
+                    this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music, duration: 600 });
                 }
                 this._step4();
             },
@@ -169,8 +174,8 @@ export default class EndScene extends Phaser.Scene {
         this.cameras.main.rotation = 0;
         this.cameras.main.fadeIn(800, 0, 0, 0);
 
-        if (this.cache.audio.has('music_fired')) {
-            const endMusic = this.sound.add('music_fired', { loop: false, volume: 0 });
+        if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.firedMusic.key)) {
+            const endMusic = this.sound.add(SOUND_ASSETS.firedMusic.key, { loop: false, volume: 0 });
             endMusic.play();
             this.tweens.add({ targets: endMusic, volume: 0.6, duration: 1200 });
         }

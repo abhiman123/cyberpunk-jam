@@ -1,5 +1,8 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
+import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
+import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
+import { isMusicEnabled } from '../state/gameSettings.js';
 
 export default class SummaryScene extends Phaser.Scene {
     constructor() { super('Summary'); }
@@ -15,6 +18,8 @@ export default class SummaryScene extends Phaser.Scene {
         const W  = 1280;
         const H  = 720;
         const cx = W / 2;
+
+        applyCyberpunkLook(this);
 
         this.add.rectangle(cx, H / 2, W, H, 0x060606);
 
@@ -99,10 +104,10 @@ export default class SummaryScene extends Phaser.Scene {
 
         // Music
         this._music = null;
-        if (this.cache.audio.has('music_payday')) {
-            this._music = this.sound.add('music_payday', { loop: true, volume: 0 });
+        if (isMusicEnabled() && this.cache.audio.has(SOUND_ASSETS.paydayMusic.key)) {
+            this._music = this.sound.add(SOUND_ASSETS.paydayMusic.key, { loop: true, volume: 0 });
             this._music.play();
-            this.tweens.add({ targets: this._music, volume: 0.7, duration: 800 });
+            this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music, duration: 800 });
         }
 
         // NEXT SHIFT button
@@ -134,7 +139,7 @@ export default class SummaryScene extends Phaser.Scene {
                 if (GameState.period !== prevPeriod) {
                     this.scene.start('Transition', { period: GameState.period });
                 } else {
-                    this.scene.start('Briefing');
+                    this.scene.start('Game');
                 }
             };
 

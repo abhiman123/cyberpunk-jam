@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import { SOUND_MANIFEST } from '../constants/gameConstants.js';
+import { MACHINE_SPRITE_MANIFEST } from '../data/machineCatalog.js';
 
 export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
@@ -21,23 +23,15 @@ export default class BootScene extends Phaser.Scene {
         this.load.json('cases',         'src/data/cases.json');
         this.load.json('rules',         'src/data/rules.json');
         this.load.json('notifications', 'src/data/notifications.json');
-        this.load.json('briefings',     'src/data/briefings.json');
         this.load.json('schedule',      'src/data/schedule.json');
 
-        // Optional audio — ruling SFX
-        this.load.audio('sfx_approve', 'assets/audio/sfx_approve.mp3');
-        this.load.audio('sfx_scrap',   'assets/audio/sfx_scrap.mp3');
-        this.load.audio('sfx_repair',  'assets/audio/sfx_repair.mp3');
-        this.load.audio('sfx_error',   'assets/audio/sfx_error.mp3');
-        this.load.audio('sfx_reveal',  'assets/audio/sfx_reveal.wav');
+        SOUND_MANIFEST.forEach((asset) => {
+            this.load.audio(asset.key, asset.path);
+        });
 
-        // Optional audio — music
-        this.load.audio('music_manager',          'assets/audio/music_manager.mp3');
-        this.load.audio('music_clocking_in',      'assets/audio/music_clocking_in.mp3');
-        this.load.audio('music_workday',          'assets/audio/music_workday.mp3');
-        this.load.audio('music_cutting_it_close', 'assets/audio/music_cutting_it_close.mp3');
-        this.load.audio('music_payday',           'assets/audio/music_payday.mp3');
-        this.load.audio('music_fired',            'assets/audio/music_fired.mp3');
+        MACHINE_SPRITE_MANIFEST.forEach((sprite) => {
+            this.load.image(sprite.key, sprite.path);
+        });
 
         // Pixel art backgrounds
         this.load.image('bg_mainview',    'mainview.jpeg');
@@ -71,6 +65,9 @@ export default class BootScene extends Phaser.Scene {
 
         // Conveyor tile
         this._makeConveyorTile();
+
+        // Machine placeholders for data-only machine entries
+        this._makeMachinePlaceholders();
     }
 
     _makeRect(key, w, h, color) {
@@ -156,6 +153,66 @@ export default class BootScene extends Phaser.Scene {
         g.beginPath(); g.moveTo(0, 0); g.lineTo(40, 40); g.strokePath();
         g.lineStyle(1, 0x2a2a33); g.strokeRect(0, 0, 40, 40);
         g.generateTexture('conveyor_tile', 40, 40);
+        g.destroy();
+    }
+
+    _makeMachinePlaceholders() {
+        this._makeBreakroomBrewerPlaceholder();
+        this._makeMechanicBroomPlaceholder();
+        this._makeFutureLoungeChairPlaceholder();
+    }
+
+    _makeBreakroomBrewerPlaceholder() {
+        if (this.textures.exists('machine_breakroom_brewer')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x2a3b41); g.fillRoundedRect(18, 26, 84, 124, 14);
+        g.fillStyle(0x5f8d93); g.fillRoundedRect(30, 38, 60, 28, 8);
+        g.fillStyle(0xb8f6ff, 0.85); g.fillRoundedRect(38, 44, 44, 14, 6);
+        g.fillStyle(0x1e2428); g.fillRoundedRect(34, 74, 52, 56, 10);
+        g.fillStyle(0x4c2b19); g.fillRoundedRect(52, 88, 18, 28, 6);
+        g.fillStyle(0xd3d0c2); g.fillRoundedRect(76, 90, 14, 20, 6);
+        g.lineStyle(2, 0xf1e7b8, 0.9); g.strokeRoundedRect(76, 90, 14, 20, 6);
+        g.fillStyle(0x8be9ff, 0.95); g.fillRect(42, 142, 36, 6);
+        g.lineStyle(2, 0x8fd2c8, 0.9); g.strokeRoundedRect(18, 26, 84, 124, 14);
+        g.generateTexture('machine_breakroom_brewer', 120, 180);
+        g.destroy();
+    }
+
+    _makeMechanicBroomPlaceholder() {
+        if (this.textures.exists('machine_mechanic_broom')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x172228); g.fillRect(0, 0, 120, 180);
+        g.lineStyle(8, 0x7e8f98, 0.95);
+        g.beginPath(); g.moveTo(36, 20); g.lineTo(72, 126); g.strokePath();
+        g.fillStyle(0x37d7ff, 0.85); g.fillCircle(36, 20, 10);
+        g.fillStyle(0x24353c); g.fillRoundedRect(46, 120, 42, 20, 8);
+        g.fillStyle(0xa5f2ff, 0.75); g.fillRoundedRect(50, 124, 34, 8, 4);
+        g.fillStyle(0x4ae66f);
+        for (let index = 0; index < 6; index++) {
+            g.fillRect(52 + (index * 6), 140, 3, 22);
+        }
+        g.fillStyle(0x6bf7ff, 0.7); g.fillRoundedRect(40, 156, 54, 8, 4);
+        g.generateTexture('machine_mechanic_broom', 120, 180);
+        g.destroy();
+    }
+
+    _makeFutureLoungeChairPlaceholder() {
+        if (this.textures.exists('machine_future_lounge_chair')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x1d2230); g.fillRoundedRect(24, 38, 52, 56, 12);
+        g.fillStyle(0x334568); g.fillRoundedRect(34, 86, 46, 24, 10);
+        g.fillStyle(0x24304d); g.fillRoundedRect(70, 74, 20, 54, 10);
+        g.lineStyle(3, 0x67f0ff, 0.95); g.strokeRoundedRect(24, 38, 52, 56, 12);
+        g.lineStyle(3, 0xa4ffde, 0.9); g.strokeRoundedRect(34, 86, 46, 24, 10);
+        g.lineStyle(3, 0x67f0ff, 0.85); g.strokeRoundedRect(70, 74, 20, 54, 10);
+        g.lineStyle(4, 0x7f8c99, 0.95);
+        g.beginPath(); g.moveTo(44, 110); g.lineTo(36, 154); g.strokePath();
+        g.beginPath(); g.moveTo(70, 110); g.lineTo(82, 154); g.strokePath();
+        g.fillStyle(0x9ef7ff, 0.8); g.fillRoundedRect(36, 52, 28, 10, 6);
+        g.generateTexture('machine_future_lounge_chair', 120, 180);
         g.destroy();
     }
 }

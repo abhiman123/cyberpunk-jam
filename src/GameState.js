@@ -4,6 +4,7 @@ export const GameState = {
     totalMistakes: 0,
     paycheckTotal: 0,
     casesProcessedThisShift: 0,
+    hasSeenOpeningPhoneCall: false,
     activeRules: [1, 2, 3],
     rulebookSeenRules: new Set(),
 
@@ -29,6 +30,7 @@ export const GameState = {
         this.totalMistakes = 0;
         this.paycheckTotal = 0;
         this.casesProcessedThisShift = 0;
+        this.hasSeenOpeningPhoneCall = false;
         this.activeRules = [1, 2, 3];
         this.rulebookSeenRules = new Set();
     }

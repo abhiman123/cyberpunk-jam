@@ -1,10 +1,14 @@
 import * as Phaser from 'phaser';
+import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
+import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
 
 export default class TitleScene extends Phaser.Scene {
     constructor() { super('Title'); }
 
     create() {
         const W = 1280, H = 720, cx = W / 2, cy = H / 2;
+
+        applyCyberpunkLook(this);
 
         // Background
         this.cameras.main.setBackgroundColor('#0f140e');
@@ -21,7 +25,7 @@ export default class TitleScene extends Phaser.Scene {
 
         // Description
         this.add.text(cx, 405,
-            'You are Unit #492240182. You inspect robots on a conveyor belt.\nApprove the compliant. Scrap the defective. Repair the redeemable.\nDo not ask questions.',
+            'Approve the compliant. Scrap the defective. Repair the redeemable.\nDo not ask questions.',
             {
                 fontFamily: 'Courier New', fontSize: '14px', color: '#33ff00',
                 align: 'center', lineSpacing: 8,
@@ -30,12 +34,14 @@ export default class TitleScene extends Phaser.Scene {
 
         // Begin Shift button
         let ready = false;
+        let transitioning = false;
         const btnBg = this.add.rectangle(cx, 510, 200, 44, 0x0a0a0a)
             .setStrokeStyle(1, 0x334455)
+            .setAlpha(0)
             .setInteractive({ useHandCursor: true });
         const btnLabel = this.add.text(cx, 510, 'BEGIN SHIFT', {
             fontFamily: 'Courier New', fontSize: '15px', color: '#dddd', letterSpacing: 3,
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setAlpha(0);
 
         // Flicker the button in after 1.5s
         this.time.delayedCall(1500, () => {
@@ -48,7 +54,7 @@ export default class TitleScene extends Phaser.Scene {
             btnBg.setStrokeStyle(1, 0x6688aa);
             btnLabel.setColor('#aabbcc');
         });
-        
+
         btnBg.on('pointerout', () => {
             btnBg.setStrokeStyle(1, 0x334455);
             btnLabel.setColor('#778899');
@@ -61,9 +67,13 @@ export default class TitleScene extends Phaser.Scene {
         });
 
         btnBg.on('pointerup', () => {
-            if (!ready) return;
+            if (!ready || transitioning) return;
+            transitioning = true;
+            if (this.cache.audio.has(SOUND_ASSETS.titlePlay.key)) {
+                this.sound.play(SOUND_ASSETS.titlePlay.key, { volume: SOUND_VOLUMES.ui });
+            }
             this.cameras.main.fadeOut(400, 0, 0, 0);
-            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Briefing'));
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Game'));
         });
 
         // Scanlines

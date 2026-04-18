@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
+import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 
 const PERIOD_BG    = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
 const PERIOD_LABEL = { 1: 'PERIOD ONE', 2: 'PERIOD TWO', 3: 'PERIOD THREE' };
@@ -19,6 +20,8 @@ export default class TransitionScene extends Phaser.Scene {
     create() {
         const cx = 640;
         const p  = this._period;
+
+        applyCyberpunkLook(this);
 
         this.add.rectangle(640, 360, 1280, 720, PERIOD_BG[p] || 0x080808);
 
@@ -42,7 +45,7 @@ export default class TransitionScene extends Phaser.Scene {
         // Auto-advance after 2.2s
         this.time.delayedCall(2200, () => {
             this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => this.scene.start('Briefing'));
+            this.time.delayedCall(400, () => this.scene.start('Game'));
         });
 
         this.cameras.main.fadeIn(400, 0, 0, 0);
