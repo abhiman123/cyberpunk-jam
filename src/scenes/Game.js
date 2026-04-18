@@ -134,15 +134,15 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorContainer.add(bg);
 
         // Monitor text overlaid on the pixel art screen (left panel area)
-        this._monitorText = this.add.text(113, 255,
+        this._monitorText = this.add.text(130, 375,
             'AWAITING UNIT\n\nSTATUS: READY', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#00cc55',
+            fontFamily: 'monospace', fontSize: '10px', color: '#301934',
             align: 'center', lineSpacing: 4,
         }).setOrigin(0.5);
         this._conveyorContainer.add(this._monitorText);
 
         // Unit container — rides on the belt, Y tuned to pixel art belt position
-        this._unitContainer  = this.add.container(1400, 390).setDepth(15);
+        this._unitContainer  = this.add.container(1400, 420).setDepth(15);
         const unitSpr        = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText   = this.add.text(0, 115, '', {
             fontFamily: 'monospace', fontSize: '13px', color: '#ccddee',
@@ -173,19 +173,12 @@ export default class GameScene extends Phaser.Scene {
     _buildInspectionScreen() {
         this._inspectionContainer = this.add.container(0, 0).setDepth(10);
 
-        // Full dark background
-        const bg = this.add.rectangle(640, 385, 1280, 670, 0x080808, 1.0);
-        this._inspectionContainer.add(bg);
-
         if (this.textures.exists('bg_inspectview')) {
-            const inspBg = this.add.image(640, 385, 'bg_inspectview').setDisplaySize(1280, 670).setAlpha(0.35);
+            const inspBg = this.add.image(640, 360, 'bg_inspectview').setDisplaySize(1280, 720).setAlpha(1.0);
             this._inspectionContainer.add(inspBg);
         }
 
         // ===== LEFT HALF — unit + zones + log =====
-        const leftBg = this.add.rectangle(255, 385, 510, 670, 0x050505, 0.95)
-            .setStrokeStyle(1, 0x2a2a3a, 0.7);
-        this._inspectionContainer.add(leftBg);
 
         // Unit name and description
         this._inspUnitName = this.add.text(255, 72, '', {
@@ -236,52 +229,62 @@ export default class GameScene extends Phaser.Scene {
         });
 
         // Inspection log panel
-        const logBg = this.add.rectangle(255, 590, 480, 185, 0x040408, 0.95)
-            .setStrokeStyle(1, 0x1a1a2a, 0.8);
+        const logBg = this.add.rectangle(255, 590, 480, 185, 0x000000, 0.55);
         this._inspectionContainer.add(logBg);
 
-        const logHeader = this.add.text(255, 504, 'INSPECTION LOG', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#005544', letterSpacing: 3,
+        const logHeader = this.add.text(255, 504, 'INSPECTION LOG  (scroll to review)', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#005544', letterSpacing: 2,
         }).setOrigin(0.5);
         this._inspectionContainer.add(logHeader);
 
-        this._logObj = this.add.text(30, 515, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#00cc88',
-            wordWrap: { width: 460 }, lineSpacing: 5,
+        // Scrollable log container clipped to the panel
+        const LOG_X = 15, LOG_TOP = 503, LOG_W = 480, LOG_H = 178;
+        const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
+        maskShape.fillRect(LOG_X, LOG_TOP, LOG_W, LOG_H);
+        const logMask = maskShape.createGeometryMask();
+
+        this._logContainerBaseY = LOG_TOP + 4;
+        this._logContainer = this.add.container(LOG_X + 6, this._logContainerBaseY);
+        this._logContainer.setMask(logMask);
+        this._inspectionContainer.add(this._logContainer);
+
+        this._logLineHeight = 16;
+        this._logScrollY    = 0;
+        this._logPanelH     = LOG_H;
+
+        this.input.on('wheel', (_ptr, _objs, _dx, dy) => {
+            if (this._screen !== 'inspection') return;
+            const maxScroll = Math.max(0, this._logLines.length * this._logLineHeight - LOG_H + 8);
+            this._logScrollY = Phaser.Math.Clamp(this._logScrollY + dy * 0.4, 0, maxScroll);
+            this._updateLogScroll();
         });
-        this._inspectionContainer.add(this._logObj);
 
         // ===== RIGHT HALF — ruling + tools =====
-        const rightBg = this.add.rectangle(910, 385, 740, 670, 0x060606, 0.95)
-            .setStrokeStyle(1, 0x2a2a2a, 0.6);
-        this._inspectionContainer.add(rightBg);
+        // Panel art is painted into bg_inspectview.jpeg. Buttons overlay the art elements.
 
-        // ─ Ruling panel (top-right, gray) ─
-        const ruleBg = this.add.rectangle(910, 210, 700, 330, 0x0a0a0a)
-            .setStrokeStyle(1, 0x444444, 0.5);
-        this._inspectionContainer.add(ruleBg);
-
-        const rulingHeader = this.add.text(910, 67, 'MAKE A RULING', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#666666', letterSpacing: 4,
-        }).setOrigin(0.5);
-        this._inspectionContainer.add(rulingHeader);
-
+        // Ruling buttons — centered in the dark panel (x=640–1280, center x=960)
+        // Spaced equally across the panel height (y≈0–490 before gold bar)
         const rulingDefs = [
-            { y: 120, label: 'SCRAP',   dotColor: 0xff3322, textColor: '#ff5544', action: 'scrap'   },
-            { y: 210, label: 'REPAIR',  dotColor: 0xffcc00, textColor: '#ffdd44', action: 'repair'  },
-            { y: 300, label: 'APPROVE', dotColor: 0x00cc44, textColor: '#44ff88', action: 'approve' },
+            { y: 140, label: 'SCRAP',   fillColor: 0xff3322, dotColor: 0xff3322, textColor: '#ff6655', action: 'scrap'   },
+            { y: 285, label: 'REPAIR',  fillColor: 0xffcc00, dotColor: 0xffcc00, textColor: '#ffdd44', action: 'repair'  },
+            { y: 425, label: 'APPROVE', fillColor: 0x00cc44, dotColor: 0x00cc44, textColor: '#44ff88', action: 'approve' },
         ];
         rulingDefs.forEach(def => {
-            const btnBg = this.add.rectangle(910, def.y, 660, 60, 0x111111)
-                .setStrokeStyle(1, 0x333333)
+            // Semi-transparent colored background so it's clearly clickable but art shows through
+            const btnBg = this.add.rectangle(960, def.y, 580, 68, def.fillColor, 0.18)
+                .setStrokeStyle(2, def.fillColor, 0.85)
                 .setInteractive({ useHandCursor: true });
-            const dot = this.add.circle(596, def.y, 7, def.dotColor, 0.9);
-            const lbl = this.add.text(910, def.y, def.label, {
-                fontFamily: 'monospace', fontSize: '17px', color: def.textColor,
+
+            // Colored dot on left edge (mirrors art dots)
+            const dot = this.add.circle(690, def.y, 9, def.dotColor, 1.0);
+
+            const lbl = this.add.text(970, def.y, def.label, {
+                fontFamily: 'monospace', fontSize: '20px', color: def.textColor,
+                stroke: '#000000', strokeThickness: 3,
             }).setOrigin(0.5);
 
-            btnBg.on('pointerover', () => btnBg.setStrokeStyle(1, 0x666666));
-            btnBg.on('pointerout',  () => btnBg.setStrokeStyle(1, 0x333333));
+            btnBg.on('pointerover', () => btnBg.setFillStyle(def.fillColor, 0.35));
+            btnBg.on('pointerout',  () => btnBg.setFillStyle(def.fillColor, 0.18));
             btnBg.on('pointerdown', () => {
                 if (this._screen !== 'inspection') return;
                 if (this._actionLocked || this._rulebook.isVisible()) return;
@@ -294,49 +297,40 @@ export default class GameScene extends Phaser.Scene {
             this._inspectionContainer.add(lbl);
         });
 
-        // ─ Tool bar (bottom-right, gold panel) ─
-        const toolBg = this.add.rectangle(910, 540, 700, 210, 0x0d0b00)
-            .setStrokeStyle(1, 0x554400, 0.7);
-        this._inspectionContainer.add(toolBg);
-
-        const toolHeader = this.add.text(910, 446, 'SELECT TOOL', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#665500', letterSpacing: 3,
-        }).setOrigin(0.5);
-        this._inspectionContainer.add(toolHeader);
-
+        // Tool buttons — overlaid on the hammer and gun painted in the gold bar (y≈500–720)
         const toolDefs = [
-            { x: 730, key: 'hammer',  label: 'HAMMER',  icon: 'tool_hammer'  },
-            { x: 1090, key: 'scanner', label: 'SCANNER', icon: 'tool_scanner' },
+            { x: 790,  key: 'hammer',  label: 'HAMMER'  },
+            { x: 1130, key: 'scanner', label: 'SCANNER' },
         ];
         this._toolBtns = {};
         toolDefs.forEach(t => {
-            const bg = this.add.rectangle(t.x, 530, 210, 130, 0x110f00)
-                .setStrokeStyle(1, 0x554400)
+            const bg = this.add.rectangle(t.x, 605, 240, 170, 0xaa8800, 0.15)
+                .setStrokeStyle(2, 0xaa8800, 0.6)
                 .setInteractive({ useHandCursor: true });
-            const icon = this.add.image(t.x, 510, t.icon).setScale(1.2);
-            const lbl  = this.add.text(t.x, 562, t.label, {
-                fontFamily: 'monospace', fontSize: '12px', color: '#aa8833',
+            const lbl = this.add.text(t.x, 667, t.label, {
+                fontFamily: 'monospace', fontSize: '13px', color: '#ccaa33',
+                stroke: '#000000', strokeThickness: 3,
             }).setOrigin(0.5);
 
-            bg.on('pointerover', () => { if (this._selectedTool !== t.key) bg.setStrokeStyle(1, 0x998822); });
-            bg.on('pointerout',  () => { if (this._selectedTool !== t.key) bg.setStrokeStyle(1, 0x554400); });
+            bg.on('pointerover', () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xffdd44, 0.22); });
+            bg.on('pointerout',  () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xaa8800, 0.15); });
             bg.on('pointerdown', () => this._onToolSelect(t.key));
 
             this._inspectionContainer.add(bg);
-            this._inspectionContainer.add(icon);
             this._inspectionContainer.add(lbl);
             this._toolBtns[t.key] = { bg, lbl };
         });
 
-        // [B] RULEBOOK button
-        const rbBg = this.add.rectangle(910, 626, 300, 36, 0x001a1a)
-            .setStrokeStyle(1, 0x003a3a)
+        // [B] RULEBOOK button — bottom strip of gold panel
+        const rbBg = this.add.rectangle(960, 696, 320, 38, 0x001a1a, 0.6)
+            .setStrokeStyle(1, 0x00aaaa, 0.7)
             .setInteractive({ useHandCursor: true });
-        const rbTxt = this.add.text(910, 626, '[B]  RULEBOOK', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#00aaaa',
+        const rbTxt = this.add.text(960, 696, '[B]  RULEBOOK', {
+            fontFamily: 'monospace', fontSize: '13px', color: '#00dddd',
+            stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5);
-        rbBg.on('pointerover', () => rbBg.setFillStyle(0x002a2a));
-        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x001a1a));
+        rbBg.on('pointerover', () => rbBg.setFillStyle(0x00aaaa, 0.22));
+        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x001a1a, 0.6));
         rbBg.on('pointerdown', () => {
             if (this._screen !== 'inspection') return;
             Animations.buttonPunch(this, rbBg);
@@ -369,11 +363,11 @@ export default class GameScene extends Phaser.Scene {
         this._selectedTool = tool;
         Object.entries(this._toolBtns).forEach(([k, b]) => {
             if (k === tool) {
-                b.bg.setStrokeStyle(3, 0xffcc44);
-                b.lbl.setColor('#ffcc44');
+                b.bg.setFillStyle(0xffcc44, 0.4).setStrokeStyle(2, 0xffcc44, 1.0);
+                b.lbl.setColor('#ffee88');
             } else {
-                b.bg.setStrokeStyle(1, 0x554400);
-                b.lbl.setColor('#aa8833');
+                b.bg.setFillStyle(0xaa8800, 0.15).setStrokeStyle(2, 0xaa8800, 0.6);
+                b.lbl.setColor('#ccaa33');
             }
         });
     }
@@ -385,8 +379,7 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
         const key = `${zoneId}:${this._selectedTool}`;
-        if (this._inspectedZones.has(key)) return;
-        this._inspectedZones.add(key);
+        this._inspectedZones.add(key); // still track for zone highlight
 
         const result = this._currentCase.zones[zoneId][this._selectedTool];
         this._appendLog(`[${zoneId}/${this._selectedTool.toUpperCase()}] ${result}`);
@@ -395,11 +388,26 @@ export default class GameScene extends Phaser.Scene {
         if (this.cache.audio.has('sfx_reveal')) this.sound.play('sfx_reveal', { volume: 0.7 });
     }
 
+    _updateLogScroll() {
+        this._logContainer.y = this._logContainerBaseY - this._logScrollY;
+    }
+
     _appendLog(text) {
+        const idx = this._logLines.length;
         this._logLines.push(text);
-        if (this._logLines.length > 6) this._logLines.shift();
-        this._logObj.setText(this._logLines.join('\n'));
-        Animations.glitchText(this, this._logObj, { duration: 120, finalAlpha: 1 });
+        const lineObj = this.add.text(0, idx * this._logLineHeight, text, {
+            fontFamily: 'monospace', fontSize: '10px', color: '#00cc88',
+            wordWrap: { width: 460 }, lineSpacing: 3,
+        });
+        this._logContainer.add(lineObj);
+        Animations.glitchText(this, lineObj, { duration: 120, finalAlpha: 1 });
+
+        // Auto-scroll to bottom so newest entry is visible
+        const totalH = (this._logLines.length) * this._logLineHeight;
+        if (totalH > this._logPanelH) {
+            this._logScrollY = totalH - this._logPanelH + 8;
+            this._updateLogScroll();
+        }
     }
 
     _highlightZone(zoneId) {
@@ -486,13 +494,15 @@ export default class GameScene extends Phaser.Scene {
         // Reset inspection state
         this._inspectedZones = new Set();
         this._logLines = [];
-        this._logObj.setText('');
+        this._logContainer.removeAll(true);
+        this._logScrollY = 0;
+        this._updateLogScroll();
         this._actionLocked = false;
         this._selectedTool = null;
 
         Object.entries(this._toolBtns).forEach(([, b]) => {
-            b.bg.setStrokeStyle(1, 0x554400);
-            b.lbl.setColor('#aa8833');
+            b.bg.setFillStyle(0xaa8800, 0.15).setStrokeStyle(2, 0xaa8800, 0.6);
+            b.lbl.setColor('#ccaa33');
         });
         Object.entries(this._zoneBtns).forEach(([, z]) => {
             z.highlighted = false;
