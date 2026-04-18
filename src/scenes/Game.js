@@ -101,22 +101,22 @@ export default class GameScene extends Phaser.Scene {
 
         this._hudPeriodText = this.add.text(12, 14,
             `PERIOD ${GameState.period}  |  DAY ${GameState.day}`, {
-            fontFamily: 'monospace', fontSize: '11px', color: '#cccccc',
+            fontFamily: 'Courier New', fontSize: '11px', color: '#cccccc',
         });
         this._hudContainer.add(this._hudPeriodText);
 
         this._hudCasesText = this.add.text(640, 25, 'CASES: 0', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#888888',
+            fontFamily: 'Courier New', fontSize: '11px', color: '#888888',
         }).setOrigin(0.5);
         this._hudContainer.add(this._hudCasesText);
 
         this._hudPayText = this.add.text(1268, 14, this._fmtPay(), {
-            fontFamily: 'monospace', fontSize: '11px', color: '#00cc88',
+            fontFamily: 'Courier New', fontSize: '11px', color: '#00cc88',
         }).setOrigin(1, 0);
         this._hudContainer.add(this._hudPayText);
 
         this._hudViolText = this.add.text(1268, 30, 'Violations: 0', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#666666',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#666666',
         }).setOrigin(1, 0);
         this._hudContainer.add(this._hudViolText);
 
@@ -145,7 +145,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._monitorText = this.add.text(130, 375,
             'AWAITING UNIT\n\nSTATUS: READY', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#301934',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#301934',
             align: 'center', lineSpacing: 4,
         }).setOrigin(0.5);
         this._conveyorContainer.add(this._monitorText);
@@ -153,11 +153,11 @@ export default class GameScene extends Phaser.Scene {
         this._unitContainer  = this.add.container(1400, 420).setDepth(15);
         const unitSpr        = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText   = this.add.text(0, 115, '', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#ccddee',
+            fontFamily: 'Courier New', fontSize: '13px', color: '#ccddee',
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5);
         this._unitIdText = this.add.text(0, 133, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#778899',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#778899',
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5);
         this._unitContainer.add([unitSpr, this._unitNameText, this._unitIdText]);
@@ -194,12 +194,12 @@ export default class GameScene extends Phaser.Scene {
         this._inspectionContainer.add(docketStrip);
 
         this._caseNameText = this.add.text(20, 60, '', {
-            fontFamily: 'monospace', fontSize: '14px', color: '#cce0ff',
+            fontFamily: 'Courier New', fontSize: '14px', color: '#cce0ff',
         });
         this._inspectionContainer.add(this._caseNameText);
 
         this._caseDescText = this.add.text(20, 80, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#778899',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#778899',
         });
         this._inspectionContainer.add(this._caseDescText);
 
@@ -221,7 +221,7 @@ export default class GameScene extends Phaser.Scene {
         this._inspectionContainer.add(logBg);
 
         const logHeader = this.add.text(LOG_X + 8, LOG_Y + 4, 'INSPECTION LOG', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#44aaaa', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#44aaaa', letterSpacing: 2,
         });
         this._inspectionContainer.add(logHeader);
 
@@ -233,7 +233,7 @@ export default class GameScene extends Phaser.Scene {
         this._logSlots = [];
         for (let i = 0; i < this._logSlotCount; i++) {
             const t = this.add.text(LOG_X + 12, LOG_INNER_Y + i * SLOT_H, '', {
-                fontFamily: 'monospace', fontSize: '10px', color: '#00cc88',
+                fontFamily: 'Courier New', fontSize: '10px', color: '#00cc88',
             }).setVisible(false);
             this._inspectionContainer.add(t);
             this._logSlots.push(t);
@@ -242,7 +242,7 @@ export default class GameScene extends Phaser.Scene {
         this._logScrollIdx = 0; // index of first visible entry
 
         const scrollHint = this.add.text(LOG_X + LOG_W - 8, LOG_Y + 4, '↑↓ scroll', {
-            fontFamily: 'monospace', fontSize: '9px', color: '#336677',
+            fontFamily: 'Courier New', fontSize: '9px', color: '#336677',
         }).setOrigin(1, 0);
         this._inspectionContainer.add(scrollHint);
 
@@ -261,7 +261,7 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0x00aaaa, 0.7)
             .setInteractive({ useHandCursor: true });
         const rbTxt = this.add.text(1180, 570, '[B] RULEBOOK', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#00dddd',
+            fontFamily: 'Courier New', fontSize: '11px', color: '#00dddd',
         }).setOrigin(0.5);
         rbBg.on('pointerover', () => rbBg.setFillStyle(0x00aaaa, 0.22));
         rbBg.on('pointerout',  () => rbBg.setFillStyle(0x001a1a, 0.8));
@@ -277,7 +277,7 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xaaaa00, 0.7)
             .setInteractive({ useHandCursor: true });
         const backTxt = this.add.text(100, 570, '◀ BELT', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#dddd00',
+            fontFamily: 'Courier New', fontSize: '11px', color: '#dddd00',
         }).setOrigin(0.5);
         backBg.on('pointerover', () => backBg.setFillStyle(0xaaaa00, 0.22));
         backBg.on('pointerout',  () => backBg.setFillStyle(0x1a1a00, 0.8));
@@ -289,7 +289,7 @@ export default class GameScene extends Phaser.Scene {
 
         // Feedback text
         this._feedbackText = this.add.text(640, 548, '', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#ff4444',
+            fontFamily: 'Courier New', fontSize: '12px', color: '#ff4444',
             stroke: '#000000', strokeThickness: 1, align: 'center',
             wordWrap: { width: 900 },
         }).setOrigin(0.5).setAlpha(0);

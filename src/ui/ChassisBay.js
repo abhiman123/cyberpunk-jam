@@ -27,7 +27,7 @@ export default class ChassisBay {
 
         // Header
         const header = this.scene.add.text(0, -200, 'CHASSIS BAY — AWAITING UNIT', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#66aacc', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '11px', color: '#66aacc', letterSpacing: 2,
         }).setOrigin(0.5);
         this.container.add(header);
         this._header = header;
@@ -42,7 +42,7 @@ export default class ChassisBay {
                 .setStrokeStyle(1, 0x336688, 0.6)
                 .setInteractive({ useHandCursor: true });
             const lbl = this.scene.add.text(p.x, p.y, `[${p.id}] ${p.label}`, {
-                fontFamily: 'monospace', fontSize: '9px', color: '#446688',
+                fontFamily: 'Courier New', fontSize: '9px', color: '#446688',
             }).setOrigin(0.5);
 
             rect.on('pointerover', () => {
@@ -63,7 +63,7 @@ export default class ChassisBay {
             .setStrokeStyle(1, 0x00cccc, 0.9)
             .setInteractive({ useHandCursor: true });
         const dTxt = this.scene.add.text(0, 0, 'OPEN DIAGNOSTIC PORT', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#00eeee', letterSpacing: 1,
+            fontFamily: 'Courier New', fontSize: '11px', color: '#00eeee', letterSpacing: 1,
         }).setOrigin(0.5);
         dBg.on('pointerover', () => dBg.setFillStyle(0x00aaaa, 0.45));
         dBg.on('pointerout',  () => dBg.setFillStyle(0x003344, 0.85));
