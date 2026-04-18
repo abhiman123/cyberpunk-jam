@@ -3,8 +3,12 @@ import { GameState } from '../GameState.js';
 import RulebookOverlay from '../systems/RulebookOverlay.js';
 import Animations from '../fx/Animations.js';
 import { applyCyberpunkLook, glitchBurst } from '../fx/applyCyberpunkLook.js';
+import StateMachine from '../core/StateMachine.js';
+import ChassisBay from '../ui/ChassisBay.js';
+import StampPress from '../ui/StampPress.js';
+import CircuitRouting from '../systems/minigames/CircuitRouting.js';
 
-const SHIFT_MS      = { 1: 180000, 2: 135000, 3: 90000 };
+const SHIFT_MS       = { 1: 180000, 2: 135000, 3: 90000 };
 const PAYCHECK_DELTA = 0.00000003;
 
 export default class GameScene extends Phaser.Scene {
@@ -20,16 +24,18 @@ export default class GameScene extends Phaser.Scene {
         const schedEntry = schedule.find(s => s.period === period && s.day === day);
         const baseIds    = schedEntry ? schedEntry.caseIds : [];
 
-        this._baseQueue   = baseIds.map(id => allCases.find(c => c.id === id)).filter(Boolean);
-        this._queue       = [...this._baseQueue];
-        this._queueIndex  = 0;
-        this._currentCase = null;
+        this._baseQueue     = baseIds.map(id => allCases.find(c => c.id === id)).filter(Boolean);
+        this._queue         = [...this._baseQueue];
+        this._queueIndex    = 0;
+        this._currentCase   = null;
         this._actionLocked  = false;
         this._shiftMistakes = 0;
         this._paycheckDelta = 0;
-        this._selectedTool  = null;
-        this._inspectedZones = new Set();
         this._logLines      = [];
+
+        // ── Per-case state machine ────────────────────────────────────────────
+        // intake → diagnose → verdict → transition
+        this._caseSM = new StateMachine('intake');
 
         // ── Cyberpunk look ────────────────────────────────────────────────────
         const fx = applyCyberpunkLook(this);
@@ -39,6 +45,7 @@ export default class GameScene extends Phaser.Scene {
         this._buildHUD();
         this._buildConveyorScreen();
         this._buildInspectionScreen();
+        this._buildMinigame();
 
         // ── Shift timer ───────────────────────────────────────────────────────
         this._shiftDuration = SHIFT_MS[period] || 180000;
@@ -50,7 +57,12 @@ export default class GameScene extends Phaser.Scene {
         // ── Rulebook ──────────────────────────────────────────────────────────
         const newRuleIds = allRules.filter(r => r.period === period).map(r => r.id);
         this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds);
-        this.events.on('shutdown', () => this._rulebook.destroy());
+        this.events.on('shutdown', () => {
+            this._rulebook.destroy();
+            this._chassisBay?.destroy();
+            this._stampPress?.destroy();
+            this._minigame?.destroy();
+        });
 
         // ── Start ─────────────────────────────────────────────────────────────
         this._setScreen('conveyor');
@@ -72,8 +84,6 @@ export default class GameScene extends Phaser.Scene {
 
         this._drawTimerBar(ratio);
         this._checkMusicPhase(ratio);
-
-        if (this._screen === 'conveyor') this._scrollBelt(delta);
 
         if (this._elapsed >= this._shiftDuration) {
             this._shiftRunning = false;
@@ -133,7 +143,6 @@ export default class GameScene extends Phaser.Scene {
         const bg = this.add.image(640, 360, bgKey).setDisplaySize(1280, 720);
         this._conveyorContainer.add(bg);
 
-        // Monitor text overlaid on the pixel art screen (left panel area)
         this._monitorText = this.add.text(130, 375,
             'AWAITING UNIT\n\nSTATUS: READY', {
             fontFamily: 'monospace', fontSize: '10px', color: '#301934',
@@ -141,7 +150,6 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5);
         this._conveyorContainer.add(this._monitorText);
 
-        // Unit container — rides on the belt, Y tuned to pixel art belt position
         this._unitContainer  = this.add.container(1400, 420).setDepth(15);
         const unitSpr        = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText   = this.add.text(0, 115, '', {
@@ -161,11 +169,8 @@ export default class GameScene extends Phaser.Scene {
             if (this._screen !== 'conveyor' || this._actionLocked) return;
             if (!this._currentCase) return;
             this._setScreen('inspection');
+            this._caseSM.transition('diagnose');
         });
-    }
-
-    _scrollBelt(_delta) {
-        // Belt animation handled by pixel art background — no-op
     }
 
     // ── Inspection screen ─────────────────────────────────────────────────────
@@ -173,174 +178,117 @@ export default class GameScene extends Phaser.Scene {
     _buildInspectionScreen() {
         this._inspectionContainer = this.add.container(0, 0).setDepth(10);
 
-        if (this.textures.exists('bg_inspectview')) {
-            const inspBg = this.add.image(640, 360, 'bg_inspectview').setDisplaySize(1280, 720).setAlpha(1.0);
-            this._inspectionContainer.add(inspBg);
-        }
+        // Dark workbench background
+        const bg = this.add.rectangle(640, 360, 1280, 720, 0x070a0c, 1);
+        this._inspectionContainer.add(bg);
 
-        // ===== LEFT HALF — unit + zones + log =====
+        // Subtle grid overlay
+        const grid = this.add.graphics();
+        grid.lineStyle(1, 0x112233, 0.4);
+        for (let x = 0; x < 1280; x += 80) grid.lineBetween(x, 50, x, 720);
+        for (let y = 50; y < 720; y += 80) grid.lineBetween(0, y, 1280, y);
+        this._inspectionContainer.add(grid);
 
-        // Unit name and description
-        this._inspUnitName = this.add.text(255, 72, '', {
-            fontFamily: 'monospace', fontSize: '15px', color: '#cce0ff',
-        }).setOrigin(0.5);
-        this._inspectionContainer.add(this._inspUnitName);
+        // Docket header strip
+        const docketStrip = this.add.rectangle(640, 70, 1280, 38, 0x0a1418, 0.95);
+        this._inspectionContainer.add(docketStrip);
 
-        this._inspUnitDesc = this.add.text(255, 95, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#778899',
-            wordWrap: { width: 440 }, align: 'center',
-        }).setOrigin(0.5, 0);
-        this._inspectionContainer.add(this._inspUnitDesc);
-
-        // Unit sprite centered
-        this._inspUnitSprite = this.add.image(255, 285, 'unit_placeholder').setScale(1.6);
-        this._inspectionContainer.add(this._inspUnitSprite);
-
-        // Zone buttons overlaid on sprite
-        // unit_placeholder is 120×200, scale 1.6 → 192×320, centered at (255, 285)
-        // y range: 285 ± 160 → y: 125..445
-        const zoneLayout = {
-            A: { x: 255, y: 145, w: 130, h: 52, label: '[A] HEAD'   },
-            B: { x: 255, y: 265, w: 155, h: 80, label: '[B] TORSO'  },
-            C: { x: 175, y: 335, w: 75,  h: 80, label: '[C] LEFT'   },
-            D: { x: 335, y: 335, w: 75,  h: 80, label: '[D] RIGHT'  },
-        };
-
-        this._zoneBtns = {};
-        Object.entries(zoneLayout).forEach(([id, z]) => {
-            const rect = this.add.rectangle(z.x, z.y, z.w, z.h, 0x001122, 0.0)
-                .setStrokeStyle(1, 0x336688, 0.6)
-                .setInteractive({ useHandCursor: true });
-            const lbl = this.add.text(z.x, z.y, z.label, {
-                fontFamily: 'monospace', fontSize: '9px', color: '#446688',
-            }).setOrigin(0.5);
-
-            rect.on('pointerover', () => {
-                if (!this._zoneBtns[id].highlighted) rect.setStrokeStyle(1, 0x66aacc, 1);
-            });
-            rect.on('pointerout', () => {
-                if (!this._zoneBtns[id].highlighted) rect.setStrokeStyle(1, 0x336688, 0.6);
-            });
-            rect.on('pointerdown', () => this._onZoneClick(id));
-
-            this._inspectionContainer.add(rect);
-            this._inspectionContainer.add(lbl);
-            this._zoneBtns[id] = { rect, lbl, highlighted: false };
+        this._caseNameText = this.add.text(20, 60, '', {
+            fontFamily: 'monospace', fontSize: '14px', color: '#cce0ff',
         });
+        this._inspectionContainer.add(this._caseNameText);
 
-        // Inspection log panel
-        const logBg = this.add.rectangle(255, 590, 480, 185, 0x000000, 0.55);
+        this._caseDescText = this.add.text(20, 80, '', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#778899',
+        });
+        this._inspectionContainer.add(this._caseDescText);
+
+        // Chassis Bay — left/center
+        this._chassisBay = new ChassisBay(this, 320, 340);
+        this._inspectionContainer.add(this._chassisBay.container);
+        this._chassisBay.onPanelOpened = (info) => this._onPanelOpened(info);
+        this._chassisBay.onDiagnosticLaunch = (caseData) => this._launchDiagnostic(caseData);
+
+        // Stamp Press — right
+        this._stampPress = new StampPress(this, 960, 340);
+        this._inspectionContainer.add(this._stampPress.container);
+        this._stampPress.onStamp = (action) => this._submitRuling(action);
+
+        // Inspection log — bottom strip
+        const LOG_X = 20, LOG_Y = 592, LOG_W = 1240, LOG_H = 108;
+        const logBg = this.add.rectangle(LOG_X + LOG_W / 2, LOG_Y + LOG_H / 2, LOG_W, LOG_H, 0x000000, 0.7)
+            .setStrokeStyle(1, 0x224455, 0.8);
         this._inspectionContainer.add(logBg);
 
-        const logHeader = this.add.text(255, 504, 'INSPECTION LOG  (scroll to review)', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#005544', letterSpacing: 2,
-        }).setOrigin(0.5);
+        const logHeader = this.add.text(LOG_X + 8, LOG_Y + 4, 'INSPECTION LOG', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#44aaaa', letterSpacing: 2,
+        });
         this._inspectionContainer.add(logHeader);
 
-        // Scrollable log container clipped to the panel
-        const LOG_X = 15, LOG_TOP = 503, LOG_W = 480, LOG_H = 178;
-        const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
-        maskShape.fillRect(LOG_X, LOG_TOP, LOG_W, LOG_H);
-        const logMask = maskShape.createGeometryMask();
+        // Fixed text slots — one text object per visible row, positioned within panel
+        const SLOT_H = 15;
+        const LOG_INNER_Y = LOG_Y + 20;
+        const LOG_INNER_H = LOG_H - 24;
+        this._logSlotCount = Math.floor(LOG_INNER_H / SLOT_H);
+        this._logSlots = [];
+        for (let i = 0; i < this._logSlotCount; i++) {
+            const t = this.add.text(LOG_X + 12, LOG_INNER_Y + i * SLOT_H, '', {
+                fontFamily: 'monospace', fontSize: '10px', color: '#00cc88',
+            }).setVisible(false);
+            this._inspectionContainer.add(t);
+            this._logSlots.push(t);
+        }
+        this._logHistory  = []; // { text, color }
+        this._logScrollIdx = 0; // index of first visible entry
 
-        this._logContainerBaseY = LOG_TOP + 4;
-        this._logContainer = this.add.container(LOG_X + 6, this._logContainerBaseY);
-        this._logContainer.setMask(logMask);
-        this._inspectionContainer.add(this._logContainer);
+        const scrollHint = this.add.text(LOG_X + LOG_W - 8, LOG_Y + 4, '↑↓ scroll', {
+            fontFamily: 'monospace', fontSize: '9px', color: '#336677',
+        }).setOrigin(1, 0);
+        this._inspectionContainer.add(scrollHint);
 
-        this._logLineHeight = 16;
-        this._logScrollY    = 0;
-        this._logPanelH     = LOG_H;
-
-        this.input.on('wheel', (_ptr, _objs, _dx, dy) => {
+        this.input.on('wheel', (ptr, _objs, _dx, dy) => {
             if (this._screen !== 'inspection') return;
-            const maxScroll = Math.max(0, this._logLines.length * this._logLineHeight - LOG_H + 8);
-            this._logScrollY = Phaser.Math.Clamp(this._logScrollY + dy * 0.4, 0, maxScroll);
-            this._updateLogScroll();
+            if (ptr.y < LOG_Y || ptr.y > LOG_Y + LOG_H) return;
+            const maxIdx = Math.max(0, this._logHistory.length - this._logSlotCount);
+            this._logScrollIdx = Phaser.Math.Clamp(
+                this._logScrollIdx + (dy > 0 ? 1 : -1), 0, maxIdx
+            );
+            this._redrawLog();
         });
 
-        // ===== RIGHT HALF — ruling + tools =====
-        // Panel art is painted into bg_inspectview.jpeg. Buttons overlay the art elements.
-
-        // Ruling buttons — centered in the dark panel (x=640–1280, center x=960)
-        // Spaced equally across the panel height (y≈0–490 before gold bar)
-        const rulingDefs = [
-            { y: 140, label: 'SCRAP',   fillColor: 0xff3322, dotColor: 0xff3322, textColor: '#ff6655', action: 'scrap'   },
-            { y: 285, label: 'REPAIR',  fillColor: 0xffcc00, dotColor: 0xffcc00, textColor: '#ffdd44', action: 'repair'  },
-            { y: 425, label: 'APPROVE', fillColor: 0x00cc44, dotColor: 0x00cc44, textColor: '#44ff88', action: 'approve' },
-        ];
-        rulingDefs.forEach(def => {
-            // Semi-transparent colored background so it's clearly clickable but art shows through
-            const btnBg = this.add.rectangle(960, def.y, 580, 68, def.fillColor, 0.18)
-                .setStrokeStyle(2, def.fillColor, 0.85)
-                .setInteractive({ useHandCursor: true });
-
-            // Colored dot on left edge (mirrors art dots)
-            const dot = this.add.circle(690, def.y, 9, def.dotColor, 1.0);
-
-            const lbl = this.add.text(970, def.y, def.label, {
-                fontFamily: 'monospace', fontSize: '20px', color: def.textColor,
-                stroke: '#000000', strokeThickness: 3,
-            }).setOrigin(0.5);
-
-            btnBg.on('pointerover', () => btnBg.setFillStyle(def.fillColor, 0.35));
-            btnBg.on('pointerout',  () => btnBg.setFillStyle(def.fillColor, 0.18));
-            btnBg.on('pointerdown', () => {
-                if (this._screen !== 'inspection') return;
-                if (this._actionLocked || this._rulebook.isVisible()) return;
-                Animations.buttonPunch(this, btnBg);
-                this._submitRuling(def.action);
-            });
-
-            this._inspectionContainer.add(btnBg);
-            this._inspectionContainer.add(dot);
-            this._inspectionContainer.add(lbl);
-        });
-
-        // Tool buttons — overlaid on the hammer and gun painted in the gold bar (y≈500–720)
-        const toolDefs = [
-            { x: 790,  key: 'hammer',  label: 'HAMMER'  },
-            { x: 1130, key: 'scanner', label: 'SCANNER' },
-        ];
-        this._toolBtns = {};
-        toolDefs.forEach(t => {
-            const bg = this.add.rectangle(t.x, 605, 240, 170, 0xaa8800, 0.15)
-                .setStrokeStyle(2, 0xaa8800, 0.6)
-                .setInteractive({ useHandCursor: true });
-            const lbl = this.add.text(t.x, 667, t.label, {
-                fontFamily: 'monospace', fontSize: '13px', color: '#ccaa33',
-                stroke: '#000000', strokeThickness: 3,
-            }).setOrigin(0.5);
-
-            bg.on('pointerover', () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xffdd44, 0.22); });
-            bg.on('pointerout',  () => { if (this._selectedTool !== t.key) bg.setFillStyle(0xaa8800, 0.15); });
-            bg.on('pointerdown', () => this._onToolSelect(t.key));
-
-            this._inspectionContainer.add(bg);
-            this._inspectionContainer.add(lbl);
-            this._toolBtns[t.key] = { bg, lbl };
-        });
-
-        // [B] RULEBOOK button — bottom strip of gold panel
-        const rbBg = this.add.rectangle(960, 696, 320, 38, 0x001a1a, 0.6)
+        // Rulebook button — small, bottom
+        const rbBg = this.add.rectangle(1180, 570, 180, 28, 0x001a1a, 0.8)
             .setStrokeStyle(1, 0x00aaaa, 0.7)
             .setInteractive({ useHandCursor: true });
-        const rbTxt = this.add.text(960, 696, '[B]  RULEBOOK', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#00dddd',
-            stroke: '#000000', strokeThickness: 2,
+        const rbTxt = this.add.text(1180, 570, '[B] RULEBOOK', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#00dddd',
         }).setOrigin(0.5);
         rbBg.on('pointerover', () => rbBg.setFillStyle(0x00aaaa, 0.22));
-        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x001a1a, 0.6));
+        rbBg.on('pointerout',  () => rbBg.setFillStyle(0x001a1a, 0.8));
         rbBg.on('pointerdown', () => {
             if (this._screen !== 'inspection') return;
             Animations.buttonPunch(this, rbBg);
             this._rulebook.toggle();
         });
-        this._inspectionContainer.add(rbBg);
-        this._inspectionContainer.add(rbTxt);
+        this._inspectionContainer.add([rbBg, rbTxt]);
+
+        // Return-to-conveyor button
+        const backBg = this.add.rectangle(100, 570, 180, 28, 0x1a1a00, 0.8)
+            .setStrokeStyle(1, 0xaaaa00, 0.7)
+            .setInteractive({ useHandCursor: true });
+        const backTxt = this.add.text(100, 570, '◀ BELT', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#dddd00',
+        }).setOrigin(0.5);
+        backBg.on('pointerover', () => backBg.setFillStyle(0xaaaa00, 0.22));
+        backBg.on('pointerout',  () => backBg.setFillStyle(0x1a1a00, 0.8));
+        backBg.on('pointerdown', () => {
+            if (this._screen !== 'inspection' || this._actionLocked) return;
+            this._setScreen('conveyor');
+        });
+        this._inspectionContainer.add([backBg, backTxt]);
 
         // Feedback text
-        this._feedbackText = this.add.text(640, 690, '', {
+        this._feedbackText = this.add.text(640, 548, '', {
             fontFamily: 'monospace', fontSize: '12px', color: '#ff4444',
             stroke: '#000000', strokeThickness: 1, align: 'center',
             wordWrap: { width: 900 },
@@ -348,7 +296,12 @@ export default class GameScene extends Phaser.Scene {
         this._inspectionContainer.add(this._feedbackText);
     }
 
-    // ── Screen toggle ──────────────────────────────────────────────────────────
+    _buildMinigame() {
+        this._minigame = new CircuitRouting(this);
+        this._minigame.onClose = (evidence) => this._onMinigameClose(evidence);
+    }
+
+    // ── Screen toggle ─────────────────────────────────────────────────────────
 
     _setScreen(name) {
         this._screen = name;
@@ -357,65 +310,62 @@ export default class GameScene extends Phaser.Scene {
         this._inspectionContainer.setVisible(name === 'inspection');
     }
 
-    // ── Zone + tool interaction ───────────────────────────────────────────────
+    // ── Panel / minigame handling ─────────────────────────────────────────────
 
-    _onToolSelect(tool) {
-        this._selectedTool = tool;
-        Object.entries(this._toolBtns).forEach(([k, b]) => {
-            if (k === tool) {
-                b.bg.setFillStyle(0xffcc44, 0.4).setStrokeStyle(2, 0xffcc44, 1.0);
-                b.lbl.setColor('#ffee88');
-            } else {
-                b.bg.setFillStyle(0xaa8800, 0.15).setStrokeStyle(2, 0xaa8800, 0.6);
-                b.lbl.setColor('#ccaa33');
-            }
-        });
-    }
-
-    _onZoneClick(zoneId) {
-        if (!this._currentCase) return;
-        if (!this._selectedTool) {
-            this._showFeedback('Select a tool first.', '#ff9933');
-            return;
-        }
-        const key = `${zoneId}:${this._selectedTool}`;
-        this._inspectedZones.add(key); // still track for zone highlight
-
-        const result = this._currentCase.zones[zoneId][this._selectedTool];
-        this._appendLog(`[${zoneId}/${this._selectedTool.toUpperCase()}] ${result}`);
-        this._highlightZone(zoneId);
-
+    _onPanelOpened({ panel, label, findings }) {
+        if (!findings.length) return;
+        this._appendLog(`[${panel}] ${label}:`);
+        findings.forEach(f => this._appendLog(`  ${f}`));
         if (this.cache.audio.has('sfx_reveal')) this.sound.play('sfx_reveal', { volume: 0.7 });
     }
 
-    _updateLogScroll() {
-        this._logContainer.y = this._logContainerBaseY - this._logScrollY;
+    _launchDiagnostic(caseData) {
+        if (!caseData.circuit) return;
+        this._minigame.show(caseData);
     }
 
-    _appendLog(text) {
-        const idx = this._logLines.length;
-        this._logLines.push(text);
-        const lineObj = this.add.text(0, idx * this._logLineHeight, text, {
-            fontFamily: 'monospace', fontSize: '10px', color: '#00cc88',
-            wordWrap: { width: 460 }, lineSpacing: 3,
-        });
-        this._logContainer.add(lineObj);
-        Animations.glitchText(this, lineObj, { duration: 120, finalAlpha: 1 });
+    _onMinigameClose(evidence) {
+        this._chassisBay.markDiagnosticComplete(evidence);
+        const allOutputsReached = (evidence.missing ?? []).length === 0;
 
-        // Auto-scroll to bottom so newest entry is visible
-        const totalH = (this._logLines.length) * this._logLineHeight;
-        if (totalH > this._logPanelH) {
-            this._logScrollY = totalH - this._logPanelH + 8;
-            this._updateLogScroll();
+        if (evidence.completed) {
+            this._appendLog('[DIAG] Circuit routes complete. No modifications.', '#00ff88');
+        } else if (evidence.forbiddenUsed && allOutputsReached) {
+            this._appendLog('[DIAG] Outputs routed — UNAUTHORIZED MODIFICATION DETECTED.', '#ff4444');
+            glitchBurst(this, this._cmFilter, 300);
+        } else {
+            this._appendLog('[DIAG] Diagnostic incomplete — outputs unreached.', '#ffcc44');
+        }
+        (evidence.symptoms || []).forEach(s => this._appendLog(`  • ${s}`, '#aabbcc'));
+        (evidence.flags || []).forEach(f => this._appendLog(`  ⚠ ${f}`, '#ff6644'));
+
+        // Unlock verdict if every output was routed (forbidden use is additional evidence, not a gate)
+        if (allOutputsReached) {
+            this._diagnosticDone = true;
+            this._stampPress.setGated(false);
+            this._showFeedback('DIAGNOSTIC COMPLETE — FILE YOUR RULING', '#00eeee');
+        } else {
+            this._showFeedback('OUTPUTS UNREACHED — RETURN TO DIAGNOSTIC', '#ffaa44');
         }
     }
 
-    _highlightZone(zoneId) {
-        const z = this._zoneBtns[zoneId];
-        if (!z || z.highlighted) return;
-        z.highlighted = true;
-        z.rect.setFillStyle(0x003322, 0.35).setStrokeStyle(2, 0x00cc88, 1);
-        z.lbl.setColor('#00cc88');
+    _appendLog(text, color = '#00cc88') {
+        this._logHistory.push({ text, color });
+        // Auto-scroll to bottom
+        this._logScrollIdx = Math.max(0, this._logHistory.length - this._logSlotCount);
+        this._redrawLog();
+    }
+
+    _redrawLog() {
+        for (let i = 0; i < this._logSlotCount; i++) {
+            const entry = this._logHistory[this._logScrollIdx + i];
+            const slot = this._logSlots[i];
+            if (entry) {
+                slot.setText(entry.text).setColor(entry.color).setVisible(true);
+            } else {
+                slot.setText('').setVisible(false);
+            }
+        }
     }
 
     // ── Ruling logic ──────────────────────────────────────────────────────────
@@ -423,6 +373,7 @@ export default class GameScene extends Phaser.Scene {
     _submitRuling(action) {
         if (this._actionLocked) return;
         this._actionLocked = true;
+        this._caseSM.transition('verdict');
 
         const correct = action === this._currentCase.correctAction;
 
@@ -450,13 +401,13 @@ export default class GameScene extends Phaser.Scene {
             this._showFeedback(this._currentCase.incorrectFeedback, '#ff4444');
         }
 
-        this.time.delayedCall(1400, () => this._advanceCase());
+        this.time.delayedCall(1600, () => this._advanceCase());
     }
 
     _showFeedback(msg, color) {
         this._feedbackText.setText(msg).setColor(color).setAlpha(1);
         this.tweens.add({
-            targets: this._feedbackText, alpha: 0, delay: 1000, duration: 400,
+            targets: this._feedbackText, alpha: 0, delay: 1200, duration: 400,
         });
     }
 
@@ -468,17 +419,23 @@ export default class GameScene extends Phaser.Scene {
         this._currentCase = this._queue[this._queueIndex];
         if (!this._currentCase) return;
 
+        this._caseSM.transition('intake');
+
         if (this._monitorText) {
             this._monitorText.setText(
                 `UNIT INCOMING\n\n${this._currentCase.id}\nSTATUS: ACTIVE`
             );
         }
 
-        // Populate inspection view
-        this._inspUnitName.setText(this._currentCase.name);
-        this._inspUnitDesc.setText(this._currentCase.description);
+        this._caseNameText.setText(`${this._currentCase.id} — ${this._currentCase.name}`);
+        this._caseDescText.setText(this._currentCase.description);
+        this._chassisBay.loadCase(this._currentCase);
+        this._stampPress.reset();
+        this._diagnosticDone = false;
+        if (this._currentCase.circuit) {
+            this._stampPress.setGated(true, 'LOCKED — RUN DIAGNOSTIC FIRST');
+        }
 
-        // Slide unit onto belt from right
         this._unitContainer.x = 1450;
         this._unitNameText.setText(this._currentCase.name);
         this._unitIdText.setText(this._currentCase.id);
@@ -491,32 +448,18 @@ export default class GameScene extends Phaser.Scene {
     _advanceCase() {
         const justProcessed = this._currentCase;
 
-        // Reset inspection state
-        this._inspectedZones = new Set();
         this._logLines = [];
-        this._logContainer.removeAll(true);
-        this._logScrollY = 0;
-        this._updateLogScroll();
+        this._logHistory = [];
+        this._logScrollIdx = 0;
+        this._logSlots.forEach(s => s.setText('').setVisible(false));
         this._actionLocked = false;
-        this._selectedTool = null;
+        this._diagnosticDone = false;
 
-        Object.entries(this._toolBtns).forEach(([, b]) => {
-            b.bg.setFillStyle(0xaa8800, 0.15).setStrokeStyle(2, 0xaa8800, 0.6);
-            b.lbl.setColor('#ccaa33');
-        });
-        Object.entries(this._zoneBtns).forEach(([, z]) => {
-            z.highlighted = false;
-            z.rect.setFillStyle(0x001122, 0).setStrokeStyle(1, 0x336688, 0.6);
-            z.lbl.setColor('#446688');
-        });
-
-        // Return to conveyor, slide unit off left
         this._setScreen('conveyor');
         this.tweens.add({
             targets: this._unitContainer, x: -250, duration: 500, ease: 'Cubic.In',
         });
 
-        // Final case check
         if (justProcessed?.isFinalCase && GameState.isLastDay()) {
             this.time.delayedCall(600, () => {
                 this._shiftRunning = false;
@@ -525,7 +468,6 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        // Advance queue, reshuffle if exhausted
         this._queueIndex++;
         if (this._queueIndex >= this._queue.length) {
             this._queue = [...this._baseQueue].sort(() => Math.random() - 0.5);
@@ -535,7 +477,7 @@ export default class GameScene extends Phaser.Scene {
         this.time.delayedCall(700, () => this._loadNextCase());
     }
 
-    // ── Shift end ──────────────────────────────────────────────────────────────
+    // ── Shift end ─────────────────────────────────────────────────────────────
 
     _endShift(fromFinalCase) {
         if (this._currentMusic) {

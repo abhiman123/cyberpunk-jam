@@ -11,7 +11,12 @@
       "D": { "hammer": "Right actuator: minor surface corrosion.", "scanner": "Override code: NONE" }
     },
     "correctAction": "repair",
-    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 1. Cracked chassis requires a repair order."
+    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 1. Cracked chassis requires a repair order.",
+    "circuit": {
+      "sourceRow": 2,
+      "outputs": { "1": "EYES", "2": "CPU" },
+      "forbiddenCount": 0
+    }
   },
   {
     "id": "C-02", "period": 1,
@@ -25,7 +30,12 @@
       "D": { "hammer": "Right actuator: NOMINAL.", "scanner": "Override code: NONE" }
     },
     "correctAction": "scrap",
-    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 2. Serial prefix ERR mandates scrapping."
+    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 2. Serial prefix ERR mandates scrapping.",
+    "circuit": {
+      "sourceRow": 2,
+      "outputs": { "1": "EYES", "2": "CPU", "3": "LIMBS" },
+      "forbiddenCount": 1
+    }
   },
   {
     "id": "C-03", "period": 1,
@@ -39,7 +49,12 @@
       "D": { "hammer": "Right actuator: NOMINAL.", "scanner": "Override code: NONE" }
     },
     "correctAction": "approve",
-    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 3. Green status light = approve."
+    "incorrectFeedback": "DIRECTIVE VIOLATION: Rule 3. Green status light = approve.",
+    "circuit": {
+      "sourceRow": 2,
+      "outputs": { "2": "CPU" },
+      "forbiddenCount": 0
+    }
   },
   {
     "id": "C-04", "period": 2,
