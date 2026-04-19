@@ -11,6 +11,7 @@ export const GEAR_CODES = Object.freeze({
     SOURCE: -1,
     SINK: -2,
     MOVABLE_WALL: -3,
+    RUSTED: -4,
 });
 
 const DIRS = Object.freeze([
@@ -30,7 +31,19 @@ const CONNECTIONS_BY_TYPE = Object.freeze({
     [GEAR_CODES.CURVE_SE]: ['E', 'S'],
     [GEAR_CODES.CURVE_SW]: ['S', 'W'],
     [GEAR_CODES.CURVE_NW]: ['W', 'N'],
+    [GEAR_CODES.RUSTED]: ['N', 'E', 'S', 'W'],
 });
+
+function buildGearPairKey(firstKey, secondKey) {
+    return [firstKey, secondKey].sort().join('|');
+}
+
+function pushUniquePair(store, seenPairs, firstKey, secondKey, payload) {
+    const pairKey = buildGearPairKey(firstKey, secondKey);
+    if (seenPairs.has(pairKey)) return;
+    seenPairs.add(pairKey);
+    store.push(payload);
+}
 
 export function gearCellKey(row, col) {
     return `${row}:${col}`;
@@ -66,8 +79,12 @@ export function isGearType(code) {
     return code >= GEAR_CODES.FULL || code === GEAR_CODES.SOURCE || code === GEAR_CODES.SINK;
 }
 
+export function isRustGearType(code) {
+    return code === GEAR_CODES.RUSTED;
+}
+
 export function isGearOccupantCode(code) {
-    return code === GEAR_CODES.MOVABLE_WALL || isGearType(code);
+    return code === GEAR_CODES.MOVABLE_WALL || isRustGearType(code) || isGearType(code);
 }
 
 export function buildGearOccupancy(board, pieces = []) {
@@ -111,22 +128,31 @@ export function buildGearOccupancy(board, pieces = []) {
 }
 
 export function evaluateGearPuzzleBoard(board, pieces = []) {
-    const { occupancy, sources, sinks } = buildGearOccupancy(board, pieces);
+    const normalizedPieces = cloneGearPieces(pieces);
+    const { occupancy, sources, sinks } = buildGearOccupancy(board, normalizedPieces);
     const powered = new Set();
+    const directions = new Map();
     const queue = [];
+    const rustContacts = [];
+    const directionConflicts = [];
+    const seenRustContacts = new Set();
+    const seenDirectionConflicts = new Set();
 
     sources.forEach((source) => {
         const key = gearCellKey(source.row, source.col);
         powered.add(key);
+        directions.set(key, 1);
         queue.push(source);
     });
 
     while (queue.length > 0) {
         const current = queue.shift();
-        const currentEntry = occupancy.get(gearCellKey(current.row, current.col));
+        const currentKey = gearCellKey(current.row, current.col);
+        const currentEntry = occupancy.get(currentKey);
         if (!currentEntry) continue;
 
         const currentConnections = getGearConnections(currentEntry.type);
+        const currentDirection = directions.get(currentKey) ?? 1;
         DIRS.forEach((dir) => {
             if (!currentConnections.includes(dir.key)) return;
 
@@ -140,6 +166,27 @@ export function evaluateGearPuzzleBoard(board, pieces = []) {
 
             const nextConnections = getGearConnections(nextEntry.type);
             if (!nextConnections.includes(dir.opposite)) return;
+
+            if (isRustGearType(nextEntry.type)) {
+                pushUniquePair(rustContacts, seenRustContacts, currentKey, nextKey, {
+                    source: currentKey,
+                    target: nextKey,
+                    direction: dir.key,
+                });
+                return;
+            }
+
+            const expectedDirection = -currentDirection;
+            if (directions.has(nextKey) && directions.get(nextKey) !== expectedDirection) {
+                pushUniquePair(directionConflicts, seenDirectionConflicts, currentKey, nextKey, {
+                    first: currentKey,
+                    second: nextKey,
+                    direction: dir.key,
+                });
+            } else if (!directions.has(nextKey)) {
+                directions.set(nextKey, expectedDirection);
+            }
+
             if (powered.has(nextKey)) return;
 
             powered.add(nextKey);
@@ -147,13 +194,35 @@ export function evaluateGearPuzzleBoard(board, pieces = []) {
         });
     }
 
-    const sinkPowered = sinks.some((sink) => powered.has(gearCellKey(sink.row, sink.col)));
-    const poweredPieces = cloneGearPieces(pieces).filter((piece) => powered.has(gearCellKey(piece.row, piece.col))).map((piece) => piece.id);
+    const jammed = rustContacts.length > 0 || directionConflicts.length > 0;
+    const jammedCells = new Set(jammed ? powered : []);
+    rustContacts.forEach(({ target }) => jammedCells.add(target));
+    const jamReason = rustContacts.length > 0
+        ? 'Rusted gear locked the train.'
+        : directionConflicts.length > 0
+            ? 'Opposed gears are binding the axle.'
+            : null;
+    const jamType = rustContacts.length > 0
+        ? 'rusted-contact'
+        : directionConflicts.length > 0
+            ? 'direction-conflict'
+            : null;
+    const sinkPowered = !jammed && sinks.some((sink) => powered.has(gearCellKey(sink.row, sink.col)));
+    const poweredPieces = normalizedPieces.filter((piece) => powered.has(gearCellKey(piece.row, piece.col))).map((piece) => piece.id);
+    const jammedPieces = normalizedPieces.filter((piece) => jammedCells.has(gearCellKey(piece.row, piece.col))).map((piece) => piece.id);
 
     return {
         occupancy,
         powered,
+        directions,
         poweredPieces,
+        jammed,
+        jammedCells,
+        jammedPieces,
+        jamReason,
+        jamType,
+        rustContacts,
+        directionConflicts,
         sinkPowered,
         completed: sinkPowered,
     };
@@ -162,14 +231,28 @@ export function evaluateGearPuzzleBoard(board, pieces = []) {
 export function buildGearProgressSnapshot(puzzle, pieces = puzzle?.pieces || []) {
     const normalizedPieces = cloneGearPieces(pieces);
     const result = evaluateGearPuzzleBoard(puzzle?.board || [], normalizedPieces);
+    const flags = [];
+
+    if (result.jammed) {
+        flags.push(result.jamType || 'gear-jam');
+    } else if (!result.completed) {
+        flags.push('drive-stalled');
+    }
 
     return {
         pieces: normalizedPieces,
         poweredCells: Array.from(result.powered).map((key) => parseGearCellKey(key)),
         poweredPieces: [...result.poweredPieces],
+        jammedCells: Array.from(result.jammedCells).map((key) => parseGearCellKey(key)),
+        jammedPieces: [...result.jammedPieces],
         completed: result.completed,
         sinkPowered: result.sinkPowered,
-        flags: [],
-        symptoms: result.completed ? [] : ['Drive train stalled.'],
+        jammed: result.jammed,
+        jamReason: result.jamReason,
+        jamType: result.jamType,
+        flags,
+        symptoms: result.completed
+            ? []
+            : [result.jamReason || 'Drive train stalled.'],
     };
 }

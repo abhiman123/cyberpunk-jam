@@ -10,6 +10,7 @@ import {
     gearCellKey,
     getGearConnections,
     isGearType,
+    isRustGearType,
 } from '../../core/gearPuzzleLogic.js';
 
 const CELL_SIZE_MAX = 86;
@@ -32,6 +33,7 @@ function getCellCenter(left, top, cellSize, row, col) {
 
 function getPieceLabel(type) {
     if (type === GEAR_CODES.MOVABLE_WALL) return 'BLK';
+    if (type === GEAR_CODES.RUSTED) return 'RST';
     if (type === GEAR_CODES.HORIZONTAL) return 'EW';
     if (type === GEAR_CODES.VERTICAL) return 'NS';
     if (type === GEAR_CODES.CURVE_NE) return 'NE';
@@ -74,6 +76,8 @@ export default class GearGridPuzzle extends MinigameBase {
             symptoms: ['Drive train stalled.'],
             flags: [],
             completed: false,
+            jammed: false,
+            jamReason: null,
             poweredCells: [],
             poweredPieces: [],
             pieces: [],
@@ -331,10 +335,11 @@ export default class GearGridPuzzle extends MinigameBase {
 
         const movableCount = this._pieceViews.filter((pieceView) => pieceView.piece.movable !== false).length;
         const fixedCount = this._pieceViews.length - movableCount;
+        const hasRustedGear = pieces.some((piece) => piece.type === GEAR_CODES.RUSTED);
         this._statusHintText?.setText(
             fixedCount > 0
-                ? `Drag the ${movableCount} loose part${movableCount === 1 ? '' : 's'} with cyan corner marks onto empty cells. ${fixedCount} train part${fixedCount === 1 ? ' stays' : 's stay'} fixed.`
-                : 'Drag the cyan-marked parts onto empty cells. Walls block power and cannot connect.'
+            ? `Drag the ${movableCount} loose part${movableCount === 1 ? '' : 's'} with cyan corner marks onto empty cells. ${fixedCount} train part${fixedCount === 1 ? ' stays' : 's stay'} fixed.${hasRustedGear ? ' Rusted gears lock the train on contact.' : ''}`
+            : `Drag the cyan-marked parts onto empty cells. Walls block power and cannot connect.${hasRustedGear ? ' Rusted gears lock the train on contact.' : ''}`
         );
     }
 
@@ -506,30 +511,54 @@ export default class GearGridPuzzle extends MinigameBase {
         return connectedDirs.map((dir) => ({ dir, ...getGearDirectionPosition(dir, pairReach) }));
     }
 
-    _drawGearVisual(visual, type, { movable = false, hovered = false, active = false, outputLive = false } = {}) {
+    _drawGearVisual(visual, type, {
+        movable = false,
+        hovered = false,
+        active = false,
+        jammed = false,
+        outputLive = false,
+        direction = 1,
+    } = {}) {
         const isWall = type === GEAR_CODES.MOVABLE_WALL || type === GEAR_CODES.WALL;
+        const isRust = isRustGearType(type);
         const shellColor = isWall
             ? (movable ? 0x596168 : 0x393f45)
-            : active
+            : jammed
+                ? 0x3f1817
+                : isRust
+                    ? 0x3f2a1d
+                    : active
                 ? 0x3f3728
                 : movable
                     ? 0x252e34
                     : 0x1b2329;
         const strokeColor = isWall
             ? (movable ? 0xd4dde3 : 0xaab2b8)
-            : active
+            : jammed
+                ? 0xffb4aa
+                : isRust
+                    ? 0xe0a26f
+                    : active
                 ? 0xffefc7
                 : movable
                     ? 0xd6d2b9
                     : 0x94a1aa;
-        const linkColor = outputLive
+        const linkColor = jammed
+            ? 0xff6f64
+            : outputLive
             ? 0xffd48a
-            : active
+            : isRust
+                ? 0xb17144
+                : active
                 ? 0xe9e1b0
                 : 0x8a907a;
         const gearColor = isWall
             ? (movable ? 0x7f8a91 : 0x596168)
-            : outputLive
+            : jammed
+                ? 0xd5544b
+                : isRust
+                    ? 0xa55d2e
+                    : outputLive
                 ? 0xffd697
                 : active
                     ? 0xf3dfad
@@ -538,7 +567,11 @@ export default class GearGridPuzzle extends MinigameBase {
                         : 0xa99267;
         const teethColor = isWall
             ? (movable ? 0xe8eef2 : 0xc8d0d6)
-            : outputLive
+            : jammed
+                ? 0xffd5cf
+                : isRust
+                    ? 0xd58b58
+                    : outputLive
                 ? 0xfff0cf
                 : active
                     ? 0xfff0c5
@@ -554,8 +587,8 @@ export default class GearGridPuzzle extends MinigameBase {
 
         visual.shell.setFillStyle(shellColor, hovered ? 1 : 0.96);
         visual.shell.setStrokeStyle(2, strokeColor, hovered ? 1 : 0.88);
-        visual.glow.setFillStyle(outputLive ? 0xffc978 : 0xf3d98c, active ? 0.24 : 0);
-        visual.glow.setRadius(Math.max(12, Math.floor(this._cellSize * 0.25)) + (active ? 8 : 0));
+        visual.glow.setFillStyle(jammed ? 0xff6b60 : (outputLive ? 0xffc978 : 0xf3d98c), (active || jammed) ? 0.24 : 0);
+        visual.glow.setRadius(Math.max(12, Math.floor(this._cellSize * 0.25)) + ((active || jammed) ? 8 : 0));
         visual.connectorGfx.clear();
         visual.moveHintGfx?.clear();
         visual.primaryGearGfx.clear();
@@ -582,7 +615,7 @@ export default class GearGridPuzzle extends MinigameBase {
             if (movable) {
                 this._drawMovableIndicator(visual.moveHintGfx, hovered, active);
             }
-            this._syncSpin(visual, false);
+            this._syncSpin(visual, false, direction);
             return;
         }
 
@@ -614,30 +647,41 @@ export default class GearGridPuzzle extends MinigameBase {
                 const nodeView = visual.nodeRotators?.[index];
                 if (!nodeView) return;
                 nodeView.rotator.setVisible(true).setPosition(node.x, node.y);
-                this._drawMiniGearGlyph(nodeView.gearGfx, nodeRadius, teethColor, gearColor, active || outputLive);
+                this._drawMiniGearGlyph(nodeView.gearGfx, nodeRadius, teethColor, gearColor, active || outputLive || jammed);
             });
             visual.primaryRotator.setVisible(true).setPosition(0, 0);
-            this._drawGearGlyph(visual.primaryGearGfx, radius, teethColor, gearColor, active);
+            this._drawGearGlyph(visual.primaryGearGfx, radius, teethColor, gearColor, active || jammed);
         }
 
         if (type === GEAR_CODES.SOURCE) {
-            visual.badgeText.setText('IN').setColor(active ? '#d8fff0' : '#d0e4ec').setVisible(true);
+            visual.badgeText.setText('IN').setColor(jammed ? '#ffd7d3' : (active ? '#d8fff0' : '#d0e4ec')).setVisible(true);
         } else if (type === GEAR_CODES.SINK) {
-            visual.badgeText.setText('OUT').setColor(outputLive ? '#fff4d0' : '#d0e4ec').setVisible(true);
+            visual.badgeText.setText('OUT').setColor(jammed ? '#ffd7d3' : (outputLive ? '#fff4d0' : '#d0e4ec')).setVisible(true);
+        } else if (isRust) {
+            visual.badgeText.setText('RUST').setColor(jammed ? '#ffe6e3' : '#ffd4b0').setVisible(true);
+            visual.connectorGfx.lineStyle(2, jammed ? 0xffd8d2 : 0xe0a06e, 0.78);
+            visual.connectorGfx.lineBetween(-18, -12, 18, 12);
+            visual.connectorGfx.lineBetween(-12, 18, 14, -18);
         }
 
         if (movable) {
-            this._drawMovableIndicator(visual.moveHintGfx, hovered, active || outputLive);
+            this._drawMovableIndicator(visual.moveHintGfx, hovered, jammed || active || outputLive);
         }
 
-        this._syncSpin(visual, active && isGearType(type), type === GEAR_CODES.SINK ? outputLive : false);
+        this._syncSpin(
+            visual,
+            !jammed && active && isGearType(type) && !isRust,
+            direction,
+            type === GEAR_CODES.SINK ? outputLive : false,
+        );
     }
 
-    _syncSpin(visual, shouldSpin, highlighted = false) {
+    _syncSpin(visual, shouldSpin, direction = 1, highlighted = false) {
         if (!visual?.primaryRotator) return;
 
+        const safeDirection = direction < 0 ? -1 : 1;
         const nextSignature = shouldSpin
-            ? `${visual.spinMode}:${highlighted ? 'live' : 'active'}`
+            ? `${visual.spinMode}:${safeDirection}:${highlighted ? 'live' : 'active'}`
             : 'idle';
         if (visual.spinSignature === nextSignature) return;
 
@@ -653,17 +697,16 @@ export default class GearGridPuzzle extends MinigameBase {
         if (!shouldSpin) return;
 
         const duration = highlighted ? 900 : 1100;
-        const primaryDirection = highlighted ? 1 : ((visual.type === GEAR_CODES.HORIZONTAL || visual.type === GEAR_CODES.CURVE_NE || visual.type === GEAR_CODES.CURVE_SW) ? 1 : -1);
         const spinTargets = visual.spinMode === 'paired'
             ? [
-                { rotator: visual.primaryRotator, direction: 1 },
-                { rotator: visual.secondaryRotator, direction: -1 },
+                { rotator: visual.primaryRotator, direction: safeDirection },
+                { rotator: visual.secondaryRotator, direction: safeDirection },
             ]
             : [
-                { rotator: visual.primaryRotator, direction: primaryDirection },
+                { rotator: visual.primaryRotator, direction: safeDirection },
                 ...(visual.nodeRotators || []).map((nodeView, index) => ({
                     rotator: nodeView.rotator,
-                    direction: index % 2 === 0 ? -primaryDirection : primaryDirection,
+                    direction: safeDirection,
                 })),
             ];
 
@@ -682,11 +725,16 @@ export default class GearGridPuzzle extends MinigameBase {
     _setPieceHover(pieceView, hovered) {
         if (this._dragState?.pieceView === pieceView) return;
         pieceView.visual.hovered = hovered;
-        const active = Boolean(this._lastEvaluation?.powered.has(gearCellKey(pieceView.piece.row, pieceView.piece.col)));
+        const cellKey = gearCellKey(pieceView.piece.row, pieceView.piece.col);
+        const active = Boolean(this._lastEvaluation?.powered.has(cellKey));
+        const jammed = Boolean(this._lastEvaluation?.jammedCells?.has(cellKey));
+        const direction = this._lastEvaluation?.directions?.get(cellKey) ?? 1;
         this._drawGearVisual(pieceView.visual, pieceView.piece.type, {
             movable: pieceView.piece.movable !== false,
             hovered,
             active,
+            jammed,
+            direction,
         });
         pieceView.container.setScale(hovered ? 1.03 : 1);
     }
@@ -842,27 +890,38 @@ export default class GearGridPuzzle extends MinigameBase {
             col: previewPiece?.id === pieceView.id ? previewPiece.col : pieceView.piece.col,
         }));
 
+        const previousEvaluation = this._lastEvaluation;
         const evaluation = evaluateGearPuzzleBoard(this._board, pieces);
         this._lastEvaluation = evaluation;
 
         this._staticViews.forEach((view) => {
-            const active = evaluation.powered.has(gearCellKey(view.row, view.col));
+            const cellKey = gearCellKey(view.row, view.col);
+            const active = evaluation.powered.has(cellKey);
+            const jammed = evaluation.jammedCells.has(cellKey);
+            const direction = evaluation.directions.get(cellKey) ?? 1;
             this._drawGearVisual(view.visual, view.type, {
                 movable: false,
                 hovered: false,
                 active,
+                jammed,
                 outputLive: view.type === GEAR_CODES.SINK && evaluation.sinkPowered,
+                direction,
             });
         });
 
         this._pieceViews.forEach((pieceView) => {
             const currentRow = previewPiece?.id === pieceView.id ? previewPiece.row : pieceView.piece.row;
             const currentCol = previewPiece?.id === pieceView.id ? previewPiece.col : pieceView.piece.col;
-            const active = evaluation.powered.has(gearCellKey(currentRow, currentCol));
+            const cellKey = gearCellKey(currentRow, currentCol);
+            const active = evaluation.powered.has(cellKey);
+            const jammed = evaluation.jammedCells.has(cellKey);
+            const direction = evaluation.directions.get(cellKey) ?? 1;
             this._drawGearVisual(pieceView.visual, pieceView.piece.type, {
                 movable: pieceView.piece.movable !== false,
                 hovered: pieceView.visual.hovered,
                 active,
+                jammed,
+                direction,
             });
         });
 
@@ -875,18 +934,24 @@ export default class GearGridPuzzle extends MinigameBase {
         const pieceSummary = pieces.map((piece) => `${piece.movable === false ? 'FIX' : 'MOVE'} ${getPieceLabel(piece.type) || 'GEAR'} @ ${piece.row + 1},${piece.col + 1}`);
 
         this._statusText
-            ?.setText(evaluation.completed ? 'OUTPUT LIVE' : 'OUTPUT OFFLINE')
-            .setColor(evaluation.completed ? '#caffb2' : '#ffd39c');
+            ?.setText(evaluation.completed ? 'OUTPUT LIVE' : (evaluation.jammed ? 'TRAIN JAMMED' : 'OUTPUT OFFLINE'))
+            .setColor(evaluation.completed ? '#caffb2' : (evaluation.jammed ? '#ff9c93' : '#ffd39c'));
         this._summaryText?.setText([
             `Active gears: ${activeGearCount}`,
             `Loose parts: ${movableCount}`,
             fixedCount > 0 ? `Fixed parts: ${fixedCount}` : 'Fixed parts: 0',
-            evaluation.completed ? 'Final shaft is turning.' : 'No valid path reaches the output.',
+            evaluation.completed
+                ? 'Final shaft is turning.'
+                : (evaluation.jammed ? evaluation.jamReason || 'The train is binding up.' : 'No valid path reaches the output.'),
             '',
             ...pieceSummary,
         ].join('\n'));
 
         if (!persist) return;
+
+        if (!previousEvaluation?.jammed && evaluation.jammed) {
+            this._playGearSound(SOUND_ASSETS.errorBuzz, SOUND_ASSETS.circuitLock, SOUND_VOLUMES.puzzleLock);
+        }
 
         const snapshot = buildGearProgressSnapshot({ board: this._board, pieces }, pieces);
         this._puzzle.progress = snapshot;

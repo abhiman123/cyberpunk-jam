@@ -122,12 +122,12 @@ export default class MachinePuzzleOverlay {
             this._subtitleText,
             this._gridBoardGfx,
             this._groupOutlineGfx,
-            this._equalLinkGfx,
             this._tableGfx,
             this._currentPulseGfx,
             this._gridLayer,
             this._groupLabelLayer,
             this._dominoLayer,
+            this._equalLinkGfx,
             this._messageText,
             backButtonBg,
             backButtonText,
@@ -1133,6 +1133,8 @@ export default class MachinePuzzleOverlay {
             this._equalLinkGfx.lineTo(end.x, end.y);
             this._equalLinkGfx.strokePath();
         });
+
+        this._panel?.bringToTop(this._equalLinkGfx);
     }
 
     _getCellCenter(row, col) {

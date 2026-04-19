@@ -762,7 +762,7 @@ const SHARED_GEAR_OPTIONS = Object.freeze([
     }),
     createGearPuzzleOption({
         previewTitle: 'TORQUE LOOP',
-        description: 'Free the stalled path and route torque through the fixed transfer gear.',
+        description: 'Free the stalled path, drag the rusted idler clear, and route torque through the fixed transfer gear.',
         board: [
             [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
             [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.FULL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.WALL],
@@ -771,7 +771,7 @@ const SHARED_GEAR_OPTIONS = Object.freeze([
             [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
         ],
         pieces: [
-            createGearPiece(GEAR_CODES.MOVABLE_WALL, 3, 3),
+            createGearPiece(GEAR_CODES.RUSTED, 3, 3),
             createGearPiece(GEAR_CODES.CURVE_SW, 2, 4),
             createGearPiece(GEAR_CODES.VERTICAL, 2, 3, { movable: false }),
             createGearPiece(GEAR_CODES.CURVE_NE, 3, 1),
@@ -791,6 +791,23 @@ const SHARED_GEAR_OPTIONS = Object.freeze([
             createGearPiece(GEAR_CODES.HORIZONTAL, 1, 2, { movable: false }),
             createGearPiece(GEAR_CODES.CURVE_SW, 2, 4),
             createGearPiece(GEAR_CODES.CURVE_NE, 3, 1),
+        ],
+    }),
+    createGearPuzzleOption({
+        previewTitle: 'CORRODED IDLER',
+        description: 'Slide the live gears into place while keeping the fixed rusted wheel out of the train.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 2),
+            createGearPiece(GEAR_CODES.RUSTED, 1, 3, { movable: false }),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 3),
         ],
     }),
 ]);

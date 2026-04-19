@@ -959,21 +959,10 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
         });
 
-        this._phoneBodyViewport = { x: 36, y: 60, width: 218, height: 72 };
+        this._phoneBodyViewport = { x: 36, y: 58, width: 218, height: 78 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
         this._phoneBodyText.setCrop(0, 0, this._phoneBodyViewport.width, this._phoneBodyViewport.height);
-        this._phoneBodyViewport = { x: 36, y: 56, width: 216, height: 110 };
-        const phoneBodyMaskGraphics = this.make.graphics({ x: panelX, y: panelY, add: false });
-        phoneBodyMaskGraphics.fillStyle(0xffffff, 1);
-        phoneBodyMaskGraphics.fillRect(
-            this._phoneBodyViewport.x,
-            this._phoneBodyViewport.y,
-            this._phoneBodyViewport.width,
-            this._phoneBodyViewport.height,
-        );
-        this._phoneBodyMaskSource = phoneBodyMaskGraphics;
-        this._phoneBodyText.setMask(phoneBodyMaskGraphics.createGeometryMask());
         this._phoneBodyScrollZone = this.add.rectangle(
             this._phoneBodyViewport.x + (this._phoneBodyViewport.width / 2),
             this._phoneBodyViewport.y + (this._phoneBodyViewport.height / 2),
@@ -1466,9 +1455,11 @@ export default class GameScene extends Phaser.Scene {
                     : 'FLOW INCOMPLETE')
                 : 'NO FLOW MODULE';
             const gearLine = machineVariant._uiGearPuzzleRequired
-                ? (machineVariant._uiGearPuzzleSolved || gearState?.completed
-                    ? 'GEAR SYNCHRONIZED'
-                    : (gearState?.sinkPowered ? 'OUTPUT SHAFT LIVE' : 'GEAR STALLED'))
+                ? (gearState?.jammed
+                    ? 'GEAR JAMMED'
+                    : (machineVariant._uiGearPuzzleSolved || gearState?.completed
+                        ? 'GEAR SYNCHRONIZED'
+                        : (gearState?.sinkPowered ? 'OUTPUT SHAFT LIVE' : 'GEAR STALLED')))
                 : 'NO GEAR MODULE';
             const commsLine = !machineVariant.hasCommunication
                 ? 'NO SIGNAL'
@@ -2844,10 +2835,15 @@ export default class GameScene extends Phaser.Scene {
 
         const voiceBrokenNow = this._hasBrokenVoiceBox(this._currentMachineVariant);
         const voiceRestoredNow = voiceWasBroken && !voiceBrokenNow;
+        const voiceBrokeNow = !voiceWasBroken && voiceBrokenNow;
         const shouldRestoreChatView = returnPhoneState?.viewMode === 'chat';
 
-        if (voiceRestoredNow && this._currentMachineVariant?.hasCommunication) {
-            this._refreshMachineConversationPanel(this._currentMachineVariant, null, { activate: false });
+        if ((voiceRestoredNow || voiceBrokeNow) && this._currentMachineVariant?.hasCommunication) {
+            this._refreshMachineConversationPanel(
+                this._currentMachineVariant,
+                voiceRestoredNow ? null : 'BROKEN VOICE BOX',
+                { activate: false },
+            );
         }
 
         this._refreshPhoneInfoBoard(this._currentMachineVariant);
@@ -2881,6 +2877,19 @@ export default class GameScene extends Phaser.Scene {
                         activate: true,
                     });
                 }
+            } else if (voiceBrokeNow) {
+                const brokenMessage = brokenTargets.length > 0
+                    ? `Voice box lost power. Still offline: ${brokenTargets.join(', ')}.`
+                    : 'Voice box lost power. Signal is degraded again.';
+                this._setPhoneInfoNote(brokenMessage, 'VOICE DEGRADED');
+                if (returnPhoneState) {
+                    this._restorePhonePanelState(returnPhoneState);
+                }
+                if (shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
+                    this._refreshMachineConversationPanel(this._currentMachineVariant, 'BROKEN VOICE BOX', {
+                        activate: true,
+                    });
+                }
             } else if (returnPhoneState) {
                 this._restorePhonePanelState(returnPhoneState);
             } else {
@@ -2905,8 +2914,8 @@ export default class GameScene extends Phaser.Scene {
             );
             if (returnPhoneState) {
                 this._restorePhonePanelState(returnPhoneState);
-                if (voiceRestoredNow && shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
-                    this._refreshMachineConversationPanel(this._currentMachineVariant, 'VOICE RESTORED', {
+                if ((voiceRestoredNow || voiceBrokeNow) && shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
+                    this._refreshMachineConversationPanel(this._currentMachineVariant, voiceBrokeNow ? 'BROKEN VOICE BOX' : 'VOICE RESTORED', {
                         activate: true,
                     });
                 }
@@ -2919,18 +2928,20 @@ export default class GameScene extends Phaser.Scene {
             brokenTargets.length > 0
                 ? `Secondary diagnostic incomplete. Still offline: ${brokenTargets.join(', ')}.`
                 : 'Secondary diagnostic incomplete. Required outputs remain offline.',
-            voiceRestoredNow ? 'VOICE RESTORED // FLOW INCOMPLETE' : 'OTHER PUZZLE INCOMPLETE'
+            voiceRestoredNow
+                ? 'VOICE RESTORED // FLOW INCOMPLETE'
+                : (voiceBrokeNow ? 'VOICE DEGRADED // FLOW INCOMPLETE' : 'OTHER PUZZLE INCOMPLETE')
         );
         if (returnPhoneState) {
             this._restorePhonePanelState(returnPhoneState);
-            if (voiceRestoredNow && shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
-                this._refreshMachineConversationPanel(this._currentMachineVariant, 'VOICE RESTORED', {
+            if ((voiceRestoredNow || voiceBrokeNow) && shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
+                this._refreshMachineConversationPanel(this._currentMachineVariant, voiceBrokeNow ? 'BROKEN VOICE BOX' : 'VOICE RESTORED', {
                     activate: true,
                 });
             }
         } else {
-            if (voiceRestoredNow && this._currentMachineVariant?.hasCommunication) {
-                this._refreshMachineConversationPanel(this._currentMachineVariant, 'VOICE RESTORED', {
+            if ((voiceRestoredNow || voiceBrokeNow) && this._currentMachineVariant?.hasCommunication) {
+                this._refreshMachineConversationPanel(this._currentMachineVariant, voiceBrokeNow ? 'BROKEN VOICE BOX' : 'VOICE RESTORED', {
                     activate: false,
                 });
             }
@@ -3243,6 +3254,8 @@ export default class GameScene extends Phaser.Scene {
 
     _advanceCase() {
         const justProcessed = this._currentCase;
+        const shiftShouldEnd = this._shiftAwaitingFinalRuling;
+        const shouldShowStandby = !shiftShouldEnd && !(justProcessed?.isFinalCase && GameState.isLastDay());
         this._advanceCaseEvent?.remove(false);
         this._advanceCaseEvent = null;
         this._actionLocked = false;
@@ -3256,7 +3269,11 @@ export default class GameScene extends Phaser.Scene {
         this._currentCase = null;
 
         this._setConveyorRulingButtonsVisible(false);
-        this._setCommStandbyState('Line cleared. Awaiting next unit.', 'SHIFT LIVE');
+        if (shouldShowStandby) {
+            this._setCommStandbyState('Line cleared. Awaiting next unit.', 'SHIFT LIVE');
+        } else {
+            this._setPhoneInfoNote('Shift window closed. Preparing the report.', 'SHIFT COMPLETE');
+        }
         this._unitMoveTween?.stop();
         this._unitMoveTween = null;
 
@@ -3296,19 +3313,24 @@ export default class GameScene extends Phaser.Scene {
             ...exitTween,
             onComplete: () => {
                 clearUnitPresentation();
+
+                if (justProcessed?.isFinalCase && GameState.isLastDay()) {
+                    this._shiftRunning = false;
+                    this._endShift(true);
+                    return;
+                }
+
+                if (shiftShouldEnd) {
+                    this._endShift(false);
+                }
             },
         });
 
         if (justProcessed?.isFinalCase && GameState.isLastDay()) {
-            this.time.delayedCall(600, () => {
-                this._shiftRunning = false;
-                this._endShift(true);
-            });
             return;
         }
 
-        if (this._shiftAwaitingFinalRuling) {
-            this.time.delayedCall(620, () => this._endShift(false));
+        if (shiftShouldEnd) {
             return;
         }
 
