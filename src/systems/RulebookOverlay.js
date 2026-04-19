@@ -33,8 +33,8 @@ const VIEWPORT_H = 382;
 
 // Scroll track (inside tablet coordinates, right edge of viewport)
 const SCROLL_TRACK_X = 410;
-const SCROLL_TRACK_TOP = -182;
-const SCROLL_TRACK_H = 368;
+const SCROLL_TRACK_TOP = VIEWPORT_Y;
+const SCROLL_TRACK_H = VIEWPORT_H;
 
 export default class RulebookOverlay {
     constructor(scene, activeRuleIds, allRules, newRuleIds = [], callbacks = {}) {
@@ -285,12 +285,11 @@ export default class RulebookOverlay {
 
         // ── Scroll track & thumb ─────────────────────────────────────────────
         this._scrollTrack = this.scene.add.rectangle(
-            SCROLL_TRACK_X, SCROLL_TRACK_TOP + (SCROLL_TRACK_H / 2),
-            8, SCROLL_TRACK_H, 0x2b353d, 1,
-        ).setStrokeStyle(1, 0x59646d, 0.45);
+            SCROLL_TRACK_X, SCROLL_TRACK_TOP, 8, SCROLL_TRACK_H, 0x2b353d, 1,
+        ).setOrigin(0.5, 0).setStrokeStyle(1, 0x59646d, 0.45);
         this._scrollThumb = this.scene.add.rectangle(
             SCROLL_TRACK_X, SCROLL_TRACK_TOP, 8, 72, 0xa2d4ff, 0.9,
-        ).setStrokeStyle(1, 0xe5fbff, 0.46);
+        ).setOrigin(0.5, 0).setStrokeStyle(1, 0xe5fbff, 0.46);
 
         // ── Assemble tablet ──────────────────────────────────────────────────
         this._tablet.add([
@@ -590,7 +589,7 @@ export default class RulebookOverlay {
         const trackRange = SCROLL_TRACK_H - thumbHeight;
         const progress = this._scrollMax <= 0 ? 0 : this._scrollOffset / this._scrollMax;
         this._scrollThumb.height = thumbHeight;
-        this._scrollThumb.y = SCROLL_TRACK_TOP + (thumbHeight / 2) + (trackRange * progress);
+        this._scrollThumb.y = SCROLL_TRACK_TOP + (trackRange * progress);
     }
 
     // ── Teardown ─────────────────────────────────────────────────────────────
