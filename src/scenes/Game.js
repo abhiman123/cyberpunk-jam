@@ -345,14 +345,6 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0x92876b, 0.55);
         const deskInset = this.add.rectangle(220, 630, 270, 112, 0x3a342d, 0.72)
             .setStrokeStyle(1, 0x6b6252, 0.55);
-        // const datePlate = this.add.rectangle(1178, 684, 176, 42, 0x2a251f, 0.88)
-        //     .setStrokeStyle(1, 0x645a47, 0.75);
-        // this._deskDateText = this.add.text(1254, 684, '', {
-        //     fontFamily: 'Courier New',
-        //     fontSize: '20px',
-        //     color: '#8d815a',
-        //     letterSpacing: 1,
-        // }).setOrigin(1, 0.5).setAlpha(0.9);
 
         this._deskPhotoBounds = new Phaser.Geom.Rectangle(18, 568, 1244, 136);
         this.input.on('pointermove', this._handleDeskItemPointerMove, this);
@@ -365,8 +357,6 @@ export default class GameScene extends Phaser.Scene {
             deskTopLip,
             deskTop,
             deskInset,
-            // datePlate,
-            // this._deskDateText,
         ]);
 
         this._updateDeskDateText();
