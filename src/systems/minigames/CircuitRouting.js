@@ -146,6 +146,7 @@ export default class CircuitRouting extends MinigameBase {
         this._sourceFlowGfx = null;
         this._closeButton = null;
         this._closeButtonLabel = null;
+        this._escKeyDown = null;
     }
 
     _build(caseData) {
@@ -277,8 +278,8 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
 
-        // Close button — added directly to the scene (not the container) so it is
-        // reliably hit-tested above nested tile containers.
+        // Close button — added to the container LAST so it sits on top of all tiles
+        // in Phaser's render list and wins input hit-testing reliably.
         const closeBg = this.scene.add.rectangle(640, 640, 260, 44, 0x003344, 0.85)
             .setStrokeStyle(1, 0x00cccc, 0.9)
             .setInteractive({ useHandCursor: true })
@@ -289,12 +290,18 @@ export default class CircuitRouting extends MinigameBase {
         closeBg.on('pointerover', () => closeBg.setFillStyle(0x00aaaa, 0.45));
         closeBg.on('pointerout',  () => closeBg.setFillStyle(0x003344, 0.85));
         closeBg.on('pointerdown', () => this._finalizeAndClose());
+        this.container.add(closeBg);
+        this.container.add(closeTxt);
         this._closeButton = closeBg;
         this._closeButtonLabel = closeTxt;
 
-        this._escKey = this.scene.input.keyboard.addKey('ESC');
+        this._escKey = this.scene.input.keyboard?.addKey('ESC');
         this._escHandler = () => { if (this.active) this._finalizeAndClose(); };
-        this._escKey.on('down', this._escHandler);
+        if (this._escKey) this._escKey.on('down', this._escHandler);
+        // Fallback: raw DOM listener so ESC always works even if the Phaser key
+        // object is blocked by focus loss or key-capture edge cases.
+        this._escKeyDown = (e) => { if (e.key === 'Escape' && this.active) this._finalizeAndClose(); };
+        window.addEventListener('keydown', this._escKeyDown);
 
         this._updateAll();
         this._startCircuitAnimationLoop();
@@ -413,11 +420,16 @@ export default class CircuitRouting extends MinigameBase {
 
         tileView.rotationTween?.stop();
         this.scene.tweens.killTweensOf(tileView.container);
+        tileView.rotationTween = null;
 
         const finalAngle = targetRotation * 90;
+        // Snap to the previous clean step so the tween always covers exactly 90°,
+        // preventing a jump when a rapid click interrupts a mid-animation tween.
+        tileView.container.angle = ((targetRotation - 1 + 4) % 4) * 90;
+
         tileView.rotationTween = this.scene.tweens.add({
             targets: tileView.container,
-            angle: tileView.container.angle + 90,
+            angle: finalAngle,
             duration: 170,
             ease: 'Sine.Out',
             onComplete: () => {
@@ -736,6 +748,10 @@ export default class CircuitRouting extends MinigameBase {
         }
         this._escKey = null;
         this._escHandler = null;
+        if (this._escKeyDown) {
+            window.removeEventListener('keydown', this._escKeyDown);
+            this._escKeyDown = null;
+        }
         this._closeButton?.destroy();
         this._closeButton = null;
         this._closeButtonLabel?.destroy();
@@ -744,6 +760,10 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     destroy() {
+        if (this._escKeyDown) {
+            window.removeEventListener('keydown', this._escKeyDown);
+            this._escKeyDown = null;
+        }
         this._closeButton?.destroy();
         this._closeButton = null;
         this._closeButtonLabel?.destroy();
