@@ -24,6 +24,7 @@ export default class BootScene extends Phaser.Scene {
         this.load.json('rules',         'src/data/rules.json');
         this.load.json('notifications', 'src/data/notifications.json');
         this.load.json('schedule',      'src/data/schedule.json');
+        this.load.json('briefings',     'src/data/briefings.json');
 
         SOUND_MANIFEST.forEach((asset) => {
             this.load.audio(asset.key, asset.path);

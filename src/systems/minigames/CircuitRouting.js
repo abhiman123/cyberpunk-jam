@@ -144,6 +144,8 @@ export default class CircuitRouting extends MinigameBase {
         this._energyTickEvent = null;
         this._lastCircuitRenderState = null;
         this._sourceFlowGfx = null;
+        this._closeButton = null;
+        this._closeButtonLabel = null;
     }
 
     _build(caseData) {
@@ -275,18 +277,20 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
 
-        // Close button
+        // Close button — added directly to the scene (not the container) so it is
+        // reliably hit-tested above nested tile containers.
         const closeBg = this.scene.add.rectangle(640, 640, 260, 44, 0x003344, 0.85)
             .setStrokeStyle(1, 0x00cccc, 0.9)
             .setInteractive({ useHandCursor: true })
-            .setDepth(depth + 2);
+            .setDepth(depth + 20);
         const closeTxt = this.scene.add.text(640, 640, 'CLOSE DIAGNOSTIC [ESC]', {
             fontFamily: 'monospace', fontSize: '13px', color: '#00eeee',
-        }).setOrigin(0.5).setDepth(depth + 3);
+        }).setOrigin(0.5).setDepth(depth + 21);
         closeBg.on('pointerover', () => closeBg.setFillStyle(0x00aaaa, 0.45));
         closeBg.on('pointerout',  () => closeBg.setFillStyle(0x003344, 0.85));
         closeBg.on('pointerdown', () => this._finalizeAndClose());
-        this.container.add([closeBg, closeTxt]);
+        this._closeButton = closeBg;
+        this._closeButtonLabel = closeTxt;
 
         this._escKey = this.scene.input.keyboard.addKey('ESC');
         this._escHandler = () => { if (this.active) this._finalizeAndClose(); };
@@ -351,20 +355,30 @@ export default class CircuitRouting extends MinigameBase {
         const tile = this._tiles[y][x];
         const locked = tile.locked === true;
 
-        const tileContainer = this.scene.add.container(cx, cy).setDepth(depth);
-
-        const bg = this.scene.add.rectangle(0, 0, this.cellSize - 4, this.cellSize - 4,
+        // bg is a direct child of this.container (not nested inside tileContainer)
+        // so Phaser's input hit-testing reliably reaches it.
+        const bg = this.scene.add.rectangle(cx, cy, this.cellSize - 4, this.cellSize - 4,
             isForbidden ? 0x2a1e00 : 0x001f22, 0.9)
             .setStrokeStyle(1, isForbidden ? 0xddaa33 : 0x225566, 0.8)
-            .setInteractive({ useHandCursor: true });
+            .setInteractive({ useHandCursor: true })
+            .setDepth(depth);
+        this.container.add(bg);
 
+        // tileContainer only holds the rotating pipe/energy graphics.
+        // A square bg looks identical at every 90° step so it never needs to rotate.
+        const tileContainer = this.scene.add.container(cx, cy).setDepth(depth);
         const energy = this.scene.add.graphics();
         const pipe = this.scene.add.graphics();
+        tileContainer.add([energy, pipe]);
+        tileContainer.angle = tile.rotation * 90;
+        this.container.add(tileContainer);
+
         const mark = isForbidden
             ? this.scene.add.text(cx + this.cellSize / 2 - 10, cy - this.cellSize / 2 + 8, '?', {
                 fontFamily: 'monospace', fontSize: '12px', color: '#ffcc44',
               }).setOrigin(1, 0).setDepth(depth + 1)
             : null;
+        if (mark) this.container.add(mark);
 
         const tileView = {
             container: tileContainer,
@@ -375,8 +389,6 @@ export default class CircuitRouting extends MinigameBase {
             isForbidden,
             rotationTween: null,
         };
-
-        tileContainer.angle = tile.rotation * 90;
 
         bg.on('pointerdown', () => {
             if (locked || tile.type === 'empty') return;
@@ -393,9 +405,6 @@ export default class CircuitRouting extends MinigameBase {
             bg.setStrokeStyle(1, isForbidden ? 0xddaa33 : 0x225566, 0.8);
         });
 
-        tileContainer.add([bg, energy, pipe]);
-        this.container.add(tileContainer);
-        if (mark) this.container.add(mark);
         return tileView;
     }
 
@@ -727,6 +736,18 @@ export default class CircuitRouting extends MinigameBase {
         }
         this._escKey = null;
         this._escHandler = null;
+        this._closeButton?.destroy();
+        this._closeButton = null;
+        this._closeButtonLabel?.destroy();
+        this._closeButtonLabel = null;
         super.hide();
+    }
+
+    destroy() {
+        this._closeButton?.destroy();
+        this._closeButton = null;
+        this._closeButtonLabel?.destroy();
+        this._closeButtonLabel = null;
+        super.destroy();
     }
 }

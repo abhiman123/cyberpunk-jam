@@ -116,6 +116,8 @@ export default class GameScene extends Phaser.Scene {
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
             this.input.off('gameout', this._handleDeskItemPointerUp, this);
+            this._phoneBodyMaskSource?.destroy();
+            this._miniMachineScreenMaskSource?.destroy();
             this._rulebook?.destroy();
             this._machinePuzzleOverlay.destroy();
             this._otherPuzzleOverlay.destroy();
@@ -631,6 +633,7 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'monospace',
             fontSize: '10px',
             color: '#9ab894',
+            wordWrap: { width: 360 },
         });
         this._miniMachineHintText = this.add.text(22, panelHeight - 24, 'CLICK GRID OR FLOW PORT', {
             fontFamily: 'monospace',
@@ -840,7 +843,7 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'Arial', fontSize: '12px', color: '#15313a',
         });
 
-        this._phoneBodyViewport = { x: 36, y: 70, width: 216, height: 60 };
+        this._phoneBodyViewport = { x: 36, y: 56, width: 216, height: 110 };
         const phoneBodyMaskGraphics = this.make.graphics({ x: panelX, y: panelY, add: false });
         phoneBodyMaskGraphics.fillStyle(0xffffff, 1);
         phoneBodyMaskGraphics.fillRect(
@@ -915,11 +918,12 @@ export default class GameScene extends Phaser.Scene {
             gloss,
             tray,
             scanlines,
-            this._phoneHeaderText,
             this._phoneBodyText,
             this._phoneBodyScrollZone,
             this._phoneScrollTrack,
             this._phoneScrollThumb,
+            // header, status, and buttons rendered after body so they paint on top
+            this._phoneHeaderText,
             this._phoneStatusText,
             this._settingsButtonBg,
             this._settingsButtonLabel,
@@ -2299,6 +2303,8 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._caseSM.transition('intake');
+        this._phoneBodyScrollOffset = 0;
+        this._phoneStickToBottom = true;
 
         this._currentMachineVariant = createMachineVariant({
             day: GameState.day,

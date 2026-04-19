@@ -49,9 +49,10 @@ export default class EndScene extends Phaser.Scene {
             fontFamily: 'monospace', fontSize: '28px', color: '#ffffff', align: 'center',
         }).setOrigin(0.5).setDepth(10).setAlpha(0);
 
-        // Play again button (hidden, not interactive yet)
+        // Play again button (hidden, interactive from creation so handlers always fire)
         this._playAgainBg = this.add.rectangle(640, 520, 220, 46, 0x111111)
-            .setStrokeStyle(1, 0x444444).setDepth(11).setAlpha(0);
+            .setStrokeStyle(1, 0x444444).setDepth(11).setAlpha(0)
+            .setInteractive({ useHandCursor: true });
         this._playAgainText = this.add.text(640, 520, 'PLAY AGAIN', {
             fontFamily: 'monospace', fontSize: '16px', color: '#888888',
         }).setOrigin(0.5).setDepth(12).setAlpha(0);
@@ -193,15 +194,12 @@ export default class EndScene extends Phaser.Scene {
         this.time.delayedCall(4500, () => this._step14());
     }
 
-    // Step 14 — Play again button becomes interactive
+    // Step 14 — Play again button fades in
     _step14() {
         this.tweens.add({
             targets: [this._playAgainBg, this._playAgainText],
             alpha: 1,
             duration: 600,
-            onComplete: () => {
-                this._playAgainBg.setInteractive({ useHandCursor: true });
-            },
         });
     }
 }

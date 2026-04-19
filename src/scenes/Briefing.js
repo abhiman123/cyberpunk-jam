@@ -18,7 +18,7 @@ export default class BriefingScene extends Phaser.Scene {
 
         applyCyberpunkLook(this);
 
-        const briefing = allBriefings.find(b => b.period === period && b.day === day)
+        const briefing = (allBriefings || []).find(b => b.period === period && b.day === day)
             || { managerType: 'human', text: 'No directives. Complete your shift.' };
 
         const newRules = allRules.filter(r => r.period === period && !GameState.rulebookSeenRules.has(r.id));
