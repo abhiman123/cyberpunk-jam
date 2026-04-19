@@ -4183,50 +4183,8 @@ export default class GameScene extends Phaser.Scene {
     _armKonamiFinale() {
         if (this._konamiFinaleTriggered) return;
 
-        const finalCase = this._findFinalCaseDefinition();
-        if (!finalCase) return;
-
         this._konamiFinaleTriggered = true;
-        finalCase._konamiOverride = true;
-
-        this._nextCaseEvent?.remove(false);
-        this._nextCaseEvent = null;
-        this._advanceCaseEvent?.remove(false);
-        this._advanceCaseEvent = null;
-        this._clearUnsafeAcceptConfirmation();
-        this._clearPhoneTyping();
-        this._actionLocked = false;
-        this._pendingExitAction = null;
-        this._shiftAwaitingFinalRuling = false;
-        this._machinePuzzleOverlay?.close(true);
-        this._hideAuxiliaryOverlays();
-        this._hideMiniMachinePanel(true);
-        this._unitMoveTween?.stop();
-        this._unitMoveTween = null;
-        this._currentCase = null;
-        this._currentMachineVariant = null;
-        this._setScreen('conveyor');
-        this._unitContainer?.setVisible(false).setPosition(MACHINE_PRESENTATION.conveyorEntryX, 420).setAngle(0).setAlpha(1);
-        this._setMachineWorklightVisible(false);
-        this._machineDialogueText?.setText('');
-        this._clearMachineGridDisplays();
-        this._queue = [finalCase];
-        this._baseQueue = [finalCase];
-        this._queueIndex = 0;
-        this._setConveyorRulingButtonsVisible(false);
-        this._showFeedback('KONAMI OVERRIDE // FINAL UNIT ROUTING', '#ffd685');
-        this._pushPhoneNotification(
-            'OVERRIDE ACCEPTED',
-            'Konami sequence received. Routing the final unit to the line.',
-            'SECRET ROUTE',
-            {
-                activate: false,
-                unread: this._phoneViewMode !== 'notifications',
-                soundAsset: SOUND_ASSETS.notificationAlert,
-            }
-        );
-        this._loadNextCase();
-        this._setPhoneInfoNote('Hidden override active. This is now the final inspection unit.', 'SECRET ROUTE');
+        this._endShift(false);
     }
 
     _loadNextCase() {
