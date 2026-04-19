@@ -16,7 +16,7 @@ import {
     getShiftClockStepMs,
 } from '../constants/gameConstants.js';
 import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections, isGearType } from '../core/gearPuzzleLogic.js';
-import { createMachineVariant, resolveMachineTexture } from '../data/machineCatalog.js';
+import { createMachineVariant, getEligibleMachineDefinitions, resolveMachineTexture } from '../data/machineCatalog.js';
 import { getMusicVolume } from '../state/gameSettings.js';
 
 import StateMachine from '../core/StateMachine.js';
@@ -45,6 +45,10 @@ export default class GameScene extends Phaser.Scene {
         this._baseQueue = baseIds.map((id) => allCases.find((item) => item.id === id)).filter(Boolean);
         this._queue = [...this._baseQueue];
         this._queueIndex = 0;
+        this._machineQueue = [];
+        this._machineQueueDefinitions = [];
+        this._machineDefinitionById = new Map();
+        this._machineGuaranteeState = [];
         this._currentCase = null;
         this._actionLocked = false;
         this._shiftMistakes = 0;
@@ -123,12 +127,10 @@ export default class GameScene extends Phaser.Scene {
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
-        this._konamiSequence = ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'B', 'A'];
+        this._konamiSequence = ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'];
         this._konamiProgress = 0;
         this._konamiFinaleTriggered = false;
-
-        // Konami code for skipping shifts
-        this._konamiCodeSequence = [];
+        this._initializeMachineShiftQueue();
 
         this._caseSM = new StateMachine('intake');
 
@@ -174,7 +176,6 @@ export default class GameScene extends Phaser.Scene {
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
             this.input.off('gameout', this._handleDeskItemPointerUp, this);
             this.input.keyboard?.off('keydown', this._handleKonamiKey);
-            this.input.keyboard.off('keydown', this._handleKonamiCodeKeydown, this);
             this._phoneBodyMaskSource?.destroy();
             this._miniMachineScreenMaskSource?.destroy();
             this._rulebook?.destroy();
@@ -356,7 +357,6 @@ export default class GameScene extends Phaser.Scene {
         this.input.on('pointermove', this._handleDeskItemPointerMove, this);
         this.input.on('pointerup', this._handleDeskItemPointerUp, this);
         this.input.on('gameout', this._handleDeskItemPointerUp, this);
-        this.input.keyboard.on('keydown', this._handleKonamiCodeKeydown, this);
 
         this._deskContainer.add([
             deskShadow,
@@ -781,17 +781,6 @@ export default class GameScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
         const flowPortLabel = this.add.text(256, 162, 'FLOW', {
             fontFamily: 'Courier New',
-            fontSize: '10px',
-            color: '#d7e7ff',
-            letterSpacing: 1,
-        });
-
-        const codePortFrame = this.add.rectangle(320, 78, 118, 42, 0x091116, 0.2)
-            .setStrokeStyle(2, 0x8bb8ff, 0.82);
-        const codePortHit = this.add.rectangle(320, 78, 118, 42, 0xffffff, 0.001)
-            .setInteractive({ useHandCursor: true });
-        const codePortLabel = this.add.text(262, 104, 'CODE', {
-            fontFamily: 'monospace',
             fontSize: '10px',
             color: '#d7e7ff',
             letterSpacing: 1,
@@ -2410,6 +2399,139 @@ export default class GameScene extends Phaser.Scene {
         this._drawClockIcon(displayMinutes);
     }
 
+    _initializeMachineShiftQueue() {
+        this._machineQueueDefinitions = getEligibleMachineDefinitions({
+            day: GameState.day,
+            period: GameState.period,
+        });
+        this._machineDefinitionById = new Map(
+            this._machineQueueDefinitions.map((definition) => [definition.id, definition])
+        );
+        this._machineGuaranteeState = this._machineQueueDefinitions
+            .filter((definition) => definition.guaranteedTimeframe)
+            .map((definition) => ({
+                id: definition.id,
+                startHour: Math.max(0, Number(definition.guaranteedTimeframe?.startHour ?? 0)),
+                endHour: Math.max(
+                    0,
+                    Number(definition.guaranteedTimeframe?.endHour ?? definition.guaranteedTimeframe?.startHour ?? 0)
+                ),
+                fulfilled: false,
+            }))
+            .sort((left, right) => {
+                if (left.endHour !== right.endHour) return left.endHour - right.endHour;
+                return left.startHour - right.startHour;
+            });
+        this._refillMachineShiftQueue();
+    }
+
+    _refillMachineShiftQueue() {
+        const machineIds = this._machineQueueDefinitions.map((definition) => definition.id);
+        this._machineQueue = Phaser.Utils.Array.Shuffle([...machineIds]);
+    }
+
+    _getCurrentShiftHourOffset() {
+        const startMinutes = (SHIFT_CLOCK.startHour24 * 60) + SHIFT_CLOCK.startMinute;
+        const displayMinutes = Number.isFinite(this._clockDisplayMinutes)
+            ? this._clockDisplayMinutes
+            : startMinutes + (Math.floor(this._elapsed / getShiftClockStepMs()) * SHIFT_CLOCK.displayStepMinutes);
+
+        return Math.max(0, (displayMinutes - startMinutes) / 60);
+    }
+
+    _getMachineGuaranteeEntry(machineId) {
+        return this._machineGuaranteeState.find((entry) => entry.id === machineId) || null;
+    }
+
+    _consumeQueuedMachineDefinition(machineId) {
+        if (!machineId) return null;
+        if (!Array.isArray(this._machineQueue) || this._machineQueue.length === 0) {
+            this._refillMachineShiftQueue();
+        }
+
+        const queueIndex = this._machineQueue.indexOf(machineId);
+        if (queueIndex >= 0) {
+            this._machineQueue.splice(queueIndex, 1);
+        }
+
+        const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
+        if (guaranteeEntry) {
+            guaranteeEntry.fulfilled = true;
+        }
+
+        return this._machineDefinitionById.get(machineId) || null;
+    }
+
+    _consumeNextSelectableMachineDefinition(currentHourOffset) {
+        if (!Array.isArray(this._machineQueue) || this._machineQueue.length === 0) {
+            this._refillMachineShiftQueue();
+        }
+        if (!this._machineQueue.length) return null;
+
+        let queueIndex = this._machineQueue.findIndex((machineId) => {
+            const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
+            return !guaranteeEntry || guaranteeEntry.fulfilled || currentHourOffset >= guaranteeEntry.startHour;
+        });
+        if (queueIndex < 0) {
+            const currentlyEligibleMachineIds = this._machineQueueDefinitions
+                .map((definition) => definition.id)
+                .filter((machineId) => {
+                    const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
+                    return !guaranteeEntry || guaranteeEntry.fulfilled || currentHourOffset >= guaranteeEntry.startHour;
+                });
+
+            if (currentlyEligibleMachineIds.length > 0) {
+                this._machineQueue = Phaser.Utils.Array.Shuffle([...currentlyEligibleMachineIds]);
+                queueIndex = 0;
+            }
+        }
+
+        const machineId = queueIndex >= 0
+            ? this._machineQueue.splice(queueIndex, 1)[0]
+            : this._machineQueue.shift();
+
+        const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
+        if (guaranteeEntry) {
+            guaranteeEntry.fulfilled = true;
+        }
+
+        return this._machineDefinitionById.get(machineId) || null;
+    }
+
+    _takeNextQueuedMachineDefinition() {
+        if (!this._machineDefinitionById?.size) return null;
+
+        const currentHourOffset = this._getCurrentShiftHourOffset();
+        const pendingGuarantees = this._machineGuaranteeState.filter((entry) => !entry.fulfilled);
+        const overdueGuarantee = pendingGuarantees.find((entry) => currentHourOffset >= entry.endHour);
+
+        if (overdueGuarantee) {
+            return this._consumeQueuedMachineDefinition(overdueGuarantee.id);
+        }
+
+        const activeGuarantees = pendingGuarantees.filter(
+            (entry) => currentHourOffset >= entry.startHour && currentHourOffset < entry.endHour
+        );
+        if (activeGuarantees.length > 0) {
+            const nextActiveGuarantee = [...activeGuarantees].sort((left, right) => {
+                if (left.endHour !== right.endHour) return left.endHour - right.endHour;
+                return left.startHour - right.startHour;
+            })[0];
+            const windowDuration = Math.max(0.25, nextActiveGuarantee.endHour - nextActiveGuarantee.startHour);
+            const windowProgress = Phaser.Math.Clamp(
+                (currentHourOffset - nextActiveGuarantee.startHour) / windowDuration,
+                0,
+                1
+            );
+            const shouldUseGuaranteedMachine = Math.random() < (0.28 + (windowProgress * 0.57));
+            if (shouldUseGuaranteedMachine) {
+                return this._consumeQueuedMachineDefinition(nextActiveGuarantee.id);
+            }
+        }
+
+        return this._consumeNextSelectableMachineDefinition(currentHourOffset);
+    }
+
     _drawClockIcon(totalMinutes) {
         const centerX = this._clockDialCenterX ?? 56;
         const centerY = this._clockDialCenterY ?? 664;
@@ -2827,6 +2949,64 @@ export default class GameScene extends Phaser.Scene {
         this._hudCasesText.setText(`CASES: ${GameState.casesProcessedThisShift}`);
         this._hudPayText.setText(this._fmtPay());
         this._hudViolText.setText(`Violations: ${this._shiftMistakes}`);
+    }
+
+    _recordTrackedMachineOutcome(action, gateState) {
+        if (!this._currentMachineVariant?.trackOutcome) return;
+
+        const evaluation = gateState?.evaluation || this._currentMachineVariant.puzzleState?.getEvaluation?.() || {};
+        const flowState = this._getMachineFlowState(this._currentMachineVariant);
+        const gearState = this._getMachineGearState(this._currentMachineVariant);
+        const debugState = this._getMachineDebugState(this._currentMachineVariant);
+        const puzzleResults = {
+            grid: {
+                required: true,
+                completed: Boolean(evaluation.solved),
+                resolved: Boolean(evaluation.solved || ((evaluation.scrapRequired || evaluation.impossible) && this._currentMachineVariant._uiPuzzleOpened)),
+                scrapRequired: Boolean(evaluation.scrapRequired || evaluation.impossible),
+            },
+            flow: {
+                required: Boolean(this._currentMachineVariant._uiOtherPuzzleRequired),
+                completed: Boolean(this._currentMachineVariant._uiOtherPuzzleSolved || flowState?.completed),
+                resolved: !this._currentMachineVariant._uiOtherPuzzleRequired
+                    || Boolean(this._currentMachineVariant._uiOtherPuzzleSolved || flowState?.completed || flowState?.scrapRequired),
+                scrapRequired: Boolean(flowState?.scrapRequired),
+            },
+            gear: {
+                required: Boolean(this._currentMachineVariant._uiGearPuzzleRequired),
+                completed: Boolean(this._currentMachineVariant._uiGearPuzzleSolved || gearState?.completed),
+                resolved: !this._currentMachineVariant._uiGearPuzzleRequired
+                    || Boolean(this._currentMachineVariant._uiGearPuzzleSolved || gearState?.completed || gearState?.scrapRequired),
+                scrapRequired: Boolean(gearState?.scrapRequired),
+            },
+            code: {
+                required: Boolean(this._currentMachineVariant._uiDebugPuzzleRequired),
+                completed: Boolean(this._currentMachineVariant._uiDebugPuzzleSolved || debugState?.completed),
+                resolved: !this._currentMachineVariant._uiDebugPuzzleRequired
+                    || Boolean(this._currentMachineVariant._uiDebugPuzzleSolved || debugState?.completed || debugState?.scrapRequired),
+                scrapRequired: Boolean(debugState?.scrapRequired),
+            },
+        };
+        const completedPuzzleParts = Object.entries(puzzleResults)
+            .filter(([, result]) => result.required && result.completed)
+            .map(([key]) => key);
+        const resolvedPuzzleParts = Object.entries(puzzleResults)
+            .filter(([, result]) => result.required && result.resolved)
+            .map(([key]) => key);
+
+        GameState.recordTrackedMachineOutcome({
+            machineId: this._currentMachineVariant.machineId,
+            machineName: this._currentMachineVariant.name,
+            caseId: this._currentCase?.id || null,
+            period: GameState.period,
+            day: GameState.day,
+            ruling: action === 'scrap' ? 'scrapped' : 'accepted',
+            scrapped: action === 'scrap',
+            accepted: action === 'approve',
+            completedPuzzleParts,
+            resolvedPuzzleParts,
+            puzzleResults,
+        });
     }
 
     _queueAdvanceCase(delayMs) {
@@ -3669,6 +3849,7 @@ export default class GameScene extends Phaser.Scene {
             notificationStatus = 'DOC NOTICE';
         }
 
+        this._recordTrackedMachineOutcome(action, gateState);
         this._applyRulingConsequence(payDelta, wasPenalty);
         this._playOneShot(this._decisionSoundFor(action), { volume: SOUND_VOLUMES.decision });
         if (machineResponse) this._appendLog(`[RESPONSE] ${machineResponse}`);
@@ -3728,7 +3909,6 @@ export default class GameScene extends Phaser.Scene {
         if (normalized === 'ARROWDOWN') return 'DOWN';
         if (normalized === 'ARROWLEFT') return 'LEFT';
         if (normalized === 'ARROWRIGHT') return 'RIGHT';
-        if (/^[A-Z]$/.test(normalized)) return normalized;
         return null;
     }
 
@@ -3824,9 +4004,11 @@ export default class GameScene extends Phaser.Scene {
         this._phoneBodyScrollOffset = 0;
         this._phoneStickToBottom = true;
 
+        const queuedMachineDefinition = this._takeNextQueuedMachineDefinition();
         this._currentMachineVariant = createMachineVariant({
             day: GameState.day,
             period: GameState.period,
+            forceMachineId: queuedMachineDefinition?.id || null,
         });
         this._currentMachineVariant._uiPuzzleOpened = false;
         this._currentMachineVariant._uiPuzzleSolved = false;
@@ -5282,47 +5464,5 @@ export default class GameScene extends Phaser.Scene {
 
     _fmtPay() {
         return `PAY $${Math.max(0, GameState.paycheckTotal).toFixed(2)}`;
-    }
-
-    _handleKonamiCodeKeydown(event) {
-        // Konami code: ↑ ↑ ↓ ↓ ← → ← →
-        const konamiKeys = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'];
-
-        const keyMap = {
-            'ArrowUp': 'ArrowUp',
-            'ArrowDown': 'ArrowDown',
-            'ArrowLeft': 'ArrowLeft',
-            'ArrowRight': 'ArrowRight',
-        };
-
-        const mappedKey = keyMap[event.key] || event.code;
-
-        // Reset if wrong key
-        if (mappedKey !== konamiKeys[this._konamiCodeSequence.length]) {
-            this._konamiCodeSequence = [];
-            // Check if this is the first key of the sequence
-            if (mappedKey === konamiKeys[0]) {
-                this._konamiCodeSequence.push(mappedKey);
-            }
-            return;
-        }
-
-        this._konamiCodeSequence.push(mappedKey);
-
-        // Check if full code entered
-        if (this._konamiCodeSequence.length === konamiKeys.length) {
-            this._konamiCodeSequence = [];
-            this._activateKonamiCode();
-        }
-    }
-
-    _activateKonamiCode() {
-        // Only skip if shift is currently running
-        if (!this._shiftRunning || this._shiftEnding) {
-            return;
-        }
-
-        // Skip to summary screen as if shift ended
-        this._endShift(true);
     }
 }

@@ -9,6 +9,7 @@ export const GameState = {
     hasSeenOpeningPhoneCall: false,
     activeRules: [1],
     rulebookSeenRules: new Set(),
+    trackedMachineOutcomes: [],
 
     isLastDay() {
         return this.period === 3 && this.day === 2;
@@ -45,6 +46,22 @@ export const GameState = {
         return date;
     },
 
+    recordTrackedMachineOutcome(outcome) {
+        if (!outcome) return null;
+
+        this.trackedMachineOutcomes.push({
+            ...outcome,
+            completedPuzzleParts: Array.isArray(outcome.completedPuzzleParts)
+                ? [...outcome.completedPuzzleParts]
+                : [],
+            resolvedPuzzleParts: Array.isArray(outcome.resolvedPuzzleParts)
+                ? [...outcome.resolvedPuzzleParts]
+                : [],
+        });
+
+        return outcome;
+    },
+
     formatCurrentShiftDate() {
         const date = this.getCurrentShiftDate();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -79,5 +96,6 @@ export const GameState = {
         this.hasSeenOpeningPhoneCall = false;
         this.activeRules = [1];
         this.rulebookSeenRules = new Set();
+        this.trackedMachineOutcomes = [];
     }
 };

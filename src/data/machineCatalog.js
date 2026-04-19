@@ -1531,6 +1531,8 @@ const createMachineDefinition = ({
     miniDisplay = MACHINE_MINI_DISPLAY_CATALOG[id] || null,
     availableDays = DEFAULT_MACHINE_DAYS,
     availablePeriods = DEFAULT_MACHINE_PERIODS,
+    guaranteedTimeframe = null,
+    trackOutcome = false,
     openingDialogues,
     questionDialogues,
     communicationChance = 1,
@@ -1545,6 +1547,13 @@ const createMachineDefinition = ({
     miniDisplay,
     availableDays,
     availablePeriods,
+    guaranteedTimeframe: guaranteedTimeframe
+        ? {
+            startHour: Number(guaranteedTimeframe.startHour ?? 0),
+            endHour: Number(guaranteedTimeframe.endHour ?? guaranteedTimeframe.startHour ?? 0),
+        }
+        : null,
+    trackOutcome: Boolean(trackOutcome),
     openingDialogues,
     questionDialogues,
     communicationChance,
@@ -1956,6 +1965,8 @@ export const MACHINE_CATALOG = Object.freeze([
         id: 'mechanic_broom',
         name: 'Mechanic Broom',
         spriteFileName: null,
+        guaranteedTimeframe: { startHour: 1, endHour: 2 },
+        trackOutcome: true,
         possibleGrids: [
             createGridOption({
                 grid: [
@@ -3265,6 +3276,33 @@ function applyGridStageToOption(gridOption, stage = 1, randomFn = Math.random) {
     return stagedOption;
 }
 
+function machineMatchesAvailability(definition, targetDay = null, targetPeriod = null) {
+    const dayMatches = targetDay === null
+        || !Array.isArray(definition.availableDays)
+        || definition.availableDays.includes(targetDay);
+    const periodMatches = targetPeriod === null
+        || !Array.isArray(definition.availablePeriods)
+        || definition.availablePeriods.includes(targetPeriod);
+
+    return dayMatches && periodMatches;
+}
+
+export function getEligibleMachineDefinitions(options = {}) {
+    const targetDay = typeof options === 'function' ? null : (options.day ?? null);
+    const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
+    const eligibleMachines = MACHINE_CATALOG.filter((machine) => machineMatchesAvailability(machine, targetDay, targetPeriod));
+    const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
+
+    return machinePool.map((definition) => ({
+        id: definition.id,
+        name: definition.name,
+        guaranteedTimeframe: definition.guaranteedTimeframe
+            ? { ...definition.guaranteedTimeframe }
+            : null,
+        trackOutcome: Boolean(definition.trackOutcome),
+    }));
+}
+
 export function createMachineVariant(options = {}) {
     const randomFn = typeof options === 'function'
         ? options
@@ -3273,11 +3311,7 @@ export function createMachineVariant(options = {}) {
     const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
     const forcedMachineId = typeof options === 'function' ? null : (options.forceMachineId ?? null);
 
-    const eligibleMachines = MACHINE_CATALOG.filter((machine) => {
-        const dayMatches = targetDay === null || !Array.isArray(machine.availableDays) || machine.availableDays.includes(targetDay);
-        const periodMatches = targetPeriod === null || !Array.isArray(machine.availablePeriods) || machine.availablePeriods.includes(targetPeriod);
-        return dayMatches && periodMatches;
-    });
+    const eligibleMachines = MACHINE_CATALOG.filter((machine) => machineMatchesAvailability(machine, targetDay, targetPeriod));
 
     const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
     const forcedDefinition = forcedMachineId
@@ -3341,6 +3375,8 @@ export function createMachineVariant(options = {}) {
         miniDisplay: cloneMiniDisplay(definition.miniDisplay),
         availableDays: Array.isArray(definition.availableDays) ? [...definition.availableDays] : [],
         availablePeriods: Array.isArray(definition.availablePeriods) ? [...definition.availablePeriods] : [],
+        guaranteedTimeframe: definition.guaranteedTimeframe ? { ...definition.guaranteedTimeframe } : null,
+        trackOutcome: Boolean(definition.trackOutcome),
         puzzleState,
         shapeGrid: puzzleState.grid,
         dominoes: puzzleState.dominoes,
