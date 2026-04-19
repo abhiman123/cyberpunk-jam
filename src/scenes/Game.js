@@ -334,36 +334,28 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _buildDeskSurface() {
-        this._deskContainer = this.add.container(0, 0).setDepth(188);
+        
+        const deskBase = this.add.rectangle(0, 0, this.scale.width, 172, 0x4b4338).setOrigin(0, 0).setStrokeStyle(2, 0x7c745f, 0.92);
+        const deskInset = this.add.rectangle(50, 30, 270, 112, 0x3a342d, 0.72).setOrigin(0, 0).setStrokeStyle(1, 0x6b6252, 0.55);
 
-        const deskShadow = this.add.rectangle(640, 640, 1280, 184, 0x000000, 0.28);
-        const deskBase = this.add.rectangle(640, 632, 1280, 172, 0x4b4338, 0.98)
-            .setStrokeStyle(2, 0x7c745f, 0.92);
-        const deskTopLip = this.add.rectangle(640, 560, 1280, 18, 0x2e2b24, 0.98)
-            .setStrokeStyle(1, 0x6f6853, 0.7);
-        const deskTop = this.add.rectangle(640, 578, 1280, 26, 0x666158, 0.96)
-            .setStrokeStyle(1, 0x92876b, 0.55);
-        const deskInset = this.add.rectangle(220, 630, 270, 112, 0x3a342d, 0.72)
-            .setStrokeStyle(1, 0x6b6252, 0.55);
+        this._deskContainer = this.add.container(0, this.scale.height - deskBase.height).setDepth(188);
+        this._deskContainer.add([
+            deskBase,
+            deskInset
+        ]);
 
-        this._deskPhotoBounds = new Phaser.Geom.Rectangle(18, 568, 1244, 136);
+        this._deskPhotoBounds = new Phaser.Geom.Rectangle(0, 0, this.scale.width, deskBase.height);
         this.input.on('pointermove', this._handleDeskItemPointerMove, this);
         this.input.on('pointerup', this._handleDeskItemPointerUp, this);
         this.input.on('gameout', this._handleDeskItemPointerUp, this);
 
-        this._deskContainer.add([
-            deskShadow,
-            deskBase,
-            deskTopLip,
-            deskTop,
-            deskInset,
-        ]);
+
 
         this._updateDeskDateText();
 
         this._createDeskPhoto('manager_human', 'manager_human', {
             x: 182,
-            y: 620,
+            y: 30,
             angle: -18,
             portraitScale: 0.42,
             width: 66,
@@ -371,7 +363,7 @@ export default class GameScene extends Phaser.Scene {
         });
         this._createDeskPhoto('manager_robot', 'manager_robot', {
             x: 216,
-            y: 628,
+            y: 0,
             angle: -6,
             portraitScale: 0.42,
             width: 66,
@@ -379,7 +371,7 @@ export default class GameScene extends Phaser.Scene {
         });
         this._createDeskPhoto('family_photo', 'family_photo', {
             x: 258,
-            y: 622,
+            y: 30,
             angle: 4,
             portraitScale: 1,
             width: 62,
@@ -388,7 +380,7 @@ export default class GameScene extends Phaser.Scene {
         });
         this._createDeskTablet('desk_tablet', {
             x: 430,
-            y: 622,
+            y: 74,
             angle: -8,
             width: 118,
             height: 76,
@@ -531,13 +523,17 @@ export default class GameScene extends Phaser.Scene {
         this._setDeskItemSelected(item, true);
         this._deskContainer.bringToTop(item.container);
 
+        // Convert pointer coordinates to container-local space
+        const containerLocalX = pointer.x - this._deskContainer.x;
+        const containerLocalY = pointer.y - this._deskContainer.y;
+
         this._deskItemIntent = {
             item,
             pointerId: pointer.id,
-            startX: pointer.x,
-            startY: pointer.y,
-            offsetX: item.container.x - pointer.x,
-            offsetY: item.container.y - pointer.y,
+            startX: containerLocalX,
+            startY: containerLocalY,
+            offsetX: item.container.x - containerLocalX,
+            offsetY: item.container.y - containerLocalY,
             startedSelected,
             dragging: false,
         };
@@ -547,8 +543,12 @@ export default class GameScene extends Phaser.Scene {
         const intent = this._deskItemIntent;
         if (!intent || pointer.id !== intent.pointerId) return;
 
+        // Convert pointer coordinates to container-local space
+        const containerLocalX = pointer.x - this._deskContainer.x;
+        const containerLocalY = pointer.y - this._deskContainer.y;
+
         if (!intent.dragging) {
-            const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, intent.startX, intent.startY);
+            const distance = Phaser.Math.Distance.Between(containerLocalX, containerLocalY, intent.startX, intent.startY);
             if (distance < 8) return;
             intent.dragging = true;
             intent.item.dragging = true;
@@ -556,10 +556,11 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const bounds = this._deskPhotoBounds;
-        const nextX = pointer.x + intent.offsetX;
-        const nextY = pointer.y + intent.offsetY;
-        const clampedX = Phaser.Math.Clamp(nextX, bounds.x + (intent.item.width / 2), bounds.x + bounds.width - (intent.item.width / 2));
-        const clampedY = Phaser.Math.Clamp(nextY, bounds.y + (intent.item.height / 2), bounds.y + bounds.height - (intent.item.height / 2));
+        const nextX = containerLocalX + intent.offsetX;
+        const nextY = containerLocalY + intent.offsetY;
+        // Clamp to container-local bounds (0 to bounds.width/height)
+        const clampedX = Phaser.Math.Clamp(nextX, intent.item.width / 2, bounds.width - (intent.item.width / 2));
+        const clampedY = Phaser.Math.Clamp(nextY, intent.item.height / 2, bounds.height - (intent.item.height / 2));
         intent.item.container.setPosition(clampedX, clampedY);
     }
 
