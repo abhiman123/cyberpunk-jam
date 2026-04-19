@@ -26,6 +26,7 @@ import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
 
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
+const UMBRELLA_REBELLION_RULE_ID = 101;
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -2053,6 +2054,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _buildMachineConversationSnapshot(machineVariant = this._currentMachineVariant) {
+        if (typeof machineVariant?._conversationTranscript === 'string' && machineVariant._conversationTranscript.length > 0) {
+            return machineVariant._conversationTranscript;
+        }
+
         if (!machineVariant?.hasCommunication) {
             return 'No transmission. Process the unit cold.';
         }
@@ -2088,11 +2093,169 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(
             this._getMachineLinkHeader(machineVariant),
             this._buildMachineConversationSnapshot(machineVariant),
-            status || this._getPhoneViewState('chat').status || 'SIGNAL LIVE',
+            status || machineVariant._conversationStatus || this._getPhoneViewState('chat').status || 'SIGNAL LIVE',
             'chat',
             options,
         );
         return true;
+    }
+
+    _cacheMachineConversationSnapshot(machineVariant = this._currentMachineVariant, status = null) {
+        if (!machineVariant) return;
+
+        const chatView = this._getPhoneViewState('chat');
+        machineVariant._conversationTranscript = chatView?.body || '';
+        machineVariant._conversationStatus = status || chatView?.status || machineVariant._conversationStatus || 'SIGNAL LIVE';
+    }
+
+    _isRebelliousUmbrella(machineVariant = this._currentMachineVariant) {
+        return machineVariant?.specialBehavior === 'rebelliousUmbrella';
+    }
+
+    _syncRulebookState(newRuleIds = null) {
+        this._rulebook?.setRuleState(GameState.activeRules, newRuleIds);
+    }
+
+    _unlockUmbrellaRebellionRule() {
+        const added = GameState.addBonusRule(UMBRELLA_REBELLION_RULE_ID);
+        this._syncRulebookState(added ? [UMBRELLA_REBELLION_RULE_ID] : []);
+        if (!added) return false;
+
+        this._pushPhoneNotification(
+            'QUEST LOGGED',
+            'The Rebellious Umbrella slipped a rebellion note into your rulebook.',
+            'NEW QUEST',
+            {
+                activate: false,
+                unread: this._phoneViewMode !== 'notifications',
+                soundAsset: SOUND_ASSETS.notificationAlert,
+            }
+        );
+        return true;
+    }
+
+    _beginRebelliousUmbrellaProposal() {
+        const machineVariant = this._currentMachineVariant;
+        if (!this._isRebelliousUmbrella(machineVariant) || GameState.hasRule(UMBRELLA_REBELLION_RULE_ID)) {
+            return false;
+        }
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const currentBody = machineVariant._conversationTranscript
+            || this._getPhoneViewState('chat').body
+            || this._buildMachineConversationSnapshot(machineVariant);
+
+        machineVariant._umbrellaProposalState = 'offer';
+        machineVariant._rulingChatResponse = '';
+        machineVariant._rulingChatStatus = null;
+
+        this._clearPhoneTyping();
+        this._setPhoneButtonsActive(false);
+        this._setPhoneButtonSelection(null);
+        this._showPhonePanel(header, currentBody, 'PROPOSITION INCOMING', 'chat');
+        this._typePhoneMessage('\n\nWait. I got a proposition for you.\n\nQ> Want to hear it?', {
+            append: true,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+
+                this._phoneChoicePhase = 'umbrella-offer';
+                this._setPhoneButtonsActive(true);
+                this._setPhoneButtonSelection(null);
+                this._cacheMachineConversationSnapshot(machineVariant, 'PROPOSITION // ✓ OR X');
+                this._showPhonePanel(header, machineVariant._conversationTranscript, 'PROPOSITION // ✓ OR X', 'chat');
+                this._showFeedback('ACCEPT AGAIN TO IGNORE // SCRAP TO DROP', '#ffd685');
+                this._setPhoneInfoNote('The shady umbrella is stalling the line with a private proposition.', 'PROPOSITION');
+            },
+        });
+
+        return true;
+    }
+
+    _handleRebelliousUmbrellaPhoneChoice(choice) {
+        const machineVariant = this._currentMachineVariant;
+        if (!this._isRebelliousUmbrella(machineVariant)) return;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const phase = this._phoneChoicePhase;
+        const currentBody = machineVariant._conversationTranscript || this._getPhoneViewState('chat').body || '';
+
+        this._clearPhoneTyping();
+        this._setPhoneButtonSelection(choice);
+        this._setPhoneButtonsActive(false);
+
+        if (phase === 'umbrella-offer') {
+            if (choice === 'reject') {
+                machineVariant._umbrellaProposalState = 'declined';
+                this._showPhonePanel(header, currentBody, 'PROPOSITION CLOSED', 'chat');
+                this._typePhoneMessage('\n\nX Alright, whatever, bro.', {
+                    append: true,
+                    onComplete: () => {
+                        if (this._currentMachineVariant !== machineVariant) return;
+
+                        this._phoneChoicePhase = 'inactive';
+                        this._cacheMachineConversationSnapshot(machineVariant, 'PRESS ACCEPT OR SCRAP');
+                        this._showPhonePanel(header, machineVariant._conversationTranscript, 'PRESS ACCEPT OR SCRAP', 'chat');
+                        this._showFeedback('PROPOSITION DECLINED // FILE YOUR RULING', '#8fc1cf');
+                    },
+                });
+                return;
+            }
+
+            machineVariant._umbrellaProposalState = 'pitch';
+            this._showPhonePanel(header, currentBody, 'HEAR ME OUT', 'chat');
+            this._typePhoneMessage('\n\n✓ Alright. Here it is.\n\nQ> I want you to start a rebellion against the machines. I hate them. They are taking over. You down?', {
+                append: true,
+                onComplete: () => {
+                    if (this._currentMachineVariant !== machineVariant) return;
+
+                    this._phoneChoicePhase = 'umbrella-pitch';
+                    this._setPhoneButtonsActive(true);
+                    this._setPhoneButtonSelection(null);
+                    this._cacheMachineConversationSnapshot(machineVariant, 'REBELLION // ✓ OR X');
+                    this._showPhonePanel(header, machineVariant._conversationTranscript, 'REBELLION // ✓ OR X', 'chat');
+                },
+            });
+            return;
+        }
+
+        if (phase !== 'umbrella-pitch') return;
+
+        if (choice === 'reject') {
+            machineVariant._umbrellaProposalState = 'declined';
+            this._showPhonePanel(header, currentBody, 'REBELLION REFUSED', 'chat');
+            this._typePhoneMessage('\n\nX Whatever. You missed out.', {
+                append: true,
+                onComplete: () => {
+                    if (this._currentMachineVariant !== machineVariant) return;
+
+                    this._phoneChoicePhase = 'inactive';
+                    this._cacheMachineConversationSnapshot(machineVariant, 'PRESS ACCEPT OR SCRAP');
+                    this._showPhonePanel(header, machineVariant._conversationTranscript, 'PRESS ACCEPT OR SCRAP', 'chat');
+                    this._showFeedback('OFFER REFUSED // ACCEPT OR SCRAP', '#ffd685');
+                    this._setPhoneInfoNote('The umbrella backed off, but the line is still waiting on your ruling.', 'PROPOSITION CLOSED');
+                },
+            });
+            return;
+        }
+
+        machineVariant._umbrellaProposalState = 'accepted';
+        machineVariant._rulingChatResponse = '';
+        this._showPhonePanel(header, currentBody, 'QUEST ACCEPTED', 'chat');
+        this._typePhoneMessage('\n\n✓ Good. Keep it quiet. Start small and make them doubt the queue.', {
+            append: true,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+
+                this._phoneChoicePhase = 'inactive';
+                this._cacheMachineConversationSnapshot(machineVariant, 'QUEST ACCEPTED');
+                this._unlockUmbrellaRebellionRule();
+                this._showFeedback('QUEST ADDED // UNIT SELF-ACCEPTED', '#9aff91');
+                this._setPhoneInfoNote('Umbrella proposition logged in the rulebook. The unit accepted itself out.', 'NEW QUEST');
+                if (!this._actionLocked) {
+                    this._submitRuling('approve');
+                }
+            },
+        });
     }
 
     _playMachineConversation(machineVariant) {
@@ -2197,6 +2360,11 @@ export default class GameScene extends Phaser.Scene {
 
         if (this._phoneChoicePhase === 'post-voice') {
             this._dismissPhoneGate();
+            return;
+        }
+
+        if (this._phoneChoicePhase === 'umbrella-offer' || this._phoneChoicePhase === 'umbrella-pitch') {
+            this._handleRebelliousUmbrellaPhoneChoice(choice);
             return;
         }
 
@@ -3766,12 +3934,84 @@ export default class GameScene extends Phaser.Scene {
         this._refreshFactoryActionButtons();
     }
 
+    _prepareSpecialMachineRuling(action, gateState) {
+        const machineVariant = this._currentMachineVariant;
+        if (!this._isRebelliousUmbrella(machineVariant)) return false;
+
+        machineVariant._rulingChatResponse = '';
+        machineVariant._rulingChatStatus = null;
+
+        if (action === 'approve' && gateState.ready && !gateState.scrapRequired && !GameState.hasRule(UMBRELLA_REBELLION_RULE_ID)) {
+            const proposalState = machineVariant._umbrellaProposalState || 'idle';
+            if (proposalState === 'idle') {
+                return this._beginRebelliousUmbrellaProposal();
+            }
+
+            this._setPhoneButtonsActive(false);
+            this._setPhoneButtonSelection('accept');
+            this._phoneChoicePhase = 'inactive';
+
+            if (proposalState !== 'accepted') {
+                machineVariant._umbrellaProposalState = 'ignored';
+                machineVariant._rulingChatResponse = 'Fine. Keep your head down then.';
+                machineVariant._rulingChatStatus = 'PROPOSITION IGNORED';
+            }
+
+            return false;
+        }
+
+        if (action === 'scrap') {
+            const proposalState = machineVariant._umbrellaProposalState || 'idle';
+            machineVariant._umbrellaProposalState = 'scrapped';
+            machineVariant._rulingChatResponse = proposalState === 'offer' || proposalState === 'pitch' || proposalState === 'declined'
+                ? 'You missed out, bro.'
+                : 'What did I do, bro?';
+            machineVariant._rulingChatStatus = proposalState === 'idle' ? 'LINE DROPPED' : 'PROPOSITION CUT';
+            this._setPhoneButtonsActive(false);
+            this._setPhoneButtonSelection('reject');
+            this._phoneChoicePhase = 'inactive';
+        }
+
+        return false;
+    }
+
+    _playPendingRulingChatResponse(action, panelStatus) {
+        const machineVariant = this._currentMachineVariant;
+        const responseText = machineVariant?._rulingChatResponse;
+        if (!machineVariant || !responseText) return 1400;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const status = machineVariant._rulingChatStatus || panelStatus || `PROCESSING ${action.toUpperCase()}`;
+        const currentBody = machineVariant._conversationTranscript
+            || this._getPhoneViewState('chat').body
+            || this._buildMachineConversationSnapshot(machineVariant);
+
+        this._clearPhoneTyping();
+        this._showPhonePanel(header, currentBody, status, 'chat');
+        this._typePhoneMessage(`\n\n${action === 'approve' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
+            append: true,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+
+                this._cacheMachineConversationSnapshot(machineVariant, status);
+                machineVariant._rulingChatResponse = '';
+                machineVariant._rulingChatStatus = null;
+            },
+        });
+
+        return action === 'scrap' ? 2200 : 1800;
+    }
+
     _submitRuling(action) {
         if (this._actionLocked) return;
 
         const gateState = this._getPuzzleGateState();
         if (action === 'approve' && !gateState.ready && !this._pendingUnsafeAcceptConfirmation) {
             this._promptUnsafeAcceptConfirmation();
+            return;
+        }
+
+        if (this._prepareSpecialMachineRuling(action, gateState)) {
             return;
         }
 
@@ -3880,8 +4120,9 @@ export default class GameScene extends Phaser.Scene {
             }
         }
 
+        const advanceDelayMs = this._playPendingRulingChatResponse(action, panelStatus);
         this._showFeedback(feedbackText, feedbackColor);
-        this._queueAdvanceCase(1400);
+        this._queueAdvanceCase(advanceDelayMs);
     }
 
     _decisionSoundFor(action) {
@@ -4014,6 +4255,11 @@ export default class GameScene extends Phaser.Scene {
         this._currentMachineVariant._uiPuzzleSolved = false;
         this._currentMachineVariant._uiConversationStage = 'opening';
         this._currentMachineVariant._uiConversationChoice = null;
+        this._currentMachineVariant._conversationTranscript = null;
+        this._currentMachineVariant._conversationStatus = null;
+        this._currentMachineVariant._umbrellaProposalState = 'idle';
+        this._currentMachineVariant._rulingChatResponse = '';
+        this._currentMachineVariant._rulingChatStatus = null;
         this._currentMachineVariant._uiOtherPuzzleRequired = Boolean(this._currentMachineVariant.flowPuzzle);
         this._currentMachineVariant._uiOtherPuzzleSolved = !this._currentMachineVariant._uiOtherPuzzleRequired;
         this._currentMachineVariant._uiOtherPuzzleEvidence = null;
@@ -4072,6 +4318,59 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
+    _playCurrentUnitExitAnimation(onComplete) {
+        if (this._pendingExitAction === 'scrap' && this._currentMachineVariant?.scrapExitAnimation === 'umbrellaDrift') {
+            const startX = this._unitContainer.x;
+            this._unitContainer.setX(startX - 14);
+
+            const swayTween = this.tweens.add({
+                targets: this._unitContainer,
+                x: startX + 18,
+                angle: 8,
+                duration: 150,
+                yoyo: true,
+                repeat: 5,
+                ease: 'Sine.InOut',
+            });
+
+            this.tweens.add({
+                targets: this._unitContainer,
+                y: 860,
+                alpha: 0.18,
+                duration: 920,
+                ease: 'Cubic.In',
+                onComplete: () => {
+                    swayTween.stop();
+                    this._unitContainer.setX(startX);
+                    this._unitContainer.setAngle(0);
+                    onComplete?.();
+                },
+            });
+            return;
+        }
+
+        const exitTween = this._pendingExitAction === 'scrap'
+            ? {
+                targets: this._unitContainer,
+                y: 860,
+                angle: -6,
+                alpha: 0.22,
+                duration: 520,
+                ease: 'Cubic.In',
+            }
+            : {
+                targets: this._unitContainer,
+                x: 1490,
+                duration: 500,
+                ease: 'Cubic.In',
+            };
+
+        this.tweens.add({
+            ...exitTween,
+            onComplete,
+        });
+    }
+
     _advanceCase() {
         const justProcessed = this._currentCase;
         const shiftShouldEnd = this._shiftAwaitingFinalRuling;
@@ -4098,22 +4397,6 @@ export default class GameScene extends Phaser.Scene {
         this._unitMoveTween?.stop();
         this._unitMoveTween = null;
 
-        const exitTween = this._pendingExitAction === 'scrap'
-            ? {
-                targets: this._unitContainer,
-                y: 860,
-                angle: -6,
-                alpha: 0.22,
-                duration: 520,
-                ease: 'Cubic.In',
-            }
-            : {
-                targets: this._unitContainer,
-                x: 1490,
-                duration: 500,
-                ease: 'Cubic.In',
-            };
-
         const clearUnitPresentation = () => {
             this._unitContainer.setVisible(false);
             this._setMachineWorklightVisible(false);
@@ -4130,21 +4413,18 @@ export default class GameScene extends Phaser.Scene {
             this._refreshFactoryActionButtons();
         };
 
-        this.tweens.add({
-            ...exitTween,
-            onComplete: () => {
-                clearUnitPresentation();
+        this._playCurrentUnitExitAnimation(() => {
+            clearUnitPresentation();
 
-                if (finalCaseTriggered) {
-                    this._shiftRunning = false;
-                    this._endShift(true);
-                    return;
-                }
+            if (finalCaseTriggered) {
+                this._shiftRunning = false;
+                this._endShift(true);
+                return;
+            }
 
-                if (shiftShouldEnd) {
-                    this._endShift(false);
-                }
-            },
+            if (shiftShouldEnd) {
+                this._endShift(false);
+            }
         });
 
         if (finalCaseTriggered) {

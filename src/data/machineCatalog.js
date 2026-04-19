@@ -3,6 +3,7 @@ import {
     buildGearProgressSnapshot,
     cloneGearBoard,
     cloneGearPieces,
+    isGearType,
 } from '../core/gearPuzzleLogic.js';
 
 const MACHINE_SPRITE_FOLDER = 'assets/machines/sprites';
@@ -66,6 +67,10 @@ const FLOW_TARGET_METADATA = Object.freeze({
     RECLINE: { displayName: 'Recline Motor', brokenLabel: 'Recline motor locked.', fixedLabel: 'Recline motor smooth.' },
     LUMBAR: { displayName: 'Lumbar Support', brokenLabel: 'Lumbar support collapsed.', fixedLabel: 'Lumbar support engaged.' },
     POWER: { displayName: 'Power Regulator', brokenLabel: 'Power regulator unstable.', fixedLabel: 'Power regulator balanced.' },
+    CANOPY: { displayName: 'Canopy Ribs', brokenLabel: 'Canopy ribs folded wrong.', fixedLabel: 'Canopy ribs tensioned.' },
+    SHAFT: { displayName: 'Umbrella Shaft', brokenLabel: 'Umbrella shaft is bent.', fixedLabel: 'Umbrella shaft braced.' },
+    SHADE: { displayName: 'Shade Visor', brokenLabel: 'Shade visor hanging loose.', fixedLabel: 'Shade visor aligned.' },
+    LATCH: { displayName: 'Latch Hook', brokenLabel: 'Latch hook snagged.', fixedLabel: 'Latch hook snapped clear.' },
 });
 
 function cloneFlowTiles(tiles) {
@@ -1158,7 +1163,7 @@ function createDebugProgress(debugPuzzleOption, randomFn = Math.random) {
     };
 }
 
-const DEFAULT_MACHINE_DAYS = Object.freeze([1]);
+const DEFAULT_MACHINE_DAYS = Object.freeze([1, 2]);
 const DEFAULT_MACHINE_PERIODS = Object.freeze([1, 2, 3]);
 
 const MACHINE_FLOW_CATALOG = Object.freeze({
@@ -1185,6 +1190,10 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
     mechanic_broom: Object.freeze([
         createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'BRUSH', 3: 'VAC', 4: 'SENSE' }, forbiddenCount: 1, previewTitle: 'CLEAN BUS' }),
         createFlowPuzzleOption({ sourceRow: 3, outputs: { 0: 'MAG', 2: 'CPU', 4: 'WHEELS' }, forbiddenCount: 0, previewTitle: 'MAINT LOOP' }),
+    ]),
+    rebellious_umbrella: Object.freeze([
+        createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'SHAFT', 3: 'CANOPY', 4: 'VOICE' }, forbiddenCount: 0, previewTitle: 'SHADE BUS' }),
+        createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'SHADE', 2: 'SHAFT', 4: 'LATCH' }, forbiddenCount: 1, previewTitle: 'HUSH LOOP' }),
     ]),
     future_lounge_chair: Object.freeze([
         createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'RECLINE', 2: 'MEMORY', 4: 'HEAT' }, forbiddenCount: 0, previewTitle: 'COMFORT BUS' }),
@@ -1261,6 +1270,42 @@ const SHARED_GEAR_OPTIONS = Object.freeze([
     }),
 ]);
 
+const UMBRELLA_GEAR_OPTIONS = Object.freeze([
+    createGearPuzzleOption({
+        previewTitle: 'SHAFT COLLAR',
+        description: 'Brace the bent umbrella shaft so the canopy hub can turn without wobbling apart.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 3),
+        ],
+    }),
+    createGearPuzzleOption({
+        previewTitle: 'CANOPY HUB',
+        description: 'Reset the canopy hub and keep the crooked idler from snagging the umbrella ribs.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 2),
+            createGearPiece(GEAR_CODES.RUSTED, 1, 3, { movable: false }),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 3),
+        ],
+    }),
+]);
+
 const MACHINE_GEAR_CATALOG = Object.freeze({
     assembler_alpha: SHARED_GEAR_OPTIONS,
     audit_drone: SHARED_GEAR_OPTIONS,
@@ -1268,6 +1313,7 @@ const MACHINE_GEAR_CATALOG = Object.freeze({
     sentry_frame: SHARED_GEAR_OPTIONS,
     breakroom_brewer: SHARED_GEAR_OPTIONS,
     mechanic_broom: SHARED_GEAR_OPTIONS,
+    rebellious_umbrella: UMBRELLA_GEAR_OPTIONS,
     future_lounge_chair: SHARED_GEAR_OPTIONS,
 });
 
@@ -1428,6 +1474,32 @@ const MACHINE_DEBUG_CATALOG = Object.freeze({
             ],
         }),
     ]),
+    rebellious_umbrella: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test shade posture',
+            repairPrompt: 'patch shade.pose.realign',
+            expectedOutput: 'SHADE POSTURE OK // VISOR CROOKED JUST RIGHT',
+            actualOutputs: [
+                'SHADE POSTURE FAIL // VISOR TWISTED',
+                'SHADE POSTURE OK // SHAFT HUM LOUD',
+                'SHADE POSTURE BAD // RIB OFFSET',
+                'SHADE POSTURE FAIL // SHAFT KINKED',
+                'SHADE POSTURE OK // ATTITUDE NULL',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test canopy fold',
+            repairPrompt: 'patch canopy.hub.rebrace',
+            expectedOutput: 'CANOPY FOLD OK // SHAFT TRUE',
+            actualOutputs: [
+                'CANOPY FOLD FAIL // SHAFT BENT',
+                'CANOPY FOLD OK // LATCH DRIFT',
+                'CANOPY FOLD BAD // RIB MISMATCH',
+                'CANOPY FOLD FAIL // LOCK STUCK',
+                'CANOPY FOLD OK // PIVOT NULL',
+            ],
+        }),
+    ]),
     future_lounge_chair: Object.freeze([
         createDebugPuzzleOption({
             prompt: 'test recline motor',
@@ -1509,6 +1581,16 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
         gearPreview: { x: 136, y: 64, width: 58, height: 34, label: 'GEAR' },
     }),
+    rebellious_umbrella: createMiniDisplay({
+        artX: 108,
+        artY: 128,
+        artScale: 1.02,
+        artAngle: -3,
+        gridPreview: { x: 44, y: 72, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 132, y: 64, width: 60, height: 34, label: 'GEAR' },
+        codePreview: { x: 54, y: 26, width: 86, height: 22, label: 'CODE' },
+    }),
     future_lounge_chair: createMiniDisplay({
         artX: 110,
         artY: 140,
@@ -1533,6 +1615,8 @@ const createMachineDefinition = ({
     availablePeriods = DEFAULT_MACHINE_PERIODS,
     guaranteedTimeframe = null,
     trackOutcome = false,
+    specialBehavior = null,
+    scrapExitAnimation = null,
     openingDialogues,
     questionDialogues,
     communicationChance = 1,
@@ -1554,6 +1638,8 @@ const createMachineDefinition = ({
         }
         : null,
     trackOutcome: Boolean(trackOutcome),
+    specialBehavior,
+    scrapExitAnimation,
     openingDialogues,
     questionDialogues,
     communicationChance,
@@ -1965,6 +2051,7 @@ export const MACHINE_CATALOG = Object.freeze([
         id: 'mechanic_broom',
         name: 'Mechanic Broom',
         spriteFileName: null,
+        availablePeriods: [1],
         guaranteedTimeframe: { startHour: 1, endHour: 2 },
         trackOutcome: true,
         possibleGrids: [
@@ -2037,6 +2124,73 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.63,
+    }),
+    createMachineDefinition({
+        id: 'rebellious_umbrella',
+        name: 'Rebellious Umbrella',
+        spriteFileName: null,
+        availablePeriods: [1],
+        guaranteedTimeframe: { startHour: 4, endHour: 7 },
+        specialBehavior: 'rebelliousUmbrella',
+        scrapExitAnimation: 'umbrellaDrift',
+        possibleGrids: [
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 0, 4, 5, 1],
+                    [1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 2),
+                    createDomino(3, 4),
+                    createDomino(0, 0),
+                ],
+                impossible: false,
+            }),
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 0, 5, 2, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 2),
+                    createDomino(4, 1),
+                    createDomino(2, 0),
+                    createDomino(3, 3),
+                ],
+                impossible: false,
+            }),
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 0, 0, 1],
+                    [1, linkCell(3, 4), 0, 3, 0, 1],
+                    [1, 4, 0, 0, linkCell(2, 1), 1],
+                    [1, 0, 5, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(3, 4),
+                    createDomino(1, 5),
+                    createDomino(2, 0),
+                    createDomino(2, 3),
+                ],
+                impossible: false,
+            }),
+        ],
+        openingDialogues: [
+            'I am a shady umbrella, bro. The sunglasses are structural.',
+            'Keep it low-key. My shaft is bent, not my attitude.',
+            'You fix the shaft, I keep the shade moving. Easy arrangement.',
+        ],
+        questionDialogues: [],
+        communicationChance: 1,
     }),
     createMachineDefinition({
         id: 'future_lounge_chair',
@@ -3377,6 +3531,8 @@ export function createMachineVariant(options = {}) {
         availablePeriods: Array.isArray(definition.availablePeriods) ? [...definition.availablePeriods] : [],
         guaranteedTimeframe: definition.guaranteedTimeframe ? { ...definition.guaranteedTimeframe } : null,
         trackOutcome: Boolean(definition.trackOutcome),
+        specialBehavior: definition.specialBehavior || null,
+        scrapExitAnimation: definition.scrapExitAnimation || null,
         puzzleState,
         shapeGrid: puzzleState.grid,
         dominoes: puzzleState.dominoes,

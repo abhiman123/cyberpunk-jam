@@ -151,6 +151,14 @@ export default class RulebookOverlay {
         this._setSection(this._currentSection, true);
     }
 
+    setRuleState(activeRuleIds, newRuleIds = null) {
+        this.activeRuleIds = Array.isArray(activeRuleIds) ? [...activeRuleIds] : [];
+        if (newRuleIds !== null) {
+            this.newRuleIds = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
+        }
+        this.refresh();
+    }
+
     // ── Build ────────────────────────────────────────────────────────────────
 
     _build() {

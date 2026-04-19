@@ -8,6 +8,7 @@ export const GameState = {
     casesProcessedThisShift: 0,
     hasSeenOpeningPhoneCall: false,
     activeRules: [1],
+    bonusRuleIds: [],
     rulebookSeenRules: new Set(),
     trackedMachineOutcomes: [],
 
@@ -37,6 +38,36 @@ export const GameState = {
 
     getDirectiveDay() {
         return Math.max(1, Math.min(3, this.period));
+    },
+
+    getBaseRuleIdsForCurrentPeriod() {
+        if (this.period <= 1) return [1];
+        if (this.period === 2) return [1, 2];
+        return [1, 2, 3];
+    },
+
+    recomputeActiveRules() {
+        this.activeRules = [...new Set([
+            ...this.getBaseRuleIdsForCurrentPeriod(),
+            ...this.bonusRuleIds,
+        ])].sort((left, right) => left - right);
+
+        return this.activeRules;
+    },
+
+    hasRule(ruleId) {
+        return this.activeRules.includes(ruleId) || this.bonusRuleIds.includes(ruleId);
+    },
+
+    addBonusRule(ruleId) {
+        const normalizedId = Number(ruleId);
+        if (!Number.isInteger(normalizedId) || this.bonusRuleIds.includes(normalizedId)) {
+            return false;
+        }
+
+        this.bonusRuleIds.push(normalizedId);
+        this.recomputeActiveRules();
+        return true;
     },
 
     getCurrentShiftDate() {
@@ -78,9 +109,7 @@ export const GameState = {
             this.day = 1;
         }
 
-        if (this.period <= 1) this.activeRules = [1];
-        else if (this.period === 2) this.activeRules = [1, 2];
-        else this.activeRules = [1, 2, 3];
+        this.recomputeActiveRules();
 
         this.casesProcessedThisShift = 0;
     },
@@ -95,6 +124,7 @@ export const GameState = {
         this.casesProcessedThisShift = 0;
         this.hasSeenOpeningPhoneCall = false;
         this.activeRules = [1];
+        this.bonusRuleIds = [];
         this.rulebookSeenRules = new Set();
         this.trackedMachineOutcomes = [];
     }

@@ -31,5 +31,15 @@
       "Wires: scrap units with red-flashing underpowered or overloaded modules.",
       "Circuit Board: scrap boards with red-charged unstable regions."
     ]
+  },
+  {
+    "id": 101,
+    "period": 1,
+    "text": "QUEST: The shady umbrella wants you to help start a rebellion against the machine line.",
+    "details": [
+      "Unlocked through a private comms proposition from the Rebellious Umbrella.",
+      "This is a story lead, not a payroll directive. Keep an ear on the comms channel.",
+      "If the line starts talking about rebellion again, check the chat feed before filing your ruling."
+    ]
   }
 ]

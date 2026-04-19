@@ -224,6 +224,7 @@ export default class BootScene extends Phaser.Scene {
     _makeMachinePlaceholders() {
         this._makeBreakroomBrewerPlaceholder();
         this._makeMechanicBroomPlaceholder();
+        this._makeRebelliousUmbrellaPlaceholder();
         this._makeFutureLoungeChairPlaceholder();
     }
 
@@ -260,6 +261,36 @@ export default class BootScene extends Phaser.Scene {
         }
         g.fillStyle(0x6bf7ff, 0.7); g.fillRoundedRect(40, 156, 54, 8, 4);
         g.generateTexture('machine_mechanic_broom', 120, 180);
+        g.destroy();
+    }
+
+    _makeRebelliousUmbrellaPlaceholder() {
+        if (this.textures.exists('machine_rebellious_umbrella')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x111923); g.fillRect(0, 0, 120, 180);
+        g.fillStyle(0x20272f); g.fillEllipse(60, 140, 54, 18);
+        g.fillStyle(0x2a323d); g.fillEllipse(60, 52, 82, 42);
+        g.lineStyle(3, 0x7ce0ff, 0.95);
+        g.strokeEllipse(60, 52, 82, 42);
+        g.fillStyle(0x2f3943); g.fillEllipse(60, 60, 92, 24);
+        g.fillStyle(0x0d1116); g.fillRoundedRect(34, 48, 52, 10, 4);
+        g.fillStyle(0x9cf7ff, 0.85); g.fillRoundedRect(36, 50, 22, 8, 4);
+        g.fillStyle(0x9cf7ff, 0.85); g.fillRoundedRect(62, 50, 22, 8, 4);
+        g.lineStyle(2, 0x0d1116, 1); g.lineBetween(58, 54, 62, 54);
+        g.lineStyle(6, 0x7b8a99, 0.96);
+        g.beginPath(); g.moveTo(58, 70); g.lineTo(66, 138); g.strokePath();
+        g.lineStyle(4, 0x5f6d79, 0.9);
+        g.beginPath(); g.moveTo(64, 112); g.lineTo(74, 130); g.strokePath();
+        g.lineStyle(4, 0x7b8a99, 0.92);
+        g.beginPath(); g.moveTo(66, 138); g.lineTo(56, 154); g.strokePath();
+        g.beginPath(); g.moveTo(56, 154); g.lineTo(66, 160); g.strokePath();
+        g.lineStyle(3, 0xa3ffde, 0.88);
+        g.beginPath(); g.moveTo(26, 52); g.lineTo(40, 28); g.strokePath();
+        g.beginPath(); g.moveTo(60, 38); g.lineTo(60, 20); g.strokePath();
+        g.beginPath(); g.moveTo(94, 52); g.lineTo(80, 28); g.strokePath();
+        g.fillStyle(0x0d1116, 0.48); g.fillTriangle(38, 72, 82, 72, 60, 104);
+        g.generateTexture('machine_rebellious_umbrella', 120, 180);
         g.destroy();
     }
 
