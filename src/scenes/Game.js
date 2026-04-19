@@ -966,8 +966,7 @@ export default class GameScene extends Phaser.Scene {
         this._phoneBodyViewport = { x: 36, y: 58, width: 218, height: 78 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
-        this._phoneBodyTopMask = this.add.rectangle(146, 29, 234, 58, 0x72d3dd, 0.92).setOrigin(0.5);
-        this._phoneBodyBottomMask = this.add.rectangle(146, 171, 234, 70, 0x72d3dd, 0.92).setOrigin(0.5);
+
         this._phoneBodyScrollZone = this.add.rectangle(
             this._phoneBodyViewport.x + (this._phoneBodyViewport.width / 2),
             this._phoneBodyViewport.y + (this._phoneBodyViewport.height / 2),
@@ -1054,8 +1053,6 @@ export default class GameScene extends Phaser.Scene {
             messageBoard,
             scanlines,
             this._phoneBodyText,
-            this._phoneBodyTopMask,
-            this._phoneBodyBottomMask,
             this._phoneBodyScrollZone,
             this._phoneScrollTrack,
             this._phoneScrollThumb,
@@ -1147,6 +1144,13 @@ export default class GameScene extends Phaser.Scene {
         this._phoneBodyText.setPosition(
             this._phoneBodyViewport.x,
             this._phoneBodyViewport.y - this._phoneBodyScrollOffset,
+        );
+        const res = this._phoneBodyText.resolution || 1;
+        this._phoneBodyText.setCrop(
+            0,
+            this._phoneBodyScrollOffset * res,
+            this._phoneBodyViewport.width * res,
+            this._phoneBodyViewport.height * res
         );
 
         if (!this._phoneScrollTrack || !this._phoneScrollThumb) return;
