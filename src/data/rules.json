@@ -4,7 +4,7 @@
     "period": 1,
     "text": "Scrap any unit with an unsalvageable subsystem fault.",
     "details": [
-      "Programming: scrap units with corrupted, untypeable command strings.",
+      "Programming: on day 1, repairable code jobs should produce the expected output once the command is run correctly.",
       "Gears: scrap units with cracked drivetrain gears.",
       "Wires: scrap units with severed or unreachable required circuits.",
       "Circuit Board: scrap boards with isolated single cells that cannot be populated."

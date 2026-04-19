@@ -2,24 +2,24 @@ import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
 import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 
-const PERIOD_BG    = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
-const PERIOD_LABEL = { 1: 'DAY ONE', 2: 'DAY TWO', 3: 'DAY THREE' };
-const PERIOD_SUB   = {
+const DAY_LABEL = { 1: 'DAY ONE', 2: 'DAY TWO', 3: 'DAY THREE', 4: 'DAY FOUR' };
+const DAY_SUB   = {
     1: 'Base repair directives active.',
     2: 'Compliance directives active.',
     3: 'Hazard directives active.',
+    4: 'Hazard directives remain active.',
 };
 
 export default class TransitionScene extends Phaser.Scene {
     constructor() { super('Transition'); }
 
     init(data) {
-        this._period = data.period || GameState.period;
+        this._day = data.day || GameState.day;
     }
 
     create() {
         const cx = 640;
-        const p  = this._period;
+        const day = this._day;
 
         applyCyberpunkLook(this);
 
@@ -27,11 +27,11 @@ export default class TransitionScene extends Phaser.Scene {
         this.cameras.main.setBackgroundColor('#0f140e');
 
         // Period label fades in
-        const label = this.add.text(cx, 320, PERIOD_LABEL[p] || `PERIOD ${p}`, {
+        const label = this.add.text(cx, 320, DAY_LABEL[day] || `DAY ${day}`, {
             fontFamily: 'Courier New', fontSize: '52px', color: '#33ff00',
         }).setOrigin(0.5).setAlpha(0);
 
-        const sub = this.add.text(cx, 400, PERIOD_SUB[p] || '', {
+        const sub = this.add.text(cx, 400, DAY_SUB[day] || '', {
             fontFamily: 'Courier New', fontSize: '18px', color: '#33ff00',
         }).setOrigin(0.5).setAlpha(0);
 

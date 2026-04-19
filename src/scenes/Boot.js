@@ -224,7 +224,11 @@ export default class BootScene extends Phaser.Scene {
     _makeMachinePlaceholders() {
         this._makeBreakroomBrewerPlaceholder();
         this._makeMechanicBroomPlaceholder();
+        this._makeCryBabyPlaceholder();
+        this._makeRichMfPlaceholder();
+        this._makeJesterInTheBoxPlaceholder();
         this._makeRebelliousUmbrellaPlaceholder();
+        this._makeDebriefMachinePlaceholder();
         this._makeFutureLoungeChairPlaceholder();
     }
 
@@ -264,6 +268,84 @@ export default class BootScene extends Phaser.Scene {
         g.destroy();
     }
 
+    _makeCryBabyPlaceholder() {
+        if (this.textures.exists('machine_cry_baby')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x121b25); g.fillRect(0, 0, 120, 180);
+        g.fillStyle(0x1f2c37); g.fillEllipse(60, 148, 58, 16);
+        g.fillStyle(0x78d9ff); g.fillRoundedRect(30, 36, 60, 56, 16);
+        g.fillStyle(0x17202a); g.fillRoundedRect(36, 42, 48, 42, 12);
+        g.fillStyle(0x7ef6ff); g.fillCircle(48, 58, 7);
+        g.fillStyle(0x7ef6ff); g.fillCircle(72, 58, 7);
+        g.lineStyle(2, 0x7ef6ff, 0.95);
+        g.beginPath(); g.moveTo(48, 76); g.lineTo(60, 84); g.lineTo(72, 76); g.strokePath();
+        g.fillStyle(0x5cc8ff, 0.92); g.fillEllipse(44, 72, 8, 18);
+        g.fillStyle(0x5cc8ff, 0.92); g.fillEllipse(76, 72, 8, 22);
+        g.fillStyle(0x78d9ff); g.fillRoundedRect(40, 90, 40, 40, 14);
+        g.lineStyle(4, 0x425364, 0.94);
+        g.beginPath(); g.moveTo(48, 130); g.lineTo(40, 152); g.strokePath();
+        g.beginPath(); g.moveTo(72, 130); g.lineTo(80, 152); g.strokePath();
+        g.beginPath(); g.moveTo(40, 104); g.lineTo(22, 118); g.strokePath();
+        g.beginPath(); g.moveTo(80, 104); g.lineTo(94, 92); g.strokePath();
+        g.fillStyle(0x78d9ff); g.fillCircle(20, 120, 10);
+        g.fillStyle(0x78d9ff); g.fillCircle(96, 90, 9);
+        g.fillStyle(0xffb24a); g.fillRoundedRect(48, 114, 24, 10, 4);
+        g.lineStyle(3, 0x78d9ff, 0.95);
+        g.beginPath(); g.moveTo(36, 30); g.lineTo(30, 18); g.strokePath();
+        g.beginPath(); g.moveTo(84, 30); g.lineTo(90, 18); g.strokePath();
+        g.fillStyle(0x7ef6ff); g.fillCircle(30, 18, 4);
+        g.fillStyle(0x7ef6ff); g.fillCircle(90, 18, 4);
+        g.generateTexture('machine_cry_baby', 120, 180);
+        g.destroy();
+    }
+
+    _makeRichMfPlaceholder() {
+        if (this.textures.exists('machine_rich_mf')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x161922); g.fillRect(0, 0, 120, 180);
+        g.fillStyle(0x2b3140); g.fillEllipse(60, 152, 56, 18);
+        g.fillStyle(0xd9c38a); g.fillCircle(60, 42, 22);
+        g.fillStyle(0x1a1d24); g.fillRoundedRect(42, 28, 36, 10, 5);
+        g.fillStyle(0x2f9cf0, 0.9); g.fillRect(46, 42, 8, 5); g.fillRect(66, 42, 8, 5);
+        g.lineStyle(3, 0x111111, 0.95); g.lineBetween(52, 62, 68, 62);
+        g.fillStyle(0x59657f); g.fillRoundedRect(34, 68, 52, 56, 12);
+        g.fillStyle(0x7d8ca8); g.fillRoundedRect(22, 80, 18, 48, 8);
+        g.fillStyle(0x7d8ca8); g.fillRoundedRect(80, 76, 18, 52, 8);
+        g.fillStyle(0x95f4ff, 0.82); g.fillRoundedRect(42, 78, 36, 18, 6);
+        g.lineStyle(4, 0x8996af, 0.95);
+        g.beginPath(); g.moveTo(48, 124); g.lineTo(42, 154); g.strokePath();
+        g.beginPath(); g.moveTo(72, 124); g.lineTo(80, 154); g.strokePath();
+        g.fillStyle(0xe7c85e); g.fillRoundedRect(48, 100, 24, 12, 5);
+        g.generateTexture('machine_rich_mf', 120, 180);
+        g.destroy();
+    }
+
+    _makeJesterInTheBoxPlaceholder() {
+        if (this.textures.exists('machine_jester_in_the_box')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x130f18); g.fillRect(0, 0, 120, 180);
+        g.fillStyle(0x2e203c); g.fillEllipse(60, 150, 58, 18);
+        g.fillStyle(0x6a2f2f); g.fillRoundedRect(30, 78, 60, 58, 10);
+        g.lineStyle(3, 0xf6d06f, 0.9); g.strokeRoundedRect(30, 78, 60, 58, 10);
+        g.fillStyle(0x2a202e); g.fillRoundedRect(26, 68, 68, 16, 8);
+        g.lineStyle(4, 0xc5c7cf, 0.92);
+        g.beginPath(); g.moveTo(60, 72); g.lineTo(60, 42); g.strokePath();
+        g.fillStyle(0xf0e3c1); g.fillCircle(60, 30, 16);
+        g.fillStyle(0x16c7ff, 0.9); g.fillCircle(54, 28, 4); g.fillCircle(66, 28, 4);
+        g.fillStyle(0xc33a4a); g.fillCircle(60, 34, 4);
+        g.lineStyle(3, 0x111111, 0.92);
+        g.beginPath(); g.moveTo(52, 40); g.quadraticCurveTo(60, 48, 68, 40); g.strokePath();
+        g.fillStyle(0xe9c15a); g.fillRect(86, 98, 12, 6);
+        g.lineStyle(4, 0xe9c15a, 0.92);
+        g.beginPath(); g.moveTo(96, 101); g.lineTo(104, 92); g.strokePath();
+        g.beginPath(); g.moveTo(96, 101); g.lineTo(104, 110); g.strokePath();
+        g.generateTexture('machine_jester_in_the_box', 120, 180);
+        g.destroy();
+    }
+
     _makeRebelliousUmbrellaPlaceholder() {
         if (this.textures.exists('machine_rebellious_umbrella')) return;
 
@@ -291,6 +373,28 @@ export default class BootScene extends Phaser.Scene {
         g.beginPath(); g.moveTo(94, 52); g.lineTo(80, 28); g.strokePath();
         g.fillStyle(0x0d1116, 0.48); g.fillTriangle(38, 72, 82, 72, 60, 104);
         g.generateTexture('machine_rebellious_umbrella', 120, 180);
+        g.destroy();
+    }
+
+    _makeDebriefMachinePlaceholder() {
+        if (this.textures.exists('machine_debrief_machine')) return;
+
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x111722); g.fillRect(0, 0, 120, 180);
+        g.fillStyle(0x233445); g.fillEllipse(60, 150, 56, 18);
+        g.fillStyle(0x30485a); g.fillRoundedRect(24, 34, 72, 96, 14);
+        g.lineStyle(3, 0x9de7ff, 0.95); g.strokeRoundedRect(24, 34, 72, 96, 14);
+        g.fillStyle(0x0d1219); g.fillRoundedRect(34, 46, 52, 34, 10);
+        g.fillStyle(0x86f3ff, 0.88); g.fillRoundedRect(40, 54, 40, 10, 5);
+        g.lineStyle(2, 0x86f3ff, 0.9);
+        g.beginPath(); g.moveTo(42, 72); g.lineTo(78, 72); g.strokePath();
+        g.beginPath(); g.moveTo(42, 78); g.lineTo(70, 78); g.strokePath();
+        g.fillStyle(0x587086); g.fillRoundedRect(38, 92, 44, 24, 8);
+        g.fillStyle(0xe7c868); g.fillRoundedRect(44, 98, 32, 8, 4);
+        g.lineStyle(4, 0x71879a, 0.95);
+        g.beginPath(); g.moveTo(44, 130); g.lineTo(38, 154); g.strokePath();
+        g.beginPath(); g.moveTo(76, 130); g.lineTo(82, 154); g.strokePath();
+        g.generateTexture('machine_debrief_machine', 120, 180);
         g.destroy();
     }
 

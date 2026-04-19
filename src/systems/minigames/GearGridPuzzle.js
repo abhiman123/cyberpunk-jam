@@ -70,6 +70,9 @@ export default class GearGridPuzzle extends MinigameBase {
         this._puzzle = null;
         this._board = [];
         this._inspectionFaultGfx = null;
+        this._specialAction = null;
+        this._specialActionButton = null;
+        this._specialActionLabel = null;
     }
 
     _defaultEvidence() {
@@ -115,6 +118,7 @@ export default class GearGridPuzzle extends MinigameBase {
         }
 
         this._puzzle = gearPuzzle;
+        this._specialAction = caseData?.specialAction || null;
         this.evidence = {
             ...this._defaultEvidence(),
             ...(gearPuzzle.progress || {}),
@@ -205,6 +209,24 @@ export default class GearGridPuzzle extends MinigameBase {
             this._finalizeAndClose();
         });
 
+        if (this._specialAction) {
+            this._specialActionButton = this.scene.add.rectangle(318, 184, 194, 38, 0x2a4124, 0.95)
+                .setStrokeStyle(2, 0x9de087, 0.9)
+                .setInteractive({ useHandCursor: true });
+            this._specialActionLabel = this.scene.add.text(318, 184, this._specialAction.label || 'SPECIAL', {
+                fontFamily: 'Courier New',
+                fontSize: '13px',
+                color: '#e3ffd9',
+                letterSpacing: 1,
+            }).setOrigin(0.5);
+            this._specialActionButton.on('pointerover', () => this._specialActionButton?.setFillStyle(0x35532d, 0.98));
+            this._specialActionButton.on('pointerout', () => this._specialActionButton?.setFillStyle(0x2a4124, 0.95));
+            this._specialActionButton.on('pointerdown', (_pointer, _localX, _localY, event) => {
+                event?.stopPropagation?.();
+                this._triggerSpecialAction();
+            });
+        }
+
         panel.add([
             frame,
             inner,
@@ -217,9 +239,11 @@ export default class GearGridPuzzle extends MinigameBase {
             this._statusText,
             this._statusHintText,
             this._summaryText,
+            this._specialActionButton,
+            this._specialActionLabel,
             closeBg,
             closeText,
-        ]);
+        ].filter(Boolean));
 
         this.container.add([blocker, panel]);
         this._panel = panel;
@@ -279,6 +303,9 @@ export default class GearGridPuzzle extends MinigameBase {
         this._panel = null;
         this._inspectionFaultGfx = null;
         this._legendContainer = null;
+        this._specialAction = null;
+        this._specialActionButton = null;
+        this._specialActionLabel = null;
         this._puzzle = null;
         this._board = [];
     }
@@ -1050,6 +1077,25 @@ export default class GearGridPuzzle extends MinigameBase {
         }, pieces);
         this._puzzle.progress = snapshot;
         this.emitEvidence(snapshot);
+    }
+
+    _triggerSpecialAction() {
+        if (!this._specialAction?.onTrigger) return;
+
+        this._persistProgress();
+        const result = this._specialAction.onTrigger({
+            evidence: { ...this.evidence },
+            gearPuzzle: this._puzzle,
+        });
+        if (!result) return;
+
+        if (result.evidence) {
+            this.emitEvidence(result.evidence);
+        }
+
+        if (result.closeAfter) {
+            this.close();
+        }
     }
 
     _persistProgress() {

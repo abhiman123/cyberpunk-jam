@@ -34,6 +34,9 @@ export default class MachinePuzzleOverlay {
         this._currentPulseTween = null;
         this._currentPulseState = null;
         this._powerEffectsSuspended = false;
+        this._specialAction = null;
+        this._specialActionButtonBg = null;
+        this._specialActionButtonText = null;
 
         this._handlePointerMove = this._handlePointerMove.bind(this);
         this._handlePointerUp = this._handlePointerUp.bind(this);
@@ -109,9 +112,29 @@ export default class MachinePuzzleOverlay {
             letterSpacing: 2,
         }).setOrigin(0.5);
 
+        this._specialActionButtonBg = this.scene.add.rectangle(-(panelWidth / 2) + 112, (panelHeight / 2) - 34, 184, 42, 0x27321f, 1)
+            .setStrokeStyle(2, 0xa9d26f, 0.92)
+            .setInteractive({ useHandCursor: true })
+            .setVisible(false);
+        this._specialActionButtonText = this.scene.add.text(-(panelWidth / 2) + 112, (panelHeight / 2) - 34, 'SPECIAL', {
+            fontFamily: 'Courier New',
+            fontSize: '15px',
+            color: '#e7ffd5',
+            letterSpacing: 1,
+        }).setOrigin(0.5).setVisible(false);
+
         backButtonBg.on('pointerover', () => backButtonBg.setFillStyle(0x4f2f22, 1));
         backButtonBg.on('pointerout', () => backButtonBg.setFillStyle(0x3a241d, 1));
         backButtonBg.on('pointerdown', () => this.close());
+        this._specialActionButtonBg.on('pointerover', () => {
+            if (!this._specialAction) return;
+            this._specialActionButtonBg.setFillStyle(0x324326, 1);
+        });
+        this._specialActionButtonBg.on('pointerout', () => {
+            if (!this._specialAction) return;
+            this._specialActionButtonBg.setFillStyle(0x27321f, 1);
+        });
+        this._specialActionButtonBg.on('pointerdown', () => this._triggerSpecialAction());
 
         this._panel.add([
             frame,
@@ -129,6 +152,8 @@ export default class MachinePuzzleOverlay {
             this._dominoLayer,
             this._equalLinkGfx,
             this._messageText,
+            this._specialActionButtonBg,
+            this._specialActionButtonText,
             backButtonBg,
             backButtonText,
         ]);
@@ -152,6 +177,7 @@ export default class MachinePuzzleOverlay {
 
         this._titleText.setText(`${machineVariant.name.toUpperCase()} GRID`);
         this._subtitleText.setText(subtitle || 'Align the charge cells and clear the unit.');
+        this._refreshSpecialAction();
 
         this._root.setVisible(true);
         this._panel.setScale(0.97);
@@ -177,7 +203,10 @@ export default class MachinePuzzleOverlay {
             alpha: 0,
             duration: 160,
             ease: 'Quad.In',
-            onComplete: () => this._root.setVisible(false),
+            onComplete: () => {
+                this._root.setVisible(false);
+                this._callbacks.onClose?.(this._machineVariant, this._puzzleState);
+            },
         });
         this.scene.tweens.add({ targets: this._panel, scaleX: 0.97, scaleY: 0.97, duration: 160, ease: 'Quad.In' });
     }
@@ -373,6 +402,14 @@ export default class MachinePuzzleOverlay {
             stroke: '#24412c',
             strokeThickness: 2,
         }).setOrigin(0.5).setVisible(false);
+        const centerLabel = this.scene.add.text(0, 0, '', {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#fff3ec',
+            stroke: '#3b0909',
+            strokeThickness: 3,
+            letterSpacing: 1,
+        }).setOrigin(0.5).setVisible(false);
         const bottomLabel = this.scene.add.text(0, MACHINE_PUZZLE.dominoHeight / 4, '', {
             fontFamily: 'Courier New',
             fontSize: '16px',
@@ -389,7 +426,7 @@ export default class MachinePuzzleOverlay {
             0.001,
         ).setInteractive({ useHandCursor: true });
 
-        container.add([hoverGlow, graphics, topLabel, bottomLabel, inputZone]);
+        container.add([hoverGlow, graphics, topLabel, centerLabel, bottomLabel, inputZone]);
         this._dominoLayer.add(container);
 
         const dominoView = {
@@ -400,6 +437,7 @@ export default class MachinePuzzleOverlay {
             hoverGlow,
             graphics,
             topLabel,
+            centerLabel,
             bottomLabel,
             slot,
             previousState: null,
@@ -421,24 +459,54 @@ export default class MachinePuzzleOverlay {
         const height = MACHINE_PUZZLE.dominoHeight;
         const { firstGlow, secondGlow, globalGlow } = this._getDominoGlowState(dominoView);
         const emphasisActive = globalGlow || dominoView.isFloating || dominoView.isHovered;
+        const isClownDomino = dominoView.dominoState.variant === 'clown';
+        const hoverFillColor = isClownDomino ? 0xff9f9a : 0xd8ff95;
+        const hoverStrokeColor = isClownDomino ? 0xffe0dc : 0xf2ffd0;
+        const baseFillColor = isClownDomino ? 0xb42222 : 0x2ca55e;
+        const baseStrokeColor = emphasisActive
+            ? (isClownDomino ? 0xffece8 : 0xf5ffd3)
+            : (isClownDomino ? 0xffc1b8 : 0xd7ffde);
+        const glossColor = isClownDomino ? 0xffd1c9 : 0xffffff;
+        const dividerColor = isClownDomino ? 0x6f1111 : 0x1d5f33;
+        const pipGlowColor = isClownDomino ? 0xffd7d2 : 0xfff2a3;
+        const pipColor = isClownDomino ? 0xfff0eb : 0xf4d850;
 
         dominoView.graphics.clear();
-        dominoView.hoverGlow.setFillStyle(0xd8ff95, globalGlow ? 0.18 : dominoView.isFloating ? 0.16 : dominoView.isHovered ? 0.12 : 0);
-        dominoView.hoverGlow.setStrokeStyle(2, 0xf2ffd0, globalGlow ? 0.75 : dominoView.isFloating ? 0.62 : dominoView.isHovered ? 0.42 : 0);
+        dominoView.hoverGlow.setFillStyle(hoverFillColor, globalGlow ? 0.18 : dominoView.isFloating ? 0.16 : dominoView.isHovered ? 0.12 : 0);
+        dominoView.hoverGlow.setStrokeStyle(2, hoverStrokeColor, globalGlow ? 0.75 : dominoView.isFloating ? 0.62 : dominoView.isHovered ? 0.42 : 0);
 
         dominoView.graphics.fillStyle(0x102214, 0.2);
         dominoView.graphics.fillRoundedRect(-width / 2 + 4, -height / 2 + 6, width, height, 14);
-        dominoView.graphics.fillStyle(0x2ca55e, 1);
+        dominoView.graphics.fillStyle(baseFillColor, 1);
         dominoView.graphics.fillRoundedRect(-width / 2, -height / 2, width, height, 14);
-        dominoView.graphics.lineStyle(2, emphasisActive ? 0xf5ffd3 : 0xd7ffde, emphasisActive ? 1 : 0.9);
+        dominoView.graphics.lineStyle(2, baseStrokeColor, emphasisActive ? 1 : 0.9);
         dominoView.graphics.strokeRoundedRect(-width / 2, -height / 2, width, height, 14);
-        dominoView.graphics.fillStyle(0xffffff, 0.08);
+        dominoView.graphics.fillStyle(glossColor, isClownDomino ? 0.12 : 0.08);
         dominoView.graphics.fillRoundedRect(-(width / 2) + 6, -(height / 2) + 6, width - 12, 18, 10);
-        dominoView.graphics.fillStyle(0x1d5f33, 1);
+        dominoView.graphics.fillStyle(dividerColor, 1);
         dominoView.graphics.fillRect(-(width / 2) + 8, -1, width - 16, 2);
 
-        this._drawPips(dominoView.graphics, dominoView.dominoState.firstOptionAmount, true, firstGlow || globalGlow);
-        this._drawPips(dominoView.graphics, dominoView.dominoState.secondOptionAmount, false, secondGlow || globalGlow);
+        this._drawPips(dominoView.graphics, dominoView.dominoState.firstOptionAmount, true, firstGlow || globalGlow, pipGlowColor, pipColor);
+        this._drawPips(dominoView.graphics, dominoView.dominoState.secondOptionAmount, false, secondGlow || globalGlow, pipGlowColor, pipColor);
+
+        if (isClownDomino) {
+            dominoView.graphics.fillStyle(0xfff6f4, 0.9);
+            dominoView.graphics.fillCircle(0, 0, 16);
+            dominoView.graphics.fillStyle(0x59c3ff, 0.95);
+            dominoView.graphics.fillCircle(-6, -4, 3);
+            dominoView.graphics.fillCircle(6, -4, 3);
+            dominoView.graphics.fillStyle(0xff5252, 0.98);
+            dominoView.graphics.fillCircle(0, 1, 4);
+            dominoView.graphics.lineStyle(2, 0x7c0c0c, 0.95);
+            dominoView.graphics.beginPath();
+            dominoView.graphics.moveTo(-7, 8);
+            dominoView.graphics.lineTo(0, 12);
+            dominoView.graphics.lineTo(7, 8);
+            dominoView.graphics.strokePath();
+            dominoView.centerLabel.setVisible(true).setText('HA');
+        } else {
+            dominoView.centerLabel.setVisible(false).setText('');
+        }
 
         if (dominoView.dominoState.firstOptionAmount > 9) {
             dominoView.topLabel.setVisible(true).setText(String(dominoView.dominoState.firstOptionAmount));
@@ -453,7 +521,7 @@ export default class MachinePuzzleOverlay {
         }
     }
 
-    _drawPips(graphics, count, isTopHalf, shouldGlow) {
+    _drawPips(graphics, count, isTopHalf, shouldGlow, glowColor = 0xfff2a3, pipColor = 0xf4d850) {
         if (!count || count <= 0) return;
 
         const localPositions = [
@@ -472,14 +540,14 @@ export default class MachinePuzzleOverlay {
         const pipCount = Math.min(count, localPositions.length);
 
         if (shouldGlow) {
-            graphics.fillStyle(0xfff2a3, 0.32);
+            graphics.fillStyle(glowColor, 0.32);
             for (let index = 0; index < pipCount; index++) {
                 const pip = localPositions[index];
                 graphics.fillCircle(pip.x, sectionOffsetY + pip.y, 9);
             }
         }
 
-        graphics.fillStyle(0xf4d850, 1);
+        graphics.fillStyle(pipColor, 1);
         for (let index = 0; index < pipCount; index++) {
             const pip = localPositions[index];
             graphics.fillCircle(pip.x, sectionOffsetY + pip.y, 5);
@@ -975,6 +1043,7 @@ export default class MachinePuzzleOverlay {
             && this._puzzleState.inspectionFault.col === cellView.col
             ? this._puzzleState.inspectionFault
             : null;
+        const clownCorrupted = Boolean(this._puzzleState.clownCorruption);
 
         let fillColor = 0x2c241f;
         let strokeColor = 0x6a5643;
@@ -1012,6 +1081,11 @@ export default class MachinePuzzleOverlay {
         } else if (isPlaced) {
             fillColor = 0x39af67;
             strokeColor = 0xe8f9b9;
+        }
+
+        if (clownCorrupted && baseValue !== CELL_WALL && !inspectionFault) {
+            fillColor = isPlaced ? 0x9f2525 : 0x5d1919;
+            strokeColor = 0xffa39c;
         }
 
         cellView.baseRect.setFillStyle(fillColor, 1);
@@ -1444,6 +1518,53 @@ export default class MachinePuzzleOverlay {
 
     _notifyGridChanged() {
         this._callbacks.onPuzzleChanged?.(this._machineVariant, this._puzzleState);
+        this._refreshSpecialAction();
+    }
+
+    _refreshSpecialAction() {
+        const action = this._callbacks.getSpecialAction?.(this._machineVariant, this._puzzleState) || null;
+        this._specialAction = action;
+
+        if (!this._specialActionButtonBg || !this._specialActionButtonText) return;
+
+        if (!action) {
+            this._specialActionButtonBg.setVisible(false);
+            this._specialActionButtonText.setVisible(false);
+            return;
+        }
+
+        this._specialActionButtonBg
+            .setVisible(true)
+            .setFillStyle(action.fillColor ?? 0x27321f, 1)
+            .setStrokeStyle(2, action.strokeColor ?? 0xa9d26f, 0.92);
+        this._specialActionButtonText
+            .setVisible(true)
+            .setText(action.label || 'SPECIAL')
+            .setColor(action.labelColor || '#e7ffd5');
+    }
+
+    _triggerSpecialAction() {
+        if (!this._specialAction?.onTrigger) return;
+
+        const result = this._specialAction.onTrigger({
+            machineVariant: this._machineVariant,
+            puzzleState: this._puzzleState,
+        });
+
+        if (!result) return;
+
+        if (result.message) {
+            this._showMessage(result.message);
+        }
+
+        if (result.refreshAfter) {
+            this._layoutPuzzle();
+            this._refreshSpecialAction();
+        }
+
+        if (result.closeAfter) {
+            this.close();
+        }
     }
 
     _showMessage(message) {

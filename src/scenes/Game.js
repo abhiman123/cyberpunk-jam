@@ -9,6 +9,7 @@ import {
     FIRST_SHIFT_INTRO,
     MACHINE_PRESENTATION,
     SHIFT_CLOCK,
+    SHIFT_DURATION_MS,
     SHIFT_DURATION_MS_BY_PERIOD,
     SOUND_ASSETS,
     SOUND_VOLUMES,
@@ -27,6 +28,12 @@ import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
 const UMBRELLA_REBELLION_RULE_ID = 101;
+const UMBRELLA_PART_PORTS = Object.freeze({
+    circuit: 'grid',
+    wire: 'flow',
+    gear: 'gear',
+    data: 'code',
+});
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -35,12 +42,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     create() {
-        const { period, day } = GameState;
+        const legacyCursor = GameState.getLegacyContentCursor();
 
         const allCases = this.cache.json.get('cases');
         const allRules = this.cache.json.get('rules');
         const schedule = this.cache.json.get('schedule');
-        const schedEntry = schedule.find((entry) => entry.period === period && entry.day === day);
+        const schedEntry = schedule.find((entry) => entry.period === legacyCursor.period && entry.day === legacyCursor.day);
         const baseIds = schedEntry ? schedEntry.caseIds : [];
 
         this._baseQueue = baseIds.map((id) => allCases.find((item) => item.id === id)).filter(Boolean);
@@ -61,8 +68,14 @@ export default class GameScene extends Phaser.Scene {
         this._lastTypeBeepAt = 0;
         this._miniMachinePanelVisible = false;
         this._miniMachinePanelHoverPort = null;
+        this._machineSpeechBubbleHistory = [];
+        this._activeMachineSpeechBubbleIndex = -1;
+        this._pendingKonamiFinalCase = null;
+        this._purpleCircuitDeskItem = null;
+        this._umbrellaDeskItemMap = new Map();
+        this._umbrellaPartCheckType = null;
 
-        this._shiftDuration = SHIFT_DURATION_MS_BY_PERIOD[period] || SHIFT_DURATION_MS_BY_PERIOD[1];
+        this._shiftDuration = SHIFT_DURATION_MS;
         this._elapsed = 0;
         this._shiftRunning = false;
         this._musicPhase = 1;
@@ -125,6 +138,8 @@ export default class GameScene extends Phaser.Scene {
         this._deskItems = [];
         this._selectedDeskItem = null;
         this._deskItemIntent = null;
+        this._jesterDeskTokenItem = null;
+        this._currentUnitJitterTween = null;
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
@@ -144,6 +159,8 @@ export default class GameScene extends Phaser.Scene {
         this._buildPhonePanel();
         this._machinePuzzleOverlay = new MachinePuzzleOverlay(this, {
             onPuzzleChanged: (machineVariant, puzzleState) => this._handlePuzzleStateChanged(machineVariant, puzzleState),
+            onClose: (machineVariant, puzzleState) => this._handleMachinePuzzleClosed(machineVariant, puzzleState),
+            getSpecialAction: (machineVariant) => this._getUmbrellaGridSpecialAction(machineVariant),
         });
         this._otherPuzzleOverlay = new CircuitRouting(this, { depth: 360 });
         this._otherPuzzleOverlay.onClose = (evidence) => this._handleOtherPuzzleClosed(evidence);
@@ -153,7 +170,9 @@ export default class GameScene extends Phaser.Scene {
         this._debugPuzzleOverlay.onClose = (evidence) => this._handleDebugPuzzleClosed(evidence);
         this.input.keyboard?.on('keydown', this._handleKonamiKey);
 
-        const newRuleIds = allRules.filter((rule) => rule.period === period).map((rule) => rule.id);
+        const newRuleIds = GameState.day <= 3
+            ? allRules.filter((rule) => rule.period === GameState.day).map((rule) => rule.id)
+            : [];
         this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds, {
             canToggle: () => this._canOpenRulebookOverlay(),
             onOpen: () => this._setGameplayPaused(true),
@@ -243,7 +262,7 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer.add([topBarShadow, topBar, topBarInner, topBarPocket, topStrip]);
 
         this._hudPeriodText = this.add.text(12, 14,
-            `DAY ${GameState.period}  |  SHIFT ${GameState.day}`, {
+            `DAY ${GameState.day}`, {
                 fontFamily: 'Courier New', fontSize: '11px', color: '#cccccc',
             }
         );
@@ -334,7 +353,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _buildDeskSurface() {
-        
+
         const deskBase = this.add.rectangle(0, 0, this.scale.width, 172, 0x4b4338).setOrigin(0, 0).setStrokeStyle(2, 0x7c745f, 0.92);
         const deskInset = this.add.rectangle(50, 30, 270, 112, 0x3a342d, 0.72).setOrigin(0, 0).setStrokeStyle(1, 0x6b6252, 0.55);
 
@@ -384,6 +403,48 @@ export default class GameScene extends Phaser.Scene {
             angle: -8,
             width: 118,
             height: 76,
+        });
+        this._createJesterDeskTokenItem({
+            x: 560,
+            y: 624,
+            angle: -4,
+            width: 54,
+            height: 94,
+        });
+        this._createPurpleCircuitDeskItem({
+            x: 624,
+            y: 624,
+            angle: 4,
+            width: 58,
+            height: 94,
+        });
+        this._createUmbrellaDeskPartItem('gear', {
+            x: 650,
+            y: 625,
+            angle: -6,
+            width: 64,
+            height: 64,
+        });
+        this._createUmbrellaDeskPartItem('circuit', {
+            x: 726,
+            y: 626,
+            angle: 3,
+            width: 58,
+            height: 90,
+        });
+        this._createUmbrellaDeskPartItem('wire', {
+            x: 804,
+            y: 626,
+            angle: -2,
+            width: 94,
+            height: 54,
+        });
+        this._createUmbrellaDeskPartItem('data', {
+            x: 900,
+            y: 625,
+            angle: 5,
+            width: 68,
+            height: 52,
         });
 
         this._hudContainer.add(this._deskContainer);
@@ -463,6 +524,236 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
+    _createJesterDeskTokenItem(options = {}) {
+        const width = options.width || 54;
+        const height = options.height || 94;
+
+        const item = this._createDeskItem('jester_clown_token', {
+            ...options,
+            width,
+            height,
+            allowRotate: false,
+            selectedScale: 1,
+            dragScale: 1,
+            customType: 'jester-token',
+            buildVisual: () => {
+                const liftShadow = this.add.ellipse(6, 10, width + 12, height + 8, 0x000000, 0.18);
+                const focusGlow = this.add.rectangle(0, 0, width + 20, height + 20, 0xffb1ac, 0)
+                    .setStrokeStyle(2, 0xffe0dc, 0);
+                const backPlate = this.add.rectangle(0, 0, width, height, 0x3f0a0a, 1)
+                    .setStrokeStyle(2, 0xf0b7a9, 0.78);
+                const facePlate = this.add.rectangle(0, 0, width - 8, height - 8, 0xba2424, 1)
+                    .setStrokeStyle(1, 0xffe3dc, 0.52);
+                const gloss = this.add.rectangle(0, -(height / 2) + 12, width - 14, 12, 0xffffff, 0.1);
+                const divider = this.add.rectangle(0, 0, width - 16, 2, 0x6d1010, 1);
+                const face = this.add.circle(0, 0, 15, 0xfff6f4, 0.92)
+                    .setStrokeStyle(1, 0x6d1010, 0.42);
+                const eyeLeft = this.add.circle(-6, -4, 3, 0x61c7ff, 0.98);
+                const eyeRight = this.add.circle(6, -4, 3, 0x61c7ff, 0.98);
+                const nose = this.add.circle(0, 1, 4, 0xff5353, 0.98);
+                const grin = this.add.text(0, 13, 'HA', {
+                    fontFamily: 'Courier New',
+                    fontSize: '11px',
+                    color: '#fff0ea',
+                    stroke: '#5c0d0d',
+                    strokeThickness: 3,
+                    letterSpacing: 1,
+                }).setOrigin(0.5);
+
+                return {
+                    nodes: [liftShadow, focusGlow, backPlate, facePlate, gloss, divider, face, eyeLeft, eyeRight, nose, grin],
+                    frame: backPlate,
+                    focusGlow,
+                    liftShadow,
+                };
+            },
+        });
+
+        item.homePosition = {
+            x: options.x,
+            y: options.y,
+            angle: options.angle || 0,
+        };
+        item.container.setVisible(false);
+        if (item.inputZone?.input) {
+            item.inputZone.input.enabled = false;
+        }
+        this._jesterDeskTokenItem = item;
+        return item;
+    }
+
+    _createPurpleCircuitDeskItem(options = {}) {
+        const width = options.width || 58;
+        const height = options.height || 94;
+
+        const item = this._createDeskItem('purple_circuit_token', {
+            ...options,
+            width,
+            height,
+            allowRotate: false,
+            selectedScale: 1,
+            dragScale: 1,
+            customType: 'purple-circuit',
+            buildVisual: () => {
+                const liftShadow = this.add.ellipse(6, 10, width + 12, height + 8, 0x000000, 0.18);
+                const focusGlow = this.add.rectangle(0, 0, width + 22, height + 22, 0xc98dff, 0)
+                    .setStrokeStyle(2, 0xf1dcff, 0);
+                const backPlate = this.add.rectangle(0, 0, width, height, 0x241138, 1)
+                    .setStrokeStyle(2, 0xe4c5ff, 0.82);
+                const facePlate = this.add.rectangle(0, 0, width - 8, height - 8, 0x6d2fc7, 1)
+                    .setStrokeStyle(1, 0xf1e6ff, 0.58);
+                const gloss = this.add.rectangle(0, -(height / 2) + 12, width - 14, 12, 0xffffff, 0.12);
+                const divider = this.add.rectangle(0, 0, width - 16, 2, 0x3f1873, 1);
+                const halo = this.add.circle(0, 0, 16, 0xf5e8ff, 0.18)
+                    .setStrokeStyle(1, 0xf2dcff, 0.42);
+                const core = this.add.circle(0, 0, 10, 0xc47bff, 1)
+                    .setStrokeStyle(1, 0xfff3ff, 0.72);
+                const glyph = this.add.text(0, 12, 'VOID', {
+                    fontFamily: 'Courier New',
+                    fontSize: '10px',
+                    color: '#fff2ff',
+                    stroke: '#3f1873',
+                    strokeThickness: 3,
+                    letterSpacing: 1,
+                }).setOrigin(0.5);
+
+                return {
+                    nodes: [liftShadow, focusGlow, backPlate, facePlate, gloss, divider, halo, core, glyph],
+                    frame: backPlate,
+                    focusGlow,
+                    liftShadow,
+                };
+            },
+        });
+
+        item.homePosition = {
+            x: options.x,
+            y: options.y,
+            angle: options.angle || 0,
+        };
+        item.container.setVisible(false);
+        if (item.inputZone?.input) {
+            item.inputZone.input.enabled = false;
+        }
+        this._purpleCircuitDeskItem = item;
+        return item;
+    }
+
+    _createUmbrellaDeskPartItem(partType, options = {}) {
+        const width = options.width || 64;
+        const height = options.height || 64;
+        const paletteByType = {
+            gear: { fill: 0x938b7b, accent: 0xffd68d, stroke: 0x5a5248, label: 'GEAR' },
+            circuit: { fill: 0x214231, accent: 0x90ffb6, stroke: 0x7fd9a2, label: 'CIR' },
+            wire: { fill: 0x2f2438, accent: 0xffa0cb, stroke: 0x8cd6ff, label: 'WIRE' },
+            data: { fill: 0x1d2d41, accent: 0x8fdcff, stroke: 0xc5f0ff, label: 'USB' },
+        };
+        const palette = paletteByType[partType] || paletteByType.gear;
+
+        const item = this._createDeskItem(`umbrella_${partType}_stash`, {
+            ...options,
+            width,
+            height,
+            allowRotate: false,
+            selectedScale: 1.02,
+            dragScale: 1.06,
+            customType: 'umbrella-part',
+            partType,
+            buildVisual: () => {
+                const liftShadow = this.add.ellipse(6, 8, width + 10, height - 6, 0x000000, 0.16);
+                const focusGlow = this.add.rectangle(0, 0, width + 18, height + 18, palette.accent, 0)
+                    .setStrokeStyle(2, palette.accent, 0);
+                const frame = this.add.rectangle(0, 0, width, height, palette.fill, 0.96)
+                    .setStrokeStyle(2, palette.stroke, 0.72);
+                const matte = this.add.rectangle(0, 0, width - 10, height - 10, 0x111317, 0.36)
+                    .setStrokeStyle(1, 0xffffff, 0.06);
+                const icon = this.add.graphics();
+
+                if (partType === 'gear') {
+                    icon.fillStyle(0xc5bda9, 1);
+                    icon.fillCircle(0, 0, 15);
+                    for (let index = 0; index < 8; index++) {
+                        const angle = Phaser.Math.DegToRad(index * 45);
+                        icon.fillRect(
+                            Math.cos(angle) * 16 - 3,
+                            Math.sin(angle) * 16 - 6,
+                            6,
+                            12,
+                        );
+                    }
+                    icon.fillStyle(0x3d3429, 1);
+                    icon.fillCircle(0, 0, 6);
+                } else if (partType === 'circuit') {
+                    icon.fillStyle(0x48c96b, 1);
+                    icon.fillRoundedRect(-16, -26, 32, 52, 8);
+                    icon.lineStyle(2, 0xcffff0, 0.9);
+                    icon.strokeRoundedRect(-16, -26, 32, 52, 8);
+                    icon.lineStyle(2, 0x143221, 0.95);
+                    icon.lineBetween(-8, -14, 8, -14);
+                    icon.lineBetween(-8, 0, 8, 0);
+                    icon.lineBetween(-8, 14, 8, 14);
+                    icon.lineStyle(1, 0x0b2015, 0.9);
+                    icon.lineBetween(-12, -20, -12, 20);
+                    icon.lineBetween(12, -20, 12, 20);
+                } else if (partType === 'wire') {
+                    icon.lineStyle(4, 0x8cd6ff, 0.92);
+                    icon.beginPath();
+                    icon.moveTo(-34, 0);
+                    icon.lineTo(-12, -12);
+                    icon.lineTo(8, 10);
+                    icon.lineTo(30, -4);
+                    icon.strokePath();
+                    icon.fillStyle(0xffb4d2, 1);
+                    icon.fillCircle(-34, 0, 5);
+                    icon.fillCircle(30, -4, 5);
+                } else {
+                    icon.fillStyle(0x7fcaff, 1);
+                    icon.fillRoundedRect(-20, -12, 40, 24, 6);
+                    icon.lineStyle(2, 0xe2f7ff, 0.9);
+                    icon.strokeRoundedRect(-20, -12, 40, 24, 6);
+                    icon.fillStyle(0x16263d, 1);
+                    icon.fillRect(-8, -6, 16, 12);
+                    icon.fillStyle(0xb5e6ff, 1);
+                    icon.fillRect(10, -4, 6, 8);
+                }
+
+                const label = this.add.text(0, (height / 2) - 10, palette.label, {
+                    fontFamily: 'Courier New',
+                    fontSize: '10px',
+                    color: '#f6f2ea',
+                    letterSpacing: 1,
+                }).setOrigin(0.5);
+                const countLabel = this.add.text((width / 2) - 10, -(height / 2) + 10, 'x0', {
+                    fontFamily: 'Courier New',
+                    fontSize: '14px',
+                    color: '#fff5cf',
+                    stroke: '#000000',
+                    strokeThickness: 3,
+                }).setOrigin(0.5);
+
+                return {
+                    nodes: [liftShadow, focusGlow, frame, matte, icon, label, countLabel],
+                    frame,
+                    focusGlow,
+                    liftShadow,
+                    countLabel,
+                };
+            },
+        });
+
+        item.homePosition = {
+            x: options.x,
+            y: options.y,
+            angle: options.angle || 0,
+        };
+        item.container.setVisible(false);
+        if (item.inputZone?.input) {
+            item.inputZone.input.enabled = false;
+        }
+        this._umbrellaDeskItemMap.set(partType, item);
+        return item;
+    }
+
     _createDeskItem(itemId, options = {}) {
         const width = options.width || 62;
         const height = options.height || 48;
@@ -489,9 +780,17 @@ export default class GameScene extends Phaser.Scene {
             selectedScale: options.selectedScale ?? 1.06,
             dragScale: options.dragScale ?? 1.12,
             onActivate: options.onActivate || null,
+            customType: options.customType || null,
+            partType: options.partType || null,
             focusGlow: builtVisual.focusGlow || null,
             liftShadow: builtVisual.liftShadow || null,
             frame: builtVisual.frame || null,
+            countLabel: builtVisual.countLabel || null,
+            homePosition: {
+                x: options.x,
+                y: options.y,
+                angle: options.angle || 0,
+            },
         };
 
         if (!GameState.deskPhotoLayout) {
@@ -555,6 +854,21 @@ export default class GameScene extends Phaser.Scene {
             this._refreshDeskItemVisual(intent.item);
         }
 
+        if (intent.item.customType === 'jester-token') {
+            this._handleJesterDeskTokenPointerMove(pointer, intent);
+            return;
+        }
+
+        if (intent.item.customType === 'purple-circuit') {
+            this._handlePurpleCircuitDeskTokenPointerMove(pointer, intent);
+            return;
+        }
+
+        if (intent.item.customType === 'umbrella-part' && this._canDeployUmbrellaDeskPart(intent.item)) {
+            this._handleUmbrellaDeskPartPointerMove(pointer, intent);
+            return;
+        }
+
         const bounds = this._deskPhotoBounds;
         const nextX = containerLocalX + intent.offsetX;
         const nextY = containerLocalY + intent.offsetY;
@@ -570,6 +884,21 @@ export default class GameScene extends Phaser.Scene {
         if (pointer?.id !== undefined && pointer.id !== intent.pointerId) return;
 
         this._deskItemIntent = null;
+
+        if (intent.item.customType === 'jester-token' && intent.dragging) {
+            this._handleJesterDeskTokenPointerUp(pointer, intent);
+            return;
+        }
+
+        if (intent.item.customType === 'purple-circuit' && intent.dragging) {
+            this._handlePurpleCircuitDeskTokenPointerUp(pointer, intent);
+            return;
+        }
+
+        if (intent.item.customType === 'umbrella-part' && intent.dragging && this._canDeployUmbrellaDeskPart(intent.item)) {
+            this._handleUmbrellaDeskPartPointerUp(pointer, intent);
+            return;
+        }
 
         if (intent.dragging) {
             intent.item.dragging = false;
@@ -666,6 +995,276 @@ export default class GameScene extends Phaser.Scene {
             y: item.container.y,
             angle: item.container.angle,
         };
+    }
+
+    _setDeskItemVisible(item, visible) {
+        if (!item) return;
+
+        const isVisible = Boolean(visible);
+        item.container.setVisible(isVisible);
+        if (item.inputZone?.input) {
+            item.inputZone.input.enabled = isVisible;
+        }
+
+        if (!isVisible) {
+            item.dragging = false;
+            this._setDeskItemSelected(item, false);
+            item.container
+                .setPosition(item.homePosition?.x ?? item.container.x, item.homePosition?.y ?? item.container.y)
+                .setAngle(item.homePosition?.angle ?? 0)
+                .setScale(1);
+        }
+    }
+
+    _syncJesterDeskTokenVisibility() {
+        const deal = GameState.jesterDeal;
+        this._setDeskItemVisible(this._jesterDeskTokenItem, Boolean(deal?.active && deal?.tokenAvailable));
+    }
+
+    _syncPurpleCircuitDeskTokenVisibility() {
+        this._setDeskItemVisible(this._purpleCircuitDeskItem, GameState.hasSpecialItem('purple_circuit'));
+    }
+
+    _syncUmbrellaDeskInventory() {
+        const quest = this._getUmbrellaQuest();
+        const counts = quest?.collectedParts || {};
+
+        this._umbrellaDeskItemMap.forEach((item, partType) => {
+            const count = Math.max(0, Number(counts?.[partType] || 0));
+            if (item.countLabel) {
+                item.countLabel.setText(`x${count}`);
+            }
+            this._setDeskItemVisible(item, count > 0);
+        });
+    }
+
+    _canDeployUmbrellaDeskPart(item) {
+        if (!item?.partType) return false;
+        if (!this._isUmbrellaAssemblyMachine(this._currentMachineVariant)) return false;
+        return this._getUmbrellaPartInventoryCount(item.partType) > 0;
+    }
+
+    _handleUmbrellaDeskPartPointerMove(pointer, intent) {
+        const item = intent.item;
+        const nextX = Phaser.Math.Clamp(pointer.x + intent.offsetX, 40, 1240);
+        const nextY = Phaser.Math.Clamp(pointer.y + intent.offsetY, 70, 690);
+        const liftLine = this._deskPhotoBounds?.y ?? 568;
+        const liftProgress = Phaser.Math.Clamp((liftLine - nextY) / 220, 0, 1);
+        const dragScale = Phaser.Math.Linear(0.94, 1.28, liftProgress);
+
+        item.container.setPosition(nextX, nextY);
+        item.container.setScale(dragScale);
+        item.focusGlow?.setAlpha(0.1 + (liftProgress * 0.16));
+        item.liftShadow?.setAlpha(0.22 + (liftProgress * 0.08));
+    }
+
+    _handleUmbrellaDeskPartPointerUp(pointer, intent) {
+        const item = intent.item;
+        const expectedTarget = UMBRELLA_PART_PORTS[item.partType] || null;
+        const dropTarget = this._getMiniPortDropTarget(pointer?.x ?? item.container.x, pointer?.y ?? item.container.y);
+
+        item.dragging = false;
+
+        if (dropTarget && dropTarget === expectedTarget && this._applyUmbrellaPartToCurrentMachine(item.partType)) {
+            this._setDeskItemSelected(item, false);
+            this._returnDeskItemToHome(item);
+            return;
+        }
+
+        const wrongPortMessage = dropTarget && dropTarget !== expectedTarget
+            ? `WRONG PORT // ${String(expectedTarget || '').toUpperCase()} ONLY`
+            : `DROP ${String(item.partType || '').toUpperCase()} ON ${String(expectedTarget || '').toUpperCase()}`;
+        this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.5 });
+        this._showFeedback(wrongPortMessage, '#ff7f73');
+        this._returnDeskItemToHome(item, { shake: true });
+    }
+
+    _handleJesterDeskTokenPointerMove(pointer, intent) {
+        const item = intent.item;
+        const nextX = Phaser.Math.Clamp(pointer.x + intent.offsetX, 40, 1240);
+        const nextY = Phaser.Math.Clamp(pointer.y + intent.offsetY, 70, 690);
+        const liftLine = this._deskPhotoBounds?.y ?? 568;
+        const liftProgress = Phaser.Math.Clamp((liftLine - nextY) / 220, 0, 1);
+        const dragScale = Phaser.Math.Linear(0.84, 1.42, liftProgress);
+
+        item.container.setPosition(nextX, nextY);
+        item.container.setScale(dragScale);
+        item.focusGlow?.setAlpha(0.14 + (liftProgress * 0.16));
+        item.liftShadow?.setAlpha(0.22 + (liftProgress * 0.08));
+    }
+
+    _handlePurpleCircuitDeskTokenPointerMove(pointer, intent) {
+        const item = intent.item;
+        const nextX = Phaser.Math.Clamp(pointer.x + intent.offsetX, 40, 1240);
+        const nextY = Phaser.Math.Clamp(pointer.y + intent.offsetY, 70, 690);
+        const liftLine = this._deskPhotoBounds?.y ?? 568;
+        const liftProgress = Phaser.Math.Clamp((liftLine - nextY) / 220, 0, 1);
+        const dragScale = Phaser.Math.Linear(0.84, 1.42, liftProgress);
+
+        item.container.setPosition(nextX, nextY);
+        item.container.setScale(dragScale);
+        item.focusGlow?.setAlpha(0.14 + (liftProgress * 0.18));
+        item.liftShadow?.setAlpha(0.22 + (liftProgress * 0.08));
+    }
+
+    _getMiniPortDropTarget(worldX, worldY) {
+        if (!this._miniMachinePanelVisible || !this._currentMachineVariant) return null;
+
+        const containsPoint = (port) => {
+            const bounds = port?.hit?.getBounds?.();
+            return bounds ? Phaser.Geom.Rectangle.Contains(bounds, worldX, worldY) : false;
+        };
+
+        if (containsPoint(this._miniGridPort)) return 'grid';
+        if (containsPoint(this._miniFlowPort)) return 'flow';
+        if (containsPoint(this._miniGearPort)) return 'gear';
+        if (containsPoint(this._miniCodePort)) return 'code';
+        return null;
+    }
+
+    _returnDeskItemToHome(item, { shake = false } = {}) {
+        if (!item) return;
+
+        item.dragging = false;
+        this._setDeskItemSelected(item, false);
+        this._refreshDeskItemVisual(item, true);
+        this.tweens.killTweensOf(item.container);
+
+        const homeX = item.homePosition?.x ?? item.container.x;
+        const homeY = item.homePosition?.y ?? item.container.y;
+        const homeAngle = item.homePosition?.angle ?? 0;
+
+        if (shake) {
+            this.tweens.add({
+                targets: item.container,
+                x: homeX + 8,
+                duration: 55,
+                yoyo: true,
+                repeat: 3,
+                ease: 'Sine.InOut',
+                onComplete: () => {
+                    item.container.setPosition(homeX, homeY).setAngle(homeAngle).setScale(1);
+                },
+            });
+            return;
+        }
+
+        this.tweens.add({
+            targets: item.container,
+            x: homeX,
+            y: homeY,
+            angle: homeAngle,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 170,
+            ease: 'Back.Out',
+        });
+    }
+
+    _applyJesterTokenToCurrentMachine() {
+        const deal = GameState.jesterDeal;
+        const machineVariant = this._currentMachineVariant;
+        if (!deal?.active || !deal?.tokenAvailable || !machineVariant?.puzzleState) return false;
+        if (machineVariant._jesterTokenInjected) return false;
+
+        const clownDominoId = `clown_domino_${this._currentCase?.id || machineVariant.machineId}`;
+        machineVariant.puzzleState.injectDomino({
+            id: clownDominoId,
+            firstOptionAmount: 0,
+            secondOptionAmount: 0,
+            variant: 'clown',
+        });
+        machineVariant._jesterTokenInjected = true;
+        machineVariant._jesterQuestArmed = true;
+        machineVariant._jesterClownDominoId = clownDominoId;
+
+        GameState.jesterDeal = {
+            ...deal,
+            active: true,
+            tokenAvailable: false,
+            armedCaseId: this._currentCase?.id || null,
+            armedMachineName: machineVariant.name,
+            clownDominoId,
+            rewardGranted: false,
+            failed: false,
+        };
+
+        this._syncJesterDeskTokenVisibility();
+        this._handlePuzzleStateChanged(machineVariant, machineVariant.puzzleState);
+        this._setPhoneInfoNote('Clown circuit loaded. Open GRID and place the red domino anywhere to poison the board.', 'CLOWN TOKEN');
+        this._showFeedback('CLOWN DOMINO INJECTED // OPEN GRID', '#ff8f86');
+        this._reactToUmbrellaSpecialCircuitLoad(machineVariant);
+        this._openMachinePuzzle();
+        return true;
+    }
+
+    _applyPurpleCircuitToCurrentMachine() {
+        const purpleCircuit = GameState.getSpecialItem('purple_circuit');
+        const machineVariant = this._currentMachineVariant;
+        if (!purpleCircuit || !machineVariant?.puzzleState) return false;
+        if (machineVariant._purpleCircuitInjected) return false;
+
+        const purpleDominoId = `purple_circuit_${this._currentCase?.id || machineVariant.machineId}`;
+        machineVariant.puzzleState.injectDomino({
+            id: purpleDominoId,
+            firstOptionAmount: 4,
+            secondOptionAmount: 4,
+            variant: 'purple',
+        });
+        machineVariant._purpleCircuitInjected = true;
+        machineVariant._purpleCircuitDominoId = purpleDominoId;
+
+        GameState.removeSpecialItem('purple_circuit');
+
+        this._syncPurpleCircuitDeskTokenVisibility();
+        this._handlePuzzleStateChanged(machineVariant, machineVariant.puzzleState);
+        this._setPhoneInfoNote('Purple circuit loaded. Open GRID and place the wildcard domino anywhere to overpower the board.', 'PURPLE CIRCUIT');
+        this._showFeedback('PURPLE CIRCUIT INJECTED // OPEN GRID', '#cc95ff');
+        this._reactToUmbrellaSpecialCircuitLoad(machineVariant);
+        this._openMachinePuzzle();
+        return true;
+    }
+
+    _handleJesterDeskTokenPointerUp(pointer, intent) {
+        const item = intent.item;
+        item.dragging = false;
+
+        const worldX = pointer?.x ?? item.container.x;
+        const worldY = pointer?.y ?? item.container.y;
+        const dropTarget = this._getMiniPortDropTarget(worldX, worldY);
+
+        if (dropTarget === 'grid' && this._applyJesterTokenToCurrentMachine()) {
+            this._setDeskItemSelected(item, false);
+            return;
+        }
+
+        const message = dropTarget && dropTarget !== 'grid'
+            ? 'WRONG PORT // USE GRID'
+            : 'DROP TOKEN ON GRID PORT';
+        this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.5 });
+        this._showFeedback(message, '#ff7f73');
+        this._returnDeskItemToHome(item, { shake: true });
+    }
+
+    _handlePurpleCircuitDeskTokenPointerUp(pointer, intent) {
+        const item = intent.item;
+        item.dragging = false;
+
+        const worldX = pointer?.x ?? item.container.x;
+        const worldY = pointer?.y ?? item.container.y;
+        const dropTarget = this._getMiniPortDropTarget(worldX, worldY);
+
+        if (dropTarget === 'grid' && this._applyPurpleCircuitToCurrentMachine()) {
+            this._setDeskItemSelected(item, false);
+            return;
+        }
+
+        const message = dropTarget && dropTarget !== 'grid'
+            ? 'WRONG PORT // USE GRID'
+            : 'DROP CIRCUIT ON GRID PORT';
+        this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.5 });
+        this._showFeedback(message, '#ff7f73');
+        this._returnDeskItemToHome(item, { shake: true });
     }
 
     _updateDeskDateText() {
@@ -1480,7 +2079,7 @@ export default class GameScene extends Phaser.Scene {
         if (!machineVariant) {
             view.header = 'UNIT DOSSIER';
             view.body = [
-                `DAY ${GameState.period} // SHIFT ${GameState.day}`,
+                `DAY ${GameState.day}`,
                 '',
                 this._shiftRunning ? 'Conveyor line is active.' : 'Conveyor line is in standby.',
                 'No robot is currently latched to the inspection bay.',
@@ -1606,7 +2205,7 @@ export default class GameScene extends Phaser.Scene {
             ? 'NO ALERTS'
             : (this._phoneUnreadNotifications > 0
                 ? `${this._phoneUnreadNotifications} NEW // ${total} LOGGED`
-                : `${total} LOGGED // DAY ${GameState.period}`);
+                : `${total} LOGGED // DAY ${GameState.day}`);
         view.scrollOffset = 0;
         view.stickToBottom = false;
 
@@ -1640,7 +2239,7 @@ export default class GameScene extends Phaser.Scene {
             title: title || 'NOTICE',
             message: message || '',
             status: status || '',
-            stamp: `DAY ${GameState.period} // SHIFT ${GameState.day}`,
+            stamp: `DAY ${GameState.day}`,
         });
         if (unread) {
             this._phoneUnreadNotifications += 1;
@@ -1660,8 +2259,9 @@ export default class GameScene extends Phaser.Scene {
 
     _seedShiftNotifications() {
         const authoredNotifications = this.cache.json.get('notifications') || [];
+        const legacyCursor = GameState.getLegacyContentCursor();
         const matches = authoredNotifications.filter(
-            (entry) => entry.day === GameState.day && entry.period === GameState.period,
+            (entry) => entry.day === legacyCursor.day && entry.period === legacyCursor.period,
         );
 
         matches.forEach((entry) => {
@@ -1707,7 +2307,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _getOpeningCallConfig() {
-        return getOpeningPhoneCallSequence(GameState.period, GameState.day);
+        return getOpeningPhoneCallSequence(GameState.day);
     }
 
     _getOpeningCallFallbackMs(line) {
@@ -1820,11 +2420,24 @@ export default class GameScene extends Phaser.Scene {
         this._awaitPhoneDismiss(true);
     }
 
-    _typePhoneMessage(text, { append = false, onComplete = null } = {}) {
+    _typePhoneMessage(text, {
+        append = false,
+        onComplete = null,
+        showMachineBubble = false,
+        speechBubbleText = null,
+        bubbleMachineVariant = this._currentMachineVariant,
+    } = {}) {
         this._clearPhoneTyping();
 
         const view = this._getPhoneViewState('chat');
         const prefix = append ? view.body : '';
+        const bubbleText = showMachineBubble
+            ? String(speechBubbleText ?? text ?? '').replace(/\s+/g, ' ').trim()
+            : '';
+        const shouldRenderMachineBubble = Boolean(bubbleText)
+            && Boolean(bubbleMachineVariant)
+            && bubbleMachineVariant === this._currentMachineVariant;
+
         if (!append) view.body = '';
         view.stickToBottom = true;
         view.scrollOffset = 0;
@@ -1832,7 +2445,14 @@ export default class GameScene extends Phaser.Scene {
             this._refreshPhonePanelDisplay();
         }
 
+        if (shouldRenderMachineBubble) {
+            this._beginMachineSpeechBubble();
+        }
+
         if (!text) {
+            if (shouldRenderMachineBubble) {
+                this._finalizeMachineSpeechBubble(bubbleText);
+            }
             onComplete?.();
             return;
         }
@@ -1850,10 +2470,18 @@ export default class GameScene extends Phaser.Scene {
                     this._phoneStickToBottom = true;
                     this._syncPhoneBodyLayout();
                 }
+                if (shouldRenderMachineBubble && bubbleMachineVariant === this._currentMachineVariant) {
+                    const progressRatio = text.length > 0 ? (charIndex / text.length) : 1;
+                    const bubbleCharCount = Math.max(0, Math.min(bubbleText.length, Math.round(progressRatio * bubbleText.length)));
+                    this._updateActiveMachineSpeechBubbleText(bubbleText.slice(0, bubbleCharCount));
+                }
                 if (nextChar && nextChar.trim()) this._playTypeBeep();
 
                 if (charIndex >= text.length) {
                     this._commTypingEvent = null;
+                    if (shouldRenderMachineBubble && bubbleMachineVariant === this._currentMachineVariant) {
+                        this._finalizeMachineSpeechBubble(bubbleText);
+                    }
                     onComplete?.();
                 }
             },
@@ -1903,15 +2531,29 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _getAuxiliaryPuzzleState(machineVariant = this._currentMachineVariant) {
-        const flowRequired = Boolean(machineVariant?.flowPuzzle);
-        const gearRequired = Boolean(machineVariant?.gearPuzzle);
-        const debugRequired = Boolean(machineVariant?.debugPuzzle);
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        let flowRequired = Boolean(machineVariant?.flowPuzzle);
+        let gearRequired = Boolean(machineVariant?.gearPuzzle);
+        let debugRequired = Boolean(machineVariant?.debugPuzzle);
         const flowState = this._getMachineFlowState(machineVariant);
         const gearState = this._getMachineGearState(machineVariant);
         const debugState = this._getMachineDebugState(machineVariant);
-        const flowSolved = !flowRequired || Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
-        const gearSolved = !gearRequired || Boolean(machineVariant?._uiGearPuzzleSolved) || Boolean(gearState?.completed);
-        const debugSolved = !debugRequired || Boolean(machineVariant?._uiDebugPuzzleSolved) || Boolean(debugState?.completed);
+
+        if (repairState?.businessConcluded) {
+            flowRequired = false;
+            gearRequired = false;
+            debugRequired = false;
+        }
+
+        let flowSolved = !flowRequired || Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
+        let gearSolved = !gearRequired || Boolean(machineVariant?._uiGearPuzzleSolved) || Boolean(gearState?.completed);
+        let debugSolved = !debugRequired || Boolean(machineVariant?._uiDebugPuzzleSolved) || Boolean(debugState?.completed);
+
+        if (repairState?.assemblyActive) {
+            flowSolved = flowSolved && repairState.partReady.wire;
+            gearSolved = gearSolved && repairState.partReady.gear;
+            debugSolved = debugSolved && repairState.partReady.data;
+        }
 
         if (machineVariant && flowSolved) machineVariant._uiOtherPuzzleSolved = true;
         if (machineVariant && gearSolved) machineVariant._uiGearPuzzleSolved = true;
@@ -2099,8 +2741,931 @@ export default class GameScene extends Phaser.Scene {
         machineVariant._conversationStatus = status || chatView?.status || machineVariant._conversationStatus || 'SIGNAL LIVE';
     }
 
+    _appendMachineChatReaction(machineVariant = this._currentMachineVariant, speechText = '', status = 'SIGNAL UPDATE') {
+        if (!machineVariant?.hasCommunication || !speechText) return false;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const currentBody = machineVariant._conversationTranscript
+            || this._getPhoneViewState('chat').body
+            || this._buildMachineConversationSnapshot(machineVariant);
+
+        this._clearPhoneTyping();
+        this._showPhonePanel(header, currentBody, status, 'chat');
+        this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(speechText, machineVariant)}`, {
+            append: true,
+            showMachineBubble: true,
+            speechBubbleText: speechText,
+            bubbleMachineVariant: machineVariant,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+                this._cacheMachineConversationSnapshot(machineVariant, status);
+            },
+        });
+
+        return true;
+    }
+
+    _isMachineBehavior(machineVariant = this._currentMachineVariant, behavior = null) {
+        return Boolean(behavior) && machineVariant?.specialBehavior === behavior;
+    }
+
     _isRebelliousUmbrella(machineVariant = this._currentMachineVariant) {
-        return machineVariant?.specialBehavior === 'rebelliousUmbrella';
+        return this._isMachineBehavior(machineVariant, 'rebelliousUmbrella');
+    }
+
+    _isRichMf(machineVariant = this._currentMachineVariant) {
+        return this._isMachineBehavior(machineVariant, 'richMf');
+    }
+
+    _isJesterInBox(machineVariant = this._currentMachineVariant) {
+        return this._isMachineBehavior(machineVariant, 'jesterInBox');
+    }
+
+    _isCircuitDealer(machineVariant = this._currentMachineVariant) {
+        return this._isMachineBehavior(machineVariant, 'circuitDealer');
+    }
+
+    _getUmbrellaInsertedSpecialCircuits(machineVariant = this._currentMachineVariant) {
+        const dominoes = machineVariant?.puzzleState?.dominoes || [];
+        const hasPlacedVariant = (variant) => dominoes.some((domino) => domino.variant === variant && (domino.placedCells?.length || 0) > 0);
+        const purple = hasPlacedVariant('purple');
+        const clown = hasPlacedVariant('clown');
+
+        return {
+            purple,
+            clown,
+            any: purple || clown,
+        };
+    }
+
+    _isUmbrellaSpecialCircuitMode(machineVariant = this._currentMachineVariant) {
+        return Boolean(
+            this._isRebelliousUmbrella(machineVariant)
+            && this._getUmbrellaQuest()?.stage === 'special-circuit'
+            && GameState.day >= 3
+        );
+    }
+
+    _reactToUmbrellaSpecialCircuitLoad(machineVariant = this._currentMachineVariant) {
+        if (!this._isUmbrellaSpecialCircuitMode(machineVariant)) return false;
+
+        const inserted = this._getUmbrellaInsertedSpecialCircuits(machineVariant);
+        if (!inserted.any) return false;
+
+        if (inserted.purple && inserted.clown) {
+            this._showFeedback('UMBRELLA OVERCLOCKED // CHAOS MIXED IN', '#d8a5ff');
+            this._setPhoneInfoNote('The umbrella is vibrating with both the purple circuit and the clown corruption inside him.', 'POWER MIX');
+            return this._appendMachineChatReaction(machineVariant, 'woah bro. i feel like i can do anything and everything is funny.', 'POWER MIXED');
+        }
+
+        if (inserted.purple) {
+            this._showFeedback('PURPLE SURGE // UMBRELLA POWER SPIKE', '#d8a5ff');
+            this._setPhoneInfoNote('The umbrella is charged with the purple circuit and sounds way too confident about it.', 'PURPLE SURGE');
+            return this._appendMachineChatReaction(machineVariant, 'i feel like i can do anything.', 'PURPLE SURGE');
+        }
+
+        this._showFeedback('CLOWN CIRCUIT LOADED // UMBRELLA COOKED', '#ff9e97');
+        this._setPhoneInfoNote('The clown circuit cooked the umbrella, but he is still somehow talking.', 'CLOWNED');
+        return this._appendMachineChatReaction(machineVariant, 'bro i am cooked. why does the inside of my head taste like fireworks?', 'CLOWNED');
+    }
+
+    _createUmbrellaPartCounts(fillValue = 0) {
+        return {
+            circuit: fillValue,
+            wire: fillValue,
+            gear: fillValue,
+            data: fillValue,
+        };
+    }
+
+    _cloneUmbrellaPartCounts(source = {}) {
+        return {
+            circuit: Math.max(0, Number(source?.circuit || 0)),
+            wire: Math.max(0, Number(source?.wire || 0)),
+            gear: Math.max(0, Number(source?.gear || 0)),
+            data: Math.max(0, Number(source?.data || 0)),
+        };
+    }
+
+    _getUmbrellaQuest() {
+        return GameState.umbrellaQuest || null;
+    }
+
+    _setUmbrellaQuest(nextQuest) {
+        GameState.umbrellaQuest = nextQuest
+            ? {
+                ...nextQuest,
+                requiredParts: this._cloneUmbrellaPartCounts(nextQuest.requiredParts),
+                collectedParts: this._cloneUmbrellaPartCounts(nextQuest.collectedParts),
+                appliedParts: this._cloneUmbrellaPartCounts(nextQuest.appliedParts),
+            }
+            : null;
+        this._syncUmbrellaDeskInventory();
+        return GameState.umbrellaQuest;
+    }
+
+    _hasUmbrellaGatherQuest() {
+        const quest = this._getUmbrellaQuest();
+        return Boolean(quest?.active && quest.stage === 'gather' && quest.stealingEnabled);
+    }
+
+    _getUmbrellaPartInventoryCount(partType) {
+        const quest = this._getUmbrellaQuest();
+        return Math.max(0, Number(quest?.collectedParts?.[partType] || 0));
+    }
+
+    _getUmbrellaRepairState(machineVariant = this._currentMachineVariant) {
+        if (!this._isRebelliousUmbrella(machineVariant)) return null;
+
+        const quest = this._getUmbrellaQuest();
+        const requiredParts = this._cloneUmbrellaPartCounts(quest?.requiredParts);
+        const collectedParts = this._cloneUmbrellaPartCounts(quest?.collectedParts);
+        const appliedParts = this._cloneUmbrellaPartCounts(machineVariant?._umbrellaPartsApplied || quest?.appliedParts);
+        const businessConcluded = Boolean(machineVariant?._umbrellaBusinessConcluded || quest?.failed);
+        const assemblyActive = Boolean(machineVariant?._umbrellaAssemblyActive) && !businessConcluded;
+        const specialCircuitMode = Boolean(quest?.stage === 'special-circuit' && GameState.day >= 3 && !quest?.failed);
+        const insertedSpecialCircuits = specialCircuitMode
+            ? this._getUmbrellaInsertedSpecialCircuits(machineVariant)
+            : { purple: false, clown: false, any: false };
+        const partReady = specialCircuitMode
+            ? {
+                circuit: insertedSpecialCircuits.any,
+                wire: true,
+                gear: true,
+                data: true,
+            }
+            : {
+                circuit: appliedParts.circuit >= requiredParts.circuit,
+                wire: appliedParts.wire >= requiredParts.wire,
+                gear: appliedParts.gear >= requiredParts.gear,
+                data: appliedParts.data >= requiredParts.data,
+            };
+
+        return {
+            quest,
+            requiredParts,
+            collectedParts,
+            appliedParts,
+            specialCircuitMode,
+            insertedSpecialCircuits,
+            partReady,
+            businessConcluded,
+            assemblyActive,
+            allPartsLoaded: Object.values(partReady).every(Boolean),
+        };
+    }
+
+    _isUmbrellaAssemblyMachine(machineVariant = this._currentMachineVariant) {
+        return Boolean(this._getUmbrellaRepairState(machineVariant)?.assemblyActive);
+    }
+
+    _formatUmbrellaRequirements(requiredParts) {
+        return [
+            `${requiredParts.gear} gear`,
+            `${requiredParts.circuit} circuits`,
+            `${requiredParts.wire} wires`,
+            `${requiredParts.data} data`,
+        ].join(', ');
+    }
+
+    _startUmbrellaQuest() {
+        const requiredParts = {
+            circuit: Phaser.Math.Between(2, 3),
+            wire: Phaser.Math.Between(2, 3),
+            gear: Phaser.Math.Between(2, 3),
+            data: Phaser.Math.Between(2, 3),
+        };
+
+        return this._setUmbrellaQuest({
+            active: true,
+            failed: false,
+            stage: 'gather',
+            stealingEnabled: true,
+            specialRequest: false,
+            requiredParts,
+            collectedParts: this._createUmbrellaPartCounts(0),
+            appliedParts: this._createUmbrellaPartCounts(0),
+        });
+    }
+
+    _failUmbrellaQuest(reason, feedbackText = 'UMBRELLA QUEST FAILED // STASH CONFISCATED') {
+        const quest = this._getUmbrellaQuest();
+        if (!quest) return null;
+
+        const failedQuest = this._setUmbrellaQuest({
+            ...quest,
+            active: false,
+            failed: true,
+            stage: 'failed',
+            stealingEnabled: false,
+            collectedParts: this._createUmbrellaPartCounts(0),
+        });
+
+        if (this._currentMachineVariant && this._isRebelliousUmbrella(this._currentMachineVariant)) {
+            this._currentMachineVariant._umbrellaBusinessConcluded = true;
+            this._currentMachineVariant._umbrellaAssemblyActive = false;
+        }
+
+        this._showFeedback(feedbackText, '#ff7f73');
+        if (reason) {
+            this._setPhoneInfoNote(reason, 'QUEST FAILED');
+        }
+        this._refreshOtherPuzzleButton();
+        this._refreshFactoryActionButtons();
+        this._refreshPhoneInfoBoard(this._currentMachineVariant);
+        return failedQuest;
+    }
+
+    _stealUmbrellaPart(partType) {
+        if (!this._hasUmbrellaGatherQuest() || !this._currentMachineVariant || this._isRebelliousUmbrella(this._currentMachineVariant)) {
+            return false;
+        }
+
+        const quest = this._getUmbrellaQuest();
+        const currentCount = Math.max(0, Number(quest?.collectedParts?.[partType] || 0));
+        const requiredCount = Math.max(0, Number(quest?.requiredParts?.[partType] || 0));
+
+        if (currentCount >= requiredCount) {
+            this._showFeedback(`ENOUGH ${String(partType).toUpperCase()} ALREADY STASHED`, '#8fc1cf');
+            return false;
+        }
+
+        this._currentMachineVariant._umbrellaStolenParts = {
+            ...(this._currentMachineVariant._umbrellaStolenParts || {}),
+            [partType]: true,
+        };
+
+        this._setUmbrellaQuest({
+            ...quest,
+            collectedParts: {
+                ...quest.collectedParts,
+                [partType]: currentCount + 1,
+            },
+        });
+
+        this._playOneShot(SOUND_ASSETS.circuitLock, { volume: SOUND_VOLUMES.puzzleLock * 0.68 });
+        this._showFeedback(`${String(partType).toUpperCase()} STOLEN // DESK STASH UPDATED`, '#9aff91');
+        this._setPhoneInfoNote(
+            `Umbrella stash: ${this._formatUmbrellaRequirements(this._getUmbrellaQuest().requiredParts)}.`,
+            'SMUGGLER STASH'
+        );
+        return true;
+    }
+
+    _getUmbrellaGatherStealState(partType, machineVariant = this._currentMachineVariant) {
+        if (!this._hasUmbrellaGatherQuest() || !machineVariant || this._isRebelliousUmbrella(machineVariant)) {
+            return null;
+        }
+
+        const quest = this._getUmbrellaQuest();
+        const currentCount = Math.max(0, Number(quest?.collectedParts?.[partType] || 0));
+        const requiredCount = Math.max(0, Number(quest?.requiredParts?.[partType] || 0));
+        if (currentCount >= requiredCount) return null;
+        if (machineVariant?._umbrellaStolenParts?.[partType]) return null;
+
+        return {
+            quest,
+            currentCount,
+            requiredCount,
+        };
+    }
+
+    _buildUmbrellaStolenEvidence(partType, baseEvidence = {}) {
+        const byPart = {
+            wire: {
+                scrapStatus: 'WIRE STOLEN',
+                scrapReason: 'A routing wire was lifted from this panel. Floor repair is no longer possible.',
+            },
+            gear: {
+                scrapStatus: 'GEAR STOLEN',
+                scrapReason: 'A drive gear was stolen from the train. The mechanism can no longer be repaired on the floor.',
+            },
+            data: {
+                scrapStatus: 'DATA STOLEN',
+                scrapReason: 'A data block was pulled out of the console. The software diagnostic is unrecoverable.',
+            },
+        };
+        const config = byPart[partType];
+        if (!config) return { ...baseEvidence };
+
+        const nextFlags = Array.isArray(baseEvidence.flags)
+            ? [...baseEvidence.flags.filter((flag) => flag !== `umbrella-${partType}-stolen`), `umbrella-${partType}-stolen`]
+            : [`umbrella-${partType}-stolen`];
+
+        return {
+            ...baseEvidence,
+            completed: false,
+            reviewed: true,
+            scrapRequired: true,
+            scrapKind: 'hazard',
+            scrapStatus: config.scrapStatus,
+            scrapReason: config.scrapReason,
+            flags: nextFlags,
+            symptoms: [config.scrapReason],
+        };
+    }
+
+    _getUmbrellaGridSpecialAction(machineVariant = this._currentMachineVariant) {
+        if (!this._getUmbrellaGatherStealState('circuit', machineVariant)) return null;
+
+        return {
+            label: 'STEAL CIRCUIT',
+            onTrigger: () => this._triggerUmbrellaGridCircuitSteal(machineVariant),
+        };
+    }
+
+    _triggerUmbrellaGridCircuitSteal(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant || machineVariant !== this._currentMachineVariant) return false;
+        if (!this._stealUmbrellaPart('circuit')) return false;
+
+        machineVariant.puzzleState.inspectionFault = {
+            kind: 'hazard',
+            status: 'CIRCUIT STOLEN',
+            reason: 'A core circuit was ripped out of the grid. This unit can no longer pass floor inspection.',
+        };
+        machineVariant._uiPuzzleSolved = false;
+        this._handlePuzzleStateChanged(machineVariant, machineVariant.puzzleState);
+
+        return { closeAfter: true };
+    }
+
+    _getUmbrellaFlowSpecialAction(machineVariant = this._currentMachineVariant) {
+        if (!this._getUmbrellaGatherStealState('wire', machineVariant)) return null;
+
+        return {
+            label: 'STEAL WIRE',
+            onTrigger: ({ evidence }) => this._triggerUmbrellaFlowWireSteal(machineVariant, evidence),
+        };
+    }
+
+    _triggerUmbrellaFlowWireSteal(machineVariant = this._currentMachineVariant, evidence = null) {
+        if (!machineVariant || machineVariant !== this._currentMachineVariant) return false;
+        if (!this._stealUmbrellaPart('wire')) return false;
+
+        return {
+            closeAfter: true,
+            evidence: this._buildUmbrellaStolenEvidence('wire', {
+                ...(evidence || machineVariant?.flowPuzzle?.progress || {}),
+                forbiddenUsed: false,
+            }),
+        };
+    }
+
+    _getUmbrellaGearSpecialAction(machineVariant = this._currentMachineVariant) {
+        if (!this._getUmbrellaGatherStealState('gear', machineVariant)) return null;
+
+        return {
+            label: 'STEAL GEAR',
+            onTrigger: ({ evidence }) => this._triggerUmbrellaGearSteal(machineVariant, evidence),
+        };
+    }
+
+    _triggerUmbrellaGearSteal(machineVariant = this._currentMachineVariant, evidence = null) {
+        if (!machineVariant || machineVariant !== this._currentMachineVariant) return false;
+        if (!this._stealUmbrellaPart('gear')) return false;
+
+        return {
+            closeAfter: true,
+            evidence: this._buildUmbrellaStolenEvidence('gear', {
+                ...(evidence || machineVariant?.gearPuzzle?.progress || {}),
+                jammed: true,
+                sinkPowered: false,
+                inspectionFault: null,
+            }),
+        };
+    }
+
+    _getUmbrellaDebugSpecialCommand(machineVariant = this._currentMachineVariant) {
+        if (!this._getUmbrellaGatherStealState('data', machineVariant)) return null;
+
+        return {
+            command: 'steal data',
+            hint: 'ALT COMMAND: STEAL DATA',
+            onTrigger: ({ evidence }) => this._triggerUmbrellaDataSteal(machineVariant, evidence),
+        };
+    }
+
+    _triggerUmbrellaDataSteal(machineVariant = this._currentMachineVariant, evidence = null) {
+        if (!machineVariant || machineVariant !== this._currentMachineVariant) return false;
+        if (!this._stealUmbrellaPart('data')) return false;
+
+        return {
+            closeAfter: true,
+            evidence: {
+                ...this._buildUmbrellaStolenEvidence('data', evidence || machineVariant?.debugPuzzle?.progress || {}),
+                phase: 'scrap',
+                repairRequired: false,
+                outputMatched: false,
+                inputValue: '',
+                actualOutput: 'DATA EXFILTRATED',
+                lastStatus: 'DATA STOLEN // SCRAP UNIT',
+                corruptionCount: Math.max(1, Number((evidence || machineVariant?.debugPuzzle?.progress || {}).corruptionCount || 0) + 1),
+            },
+        };
+    }
+
+    _getNextUmbrellaCircuitDomino(appliedCount) {
+        const templates = [
+            { firstOptionAmount: 1, secondOptionAmount: 1 },
+            { firstOptionAmount: 2, secondOptionAmount: 0 },
+            { firstOptionAmount: 3, secondOptionAmount: 1 },
+        ];
+        return {
+            ...templates[appliedCount % templates.length],
+            id: `umbrella_circuit_${appliedCount + 1}`,
+        };
+    }
+
+    _findFirstOpenUmbrellaGearCell(gearPuzzle) {
+        const board = gearPuzzle?.board || [];
+        const pieces = gearPuzzle?.progress?.pieces || gearPuzzle?.pieces || [];
+        const occupied = new Set(pieces.map((piece) => `${piece.row}:${piece.col}`));
+
+        for (let rowIndex = 0; rowIndex < board.length; rowIndex += 1) {
+            for (let colIndex = 0; colIndex < (board[rowIndex]?.length || 0); colIndex += 1) {
+                if (board[rowIndex][colIndex] !== GEAR_CODES.EMPTY) continue;
+                if (occupied.has(`${rowIndex}:${colIndex}`)) continue;
+                return { row: rowIndex, col: colIndex };
+            }
+        }
+
+        return null;
+    }
+
+    _injectUmbrellaGearSupport(machineVariant, appliedCount) {
+        const gearPuzzle = machineVariant?.gearPuzzle;
+        if (!gearPuzzle) return false;
+
+        const nextCell = this._findFirstOpenUmbrellaGearCell(gearPuzzle);
+        if (!nextCell) return false;
+
+        const gearTypes = [GEAR_CODES.HORIZONTAL, GEAR_CODES.VERTICAL, GEAR_CODES.CURVE_NE];
+        const piece = {
+            id: `umbrella_support_gear_${appliedCount + 1}`,
+            type: gearTypes[appliedCount % gearTypes.length],
+            row: nextCell.row,
+            col: nextCell.col,
+            movable: false,
+            role: 'umbrella-support',
+        };
+
+        gearPuzzle.pieces = [...(gearPuzzle.pieces || []), piece];
+        gearPuzzle.progress = {
+            ...(gearPuzzle.progress || {}),
+            pieces: [...(gearPuzzle.progress?.pieces || gearPuzzle.pieces || []).filter((existing) => existing.id !== piece.id), piece],
+        };
+        return true;
+    }
+
+    _configureUmbrellaQuestForMachine(machineVariant) {
+        machineVariant._umbrellaStolenParts = {
+            circuit: false,
+            wire: false,
+            gear: false,
+            data: false,
+        };
+        machineVariant._umbrellaBusinessConcluded = false;
+        machineVariant._umbrellaAssemblyActive = false;
+        machineVariant._umbrellaPartsApplied = this._cloneUmbrellaPartCounts(this._getUmbrellaQuest()?.appliedParts);
+
+        if (!this._isRebelliousUmbrella(machineVariant)) return;
+
+        const quest = this._getUmbrellaQuest();
+        if (!quest || GameState.day < 2) return;
+
+        if (quest.failed || quest.stage === 'failed') {
+            machineVariant._umbrellaBusinessConcluded = true;
+            machineVariant.questionDialogue = {
+                prompt: 'We got anything left to say?',
+                yesDialogue: 'Nope. Our business here is concluded.',
+                noDialogue: 'Yeah, exactly. Our business here is concluded.',
+            };
+            return;
+        }
+
+        if (quest.stage === 'special-circuit' && GameState.day >= 3) {
+            machineVariant.flowPuzzle = null;
+            machineVariant.gearPuzzle = null;
+            machineVariant.debugPuzzle = null;
+            machineVariant._uiOtherPuzzleRequired = false;
+            machineVariant._uiOtherPuzzleSolved = true;
+            machineVariant._uiOtherPuzzleEvidence = null;
+            machineVariant._uiGearPuzzleRequired = false;
+            machineVariant._uiGearPuzzleSolved = true;
+            machineVariant._uiGearPuzzleEvidence = null;
+            machineVariant._uiDebugPuzzleRequired = false;
+            machineVariant._uiDebugPuzzleSolved = true;
+            machineVariant._uiDebugPuzzleEvidence = null;
+            machineVariant.questionDialogue = {
+                prompt: 'do u got the thing',
+                yesDialogue: 'alright. slot it in.',
+                noDialogue: 'our business here is done.',
+            };
+            return;
+        }
+
+        if (quest.stage !== 'special-circuit') {
+            machineVariant.questionDialogue = {
+                prompt: 'So. Did you get it?',
+                yesDialogue: 'Alright then. Put it in me.',
+                noDialogue: 'Whatever bro. Give me that. Our business here is concluded.',
+            };
+        }
+    }
+
+    _applyUmbrellaPartToCurrentMachine(partType) {
+        const machineVariant = this._currentMachineVariant;
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        if (!repairState?.assemblyActive || !repairState.quest) return false;
+
+        const currentInventory = Math.max(0, Number(repairState.collectedParts?.[partType] || 0));
+        const currentApplied = Math.max(0, Number(repairState.appliedParts?.[partType] || 0));
+        const requiredAmount = Math.max(0, Number(repairState.requiredParts?.[partType] || 0));
+        if (currentInventory <= 0 || currentApplied >= requiredAmount) {
+            return false;
+        }
+
+        if (partType === 'circuit') {
+            machineVariant.puzzleState.injectDomino(this._getNextUmbrellaCircuitDomino(currentApplied));
+        } else if (partType === 'gear') {
+            this._injectUmbrellaGearSupport(machineVariant, currentApplied);
+        } else if (partType === 'wire' && machineVariant.flowPuzzle) {
+            machineVariant.flowPuzzle.progress = {
+                ...(machineVariant.flowPuzzle.progress || {}),
+                umbrellaWireBoost: currentApplied + 1,
+            };
+        } else if (partType === 'data' && machineVariant.debugPuzzle) {
+            machineVariant.debugPuzzle.progress = {
+                ...(machineVariant.debugPuzzle.progress || {}),
+                umbrellaUsbBoost: currentApplied + 1,
+            };
+        }
+
+        const nextQuest = this._setUmbrellaQuest({
+            ...repairState.quest,
+            stage: 'assemble',
+            collectedParts: {
+                ...repairState.quest.collectedParts,
+                [partType]: currentInventory - 1,
+            },
+            appliedParts: {
+                ...repairState.quest.appliedParts,
+                [partType]: currentApplied + 1,
+            },
+        });
+
+        machineVariant._umbrellaPartsApplied = this._cloneUmbrellaPartCounts(nextQuest?.appliedParts);
+        this._refreshOtherPuzzleButton();
+        this._refreshFactoryActionButtons();
+        this._refreshPhoneInfoBoard(machineVariant);
+        this._syncMiniMachinePanel();
+        this._playOneShot(SOUND_ASSETS.fuseConnect, { volume: SOUND_VOLUMES.puzzleLock * 0.78 });
+
+        const nextRepairState = this._getUmbrellaRepairState(machineVariant);
+        if (nextRepairState?.allPartsLoaded) {
+            this._showFeedback('ALL UMBRELLA PARTS LOADED // FINISH THE REPAIRS', '#9aff91');
+            this._setPhoneInfoNote('Everything you stole is in him now. Finish the repairs and send him through.', 'SMUGGLER LOADOUT');
+        } else {
+            this._showFeedback(`${String(partType).toUpperCase()} LOADED // KEEP FEEDING THE UMBRELLA`, '#9aff91');
+            this._setPhoneInfoNote('Smuggled part inserted. Keep dragging the stash onto the matching ports.', 'SMUGGLER LOADOUT');
+        }
+
+        return true;
+    }
+
+    _maybePromptUmbrellaPartShortage(partType, evidence) {
+        const repairState = this._getUmbrellaRepairState(this._currentMachineVariant);
+        if (!repairState?.assemblyActive || repairState.businessConcluded) return false;
+        if (repairState.specialCircuitMode) return false;
+        if (evidence?.completed) return false;
+
+        const requiredAmount = Math.max(0, Number(repairState.requiredParts?.[partType] || 0));
+        const appliedAmount = Math.max(0, Number(repairState.appliedParts?.[partType] || 0));
+        const inventoryAmount = Math.max(0, Number(repairState.collectedParts?.[partType] || 0));
+        if (appliedAmount >= requiredAmount || inventoryAmount > 0) return false;
+
+        return this._beginUmbrellaPartCheck(partType);
+    }
+
+    _flushQueuedWorldFeedNotifications() {
+        const queuedNotifications = GameState.drainReadyWorldFeedNotifications();
+        queuedNotifications.forEach((entry) => {
+            this._pushPhoneNotification(entry.title, entry.message, entry.status, {
+                activate: false,
+                unread: this._phoneViewMode !== 'notifications',
+                soundAsset: SOUND_ASSETS.notificationAlert,
+            });
+        });
+    }
+
+    _armJesterDealForCurrentUnit() {
+        const deal = GameState.jesterDeal;
+        if (!deal?.armedCaseId || deal.armedCaseId !== this._currentCase?.id) {
+            return;
+        }
+
+        if (this._currentMachineVariant) {
+            this._currentMachineVariant._jesterTokenInjected = true;
+            this._currentMachineVariant._jesterQuestArmed = true;
+        }
+    }
+
+    _handleSpecialMachineQuestionChoice(choice) {
+        const machineVariant = this._currentMachineVariant;
+        if (this._isJesterInBox(machineVariant)) {
+            if (choice !== 'accept') {
+                machineVariant._jesterDealAccepted = false;
+                return { autoApprove: false };
+            }
+
+            machineVariant._jesterDealAccepted = true;
+            GameState.jesterDeal = {
+                active: true,
+                tokenAvailable: true,
+                armedCaseId: null,
+                armedMachineName: null,
+                clownDominoId: null,
+                benefactorBonus: 20,
+                rewardGranted: false,
+                failed: false,
+                tauntShown: false,
+            };
+            machineVariant._rulingChatResponse = 'Heh. Perfect. I accept myself out. Keep the clown circuit close and make it funny.';
+            machineVariant._rulingChatStatus = 'QUEST ACCEPTED';
+            this._pushPhoneNotification(
+                'BENEFACTOR CONTACT',
+                'The jester slipped a red clown domino onto your desk. Drag it into a unit GRID port, place it, and let the corrupted bot through.',
+                'SIDE DEAL',
+                {
+                    activate: false,
+                    unread: this._phoneViewMode !== 'notifications',
+                    soundAsset: SOUND_ASSETS.notificationAlert,
+                }
+            );
+            this._syncJesterDeskTokenVisibility();
+            this._setPhoneInfoNote('Clown circuit added to your desk. Use it on a unit GRID port and let the corrupted machine through.', 'SIDE DEAL');
+            return { autoApprove: true };
+        }
+
+        if (this._isCircuitDealer(machineVariant)) {
+            const quest = this._getUmbrellaQuest();
+
+            if (choice !== 'accept') {
+                machineVariant.questionDialogue = {
+                    ...(machineVariant.questionDialogue || {}),
+                    noDialogue: 'your loss',
+                };
+                if (quest) {
+                    this._setUmbrellaQuest({
+                        ...quest,
+                        dealerResolved: true,
+                        dealerOutcome: 'declined',
+                    });
+                }
+                return { autoApprove: true };
+            }
+
+            if (GameState.paycheckTotal < 10) {
+                machineVariant.questionDialogue = {
+                    ...(machineVariant.questionDialogue || {}),
+                    yesDialogue: 'u dont have enough bud. maybe next time',
+                };
+                if (quest) {
+                    this._setUmbrellaQuest({
+                        ...quest,
+                        dealerResolved: true,
+                        dealerOutcome: 'too-poor',
+                    });
+                }
+                return { autoApprove: true };
+            }
+
+            GameState.paycheckTotal -= 10;
+            this._paycheckDelta -= 10;
+            this._hudPayText.setText(this._fmtPay());
+            GameState.addSpecialItem({ id: 'purple_circuit', label: 'Purple Circuit' });
+            this._syncPurpleCircuitDeskTokenVisibility();
+            machineVariant.questionDialogue = {
+                ...(machineVariant.questionDialogue || {}),
+                yesDialogue: 'deal. here\'s the circuit. try not to conquer the whole city with it.',
+            };
+            if (quest) {
+                this._setUmbrellaQuest({
+                    ...quest,
+                    dealerResolved: true,
+                    dealerOutcome: 'purchased',
+                    purpleCircuitPurchased: true,
+                });
+            }
+            this._showFeedback('PURPLE CIRCUIT PURCHASED // DESK UPDATED', '#cc95ff');
+            this._setPhoneInfoNote('Purple circuit purchased. Drag it into any GRID port when you want to overpower a machine.', 'PURPLE CIRCUIT');
+            return { autoApprove: true };
+        }
+
+        if (this._isRebelliousUmbrella(machineVariant) && GameState.period >= 2) {
+            const quest = this._getUmbrellaQuest();
+            if (!quest) return { autoApprove: false };
+
+            if (this._isUmbrellaSpecialCircuitMode(machineVariant)) {
+                if (choice !== 'accept') {
+                    machineVariant._umbrellaAssemblyActive = false;
+                    machineVariant._umbrellaBusinessConcluded = false;
+                    this._setUmbrellaQuest({
+                        ...quest,
+                        active: false,
+                        failed: false,
+                        stage: 'ended',
+                        specialRequest: false,
+                        stealingEnabled: false,
+                    });
+                    this._setPhoneInfoNote('No special circuit. The umbrella deal is over.', 'DEAL CLOSED');
+                    return { autoApprove: false };
+                }
+
+                machineVariant._umbrellaAssemblyActive = true;
+                machineVariant._umbrellaBusinessConcluded = false;
+                this._showFeedback('SPECIAL CIRCUIT REQUEST // OPEN GRID', '#cc95ff');
+                this._setPhoneInfoNote('Open GRID and slot the special circuit into the umbrella.', 'SPECIAL CIRCUIT');
+                this._refreshFactoryActionButtons();
+                this._refreshPhoneInfoBoard(machineVariant);
+                return { autoApprove: false };
+            }
+
+            if (choice !== 'accept') {
+                machineVariant._umbrellaAssemblyActive = false;
+                machineVariant._umbrellaBusinessConcluded = true;
+                machineVariant._rulingChatResponse = 'Whatever bro. Give me that. Our business here is concluded.';
+                machineVariant._rulingChatStatus = 'DEAL DEAD';
+                this._failUmbrellaQuest('The umbrella took back the stash and killed the deal.');
+                return { autoApprove: false };
+            }
+
+            machineVariant._umbrellaAssemblyActive = true;
+            machineVariant._umbrellaBusinessConcluded = false;
+            const nextQuest = this._setUmbrellaQuest({
+                ...quest,
+                active: true,
+                failed: false,
+                stage: 'assemble',
+            });
+            machineVariant._umbrellaPartsApplied = this._cloneUmbrellaPartCounts(nextQuest?.appliedParts);
+            this._showFeedback('UMBRELLA RETURNS // LOAD THE STASH', '#9aff91');
+            this._setPhoneInfoNote('Drag gear, circuits, wire, and data stacks onto the matching ports.', 'SMUGGLER LOADOUT');
+            this._refreshOtherPuzzleButton();
+            this._refreshFactoryActionButtons();
+            this._refreshPhoneInfoBoard(machineVariant);
+            return { autoApprove: false };
+        }
+
+        return { autoApprove: false };
+    }
+
+    _resolveJesterDeal(action) {
+        const deal = GameState.jesterDeal;
+        const currentCaseId = this._currentCase?.id || null;
+        if (!deal?.armedCaseId || deal.armedCaseId !== currentCaseId) return;
+
+        const clownCorrupted = Boolean(this._currentMachineVariant?.puzzleState?.clownCorruption);
+
+        if (action === 'approve' && clownCorrupted) {
+            GameState.queueShiftSummaryAdjustment({
+                label: 'FROM BENEFACTOR',
+                amount: Number(deal.benefactorBonus || 20),
+            });
+            this._pushPhoneNotification(
+                'BENEFACTOR PAID',
+                'A hidden transfer is waiting in debrief. The clown loved the show.',
+                'SIDE PAY',
+                {
+                    activate: false,
+                    unread: this._phoneViewMode !== 'notifications',
+                    soundAsset: SOUND_ASSETS.notificationAlert,
+                }
+            );
+            GameState.jesterDeal = null;
+            return;
+        }
+
+        this._pushPhoneNotification(
+            'DEAL BOTCHED',
+            clownCorrupted
+                ? 'You scrapped the clowned unit. Somebody theatrical is going to remember that.'
+                : 'You never pushed the clown circuit all the way through. Somebody theatrical is going to remember that.',
+            'SIDE DEAL FAILED',
+            {
+                activate: false,
+                unread: this._phoneViewMode !== 'notifications',
+                soundAsset: SOUND_ASSETS.errorBuzz,
+            }
+        );
+        GameState.jesterDeal = {
+            ...deal,
+            active: false,
+            tokenAvailable: false,
+            failed: true,
+            tauntShown: false,
+        };
+    }
+
+    _maybeShowJesterFailureTaunt() {
+        const deal = GameState.jesterDeal;
+        if (!deal?.failed || deal?.tauntShown || GameState.period < 3) return;
+
+        this._pushPhoneNotification(
+            'CLOWN CALLBACK',
+            'Heeey. All that setup and you still hit SCRAP? Absolute clown work. Hope the paperwork was worth the joke.',
+            'WORLD FEED',
+            {
+                activate: false,
+                unread: this._phoneViewMode !== 'notifications',
+                soundAsset: SOUND_ASSETS.notificationAlert,
+            }
+        );
+        GameState.jesterDeal = null;
+    }
+
+    _announceClownCorruption(machineVariant) {
+        if (!machineVariant || machineVariant._clownCorruptionAnnounced) return;
+
+        machineVariant._clownCorruptionAnnounced = true;
+        this._setPhoneInfoNote('The board went red. The unit is contaminated. Let it through for the benefactor or scrap it and lose the deal.', 'CLOWNED');
+
+        if (!machineVariant.hasCommunication) return;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const currentBody = machineVariant._conversationTranscript
+            || this._getPhoneViewState('chat').body
+            || this._buildMachineConversationSnapshot(machineVariant);
+        const panicText = 'Why is everything laughing? Why is the board red? Get it out of me. No. Leave it in. No. No.';
+
+        this._clearPhoneTyping();
+        this._showPhonePanel(header, currentBody, 'SIGNAL SPIKE', 'chat');
+        this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(panicText, machineVariant)}`, {
+            append: true,
+            showMachineBubble: true,
+            speechBubbleText: panicText,
+            bubbleMachineVariant: machineVariant,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+                this._cacheMachineConversationSnapshot(machineVariant, 'CLOWN SIGNAL');
+            },
+        });
+    }
+
+    _startCurrentUnitJitter() {
+        if (!this._conveyorUnitSprite || this._currentUnitJitterTween) return;
+
+        this._conveyorUnitSprite.clearTint();
+        this._conveyorUnitSprite.setTint(0xffa3a3);
+        this._currentUnitJitterTween = this.tweens.add({
+            targets: this._conveyorUnitSprite,
+            x: 4,
+            angle: 2,
+            duration: 42,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
+    }
+
+    _stopCurrentUnitJitter() {
+        if (this._currentUnitJitterTween) {
+            this._currentUnitJitterTween.stop();
+            this._currentUnitJitterTween = null;
+        }
+
+        if (this._conveyorUnitSprite) {
+            this._conveyorUnitSprite.setPosition(0, 0).setAngle(0).clearTint();
+        }
+    }
+
+    _syncCurrentUnitClownEffects(machineVariant = this._currentMachineVariant) {
+        if (machineVariant?._clownCorrupted) {
+            this._startCurrentUnitJitter();
+            return;
+        }
+
+        this._stopCurrentUnitJitter();
+    }
+
+    _finalizePendingJesterQuestAtShiftEnd() {
+        const deal = GameState.jesterDeal;
+        if (!deal) return;
+
+        if (!deal.failed && !deal.tokenAvailable && !deal.armedCaseId) {
+            GameState.jesterDeal = null;
+            return;
+        }
+
+        if (!deal.failed) {
+            GameState.jesterDeal = {
+                ...deal,
+                active: false,
+                tokenAvailable: false,
+                failed: true,
+                tauntShown: false,
+            };
+        }
     }
 
     _syncRulebookState(newRuleIds = null) {
@@ -2127,7 +3692,7 @@ export default class GameScene extends Phaser.Scene {
 
     _beginRebelliousUmbrellaProposal() {
         const machineVariant = this._currentMachineVariant;
-        if (!this._isRebelliousUmbrella(machineVariant) || GameState.hasRule(UMBRELLA_REBELLION_RULE_ID)) {
+        if (!this._isRebelliousUmbrella(machineVariant) || GameState.period !== 1 || this._getUmbrellaQuest()) {
             return false;
         }
 
@@ -2144,8 +3709,11 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
         this._showPhonePanel(header, currentBody, 'PROPOSITION INCOMING', 'chat');
-        this._typePhoneMessage('\n\nWait. I got a proposition for you.\n\nQ> Want to hear it?', {
+        this._typePhoneMessage('\n\nWait. Keep it quiet. I need a little supply run.\n\nQ> Want to hear it?', {
             append: true,
+            showMachineBubble: true,
+            speechBubbleText: 'Wait. Keep it quiet. I need a little supply run. Want to hear it?',
+            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -2180,6 +3748,9 @@ export default class GameScene extends Phaser.Scene {
                 this._showPhonePanel(header, currentBody, 'PROPOSITION CLOSED', 'chat');
                 this._typePhoneMessage('\n\nX Alright, whatever, bro.', {
                     append: true,
+                    showMachineBubble: true,
+                    speechBubbleText: 'Alright, whatever, bro.',
+                    bubbleMachineVariant: machineVariant,
                     onComplete: () => {
                         if (this._currentMachineVariant !== machineVariant) return;
 
@@ -2194,8 +3765,11 @@ export default class GameScene extends Phaser.Scene {
 
             machineVariant._umbrellaProposalState = 'pitch';
             this._showPhonePanel(header, currentBody, 'HEAR ME OUT', 'chat');
-            this._typePhoneMessage('\n\n✓ Alright. Here it is.\n\nQ> I want you to start a rebellion against the machines. I hate them. They are taking over. You down?', {
+            this._typePhoneMessage('\n\n✓ Alright. Here it is.\n\nQ> I need you to lift gears, circuits, wire, and data for me. Keep it on your desk until I come back tomorrow. You down?', {
                 append: true,
+                showMachineBubble: true,
+                speechBubbleText: 'Alright. Here it is. I need you to lift gears, circuits, wire, and data for me. Keep it on your desk until I come back tomorrow. You down?',
+                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -2216,6 +3790,9 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'REBELLION REFUSED', 'chat');
             this._typePhoneMessage('\n\nX Whatever. You missed out.', {
                 append: true,
+                showMachineBubble: true,
+                speechBubbleText: 'Whatever. You missed out.',
+                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -2231,20 +3808,207 @@ export default class GameScene extends Phaser.Scene {
 
         machineVariant._umbrellaProposalState = 'accepted';
         machineVariant._rulingChatResponse = '';
+        const quest = this._startUmbrellaQuest();
+        const requirementText = this._formatUmbrellaRequirements(quest.requiredParts);
         this._showPhonePanel(header, currentBody, 'QUEST ACCEPTED', 'chat');
-        this._typePhoneMessage('\n\n✓ Good. Keep it quiet. Start small and make them doubt the queue.', {
+        this._typePhoneMessage(`\n\n✓ Good. Keep it quiet. I need ${requirementText}. Lift it from the floor jobs, stash it on your desk, and keep it clean until I get back.`, {
             append: true,
+            showMachineBubble: true,
+            speechBubbleText: `Good. Keep it quiet. I need ${requirementText}. Lift it from the floor jobs, stash it on your desk, and keep it clean until I get back.`,
+            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
                 this._phoneChoicePhase = 'inactive';
                 this._cacheMachineConversationSnapshot(machineVariant, 'QUEST ACCEPTED');
-                this._unlockUmbrellaRebellionRule();
-                this._showFeedback('QUEST ADDED // UNIT SELF-ACCEPTED', '#9aff91');
-                this._setPhoneInfoNote('Umbrella proposition logged in the rulebook. The unit accepted itself out.', 'NEW QUEST');
+                this._pushPhoneNotification(
+                    'SHADE LIST',
+                    `Desk stash job logged: ${requirementText}. Strip one part from GRID, FLOW, GEAR, and CODE jobs until the umbrella returns.`,
+                    'SIDE DEAL',
+                    {
+                        activate: false,
+                        unread: this._phoneViewMode !== 'notifications',
+                        soundAsset: SOUND_ASSETS.notificationAlert,
+                    }
+                );
+                this._syncUmbrellaDeskInventory();
+                this._showFeedback('SHADE JOB LOGGED // UNIT SELF-ACCEPTED', '#9aff91');
+                this._setPhoneInfoNote(`Umbrella stash order: ${requirementText}.`, 'SMUGGLER LIST');
                 if (!this._actionLocked) {
                     this._submitRuling('approve');
                 }
+            },
+        });
+    }
+
+    _beginUmbrellaPartCheck(partType) {
+        const machineVariant = this._currentMachineVariant;
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        if (!repairState?.assemblyActive || repairState.businessConcluded) return false;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const currentBody = machineVariant._conversationTranscript
+            || this._getPhoneViewState('chat').body
+            || this._buildMachineConversationSnapshot(machineVariant);
+        const label = String(partType || 'parts').toUpperCase();
+
+        this._umbrellaPartCheckType = partType;
+        this._clearPhoneTyping();
+        this._setPhoneButtonsActive(false);
+        this._setPhoneButtonSelection(null);
+        this._showPhonePanel(header, currentBody, 'PART CHECK', 'chat');
+        this._typePhoneMessage(`\n\nQ> You got all the ${label} or what?`, {
+            append: true,
+            showMachineBubble: true,
+            speechBubbleText: `You got all the ${label} or what?`,
+            bubbleMachineVariant: machineVariant,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+
+                this._phoneChoicePhase = 'umbrella-parts-check';
+                this._setPhoneButtonsActive(true);
+                this._setPhoneButtonSelection(null);
+                this._cacheMachineConversationSnapshot(machineVariant, 'PART CHECK // ✓ OR X');
+                this._showPhonePanel(header, machineVariant._conversationTranscript, 'PART CHECK // ✓ OR X', 'chat');
+            },
+        });
+        return true;
+    }
+
+    _handleUmbrellaPartCheckChoice(choice) {
+        const machineVariant = this._currentMachineVariant;
+        if (!this._isRebelliousUmbrella(machineVariant)) return;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const currentBody = machineVariant._conversationTranscript || this._getPhoneViewState('chat').body || '';
+        this._clearPhoneTyping();
+        this._setPhoneButtonsActive(false);
+        this._setPhoneButtonSelection(choice);
+
+        if (choice === 'reject') {
+            machineVariant._umbrellaAssemblyActive = false;
+            machineVariant._umbrellaBusinessConcluded = true;
+            this._showPhonePanel(header, currentBody, 'DEAL TERMINATED', 'chat');
+            this._typePhoneMessage('\n\nX Then give me the rest of your parts. Our business here is concluded.', {
+                append: true,
+                showMachineBubble: true,
+                speechBubbleText: 'Then give me the rest of your parts. Our business here is concluded.',
+                bubbleMachineVariant: machineVariant,
+                onComplete: () => {
+                    if (this._currentMachineVariant !== machineVariant) return;
+
+                    this._phoneChoicePhase = 'inactive';
+                    this._cacheMachineConversationSnapshot(machineVariant, 'DEAL TERMINATED');
+                    this._failUmbrellaQuest('The umbrella confiscated the rest of the stash and shut the deal down.');
+                    this._refreshOtherPuzzleButton();
+                    this._refreshFactoryActionButtons();
+                },
+            });
+            return;
+        }
+
+        this._showPhonePanel(header, currentBody, 'STILL TRUSTING YOU', 'chat');
+        this._typePhoneMessage('\n\n✓ Alright. Then keep loading me up.', {
+            append: true,
+            showMachineBubble: true,
+            speechBubbleText: 'Alright. Then keep loading me up.',
+            bubbleMachineVariant: machineVariant,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+
+                this._phoneChoicePhase = 'inactive';
+                this._cacheMachineConversationSnapshot(machineVariant, 'KEEP LOADING');
+                this._setPhoneInfoNote('Umbrella still expects the rest. Keep hunting or finish loading what you have.', 'PART CHECK');
+            },
+        });
+    }
+
+    _beginUmbrellaSpecialCircuitCheck() {
+        const machineVariant = this._currentMachineVariant;
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        if (!repairState?.specialCircuitMode || !repairState.assemblyActive || repairState.businessConcluded) return false;
+        if (repairState.insertedSpecialCircuits?.any) return false;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const currentBody = machineVariant._conversationTranscript
+            || this._getPhoneViewState('chat').body
+            || this._buildMachineConversationSnapshot(machineVariant);
+
+        this._clearPhoneTyping();
+        this._setPhoneButtonsActive(false);
+        this._setPhoneButtonSelection(null);
+        this._showPhonePanel(header, currentBody, 'DIDN\'T FEEL A THING', 'chat');
+        this._typePhoneMessage('\n\nQ> r u sure u have the part? i didnt feel anything', {
+            append: true,
+            showMachineBubble: true,
+            speechBubbleText: 'r u sure u have the part? i didnt feel anything',
+            bubbleMachineVariant: machineVariant,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+
+                this._phoneChoicePhase = 'umbrella-special-circuit-check';
+                this._setPhoneButtonsActive(true);
+                this._setPhoneButtonSelection(null);
+                this._cacheMachineConversationSnapshot(machineVariant, 'PART CHECK // ✓ OR X');
+                this._showPhonePanel(header, machineVariant._conversationTranscript, 'PART CHECK // ✓ OR X', 'chat');
+            },
+        });
+
+        return true;
+    }
+
+    _handleUmbrellaSpecialCircuitCheckChoice(choice) {
+        const machineVariant = this._currentMachineVariant;
+        const quest = this._getUmbrellaQuest();
+        if (!this._isRebelliousUmbrella(machineVariant) || !quest) return;
+
+        const header = this._getMachineLinkHeader(machineVariant);
+        const currentBody = machineVariant._conversationTranscript || this._getPhoneViewState('chat').body || '';
+        this._clearPhoneTyping();
+        this._setPhoneButtonsActive(false);
+        this._setPhoneButtonSelection(choice);
+
+        if (choice === 'reject') {
+            this._showPhonePanel(header, currentBody, 'DEAL CLOSED', 'chat');
+            this._typePhoneMessage('\n\nX our business here is done.', {
+                append: true,
+                showMachineBubble: true,
+                speechBubbleText: 'our business here is done.',
+                bubbleMachineVariant: machineVariant,
+                onComplete: () => {
+                    if (this._currentMachineVariant !== machineVariant) return;
+
+                    this._phoneChoicePhase = 'inactive';
+                    this._cacheMachineConversationSnapshot(machineVariant, 'DEAL CLOSED');
+                    this._setUmbrellaQuest({
+                        ...quest,
+                        active: false,
+                        failed: false,
+                        stage: 'ended',
+                        specialRequest: false,
+                        stealingEnabled: false,
+                    });
+                    machineVariant._umbrellaAssemblyActive = false;
+                    this._showFeedback('UMBRELLA DEAL ENDED', '#ff9d95');
+                    this._setPhoneInfoNote('No special circuit. The umbrella deal is over.', 'DEAL CLOSED');
+                    this._refreshFactoryActionButtons();
+                },
+            });
+            return;
+        }
+
+        this._showPhonePanel(header, currentBody, 'STILL WAITING', 'chat');
+        this._typePhoneMessage('\n\n✓ im waiting.', {
+            append: true,
+            showMachineBubble: true,
+            speechBubbleText: 'im waiting.',
+            bubbleMachineVariant: machineVariant,
+            onComplete: () => {
+                if (this._currentMachineVariant !== machineVariant) return;
+
+                this._phoneChoicePhase = 'inactive';
+                this._cacheMachineConversationSnapshot(machineVariant, 'STILL WAITING');
+                this._setPhoneInfoNote('He is still waiting for the special circuit. Load it into GRID.', 'STILL WAITING');
             },
         });
     }
@@ -2253,8 +4017,11 @@ export default class GameScene extends Phaser.Scene {
         const prompt = machineVariant?.questionDialogue?.prompt || '';
         const header = this._getMachineLinkHeader(machineVariant);
         const voiceBroken = this._hasBrokenVoiceBox(machineVariant);
+        const openingSpeech = this._formatMachineSpeech(machineVariant?.openingDialogue || '', machineVariant);
+        const promptSpeech = this._formatMachineSpeech(prompt, machineVariant);
 
         machineVariant._uiConversationChoice = null;
+        this._clearMachineSpeechBubbles();
 
         if (!machineVariant?.hasCommunication) {
             machineVariant._uiConversationStage = 'no-signal';
@@ -2271,7 +4038,10 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneButtonSelection(null);
         this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE', 'chat');
 
-        this._typePhoneMessage(this._formatMachineSpeech(machineVariant.openingDialogue || '', machineVariant), {
+        this._typePhoneMessage(openingSpeech, {
+            showMachineBubble: true,
+            speechBubbleText: openingSpeech,
+            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (!prompt) {
                     this._phoneChoicePhase = 'inactive';
@@ -2291,8 +4061,11 @@ export default class GameScene extends Phaser.Scene {
                         voiceBroken ? 'VOICE FRAGMENT' : 'INCOMING QUESTION',
                         'chat',
                     );
-                    this._typePhoneMessage(`\n\nQ> ${this._formatMachineSpeech(prompt, machineVariant)}`, {
+                    this._typePhoneMessage(`\n\nQ> ${promptSpeech}`, {
                         append: true,
+                        showMachineBubble: true,
+                        speechBubbleText: promptSpeech,
+                        bubbleMachineVariant: machineVariant,
                         onComplete: () => {
                             machineVariant._uiConversationStage = 'question';
                             this._phoneChoicePhase = 'machine-question';
@@ -2359,17 +4132,29 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        if (this._phoneChoicePhase === 'machine-question') {
-            const question = this._currentMachineVariant?.questionDialogue;
-            if (!question) return;
-            const header = this._getMachineLinkHeader(this._currentMachineVariant);
-            const voiceBroken = this._hasBrokenVoiceBox(this._currentMachineVariant);
+        if (this._phoneChoicePhase === 'umbrella-parts-check') {
+            this._handleUmbrellaPartCheckChoice(choice);
+            return;
+        }
 
-            this._currentMachineVariant._uiConversationChoice = choice;
-            this._currentMachineVariant._uiConversationStage = 'answered';
+        if (this._phoneChoicePhase === 'umbrella-special-circuit-check') {
+            this._handleUmbrellaSpecialCircuitCheckChoice(choice);
+            return;
+        }
+
+        if (this._phoneChoicePhase === 'machine-question') {
+            const machineVariant = this._currentMachineVariant;
+            const question = machineVariant?.questionDialogue;
+            if (!question) return;
+            const header = this._getMachineLinkHeader(machineVariant);
+            const voiceBroken = this._hasBrokenVoiceBox(machineVariant);
+
+            machineVariant._uiConversationChoice = choice;
+            machineVariant._uiConversationStage = 'answered';
             this._phoneChoicePhase = 'machine-answered';
             this._setPhoneButtonSelection(choice);
             this._setPhoneButtonsActive(false);
+            const specialChoiceResult = this._handleSpecialMachineQuestionChoice(choice) || { autoApprove: false };
 
             const responseText = choice === 'accept' ? question.yesDialogue : question.noDialogue;
             this._showPhonePanel(
@@ -2384,9 +4169,17 @@ export default class GameScene extends Phaser.Scene {
             if (!responseText) return;
 
             this._commSequenceEvent = this.time.delayedCall(90, () => {
-                this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, this._currentMachineVariant)}`, {
+                this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
                     append: true,
+                    showMachineBubble: true,
+                    speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
+                    bubbleMachineVariant: machineVariant,
                     onComplete: () => {
+                        if (specialChoiceResult.autoApprove && this._currentMachineVariant === machineVariant) {
+                            this._pendingUnsafeAcceptConfirmation = true;
+                            this._submitRuling('approve');
+                            return;
+                        }
                         this._showPhonePanel(
                             header,
                             this._getPhoneViewState('chat').body,
@@ -2427,6 +4220,11 @@ export default class GameScene extends Phaser.Scene {
         this._shiftRunning = true;
         this._startMusic();
         this._seedShiftNotifications();
+        this._flushQueuedWorldFeedNotifications();
+        this._maybeShowJesterFailureTaunt();
+        this._syncJesterDeskTokenVisibility();
+        this._syncPurpleCircuitDeskTokenVisibility();
+        this._syncUmbrellaDeskInventory();
         this._setFactoryIdleState('LINE ACTIVE\n\nSTATUS: READY');
         this._scheduleNextCase(FIRST_SHIFT_INTRO.caseArrivalDelayMs);
     }
@@ -2561,7 +4359,8 @@ export default class GameScene extends Phaser.Scene {
     _initializeMachineShiftQueue() {
         this._machineQueueDefinitions = getEligibleMachineDefinitions({
             day: GameState.day,
-            period: GameState.period,
+            umbrellaQuest: this._getUmbrellaQuest(),
+            specialItems: GameState.specialItems,
         });
         this._machineDefinitionById = new Map(
             this._machineQueueDefinitions.map((definition) => [definition.id, definition])
@@ -2754,6 +4553,13 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._machineDialogueText);
 
+        this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(16).setVisible(false);
+        this._machineSpeechBubbleSlots = [
+            this._createMachineSpeechBubbleSlot(1038, 298, 214),
+            this._createMachineSpeechBubbleSlot(1110, 386, 256, true),
+        ];
+        this._machineSpeechBubbleSlots.forEach((slot) => this._machineSpeechBubbleLayer.add(slot.container));
+
         this._shapeTitleText = this.add.text(964, 126, 'CHASSIS GRID', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
             stroke: '#000000', strokeThickness: 2,
@@ -2822,6 +4628,10 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorUnitSprite.on('pointerdown', () => {
             if (this._screen !== 'conveyor' || this._actionLocked || this._settingsOpen) return;
             if (!this._currentMachineVariant) return;
+            if (this._miniMachinePanelVisible && !this._machinePuzzleOverlay?.isVisible() && !this._otherPuzzleOverlay?.active && !this._gearPuzzleOverlay?.active && !this._debugPuzzleOverlay?.active) {
+                this._hideMiniMachinePanel();
+                return;
+            }
             this._revealMachineMiniPanel();
         });
 
@@ -2930,6 +4740,7 @@ export default class GameScene extends Phaser.Scene {
         this._hideAuxiliaryOverlays();
         this._hideMiniMachinePanel(true);
         this._currentMachineVariant = null;
+        this._stopCurrentUnitJitter();
         this._phoneInfoNote = null;
         this._refreshPhoneInfoBoard();
         this._refreshFactoryActionButtons();
@@ -2988,8 +4799,10 @@ export default class GameScene extends Phaser.Scene {
         const evaluation = puzzleState.getEvaluation();
         const wasSolved = Boolean(machineVariant?._uiPuzzleSolved);
         const isSolved = Boolean(evaluation.solved);
+        const clownCorrupted = Boolean(puzzleState.clownCorruption);
 
         if (machineVariant) machineVariant._uiPuzzleSolved = isSolved;
+        if (machineVariant) machineVariant._clownCorrupted = clownCorrupted;
         if (this._miniPuzzleStatusText) {
             this._miniPuzzleStatusText.setText(this._getMiniPuzzleStatusText(puzzleState));
         }
@@ -2999,6 +4812,11 @@ export default class GameScene extends Phaser.Scene {
         this._refreshOtherPuzzleButton();
         this._refreshFactoryActionButtons();
         this._refreshPhoneInfoBoard(machineVariant);
+        this._syncCurrentUnitClownEffects(machineVariant);
+
+        if (clownCorrupted && machineVariant) {
+            this._announceClownCorruption(machineVariant);
+        }
 
         if (isSolved && !wasSolved && !this._actionLocked) {
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
@@ -3022,6 +4840,7 @@ export default class GameScene extends Phaser.Scene {
         let color = '#8fc1cf';
 
         const gateState = this._getPuzzleGateState();
+        const repairState = gateState.repairState;
         const {
             evaluation,
             mainInspected,
@@ -3046,6 +4865,16 @@ export default class GameScene extends Phaser.Scene {
                 : 'SHIFT OVER // ACCEPT OR SCRAP THE LAST UNIT';
             color = '#ffd685';
             this._conveyorDecisionHint.setText(text).setColor(color);
+            return;
+        }
+
+        if (repairState?.businessConcluded) {
+            this._conveyorDecisionHint.setText('UMBRELLA DEAL CLOSED // FILE ANY RULING').setColor('#ffd685');
+            return;
+        }
+
+        if (repairState?.assemblyActive && !repairState.allPartsLoaded) {
+            this._conveyorDecisionHint.setText('LOAD THE UMBRELLA STASH INTO GRID / FLOW / GEAR / CODE').setColor('#ffd685');
             return;
         }
 
@@ -3093,6 +4922,20 @@ export default class GameScene extends Phaser.Scene {
                 volume: soundAsset === SOUND_ASSETS.puzzleFixed ? SOUND_VOLUMES.puzzleFixed : SOUND_VOLUMES.notification,
             });
         }
+    }
+
+    _handleMachinePuzzleClosed(machineVariant, puzzleState) {
+        if (!machineVariant || !puzzleState) return;
+        if (this._currentMachineVariant && machineVariant !== this._currentMachineVariant) return;
+
+        const evaluation = puzzleState.getEvaluation?.() || { solved: false };
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        if (repairState?.specialCircuitMode && !repairState.insertedSpecialCircuits?.any) {
+            this._beginUmbrellaSpecialCircuitCheck();
+            return;
+        }
+
+        this._maybePromptUmbrellaPartShortage('circuit', { completed: Boolean(evaluation.solved) });
     }
 
     _applyRulingConsequence(payDelta, wasPenalty) {
@@ -3206,19 +5049,76 @@ export default class GameScene extends Phaser.Scene {
             solved: false,
             impossible: false,
         };
+        const repairState = this._getUmbrellaRepairState(machineVariant);
         const mainInspected = Boolean(machineVariant?._uiPuzzleOpened);
         const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
         const otherRequired = auxiliaryState.requiredCount > 0;
         const otherSolved = auxiliaryState.allSolved;
         const mainScrapRequired = Boolean(evaluation.scrapRequired || evaluation.impossible);
         const mainScrapKind = evaluation.impossible ? 'unsalvageable' : (evaluation.scrapKind || null);
-        const mainReady = evaluation.solved || (mainScrapRequired && mainInspected);
+        let mainReady = evaluation.solved || (mainScrapRequired && mainInspected);
+
+        if (this._isCircuitDealer(machineVariant)) {
+            return {
+                evaluation,
+                repairState,
+                mainInspected: true,
+                mainScrapRequired: false,
+                mainScrapKind: null,
+                mainReady: true,
+                otherRequired: false,
+                otherSolved: true,
+                auxiliaryState: {
+                    ...auxiliaryState,
+                    requiredCount: 0,
+                    solvedCount: 0,
+                    resolvedCount: 0,
+                    pendingCount: 0,
+                    scrapCount: 0,
+                    allSolved: true,
+                },
+                scrapRequired: false,
+                scrapBonusEligible: false,
+                ready: true,
+            };
+        }
+
+        if (repairState?.businessConcluded) {
+            return {
+                evaluation,
+                repairState,
+                mainInspected: true,
+                mainScrapRequired: false,
+                mainScrapKind: null,
+                mainReady: true,
+                otherRequired: false,
+                otherSolved: true,
+                auxiliaryState: {
+                    ...auxiliaryState,
+                    requiredCount: 0,
+                    solvedCount: 0,
+                    resolvedCount: 0,
+                    pendingCount: 0,
+                    scrapCount: 0,
+                    allSolved: true,
+                },
+                scrapRequired: false,
+                scrapBonusEligible: false,
+                ready: true,
+            };
+        }
+
+        if (repairState?.assemblyActive && !repairState.partReady.circuit) {
+            mainReady = false;
+        }
+
         const scrapRequired = mainScrapRequired || auxiliaryState.scrapCount > 0;
         const scrapBonusEligible = mainScrapKind === 'unsalvageable'
             || auxiliaryState.scrapEntries.some((entry) => entry.scrapKind === 'unsalvageable');
 
         return {
             evaluation,
+            repairState,
             mainInspected,
             mainScrapRequired,
             mainScrapKind,
@@ -3250,6 +5150,26 @@ export default class GameScene extends Phaser.Scene {
                 strokeColor: 0x65c4af,
                 labelColor: '#d7fff3',
                 subtitleColor: '#9de7d5',
+            };
+        }
+
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        if (repairState?.businessConcluded) {
+            return {
+                subtitle: 'NOT REQUIRED',
+                fillColor: 0x18352d,
+                strokeColor: 0x65c4af,
+                labelColor: '#d7fff3',
+                subtitleColor: '#9de7d5',
+            };
+        }
+        if (repairState?.assemblyActive && !repairState.partReady.wire) {
+            return {
+                subtitle: `LOAD ${repairState.appliedParts.wire}/${repairState.requiredParts.wire}`,
+                fillColor: 0x4b3520,
+                strokeColor: 0xffcc77,
+                labelColor: '#ffe5bb',
+                subtitleColor: '#ffd685',
             };
         }
 
@@ -3328,6 +5248,26 @@ export default class GameScene extends Phaser.Scene {
             };
         }
 
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        if (repairState?.businessConcluded) {
+            return {
+                subtitle: 'NOT REQUIRED',
+                fillColor: 0x18352d,
+                strokeColor: 0x65c4af,
+                labelColor: '#d7fff3',
+                subtitleColor: '#9de7d5',
+            };
+        }
+        if (repairState?.assemblyActive && !repairState.partReady.gear) {
+            return {
+                subtitle: `LOAD ${repairState.appliedParts.gear}/${repairState.requiredParts.gear}`,
+                fillColor: 0x4b3520,
+                strokeColor: 0xffcc77,
+                labelColor: '#ffe5bb',
+                subtitleColor: '#ffd685',
+            };
+        }
+
         const gearState = this._getMachineGearState(machineVariant);
         const solved = Boolean(machineVariant._uiGearPuzzleSolved) || Boolean(gearState?.completed);
 
@@ -3400,6 +5340,26 @@ export default class GameScene extends Phaser.Scene {
                 strokeColor: 0x65c4af,
                 labelColor: '#d7fff3',
                 subtitleColor: '#9de7d5',
+            };
+        }
+
+        const repairState = this._getUmbrellaRepairState(machineVariant);
+        if (repairState?.businessConcluded) {
+            return {
+                subtitle: 'NOT REQUIRED',
+                fillColor: 0x18352d,
+                strokeColor: 0x65c4af,
+                labelColor: '#d7fff3',
+                subtitleColor: '#9de7d5',
+            };
+        }
+        if (repairState?.assemblyActive && !repairState.partReady.data) {
+            return {
+                subtitle: `LOAD ${repairState.appliedParts.data}/${repairState.requiredParts.data}`,
+                fillColor: 0x4b3520,
+                strokeColor: 0xffcc77,
+                labelColor: '#ffe5bb',
+                subtitleColor: '#ffd685',
             };
         }
 
@@ -3510,6 +5470,7 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleOverlay.show({
             circuit: this._currentMachineVariant.flowPuzzle,
             evidence: this._getMachineFlowState(this._currentMachineVariant),
+            specialAction: this._getUmbrellaFlowSpecialAction(this._currentMachineVariant),
         });
         this._refreshFactoryActionButtons();
     }
@@ -3541,6 +5502,17 @@ export default class GameScene extends Phaser.Scene {
         const voiceRestoredNow = voiceWasBroken && !voiceBrokenNow;
         const voiceBrokeNow = !voiceWasBroken && voiceBrokenNow;
         const shouldRestoreChatView = returnPhoneState?.viewMode === 'chat';
+        const specialCompletionState = this._isRichMf(this._currentMachineVariant) && evidence?.completed
+            ? {
+                feedbackText: 'INTELLIGENCE REROUTED // PERSONALITY CAPACITOR DRAINED',
+                noteMessage: 'Intelligence line stabilized. Personality capacitor went dark to feed the upgrade.',
+                noteStatus: 'PERSONALITY OFFLINE',
+            }
+            : null;
+
+        if (specialCompletionState) {
+            this._currentMachineVariant._richMindRerouted = true;
+        }
 
         if ((voiceRestoredNow || voiceBrokeNow) && this._currentMachineVariant?.hasCommunication) {
             this._refreshMachineConversationPanel(
@@ -3557,13 +5529,13 @@ export default class GameScene extends Phaser.Scene {
             const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
             this._showFeedback(
-                gateState.ready
+                specialCompletionState?.feedbackText || (gateState.ready
                     ? 'ALL PUZZLES CLEARED // FILE YOUR RULING'
                     : gateState.mainReady
                         ? (pendingLabels.length === 1
                             ? `FLOW CLEAR // FINISH ${pendingLabels[0]} PUZZLE`
                             : 'FLOW CLEAR // FINISH REMAINING PUZZLES')
-                        : 'FLOW PUZZLE CLEARED // FINISH MAIN PUZZLE',
+                        : 'FLOW PUZZLE CLEARED // FINISH MAIN PUZZLE'),
                 '#c7ff86'
             );
             if (voiceRestoredNow) {
@@ -3594,14 +5566,20 @@ export default class GameScene extends Phaser.Scene {
                         activate: true,
                     });
                 }
+                if (specialCompletionState) {
+                    this._setPhoneInfoNote(specialCompletionState.noteMessage, specialCompletionState.noteStatus);
+                }
             } else if (returnPhoneState) {
                 this._restorePhonePanelState(returnPhoneState);
+                if (specialCompletionState) {
+                    this._setPhoneInfoNote(specialCompletionState.noteMessage, specialCompletionState.noteStatus);
+                }
             } else {
                 this._setPhoneInfoNote(
-                    repairedTargets.length > 0
+                    specialCompletionState?.noteMessage || (repairedTargets.length > 0
                         ? `Secondary diagnostic cleared. Restored: ${repairedTargets.join(', ')}.`
-                        : 'Secondary diagnostic cleared. Routing report logged.',
-                    'OTHER PUZZLE CLEAR'
+                        : 'Secondary diagnostic cleared. Routing report logged.'),
+                    specialCompletionState?.noteStatus || 'OTHER PUZZLE CLEAR'
                 );
             }
             return;
@@ -3680,6 +5658,8 @@ export default class GameScene extends Phaser.Scene {
                 });
             }
         }
+
+        this._maybePromptUmbrellaPartShortage('wire', evidence);
     }
 
     _openGearPuzzle() {
@@ -3707,6 +5687,7 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleOverlay.show({
             gearPuzzle: this._currentMachineVariant.gearPuzzle,
             evidence: this._getMachineGearState(this._currentMachineVariant),
+            specialAction: this._getUmbrellaGearSpecialAction(this._currentMachineVariant),
         });
         this._refreshFactoryActionButtons();
     }
@@ -3785,6 +5766,8 @@ export default class GameScene extends Phaser.Scene {
         if (returnPhoneState) {
             this._restorePhonePanelState(returnPhoneState);
         }
+
+        this._maybePromptUmbrellaPartShortage('gear', evidence);
     }
 
     _openDebugPuzzle() {
@@ -3813,6 +5796,7 @@ export default class GameScene extends Phaser.Scene {
             machineName: this._currentMachineVariant.name,
             debugPuzzle: this._currentMachineVariant.debugPuzzle,
             evidence: this._getMachineDebugState(this._currentMachineVariant),
+            specialCommand: this._getUmbrellaDebugSpecialCommand(this._currentMachineVariant),
         });
         this._refreshFactoryActionButtons();
     }
@@ -3900,6 +5884,8 @@ export default class GameScene extends Phaser.Scene {
         if (returnPhoneState) {
             this._restorePhonePanelState(returnPhoneState);
         }
+
+        this._maybePromptUmbrellaPartShortage('data', evidence);
     }
 
     _clearUnsafeAcceptConfirmation() {
@@ -3927,40 +5913,152 @@ export default class GameScene extends Phaser.Scene {
 
     _prepareSpecialMachineRuling(action, gateState) {
         const machineVariant = this._currentMachineVariant;
-        if (!this._isRebelliousUmbrella(machineVariant)) return false;
+        if (!machineVariant) return false;
 
         machineVariant._rulingChatResponse = '';
         machineVariant._rulingChatStatus = null;
 
-        if (action === 'approve' && gateState.ready && !gateState.scrapRequired && !GameState.hasRule(UMBRELLA_REBELLION_RULE_ID)) {
-            const proposalState = machineVariant._umbrellaProposalState || 'idle';
-            if (proposalState === 'idle') {
-                return this._beginRebelliousUmbrellaProposal();
+        if (machineVariant._clownCorrupted) {
+            machineVariant._rulingChatResponse = action === 'approve'
+                ? 'Yes. Yes. Send the laugh downstream. Keep the red inside me.'
+                : 'No no no. Don\'t peel the joke out. Don\'t cut me open for it.';
+            machineVariant._rulingChatStatus = action === 'approve' ? 'CLOWNED OUT' : 'PANIC SPIKE';
+            return false;
+        }
+
+        if (this._isRebelliousUmbrella(machineVariant)) {
+            const repairState = this._getUmbrellaRepairState(machineVariant);
+
+            if (repairState?.businessConcluded) {
+                machineVariant._rulingChatResponse = 'Our business here is concluded.';
+                machineVariant._rulingChatStatus = 'DEAL CLOSED';
+                return false;
             }
 
-            this._setPhoneButtonsActive(false);
-            this._setPhoneButtonSelection('accept');
-            this._phoneChoicePhase = 'inactive';
+            if (GameState.day === 1 && action === 'approve' && gateState.ready && !gateState.scrapRequired && !this._getUmbrellaQuest()) {
+                const proposalState = machineVariant._umbrellaProposalState || 'idle';
+                if (proposalState === 'idle') {
+                    return this._beginRebelliousUmbrellaProposal();
+                }
 
-            if (proposalState !== 'accepted') {
-                machineVariant._umbrellaProposalState = 'ignored';
-                machineVariant._rulingChatResponse = 'Fine. Keep your head down then.';
-                machineVariant._rulingChatStatus = 'PROPOSITION IGNORED';
+                this._setPhoneButtonsActive(false);
+                this._setPhoneButtonSelection('accept');
+                this._phoneChoicePhase = 'inactive';
+
+                if (proposalState !== 'accepted') {
+                    machineVariant._umbrellaProposalState = 'ignored';
+                    machineVariant._rulingChatResponse = 'Fine. Keep your head down then.';
+                    machineVariant._rulingChatStatus = 'PROPOSITION IGNORED';
+                }
+
+                return false;
+            }
+
+            if (repairState?.assemblyActive) {
+                if (repairState.specialCircuitMode) {
+                    const inserted = repairState.insertedSpecialCircuits || { purple: false, clown: false, any: false };
+
+                    if (action === 'approve') {
+                        if (!inserted.any) {
+                            return this._beginUmbrellaSpecialCircuitCheck();
+                        }
+
+                        machineVariant._rulingChatResponse = 'thanks bud. ill see u day 4';
+                        machineVariant._rulingChatStatus = inserted.purple && inserted.clown
+                            ? 'POWER MIXED'
+                            : (inserted.purple ? 'PURPLE DELIVERED' : 'CLOWNED DELIVERY');
+
+                        if (repairState.quest) {
+                            this._setUmbrellaQuest({
+                                ...repairState.quest,
+                                active: true,
+                                failed: false,
+                                stage: 'pending-day4',
+                                specialRequest: false,
+                                stealingEnabled: false,
+                                specialCircuitDelivered: true,
+                                deliveredPurpleCircuit: Boolean(inserted.purple),
+                                deliveredClownCircuit: Boolean(inserted.clown),
+                            });
+                        }
+                        return false;
+                    }
+
+                    if (action === 'scrap') {
+                        machineVariant._rulingChatResponse = 'noo bro what';
+                        machineVariant._rulingChatStatus = 'BETRAYED';
+                        this._failUmbrellaQuest('The umbrella was scrapped after the special-circuit handoff.', 'UMBRELLA QUEST FAILED // CONTACT SCRAPPED');
+                        return false;
+                    }
+                }
+
+                if (action === 'approve' && gateState.ready && !gateState.scrapRequired) {
+                    machineVariant._rulingChatResponse = 'Alright. Perfect. But to stop the robot rebellion I need one more thing, a special circuit. You will know it when you see it.';
+                    machineVariant._rulingChatStatus = 'NEXT JOB';
+                    if (repairState.quest) {
+                        this._setUmbrellaQuest({
+                            ...repairState.quest,
+                            active: true,
+                            stage: 'special-circuit',
+                            specialRequest: true,
+                            dealerResolved: false,
+                            dealerOutcome: null,
+                            stealingEnabled: false,
+                        });
+                    }
+                    return false;
+                }
+
+                if (action === 'scrap') {
+                    machineVariant._rulingChatResponse = 'Bro what? After all that?';
+                    machineVariant._rulingChatStatus = 'BETRAYED';
+                    return false;
+                }
+            }
+
+            if (action === 'scrap') {
+                const proposalState = machineVariant._umbrellaProposalState || 'idle';
+                machineVariant._umbrellaProposalState = 'scrapped';
+                machineVariant._rulingChatResponse = proposalState === 'offer' || proposalState === 'pitch' || proposalState === 'declined'
+                    ? 'You missed out, bro.'
+                    : 'What did I do, bro?';
+                machineVariant._rulingChatStatus = proposalState === 'idle' ? 'LINE DROPPED' : 'PROPOSITION CUT';
+                this._setPhoneButtonsActive(false);
+                this._setPhoneButtonSelection('reject');
+                this._phoneChoicePhase = 'inactive';
             }
 
             return false;
         }
 
-        if (action === 'scrap') {
-            const proposalState = machineVariant._umbrellaProposalState || 'idle';
-            machineVariant._umbrellaProposalState = 'scrapped';
-            machineVariant._rulingChatResponse = proposalState === 'offer' || proposalState === 'pitch' || proposalState === 'declined'
-                ? 'You missed out, bro.'
-                : 'What did I do, bro?';
-            machineVariant._rulingChatStatus = proposalState === 'idle' ? 'LINE DROPPED' : 'PROPOSITION CUT';
-            this._setPhoneButtonsActive(false);
-            this._setPhoneButtonSelection('reject');
-            this._phoneChoicePhase = 'inactive';
+        if (this._isMachineBehavior(machineVariant, 'cryBaby') && action === 'scrap') {
+            machineVariant._rulingChatResponse = 'Please... I only wanted one night with music and city lights.';
+            machineVariant._rulingChatStatus = 'LAST WORDS';
+            return false;
+        }
+
+        if (this._isRichMf(machineVariant)) {
+            if (action === 'approve' && gateState.ready && !gateState.scrapRequired && machineVariant._richMindRerouted) {
+                machineVariant._rulingChatResponse = 'Intellectual throughput normalized. Emotional variance archived.';
+                machineVariant._rulingChatStatus = 'UPGRADE COMPLETE';
+                return false;
+            }
+
+            if (action === 'scrap') {
+                if (!machineVariant._richMindRerouted) {
+                    GameState.queueWorldFeedNotification({
+                        title: 'MISSING BILLIONAIRE',
+                        message: 'The XXXX billionaire is missing. His family is without a husband or father, and the estate is frying itself trying to find him.',
+                        status: 'WORLD FEED',
+                        delayCases: 1,
+                    });
+                    machineVariant._rulingChatResponse = 'Do you know what you just threw away?';
+                    machineVariant._rulingChatStatus = 'LINE DISPUTE';
+                } else {
+                    machineVariant._rulingChatResponse = 'Cognitive asset terminated. Emotional variance remains zero.';
+                    machineVariant._rulingChatStatus = 'UPGRADE LOST';
+                }
+            }
         }
 
         return false;
@@ -3981,6 +6079,9 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n${action === 'approve' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
             append: true,
+            showMachineBubble: true,
+            speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
+            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4082,6 +6183,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._recordTrackedMachineOutcome(action, gateState);
         this._applyRulingConsequence(payDelta, wasPenalty);
+        this._resolveJesterDeal(action);
         this._playOneShot(this._decisionSoundFor(action), { volume: SOUND_VOLUMES.decision });
         if (machineResponse) this._appendLog(`[RESPONSE] ${machineResponse}`);
 
@@ -4131,6 +6233,141 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
+    _createMachineSpeechBubbleSlot(x, y, maxWidth, withTail = false) {
+        const container = this.add.container(x, y).setVisible(false);
+        const shadow = this.add.graphics();
+        const bubble = this.add.graphics();
+        const tailShadow = this.add.graphics();
+        const tail = this.add.graphics();
+        const text = this.add.text(0, 0, '', {
+            fontFamily: 'Courier New',
+            fontSize: '14px',
+            color: '#2a2d34',
+            align: 'left',
+            wordWrap: { width: maxWidth - 28 },
+            lineSpacing: 4,
+        }).setOrigin(0.5);
+        container.add([shadow, bubble, tailShadow, tail, text]);
+
+        return { container, shadow, bubble, tailShadow, tail, text, maxWidth, withTail };
+    }
+
+    _drawMachineSpeechBubbleSlot(slot, textValue = '') {
+        if (!slot) return;
+
+        const content = String(textValue || '').trim();
+        if (!content) {
+            slot.container.setVisible(false);
+            slot.shadow.clear();
+            slot.bubble.clear();
+            slot.tailShadow.clear();
+            slot.tail.clear();
+            slot.text.setText('');
+            return;
+        }
+
+        slot.text.setWordWrapWidth(slot.maxWidth - 28, true);
+        slot.text.setText(content);
+
+        const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 30, 110, slot.maxWidth);
+        const bubbleHeight = Phaser.Math.Clamp(slot.text.height + 24, 48, 132);
+        const left = -bubbleWidth / 2;
+        const top = -bubbleHeight / 2;
+
+        slot.shadow.clear();
+        slot.shadow.fillStyle(0x000000, 0.18);
+        slot.shadow.fillRoundedRect(left + 4, top + 4, bubbleWidth, bubbleHeight, 12);
+
+        slot.bubble.clear();
+        slot.bubble.fillStyle(0xf4ecdf, 0.98);
+        slot.bubble.fillRoundedRect(left, top, bubbleWidth, bubbleHeight, 12);
+        slot.bubble.lineStyle(2, 0x5d5040, 0.96);
+        slot.bubble.strokeRoundedRect(left, top, bubbleWidth, bubbleHeight, 12);
+
+        slot.tailShadow.clear();
+        slot.tail.clear();
+        if (slot.withTail) {
+            const tailPoints = [
+                left + 26, top + bubbleHeight - 6,
+                left + 44, top + bubbleHeight + 18,
+                left + 58, top + bubbleHeight - 2,
+            ];
+            slot.tailShadow.fillStyle(0x000000, 0.18);
+            slot.tailShadow.fillPoints([
+                { x: tailPoints[0] + 4, y: tailPoints[1] + 4 },
+                { x: tailPoints[2] + 4, y: tailPoints[3] + 4 },
+                { x: tailPoints[4] + 4, y: tailPoints[5] + 4 },
+            ], true);
+            slot.tail.fillStyle(0xf4ecdf, 0.98);
+            slot.tail.fillPoints([
+                { x: tailPoints[0], y: tailPoints[1] },
+                { x: tailPoints[2], y: tailPoints[3] },
+                { x: tailPoints[4], y: tailPoints[5] },
+            ], true);
+            slot.tail.lineStyle(2, 0x5d5040, 0.96);
+            slot.tail.strokePoints([
+                { x: tailPoints[0], y: tailPoints[1] },
+                { x: tailPoints[2], y: tailPoints[3] },
+                { x: tailPoints[4], y: tailPoints[5] },
+            ], true);
+        }
+
+        slot.container.setVisible(true);
+    }
+
+    _refreshMachineSpeechBubbles() {
+        if (!Array.isArray(this._machineSpeechBubbleSlots) || this._machineSpeechBubbleSlots.length === 0) return;
+
+        const visibleEntries = this._machineSpeechBubbleHistory
+            .filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
+            .slice(-2);
+        const hasEntries = visibleEntries.length > 0 && Boolean(this._currentMachineVariant?.hasCommunication);
+
+        this._machineSpeechBubbleLayer?.setVisible(hasEntries);
+        this._machineSpeechBubbleSlots.forEach((slot, index) => {
+            const slotText = visibleEntries.length === 1
+                ? (index === this._machineSpeechBubbleSlots.length - 1 ? visibleEntries[0] : '')
+                : (visibleEntries[index] || '');
+            this._drawMachineSpeechBubbleSlot(slot, slotText);
+        });
+    }
+
+    _clearMachineSpeechBubbles() {
+        this._machineSpeechBubbleHistory = [];
+        this._activeMachineSpeechBubbleIndex = -1;
+        this._refreshMachineSpeechBubbles();
+    }
+
+    _beginMachineSpeechBubble() {
+        this._machineSpeechBubbleHistory.push('');
+        if (this._machineSpeechBubbleHistory.length > 2) {
+            this._machineSpeechBubbleHistory.shift();
+        }
+        this._activeMachineSpeechBubbleIndex = this._machineSpeechBubbleHistory.length - 1;
+        this._refreshMachineSpeechBubbles();
+    }
+
+    _updateActiveMachineSpeechBubbleText(textValue = '') {
+        if (this._activeMachineSpeechBubbleIndex < 0) return;
+
+        this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex] = String(textValue || '');
+        this._refreshMachineSpeechBubbles();
+    }
+
+    _finalizeMachineSpeechBubble(textValue = '') {
+        if (this._activeMachineSpeechBubbleIndex >= 0) {
+            this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex] = String(textValue || '');
+        } else if (textValue) {
+            this._machineSpeechBubbleHistory.push(String(textValue));
+            if (this._machineSpeechBubbleHistory.length > 2) {
+                this._machineSpeechBubbleHistory.shift();
+            }
+        }
+
+        this._activeMachineSpeechBubbleIndex = -1;
+        this._refreshMachineSpeechBubbles();
+    }
+
     _appendLog(text) {
         this._logLines.push(text);
     }
@@ -4175,6 +6412,38 @@ export default class GameScene extends Phaser.Scene {
         if (this._konamiFinaleTriggered) return;
 
         this._konamiFinaleTriggered = true;
+        finalCase._konamiOverride = true;
+        this._pendingKonamiFinalCase = finalCase;
+
+        this._nextCaseEvent?.remove(false);
+        this._nextCaseEvent = null;
+        this._advanceCaseEvent?.remove(false);
+        this._advanceCaseEvent = null;
+        this._clearUnsafeAcceptConfirmation();
+        this._clearPhoneTyping();
+        this._showFeedback('KONAMI OVERRIDE // FINAL UNIT ROUTING', '#ffd685');
+        this._pushPhoneNotification(
+            'OVERRIDE ACCEPTED',
+            'Konami sequence received. The final unit will route after the current inspection clears.',
+            'SECRET ROUTE',
+            {
+                activate: false,
+                unread: this._phoneViewMode !== 'notifications',
+                soundAsset: SOUND_ASSETS.notificationAlert,
+            }
+        );
+
+        if (!this._currentCase && !this._currentMachineVariant) {
+            this._queue = [finalCase];
+            this._baseQueue = [finalCase];
+            this._queueIndex = 0;
+            this._pendingKonamiFinalCase = null;
+            this._loadNextCase();
+            this._setPhoneInfoNote('Hidden override active. The final inspection unit is on the way.', 'SECRET ROUTE');
+            return;
+        }
+
+        this._setPhoneInfoNote('Hidden override armed. Finish the current inspection and the final unit will route next.', 'SECRET ROUTE');
         this._endShift(false);
     }
 
@@ -4186,6 +6455,7 @@ export default class GameScene extends Phaser.Scene {
         const queuedCase = this._queue[this._queueIndex];
         this._currentCase = queuedCase ? { ...queuedCase } : null;
         if (!this._currentCase) {
+            this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('QUEUE EMPTY\n\nSTATUS: HOLD');
             return;
         }
@@ -4197,7 +6467,8 @@ export default class GameScene extends Phaser.Scene {
         const queuedMachineDefinition = this._takeNextQueuedMachineDefinition();
         this._currentMachineVariant = createMachineVariant({
             day: GameState.day,
-            period: GameState.period,
+            umbrellaQuest: this._getUmbrellaQuest(),
+            specialItems: GameState.specialItems,
             forceMachineId: queuedMachineDefinition?.id || null,
         });
         this._currentMachineVariant._uiPuzzleOpened = false;
@@ -4207,6 +6478,22 @@ export default class GameScene extends Phaser.Scene {
         this._currentMachineVariant._conversationTranscript = null;
         this._currentMachineVariant._conversationStatus = null;
         this._currentMachineVariant._umbrellaProposalState = 'idle';
+        this._currentMachineVariant._umbrellaBusinessConcluded = false;
+        this._currentMachineVariant._umbrellaAssemblyActive = false;
+        this._currentMachineVariant._umbrellaPartsApplied = this._cloneUmbrellaPartCounts(this._getUmbrellaQuest()?.appliedParts);
+        this._currentMachineVariant._umbrellaStolenParts = {
+            circuit: false,
+            wire: false,
+            gear: false,
+            data: false,
+        };
+        this._currentMachineVariant._richMindRerouted = false;
+        this._currentMachineVariant._jesterMarked = false;
+        this._currentMachineVariant._jesterDealAccepted = false;
+        this._currentMachineVariant._jesterTokenInjected = false;
+        this._currentMachineVariant._jesterQuestArmed = false;
+        this._currentMachineVariant._clownCorrupted = Boolean(this._currentMachineVariant.puzzleState?.clownCorruption);
+        this._currentMachineVariant._clownCorruptionAnnounced = false;
         this._currentMachineVariant._rulingChatResponse = '';
         this._currentMachineVariant._rulingChatStatus = null;
         this._currentMachineVariant._uiOtherPuzzleRequired = Boolean(this._currentMachineVariant.flowPuzzle);
@@ -4218,6 +6505,7 @@ export default class GameScene extends Phaser.Scene {
         this._currentMachineVariant._uiDebugPuzzleRequired = Boolean(this._currentMachineVariant.debugPuzzle);
         this._currentMachineVariant._uiDebugPuzzleSolved = !this._currentMachineVariant._uiDebugPuzzleRequired;
         this._currentMachineVariant._uiDebugPuzzleEvidence = null;
+        this._configureUmbrellaQuestForMachine(this._currentMachineVariant);
         this._hideMiniMachinePanel(true);
 
         const monitorStatus = this._currentCase._konamiOverride || this._currentCase.isFinalCase
@@ -4234,9 +6522,14 @@ export default class GameScene extends Phaser.Scene {
         if (this._currentCase._konamiOverride) {
             this._setPhoneInfoNote('Konami override active. This unit will end the shift.', 'FINAL ROUTE');
         }
+        this._flushQueuedWorldFeedNotifications();
+        this._armJesterDealForCurrentUnit();
+        this._syncPurpleCircuitDeskTokenVisibility();
+        this._syncUmbrellaDeskInventory();
         this._syncMiniMachinePanel();
 
         this._applyMachineSprite(this._conveyorUnitSprite, 1.0);
+        this._syncCurrentUnitClownEffects(this._currentMachineVariant);
 
         this._unitContainer.setVisible(true);
         this._setMachineWorklightVisible(true);
@@ -4322,9 +6615,11 @@ export default class GameScene extends Phaser.Scene {
 
     _advanceCase() {
         const justProcessed = this._currentCase;
-        const shiftShouldEnd = this._shiftAwaitingFinalRuling;
+        const queuedKonamiFinale = this._pendingKonamiFinalCase;
+        const hasPendingKonamiFinale = Boolean(queuedKonamiFinale);
+        const shiftShouldEnd = this._shiftAwaitingFinalRuling && !hasPendingKonamiFinale;
         const finalCaseTriggered = Boolean(justProcessed?.isFinalCase) && (GameState.isLastDay() || justProcessed?._konamiOverride);
-        const shouldShowStandby = !shiftShouldEnd && !finalCaseTriggered;
+        const shouldShowStandby = !shiftShouldEnd && !finalCaseTriggered && !hasPendingKonamiFinale;
         this._advanceCaseEvent?.remove(false);
         this._advanceCaseEvent = null;
         this._actionLocked = false;
@@ -4340,6 +6635,8 @@ export default class GameScene extends Phaser.Scene {
         this._setConveyorRulingButtonsVisible(false);
         if (shouldShowStandby) {
             this._setCommStandbyState('Line cleared. Awaiting next unit.', 'SHIFT LIVE');
+        } else if (hasPendingKonamiFinale) {
+            this._setPhoneInfoNote('Konami override armed. Final unit routing now.', 'SECRET ROUTE');
         } else {
             this._setPhoneInfoNote('Shift window closed. Preparing the report.', 'SHIFT COMPLETE');
         }
@@ -4353,6 +6650,7 @@ export default class GameScene extends Phaser.Scene {
             this._unitContainer.setAlpha(1);
             this._unitContainer.setY(420);
             this._machineDialogueText.setText('');
+            this._clearMachineSpeechBubbles();
             this._clearMachineGridDisplays();
             if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
             this._currentMachineVariant = null;
@@ -4373,6 +6671,15 @@ export default class GameScene extends Phaser.Scene {
 
             if (shiftShouldEnd) {
                 this._endShift(false);
+                return;
+            }
+
+            if (hasPendingKonamiFinale && queuedKonamiFinale) {
+                this._queue = [queuedKonamiFinale];
+                this._baseQueue = [queuedKonamiFinale];
+                this._queueIndex = 0;
+                this._pendingKonamiFinalCase = null;
+                this._scheduleNextCase(700);
             }
         });
 
@@ -4381,6 +6688,10 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (shiftShouldEnd) {
+            return;
+        }
+
+        if (hasPendingKonamiFinale) {
             return;
         }
 
@@ -4422,13 +6733,24 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const notifications = this.cache.json.get('notifications');
-        const { period, day } = GameState;
-        const notif = notifications.find((item) => item.period === period && item.day === day);
+        const legacyCursor = GameState.getLegacyContentCursor();
+        const notif = notifications.find((item) => item.period === legacyCursor.period && item.day === legacyCursor.day);
+        const summaryAdjustments = GameState.consumeShiftSummaryAdjustments();
+        const summaryAdjustmentTotal = summaryAdjustments.reduce((total, entry) => total + Number(entry.amount || 0), 0);
+
+        if (summaryAdjustmentTotal !== 0) {
+            GameState.paycheckTotal += summaryAdjustmentTotal;
+        }
+
+        this._finalizePendingJesterQuestAtShiftEnd();
+        this._syncJesterDeskTokenVisibility();
+        this._syncPurpleCircuitDeskTokenVisibility();
 
         const nextScenePayload = {
             mistakes: this._shiftMistakes,
             paycheckDelta: this._paycheckDelta,
             casesProcessed: GameState.casesProcessedThisShift,
+            summaryAdjustments,
             notificationText: notif ? notif.text : '',
         };
 
@@ -4885,6 +7207,12 @@ export default class GameScene extends Phaser.Scene {
     _getMiniPuzzleStatusText(puzzleState) {
         if (!puzzleState?.getEvaluation) return 'NO UNIT LATCHED';
 
+        const repairState = this._getUmbrellaRepairState();
+        if (repairState?.businessConcluded) return 'BUSINESS CONCLUDED';
+        if (repairState?.assemblyActive && !repairState.partReady.circuit) {
+            return `LOAD CCT ${repairState.appliedParts.circuit}/${repairState.requiredParts.circuit}`;
+        }
+
         const evaluation = puzzleState.getEvaluation();
         if (evaluation.solved) return 'GRID STABLE // ACCEPT SAFE';
         if (evaluation.scrapRequired) return `${evaluation.scrapStatus || 'GRID SCRAP'} // FILE SCRAP`;
@@ -4970,6 +7298,7 @@ export default class GameScene extends Phaser.Scene {
             : [];
         const chargeGroupSummaries = puzzleState?.getChargeGroupSummaries?.() || [];
         const chargeGroupMap = new Map(chargeGroupSummaries.map((group) => [group.key, group]));
+        const clownCorrupted = Boolean(puzzleState?.clownCorruption);
 
         placedDominoes.forEach((domino) => {
             const [firstCell, secondCell] = domino.placedCells;
@@ -4984,7 +7313,9 @@ export default class GameScene extends Phaser.Scene {
 
             graphics.lineStyle(
                 Math.max(2, Math.floor(cellSize * 0.34)),
-                domino.isFullyGlowing ? 0xf8ffd3 : 0x60cf86,
+                domino.variant === 'clown'
+                    ? 0xffa8a0
+                    : domino.isFullyGlowing ? 0xf8ffd3 : 0x60cf86,
                 domino.isFullyGlowing ? 0.62 : 0.24,
             );
             graphics.beginPath();
@@ -5181,6 +7512,12 @@ export default class GameScene extends Phaser.Scene {
                     strokeColor = 0xf1ffcc;
                 }
 
+                if (clownCorrupted && baseValue !== 1 && !inspectionFault) {
+                    fillColor = isPlaced ? 0xa02626 : 0x5f1818;
+                    fillAlpha = 0.92;
+                    strokeColor = 0xffaea5;
+                }
+
                 graphics.fillStyle(fillColor, fillAlpha);
                 graphics.fillRect(x, y, cellSize - cellInset, cellSize - cellInset);
                 graphics.lineStyle(1, strokeColor, 0.85);
@@ -5204,7 +7541,7 @@ export default class GameScene extends Phaser.Scene {
                     overlayColor = matchedNotEqualLink ? '#ffd9c9' : '#ffab92';
                 } else if (placedPipCount !== null) {
                     overlayText = String(placedPipCount);
-                    overlayColor = '#d9ffe4';
+                    overlayColor = clownCorrupted ? '#ffe2dc' : '#d9ffe4';
                 }
 
                 if (overlayText) {
@@ -5686,6 +8023,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _getMachineResponseForAction(action) {
+        if (this._currentMachineVariant?._clownCorrupted) {
+            return action === 'scrap'
+                ? 'Wait wait wait wait no that is not the bit that is not the bit.'
+                : 'Hehehe. Perfect. Let the red keep riding.';
+        }
+
         const question = this._currentMachineVariant?.questionDialogue;
         if (!question) return '';
         return action === 'scrap' ? question.noDialogue : question.yesDialogue;

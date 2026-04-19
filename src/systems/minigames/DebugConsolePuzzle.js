@@ -55,6 +55,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._syncVisualFrame = null;
         this._puzzle = null;
         this._machineName = 'UNKNOWN UNIT';
+        this._specialCommand = null;
         this._charWidth = 14;
         this._commandTextStartX = -420;
         this._commandTextY = -100;
@@ -134,6 +135,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         this._puzzle = debugPuzzle;
         this._machineName = String(caseData?.machineName || 'UNKNOWN UNIT').toUpperCase();
+        this._specialCommand = caseData?.specialCommand || null;
         this.evidence = {
             ...this._defaultEvidence(),
             ...debugPuzzle.progress,
@@ -175,7 +177,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
             color: '#edf9ff',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
-        const subtitle = this.scene.add.text(-520, -252, debugPuzzle.description || 'Type the command exactly. If the output drifts, patch it and stabilize the machine.', {
+        const subtitle = this.scene.add.text(-520, -252, [
+            debugPuzzle.description || 'Type the command exactly. If the output drifts, patch it and stabilize the machine.',
+            this._specialCommand?.hint || '',
+        ].filter(Boolean).join('\n'), {
             fontFamily: 'monospace',
             fontSize: '12px',
             color: '#8eb1bd',
@@ -381,6 +386,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._escKey = null;
         this._escHandler = null;
         this._puzzle = null;
+        this._specialCommand = null;
         this._panel = null;
         this._blocker = null;
         this._closeButtonBg = null;
@@ -452,6 +458,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const nextMismatchCount = this._countMismatches(nextValue);
 
         this.emitEvidence({ inputValue: nextValue });
+
+        if (this._trySpecialCommand(nextValue)) {
+            return;
+        }
 
         if (nextMismatchCount > previousMismatchCount) {
             this._playWrongLetterSound();
@@ -801,6 +811,48 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._messageText?.setText(message);
         this._bugCounterText?.setText(`BUGS SQUASHED ${this.evidence.bugsSquashed || 0}  //  CORRUPTIONS ${this.evidence.corruptionCount || 0}`);
         this._closeButtonText?.setText((this.evidence.completed || this.evidence.phase === 'scrap') ? 'RETURN TO BOOTH [ESC]' : 'CLOSE PANEL [ESC]');
+    }
+
+    _trySpecialCommand(inputValue) {
+        const command = String(this._specialCommand?.command || '');
+        if (!command || inputValue !== command) return false;
+        if (this.evidence.completed || this.evidence.phase === 'scrap') return false;
+
+        const result = this._specialCommand.onTrigger?.({
+            evidence: {
+                ...this.evidence,
+                inputValue,
+            },
+            debugPuzzle: this._puzzle,
+        });
+        if (!result) return false;
+
+        const nextEvidence = result.evidence || {
+            ...this.evidence,
+            inputValue: '',
+        };
+        this.emitEvidence(nextEvidence);
+
+        if (this._hiddenInput) {
+            this._hiddenInput.value = String(nextEvidence.inputValue || '');
+            const caretIndex = this._hiddenInput.value.length;
+            this._setSelectionRange(caretIndex, caretIndex);
+        }
+
+        if (nextEvidence.completed || nextEvidence.phase === 'scrap') {
+            this._stopBugSpawner();
+            this._destroyAllBugs();
+        }
+
+        this._syncCommandVisuals();
+
+        if (result.closeAfter) {
+            this.close();
+        } else if (nextEvidence.phase !== 'scrap') {
+            this._focusHiddenInput();
+        }
+
+        return true;
     }
 
     _submitCurrentCommand() {

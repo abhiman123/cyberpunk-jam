@@ -58,10 +58,13 @@ export const SOUND_VOLUMES = Object.freeze({
     music: 0.7,
 });
 
+export const SHIFT_DURATION_MS = 360000;
+
 export const SHIFT_DURATION_MS_BY_PERIOD = Object.freeze({
-    1: 180000,
-    2: 135000,
-    3: 90000,
+    1: SHIFT_DURATION_MS,
+    2: SHIFT_DURATION_MS,
+    3: SHIFT_DURATION_MS,
+    4: SHIFT_DURATION_MS,
 });
 
 export const SHIFT_CLOCK = Object.freeze({
@@ -116,8 +119,8 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             ],
             no: [
                 createIntroSequenceLine('line3', 'Alright, see this? The rulebook only cares about one thing today: can the subsystem even be saved.', SOUND_ASSETS.phoneIntroYesLine3),
-                createIntroSequenceLine('line4', 'If the command is corrupted, the gear is cracked, the wire route is severed, or the board has an orphan cell, you scrap it. No heroics.', SOUND_ASSETS.phoneIntroYesLine4),
-                createIntroSequenceLine('line5', 'If it is broken but still repairable, you solve the puzzle and file the unit clean. Today is about learning the work, not getting cute.', SOUND_ASSETS.phoneIntroYesLine5),
+                createIntroSequenceLine('line4', 'If the gear is cracked, the wire route is severed, or the board has an orphan cell, you scrap it. Programming jobs should run clean on day one if they are repairable at all.', SOUND_ASSETS.phoneIntroYesLine4),
+                createIntroSequenceLine('line5', 'If it is broken but still repairable, you solve the puzzle and file the unit clean. Today is about learning the work, not chasing output drift.', SOUND_ASSETS.phoneIntroYesLine5),
                 createIntroSequenceLine('line6', 'Good luck and your shift ends at 12.', SOUND_ASSETS.phoneIntroYesLine6),
             ],
         }),
@@ -213,12 +216,37 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
                 createIntroSequenceLine('line3', 'Last reminder. Red sparks, unstable load, crawling contamination, charged regions. Those are not challenges. Those are verdicts.'),
                 createIntroSequenceLine('line4', 'File the scrap and keep the line moving.'),
             ],
+        '4-1': createIntroSequence({
+            incomingBody: 'Overtime Call Coming',
+            questionStatus: 'KNOW TODAY\'S RULE? // ✓ YES // X NO',
+            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
+            postVoiceBody: 'Day 4 loaded. Tap either button to continue.',
+            intro: [
+                createIntroSequenceLine('line1', 'Look at you. Still here.'),
+                createIntroSequenceLine('line2', 'Same hazard rules as yesterday. If it looks unstable, contaminated, or dangerous, you scrap it.'),
+            ],
+            yes: [
+                createIntroSequenceLine('line3', 'Good. Then trust the warning signs before you trust the machine.'),
+            ],
+            no: [
+                createIntroSequenceLine('line3', 'Quick version. If the machine starts looking wrong in a dangerous way, do not get sentimental.'),
+                createIntroSequenceLine('line4', 'Unsafe software, unsafe load, unsafe motion, unsafe board. Scrap it and keep moving.'),
+            ],
+        }),
         }),
     }),
 });
 
 export function getOpeningPhoneCallSequence(period = 1, day = 1) {
-    return FIRST_SHIFT_INTRO.sequences[`${period}-${day}`] || FIRST_SHIFT_INTRO.sequences['1-1'];
+export function getOpeningPhoneCallSequence(day = 1) {
+    const sequenceKeyByDay = {
+        1: '1-1',
+        2: '2-1',
+        3: '3-1',
+        4: '4-1',
+    };
+
+    return FIRST_SHIFT_INTRO.sequences[sequenceKeyByDay[day] || '1-1'] || FIRST_SHIFT_INTRO.sequences['1-1'];
 }
 
 export const MACHINE_PRESENTATION = Object.freeze({

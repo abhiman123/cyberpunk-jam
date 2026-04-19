@@ -11,6 +11,7 @@ export default class SummaryScene extends Phaser.Scene {
         this._mistakes         = data.mistakes         || 0;
         this._paycheckDelta    = data.paycheckDelta    || 0;
         this._casesProcessed   = data.casesProcessed   || 0;
+        this._summaryAdjustments = Array.isArray(data.summaryAdjustments) ? data.summaryAdjustments : [];
         this._notificationText = data.notificationText || '';
     }
 
@@ -30,11 +31,11 @@ export default class SummaryScene extends Phaser.Scene {
         const accentColor = this._mistakes > 0 ? 0xcc3333 : 0x1a7a3a;
         this.add.rectangle(cx, 0, W, 2, accentColor).setOrigin(0.5, 0);
 
-        this.add.text(cx, 72, 'END OF SHIFT', {
+        this.add.text(cx, 72, 'END OF DAY', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
         }).setOrigin(0.5);
 
-        this.add.text(cx, 102, `DAY ${GameState.period}  ·  SHIFT ${GameState.day} OF 2`, {
+        this.add.text(cx, 102, `DAY ${GameState.day} COMPLETE`, {
             fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa', letterSpacing: 4,
         }).setOrigin(0.5);
 
@@ -68,30 +69,46 @@ export default class SummaryScene extends Phaser.Scene {
         const deltaSign = this._paycheckDelta >= 0 ? '+' : '-';
         const deltaStr  = `${deltaSign}$${Math.abs(this._paycheckDelta).toFixed(2)}`;
         const totalStr  = `$${Math.max(0, GameState.paycheckTotal).toFixed(2)}`;
+        const compensationRows = [
+            {
+                label: 'FROM WORK',
+                value: deltaStr,
+                color: hasViolations ? '#ff5555' : '#aaaaaa',
+            },
+            ...this._summaryAdjustments.map((entry) => ({
+                label: String(entry.label || 'ADJUSTMENT').toUpperCase(),
+                value: `${Number(entry.amount || 0) >= 0 ? '+' : '-'}$${Math.abs(Number(entry.amount || 0)).toFixed(2)}`,
+                color: Number(entry.amount || 0) >= 0 ? '#d8c46a' : '#ff7777',
+            })),
+            {
+                label: 'RUNNING',
+                value: totalStr,
+                color: '#44cc88',
+            },
+        ];
 
-        this.add.text(cx - 80, 352, 'THIS SHIFT', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa',
-        }).setOrigin(1, 0.5);
-        this.add.text(cx - 64, 352, deltaStr, {
-            fontFamily: 'Courier New', fontSize: '13px',
-            color: hasViolations ? '#ff5555' : '#aaaaaa',
-        }).setOrigin(0, 0.5);
+        const compensationStartY = 352;
+        const compensationLineGap = 24;
 
-        this.add.text(cx - 80, 376, 'RUNNING', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa',
-        }).setOrigin(1, 0.5);
-        this.add.text(cx - 64, 376, totalStr, {
-            fontFamily: 'Courier New', fontSize: '13px', color: '#44cc88',
-        }).setOrigin(0, 0.5);
+        compensationRows.forEach((row, index) => {
+            const y = compensationStartY + (index * compensationLineGap);
+            this.add.text(cx - 80, y, row.label, {
+                fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa',
+            }).setOrigin(1, 0.5);
+            this.add.text(cx - 64, y, row.value, {
+                fontFamily: 'Courier New', fontSize: '13px', color: row.color,
+            }).setOrigin(0, 0.5);
+        });
 
         if (this._notificationText) {
-            this._rule(420, 0x333333);
+            const notificationRuleY = 420 + Math.max(0, compensationRows.length - 2) * compensationLineGap;
+            this._rule(notificationRuleY, 0x333333);
 
-            const tagText = this.add.text(cx, 450, '// INCOMING TRANSMISSION', {
+            const tagText = this.add.text(cx, notificationRuleY + 30, '// INCOMING TRANSMISSION', {
                 fontFamily: 'Courier New', fontSize: '10px', color: '#55cc55', letterSpacing: 3,
             }).setOrigin(0.5);
 
-            const msgText = this.add.text(cx, 496, this._notificationText, {
+            const msgText = this.add.text(cx, notificationRuleY + 76, this._notificationText, {
                 fontFamily: 'Courier New', fontSize: '14px', color: '#aaddaa',
                 wordWrap: { width: 660 }, align: 'center', lineSpacing: 8,
             }).setOrigin(0.5);
@@ -112,11 +129,12 @@ export default class SummaryScene extends Phaser.Scene {
         }
 
         // NEXT SHIFT button
+        const isLastDay = GameState.isLastDay();
         const btnY    = 648;
         const btnBg   = this.add.rectangle(cx, btnY, 200, 38, 0x0c0c0c)
             .setStrokeStyle(1, 0x555555)
             .setInteractive({ useHandCursor: true });
-        const btnLabel = this.add.text(cx, btnY, 'NEXT SHIFT', {
+        const btnLabel = this.add.text(cx, btnY, isLastDay ? 'END RUN' : 'NEXT DAY', {
             fontFamily: 'Courier New', fontSize: '13px', color: '#cccccc', letterSpacing: 4,
         }).setOrigin(0.5);
 
@@ -135,13 +153,13 @@ export default class SummaryScene extends Phaser.Scene {
             transitioning = true;
 
             const doTransition = () => {
-                const prevPeriod = GameState.period;
-                GameState.advanceDay();
-                if (GameState.period !== prevPeriod) {
-                    this.scene.start('Transition', { period: GameState.period });
-                } else {
-                    this.scene.start('Game');
+                if (GameState.isLastDay()) {
+                    this.scene.start('End');
+                    return;
                 }
+
+                GameState.advanceDay();
+                this.scene.start('Transition', { day: GameState.day });
             };
 
             if (this._music) {

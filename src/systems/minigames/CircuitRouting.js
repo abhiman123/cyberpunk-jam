@@ -179,6 +179,9 @@ export default class CircuitRouting extends MinigameBase {
         this._inspectionFault = null;
         this._closeButton = null;
         this._closeButtonLabel = null;
+        this._specialAction = null;
+        this._specialActionButton = null;
+        this._specialActionLabel = null;
         this._escKeyDown = null;
     }
 
@@ -211,6 +214,7 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         this._circuit = circuit;
+        this._specialAction = caseData?.specialAction || null;
         this.evidence = {
             ...this._defaultEvidence(),
             ...(circuit.progress || {}),
@@ -400,7 +404,23 @@ export default class CircuitRouting extends MinigameBase {
         closeBg.on('pointerover', () => closeBg.setFillStyle(0x00aaaa, 0.45));
         closeBg.on('pointerout',  () => closeBg.setFillStyle(0x003344, 0.85));
         closeBg.on('pointerdown', () => this._finalizeAndClose());
-        this.container.add([closeBg, closeTxt]);
+
+        const overlayNodes = [];
+        if (this._specialAction) {
+            this._specialActionButton = this.scene.add.rectangle(640, 592, 220, 40, 0x233923, 0.9)
+                .setStrokeStyle(1, 0x8dff9f, 0.92)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(depth + 20);
+            this._specialActionLabel = this.scene.add.text(640, 592, this._specialAction.label || 'SPECIAL', {
+                fontFamily: 'Courier New', fontSize: '13px', color: '#d7ffe0',
+            }).setOrigin(0.5).setDepth(depth + 21);
+            this._specialActionButton.on('pointerover', () => this._specialActionButton?.setFillStyle(0x2d4b2d, 0.96));
+            this._specialActionButton.on('pointerout', () => this._specialActionButton?.setFillStyle(0x233923, 0.9));
+            this._specialActionButton.on('pointerdown', () => this._triggerSpecialAction());
+            overlayNodes.push(this._specialActionButton, this._specialActionLabel);
+        }
+
+        this.container.add([...overlayNodes, closeBg, closeTxt]);
 
         this._escKey = this.scene.input.keyboard?.addKey('ESC');
         this._escHandler = () => { if (this.active) this._finalizeAndClose(); };
@@ -1008,6 +1028,25 @@ export default class CircuitRouting extends MinigameBase {
         this._syncCircuitProgress(this._lastResult);
     }
 
+    _triggerSpecialAction() {
+        if (!this._specialAction?.onTrigger) return;
+
+        const snapshot = this._syncCircuitProgress(this._lastResult) || this._buildProgressSnapshot(this._lastResult);
+        const result = this._specialAction.onTrigger({
+            evidence: snapshot,
+            circuit: this._circuit,
+        });
+        if (!result) return;
+
+        if (result.evidence) {
+            this.emitEvidence(result.evidence);
+        }
+
+        if (result.closeAfter) {
+            this.close();
+        }
+    }
+
     _finalizeAndClose() {
         const snapshot = this._syncCircuitProgress(this._lastResult) || this._buildProgressSnapshot(this._lastResult);
         this.emitEvidence(snapshot);
@@ -1032,6 +1071,9 @@ export default class CircuitRouting extends MinigameBase {
         this._sourceViews = {};
         this._inspectionFaultGfx = null;
         this._inspectionFault = null;
+        this._specialAction = null;
+        this._specialActionButton = null;
+        this._specialActionLabel = null;
         if (this._escKey && this._escHandler) {
             this._escKey.off('down', this._escHandler);
         }

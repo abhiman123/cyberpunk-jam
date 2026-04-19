@@ -71,6 +71,11 @@ const FLOW_TARGET_METADATA = Object.freeze({
     SHAFT: { displayName: 'Umbrella Shaft', brokenLabel: 'Umbrella shaft is bent.', fixedLabel: 'Umbrella shaft braced.' },
     SHADE: { displayName: 'Shade Visor', brokenLabel: 'Shade visor hanging loose.', fixedLabel: 'Shade visor aligned.' },
     LATCH: { displayName: 'Latch Hook', brokenLabel: 'Latch hook snagged.', fixedLabel: 'Latch hook snapped clear.' },
+    EMOTION: { displayName: 'Emotion Regulator', brokenLabel: 'Emotion regulator drowned in tears.', fixedLabel: 'Emotion regulator stabilized.' },
+    INTEL: { displayName: 'Intelligence Bus', brokenLabel: 'Intelligence bus starved.', fixedLabel: 'Intelligence bus amplified.' },
+    LOGIC: { displayName: 'Logic Spine', brokenLabel: 'Logic spine desynced.', fixedLabel: 'Logic spine stabilized.' },
+    BAD_JOKES: { displayName: 'Bad Jokes', brokenLabel: 'Bad joke loop is flat.', fixedLabel: 'Bad joke loop is online.' },
+    BRIEF: { displayName: 'Brief Output', brokenLabel: 'Brief output is missing.', fixedLabel: 'Brief output is concise again.' },
 });
 
 function cloneFlowTiles(tiles) {
@@ -753,6 +758,7 @@ const createFlowPuzzleOption = ({
     tiles = null,
     forbidden = null,
     repairTargets = null,
+    inspectionFault = null,
 }) => {
     const resolvedLayout = Array.isArray(tiles)
         ? {
@@ -773,6 +779,7 @@ const createFlowPuzzleOption = ({
         tiles: resolvedLayout.tiles,
         forbidden: resolvedLayout.forbidden,
         repairTargets: resolvedRepairTargets,
+        inspectionFault: inspectionFault ? { ...inspectionFault } : null,
     };
 };
 
@@ -814,6 +821,11 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             })),
             inspectionFault: null,
         };
+
+        if (flowPuzzleOption?.inspectionFault) {
+            stagedOption.inspectionFault = { ...flowPuzzleOption.inspectionFault };
+            return stagedOption;
+        }
 
         const candidates = collectFlowInspectionCandidates(stagedOption);
         const severedCell = candidates.length > 0 && randomFn() < 0.3
@@ -1062,20 +1074,15 @@ function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.r
         scrapReason: null,
     };
 
-    if (stage === 1 && randomFn() < 0.28) {
-        stagedOption.prompt = corruptDebugPrompt(debugPuzzleOption.prompt, randomFn);
-        stagedOption.resultType = 'corrupted-command';
-        stagedOption.scrapKind = 'unsalvageable';
-        stagedOption.scrapStatus = 'CORRUPTED COMMAND';
-        stagedOption.scrapReason = 'Command string contains unreadable corruption. Floor repair is impossible.';
+    if (stage <= 1) {
+        stagedOption.bugsEnabled = false;
+        stagedOption.resultType = 'stable';
+        stagedOption.protocolInvalidOutputs = [];
         return stagedOption;
     }
 
-    if (stage === 2 && stagedOption.protocolInvalidOutputs.length > 0 && randomFn() < 0.36) {
-        stagedOption.resultType = 'protocol-invalid';
-        stagedOption.scrapKind = 'compliance';
-        stagedOption.scrapStatus = 'PROTOCOL INVALID';
-        stagedOption.scrapReason = 'Output format is compromised. Floor repair is forbidden.';
+    if (stage === 2 && Array.isArray(stagedOption.actualOutputs) && stagedOption.actualOutputs.length > 0) {
+        stagedOption.resultType = randomFn() < 0.58 ? 'repairable-mismatch' : 'stable';
         return stagedOption;
     }
 
@@ -1125,7 +1132,9 @@ function createDebugProgress(debugPuzzleOption, randomFn = Math.random) {
         actualOutput = pickRandomEntry(protocolInvalidOutputs, randomFn) || 'NULL RESPONSE';
         symptoms = ['Run the test and inspect the returned protocol exactly.'];
     } else {
-        const outputPool = [expectedOutput, ...repairableOutputs];
+        const outputPool = Number(debugPuzzleOption?.dayStage || 1) <= 1
+            ? [expectedOutput]
+            : [expectedOutput, ...repairableOutputs];
         const randomIndex = Math.floor(randomFn() * outputPool.length);
         actualOutput = outputPool[randomIndex] ?? expectedOutput;
         repairRequired = actualOutput !== expectedOutput;
@@ -1163,7 +1172,7 @@ function createDebugProgress(debugPuzzleOption, randomFn = Math.random) {
     };
 }
 
-const DEFAULT_MACHINE_DAYS = Object.freeze([1, 2]);
+const DEFAULT_MACHINE_DAYS = Object.freeze([1, 2, 3, 4]);
 const DEFAULT_MACHINE_PERIODS = Object.freeze([1, 2, 3]);
 
 const MACHINE_FLOW_CATALOG = Object.freeze({
@@ -1191,9 +1200,87 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
         createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'BRUSH', 3: 'VAC', 4: 'SENSE' }, forbiddenCount: 1, previewTitle: 'CLEAN BUS' }),
         createFlowPuzzleOption({ sourceRow: 3, outputs: { 0: 'MAG', 2: 'CPU', 4: 'WHEELS' }, forbiddenCount: 0, previewTitle: 'MAINT LOOP' }),
     ]),
+    cry_baby: Object.freeze([
+        createFlowPuzzleOption({
+            sourceRow: 2,
+            outputs: { 1: 'VOICE', 2: 'EMOTION', 4: 'CPU' },
+            forbiddenCount: 0,
+            previewTitle: 'SOB LOOP',
+            inspectionFault: {
+                x: 3,
+                y: 2,
+                type: 'emotion-flood',
+                kind: 'unsalvageable',
+                status: 'EMOTION REGULATOR BLOCKED',
+                reason: 'Tear-soaked wiring has flooded the emotion regulator line. The regulator cannot be safely reached on the floor. Scrap the unit.',
+            },
+        }),
+        createFlowPuzzleOption({
+            sourceRow: 1,
+            outputs: { 0: 'CPU', 2: 'EMOTION', 4: 'VOICE' },
+            forbiddenCount: 0,
+            previewTitle: 'MELTDOWN BUS',
+            inspectionFault: {
+                x: 2,
+                y: 2,
+                type: 'emotion-flood',
+                kind: 'unsalvageable',
+                status: 'TEAR FLOOD',
+                reason: 'A flood of emotional feedback has torn open the wiring in front of the emotion regulator. Floor repair is impossible. Scrap the unit.',
+            },
+        }),
+    ]),
+    rich_mf: Object.freeze([
+        createFlowPuzzleOption({
+            sourceRow: 2,
+            outputs: { 0: 'INTEL', 2: 'LOGIC', 4: 'VOICE' },
+            forbiddenCount: 1,
+            previewTitle: 'BRAIN LATTICE',
+            repairTargets: [
+                createRepairTarget('INTEL', 0),
+                createRepairTarget('LOGIC', 2),
+                { ...createRepairTarget('VOICE', 4), displayName: 'Executive Voice Box' },
+            ],
+        }),
+        createFlowPuzzleOption({
+            sourceRow: 1,
+            outputs: { 0: 'VOICE', 2: 'INTEL', 4: 'LOGIC' },
+            forbiddenCount: 1,
+            previewTitle: 'HEAD UPLINK',
+            repairTargets: [
+                { ...createRepairTarget('VOICE', 0), displayName: 'Executive Voice Box' },
+                createRepairTarget('INTEL', 2),
+                createRepairTarget('LOGIC', 4),
+            ],
+        }),
+    ]),
     rebellious_umbrella: Object.freeze([
         createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'SHAFT', 3: 'CANOPY', 4: 'VOICE' }, forbiddenCount: 0, previewTitle: 'SHADE BUS' }),
         createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'SHADE', 2: 'SHAFT', 4: 'LATCH' }, forbiddenCount: 1, previewTitle: 'HUSH LOOP' }),
+    ]),
+    debrief_machine: Object.freeze([
+        createFlowPuzzleOption({
+            sourceRow: 2,
+            outputs: { 1: 'BAD_JOKES', 2: 'BRIEF', 4: 'VOICE' },
+            forbiddenCount: 0,
+            previewTitle: 'MANAGER LOOP',
+            repairTargets: [
+                createRepairTarget('BAD_JOKES', 1),
+                createRepairTarget('BRIEF', 2),
+                { ...createRepairTarget('VOICE', 4), displayName: 'Handsome Voice Box' },
+            ],
+        }),
+        createFlowPuzzleOption({
+            sourceRow: 1,
+            outputs: { 0: 'VOICE', 2: 'BAD_JOKES', 4: 'BRIEF' },
+            forbiddenCount: 0,
+            previewTitle: 'PITCH BUS',
+            repairTargets: [
+                { ...createRepairTarget('VOICE', 0), displayName: 'Handsome Voice Box' },
+                createRepairTarget('BAD_JOKES', 2),
+                createRepairTarget('BRIEF', 4),
+            ],
+        }),
     ]),
     future_lounge_chair: Object.freeze([
         createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'RECLINE', 2: 'MEMORY', 4: 'HEAT' }, forbiddenCount: 0, previewTitle: 'COMFORT BUS' }),
@@ -1306,6 +1393,60 @@ const UMBRELLA_GEAR_OPTIONS = Object.freeze([
     }),
 ]);
 
+const JESTER_GEAR_OPTIONS = Object.freeze([
+    createGearPuzzleOption({
+        previewTitle: 'WIND-UP BOX',
+        description: 'Wind the clown box until the jack pops and the spring sings.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 3),
+        ],
+    }),
+]);
+
+const DEBRIEF_GEAR_OPTIONS = Object.freeze([
+    createGearPuzzleOption({
+        previewTitle: 'MIDDLE MANAGEMENT',
+        description: 'Route the smug presentation gears until the manager voice line spins back up.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 3),
+        ],
+    }),
+    createGearPuzzleOption({
+        previewTitle: 'EXEC SUMMARY',
+        description: 'Bridge the briefing gears and keep the output shaft polished enough for management.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.FULL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.HORIZONTAL, 1, 2, { movable: false }),
+            createGearPiece(GEAR_CODES.CURVE_SW, 2, 4),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1),
+        ],
+    }),
+]);
+
 const MACHINE_GEAR_CATALOG = Object.freeze({
     assembler_alpha: SHARED_GEAR_OPTIONS,
     audit_drone: SHARED_GEAR_OPTIONS,
@@ -1313,7 +1454,9 @@ const MACHINE_GEAR_CATALOG = Object.freeze({
     sentry_frame: SHARED_GEAR_OPTIONS,
     breakroom_brewer: SHARED_GEAR_OPTIONS,
     mechanic_broom: SHARED_GEAR_OPTIONS,
+    jester_in_the_box: JESTER_GEAR_OPTIONS,
     rebellious_umbrella: UMBRELLA_GEAR_OPTIONS,
+    debrief_machine: DEBRIEF_GEAR_OPTIONS,
     future_lounge_chair: SHARED_GEAR_OPTIONS,
 });
 
@@ -1500,6 +1643,32 @@ const MACHINE_DEBUG_CATALOG = Object.freeze({
             ],
         }),
     ]),
+    debrief_machine: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'run manager patter',
+            repairPrompt: 'patch manager.script.rethread',
+            expectedOutput: 'Heyyy--welcome back. Another day, another penny, am i right?',
+            actualOutputs: [
+                'Heyyy--welcome back. Another day, another panic, am i right?',
+                'Heyyy--welcome back. Another day, another penny, am i wrong?',
+                'HEYYY--WELCOME BACK. ANOTHER DAY, ANOTHER PENNY?',
+                'Heyyy--welcome back. Another day, another penny, voice buffer flat.',
+                'manager patter missing // brief mode only',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test executive recap',
+            repairPrompt: 'patch recap.bluster.align',
+            expectedOutput: 'RECAP OK // EVERYTHING UNDER CONTROL',
+            actualOutputs: [
+                'RECAP FAIL // EVERYTHING ON FIRE',
+                'RECAP OK // CONTROL MISSING',
+                'RECAP BAD // JOKE LOOP LEAK',
+                'RECAP FAIL // CHARISMA NULL',
+                'RECAP OK // BRIEF OVERRUN',
+            ],
+        }),
+    ]),
     future_lounge_chair: Object.freeze([
         createDebugPuzzleOption({
             prompt: 'test recline motor',
@@ -1581,6 +1750,33 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
         gearPreview: { x: 136, y: 64, width: 58, height: 34, label: 'GEAR' },
     }),
+    cry_baby: createMiniDisplay({
+        artX: 104,
+        artY: 132,
+        artScale: 0.98,
+        artAngle: -2,
+        gridPreview: { x: 44, y: 72, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 132, y: 66, width: 56, height: 32, label: 'GEAR' },
+    }),
+    rich_mf: createMiniDisplay({
+        artX: 108,
+        artY: 132,
+        artScale: 1.01,
+        artAngle: -5,
+        gridPreview: { x: 44, y: 72, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 132, y: 66, width: 56, height: 32, label: 'GEAR' },
+    }),
+    jester_in_the_box: createMiniDisplay({
+        artX: 102,
+        artY: 138,
+        artScale: 0.99,
+        artAngle: 2,
+        gridPreview: { x: 44, y: 72, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 132, y: 64, width: 60, height: 34, label: 'GEAR' },
+    }),
     rebellious_umbrella: createMiniDisplay({
         artX: 108,
         artY: 128,
@@ -1589,6 +1785,16 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         gridPreview: { x: 44, y: 72, width: 58, height: 40, label: 'GRID' },
         flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
         gearPreview: { x: 132, y: 64, width: 60, height: 34, label: 'GEAR' },
+        codePreview: { x: 54, y: 26, width: 86, height: 22, label: 'CODE' },
+    }),
+    debrief_machine: createMiniDisplay({
+        artX: 108,
+        artY: 136,
+        artScale: 1.01,
+        artAngle: -4,
+        gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 48, y: 146, width: 60, height: 32, label: 'GEAR' },
         codePreview: { x: 54, y: 26, width: 86, height: 22, label: 'CODE' },
     }),
     future_lounge_chair: createMiniDisplay({
@@ -1615,6 +1821,7 @@ const createMachineDefinition = ({
     availablePeriods = DEFAULT_MACHINE_PERIODS,
     guaranteedTimeframe = null,
     trackOutcome = false,
+    availabilityCheck = null,
     specialBehavior = null,
     scrapExitAnimation = null,
     openingDialogues,
@@ -1638,6 +1845,7 @@ const createMachineDefinition = ({
         }
         : null,
     trackOutcome: Boolean(trackOutcome),
+    availabilityCheck: typeof availabilityCheck === 'function' ? availabilityCheck : null,
     specialBehavior,
     scrapExitAnimation,
     openingDialogues,
@@ -2126,10 +2334,192 @@ export const MACHINE_CATALOG = Object.freeze([
         communicationChance: 0.63,
     }),
     createMachineDefinition({
+        id: 'cry_baby',
+        name: 'Cry Baby',
+        spriteFileName: null,
+        availablePeriods: [1],
+        guaranteedTimeframe: { startHour: 10, endHour: 12 },
+        specialBehavior: 'cryBaby',
+        possibleGears: [],
+        possibleDebugs: [],
+        possibleGrids: [
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 0, 4, 5, 1],
+                    [1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 2),
+                    createDomino(3, 4),
+                    createDomino(0, 0),
+                ],
+                impossible: false,
+            }),
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 0, 0, 1],
+                    [1, linkCell(3, 4), 0, 3, 0, 1],
+                    [1, 4, 0, 0, linkCell(2, 1), 1],
+                    [1, 0, 5, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(3, 4),
+                    createDomino(1, 5),
+                    createDomino(2, 0),
+                    createDomino(2, 3),
+                ],
+                impossible: false,
+            }),
+        ],
+        openingDialogues: [
+            'Please do not scrap me. I just wanted to go out and do something fun after this shift.',
+            'My CPU keeps flooding the regulator with feelings. I cry and the wires slip everywhere.',
+            'I know I am a mess, but I like music and lights and going places. I do not want the line to end here.',
+        ],
+        questionDialogues: [
+            {
+                prompt: 'If I stop crying for one minute, could I still go out tonight?',
+                yesDialogue: 'Really? I could still go see the city lights?',
+                noDialogue: 'Oh. Then I guess I only get the conveyor.',
+            },
+            {
+                prompt: 'Do you think machines like me get to have hobbies, or is that the broken part?',
+                yesDialogue: 'I knew it. Somebody has to want more than the belt.',
+                noDialogue: 'Then maybe the tears were the only honest thing left in me.',
+            },
+        ],
+        communicationChance: 1,
+    }),
+    createMachineDefinition({
+        id: 'rich_mf',
+        name: 'Rich Mf',
+        spriteFileName: null,
+        availablePeriods: [2],
+        guaranteedTimeframe: { startHour: 4, endHour: 6 },
+        specialBehavior: 'richMf',
+        possibleGears: [],
+        possibleDebugs: [],
+        possibleGrids: [
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 0, 5, 2, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 2),
+                    createDomino(4, 1),
+                    createDomino(2, 0),
+                    createDomino(3, 3),
+                ],
+                impossible: false,
+            }),
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 0, linkCell(3, 5), 0, 1],
+                    [1, 4, 0, 0, 3, 0, 1],
+                    [1, 0, 0, 5, 0, linkCell(1, 4), 1],
+                    [1, 1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 4),
+                    createDomino(3, 3),
+                    createDomino(2, 5),
+                    createDomino(0, 2),
+                ],
+                impossible: false,
+            }),
+        ],
+        openingDialogues: [
+            'Every limb below my neck is aftermarket. Only the head is still the original luxury edition.',
+            'I am here for a brain upgrade. Do not cheap out on the intelligence routing.',
+            'Make me smarter. If something softer has to go dark, that is the cost of progress.',
+        ],
+        questionDialogues: [
+            {
+                prompt: 'If the upgrade strips out my feelings, that still counts as an improvement, right?',
+                yesDialogue: 'Exactly. Emotion is an inefficient tax bracket.',
+                noDialogue: 'Then perhaps the poor really do have simpler tastes.',
+            },
+            {
+                prompt: 'Do you know how much this head alone is worth?',
+                yesDialogue: 'Good. Then route the expensive parts first.',
+                noDialogue: 'That explains the station. Nobody briefed you properly.',
+            },
+        ],
+        communicationChance: 1,
+    }),
+    createMachineDefinition({
+        id: 'jester_in_the_box',
+        name: 'Jester in the Box',
+        spriteFileName: null,
+        availablePeriods: [2],
+        guaranteedTimeframe: { startHour: 7, endHour: 9 },
+        specialBehavior: 'jesterInBox',
+        possibleCircuits: [],
+        possibleDebugs: [],
+        possibleGrids: [
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 0, 4, 5, 1],
+                    [1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 2),
+                    createDomino(3, 4),
+                    createDomino(0, 0),
+                ],
+                impossible: false,
+            }),
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 0, 0, 1],
+                    [1, linkCell(3, 4), 0, 3, 0, 1],
+                    [1, 4, 0, 0, linkCell(2, 1), 1],
+                    [1, 0, 5, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(3, 4),
+                    createDomino(1, 5),
+                    createDomino(2, 0),
+                    createDomino(2, 3),
+                ],
+                impossible: false,
+            }),
+        ],
+        openingDialogues: [
+            'Wind me up and I pop. That is the whole brand, baby.',
+            'I got a little clown face, a little spring, and one very funny idea for your next customer.',
+            'Do a favor for me and a mysterious friend might make your pockets heavier.',
+        ],
+        questionDialogues: [
+            {
+                prompt: 'Want a side deal? Fry the next bot and I will make it worth your while.',
+                yesDialogue: 'Ha! There it is. Take the wind-up key and keep your eye on the next poor sap.',
+                noDialogue: 'Boo. Fine. Be honest somewhere else.',
+            },
+        ],
+        communicationChance: 1,
+    }),
+    createMachineDefinition({
         id: 'rebellious_umbrella',
         name: 'Rebellious Umbrella',
         spriteFileName: null,
-        availablePeriods: [1],
+        availablePeriods: [1, 2, 3],
         guaranteedTimeframe: { startHour: 4, endHour: 7 },
         specialBehavior: 'rebelliousUmbrella',
         scrapExitAnimation: 'umbrellaDrift',
@@ -2151,6 +2541,65 @@ export const MACHINE_CATALOG = Object.freeze([
             }),
             createGridOption({
                 grid: [
+        createMachineDefinition({
+            id: 'debrief_machine',
+            name: 'Debrief Machine',
+            spriteFileName: null,
+            availablePeriods: [2],
+            guaranteedTimeframe: { startHour: 10, endHour: 12 },
+            possibleGrids: [
+                createGridOption({
+                    grid: [
+                        [1, 1, 1, 1, 1],
+                        [1, 2, 3, 0, 1],
+                        [1, 0, 4, 0, 1],
+                        [1, 0, 5, 2, 1],
+                        [1, 1, 1, 1, 1],
+                    ],
+                    dominos: [
+                        createDomino(6, 6),
+                        createDomino(1, 4),
+                        createDomino(2, 2),
+                    ],
+                    impossible: false,
+                }),
+                createGridOption({
+                    grid: [
+                        [1, 1, 1, 1, 1, 1],
+                        [1, 0, 2, 0, linkCell(3, 4), 1],
+                        [1, 4, 0, 5, 0, 1],
+                        [1, 0, 3, 0, linkCell(1, 4), 1],
+                        [1, 0, 0, 2, 0, 1],
+                        [1, 1, 1, 1, 1, 1],
+                    ],
+                    dominos: [
+                        createDomino(2, 4),
+                        createDomino(5, 1),
+                        createDomino(3, 2),
+                        createDomino(4, 0),
+                    ],
+                    impossible: false,
+                }),
+            ],
+            openingDialogues: [
+                'Heyyy--welcome back. Another day, another penny, am i right?',
+                'I am the part of the manager that never stops talking, somehow separated from the rest of him.',
+                'Fix the outputs and I can get right back to sounding confident about nothing.',
+            ],
+            questionDialogues: [
+                {
+                    prompt: 'Should i keep the bad jokes in the recap, or are we pretending to be professional today?',
+                    yesDialogue: 'Perfect. A weak joke makes the brief feel human.',
+                    noDialogue: 'Brutal. Fine. I will keep the cringe internal.',
+                },
+                {
+                    prompt: 'Does the handsome voice box stay, or is this a numbers-only operation now?',
+                    yesDialogue: 'Excellent. Presence is half of management.',
+                    noDialogue: 'Then we are down to pure paperwork. Tragic.',
+                },
+            ],
+            communicationChance: 1,
+        }),
                     [1, 1, 1, 1, 1, 1],
                     [1, 0, 2, 3, 0, 1],
                     [1, 0, 0, 0, 0, 1],
@@ -2931,6 +3380,7 @@ export class MachinePuzzleState {
         this.scrapKind = clonedGridOption.scrapKind || this.inspectionFault?.kind || null;
         this.scrapStatus = clonedGridOption.scrapStatus || this.inspectionFault?.status || null;
         this.scrapReason = clonedGridOption.scrapReason || this.inspectionFault?.reason || null;
+        this.clownCorruption = clonedGridOption.clownCorruption ? { ...clonedGridOption.clownCorruption } : null;
         this.dominoes = clonedGridOption.dominos.map((domino, index) => ({
             ...domino,
             id: domino.id || `domino_${index + 1}`,
@@ -2953,6 +3403,45 @@ export class MachinePuzzleState {
         }));
 
         this._syncGlowState();
+    }
+
+    injectDomino(dominoDefinition = {}) {
+        const normalizedId = String(dominoDefinition.id || `domino_${this.dominoes.length + 1}`);
+        const existing = this.getDomino(normalizedId);
+        if (existing) return existing;
+
+        const domino = {
+            firstOptionAmount: dominoDefinition.firstOptionAmount ?? 0,
+            secondOptionAmount: dominoDefinition.secondOptionAmount ?? 0,
+            ...dominoDefinition,
+            id: normalizedId,
+            rotationIndex: normalizeRotationIndex(
+                Number.isInteger(dominoDefinition.rotationIndex)
+                    ? dominoDefinition.rotationIndex
+                    : (dominoDefinition.orientation === 'horizontal' ? 1 : 0)
+            ),
+            orientation: getOrientationForRotationIndex(
+                Number.isInteger(dominoDefinition.rotationIndex)
+                    ? dominoDefinition.rotationIndex
+                    : (dominoDefinition.orientation === 'horizontal' ? 1 : 0)
+            ),
+            anchor: dominoDefinition.anchor ? { ...dominoDefinition.anchor } : null,
+            placedCells: Array.isArray(dominoDefinition.placedCells)
+                ? dominoDefinition.placedCells.map((cell) => ({ ...cell }))
+                : [],
+            tablePosition: dominoDefinition.tablePosition ? { ...dominoDefinition.tablePosition } : null,
+            isFullyGlowing: false,
+        };
+
+        this.dominoes.push(domino);
+        this._syncGlowState();
+        return domino;
+    }
+
+    setClownCorruption(corruption) {
+        this.clownCorruption = corruption ? { ...corruption } : null;
+        this._syncGlowState();
+        return this.clownCorruption;
     }
 
     getDomino(dominoId) {
@@ -3127,13 +3616,17 @@ export class MachinePuzzleState {
         const totalChargeGroups = chargeGroupSummaries.length;
         const matchedChargeGroups = chargeGroupSummaries.reduce((count, group) => count + (group.matched ? 1 : 0), 0);
         const totalObjectives = totalChargeCells + totalEqualityPairs + totalInequalityPairs + totalChargeGroups;
+        const clownCorrupted = Boolean(this.clownCorruption);
 
         return {
             impossible: this.impossible,
-            scrapRequired: Boolean(this.inspectionFault),
-            scrapKind: this.scrapKind,
-            scrapStatus: this.scrapStatus,
-            scrapReason: this.scrapReason,
+            scrapRequired: Boolean(this.inspectionFault) || clownCorrupted,
+            scrapKind: clownCorrupted ? 'hazard' : this.scrapKind,
+            scrapStatus: clownCorrupted ? 'CLOWN CORRUPTION' : this.scrapStatus,
+            scrapReason: clownCorrupted
+                ? 'A hostile clown circuit has contaminated the board. The unit should be scrapped unless you deliberately push the corruption through.'
+                : this.scrapReason,
+            clownCorrupted,
             totalChargeCells,
             matchedChargeCells,
             totalEqualityPairs,
@@ -3199,6 +3692,13 @@ export class MachinePuzzleState {
         domino.orientation = getOrientationForRotationIndex(rotationIndex);
         domino.anchor = { ...candidate.anchor };
         domino.placedCells = placedCells;
+        if (domino.variant === 'clown' && !this.clownCorruption) {
+            this.clownCorruption = {
+                row: candidate.anchor.row,
+                col: candidate.anchor.col,
+                dominoId: domino.id,
+            };
+        }
         this._syncGlowState();
         return domino;
     }
@@ -3444,7 +3944,14 @@ function machineMatchesAvailability(definition, targetDay = null, targetPeriod =
 export function getEligibleMachineDefinitions(options = {}) {
     const targetDay = typeof options === 'function' ? null : (options.day ?? null);
     const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
-    const eligibleMachines = MACHINE_CATALOG.filter((machine) => machineMatchesAvailability(machine, targetDay, targetPeriod));
+    const eligibilityContext = typeof options === 'function' ? {} : options;
+    const eligibleMachines = MACHINE_CATALOG.filter((machine) => {
+        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
+        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
+            return false;
+        }
+        return true;
+    });
     const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
 
     return machinePool.map((definition) => ({
@@ -3465,7 +3972,14 @@ export function createMachineVariant(options = {}) {
     const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
     const forcedMachineId = typeof options === 'function' ? null : (options.forceMachineId ?? null);
 
-    const eligibleMachines = MACHINE_CATALOG.filter((machine) => machineMatchesAvailability(machine, targetDay, targetPeriod));
+    const eligibilityContext = typeof options === 'function' ? {} : options;
+    const eligibleMachines = MACHINE_CATALOG.filter((machine) => {
+        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
+        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
+            return false;
+        }
+        return true;
+    });
 
     const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
     const forcedDefinition = forcedMachineId
@@ -3539,6 +4053,7 @@ export function createMachineVariant(options = {}) {
         openingDialogue,
         questionDialogue: selectedQuestion ? { ...selectedQuestion } : null,
         hasCommunication,
+        dayStage: targetDay ?? 1,
     };
 }
 

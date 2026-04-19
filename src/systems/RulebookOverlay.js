@@ -437,7 +437,7 @@ export default class RulebookOverlay {
                 ? 'Live booth context for this run.'
                 : 'Quick legends for every puzzle layer, including CODE tasks.';
 
-        this._sidebarShiftText.setText(`DAY ${GameState.period}  //  SHIFT ${GameState.day}`);
+        this._sidebarShiftText.setText(`DAY ${GameState.day}`);
         this._sidebarDateText.setText(GameState.formatCurrentShiftDate());
         this._sidebarPanelLabel?.setText(this._currentSection === 'rules' ? 'LIVE PANEL' : this._currentSection === 'booth' ? 'STATUS FEED' : 'REFERENCE');
         this._sidebarRuleCountText.setText(`${this.activeRuleIds.length} ACTIVE RULES`);
@@ -521,8 +521,8 @@ export default class RulebookOverlay {
         y = this._addSectionHeader('BOOTH STATUS', 'Live notes pulled from the current shift.', y);
 
         const stats = [
-            { label: 'PERIOD', value: String(GameState.period) },
             { label: 'DAY', value: String(GameState.day) },
+            { label: 'RULESET', value: String(GameState.getDirectiveDay()) },
             { label: 'DATE', value: GameState.formatCurrentShiftDate() },
             { label: 'ACTIVE RULES', value: String(this.activeRuleIds.length) },
         ];
