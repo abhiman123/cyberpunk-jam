@@ -206,6 +206,12 @@ export default class CircuitRouting extends MinigameBase {
         const blocker = this.scene.add.rectangle(640, 360, 1280, 720, 0x000000, 0.6)
             .setDepth(depth - 1)
             .setInteractive();
+        blocker.on('pointerdown', (_pointer, _localX, _localY, event) => {
+            event?.stopPropagation?.();
+        });
+        blocker.on('pointerup', (_pointer, _localX, _localY, event) => {
+            event?.stopPropagation?.();
+        });
         this.container.add(blocker);
 
         // Backdrop — diegetic hologram panel
@@ -228,7 +234,7 @@ export default class CircuitRouting extends MinigameBase {
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(title);
 
-        const subtitle = this.scene.add.text(640, 108, 'Click tiles to rotate. Route PWR to every output. Amber [?] nodes flag modifications when power passes through.', {
+        const subtitle = this.scene.add.text(640, 108, 'Click tiles to rotate. Route PWR to every output. Amber [?] nodes are blocked and cannot carry power.', {
             fontFamily: 'monospace', fontSize: '10px', color: '#66aaaa',
             align: 'center', wordWrap: { width: 1000 },
         }).setOrigin(0.5).setDepth(depth + 2);
@@ -239,10 +245,6 @@ export default class CircuitRouting extends MinigameBase {
         const srcX = this.boardX - 40;
         const srcDot = this.scene.add.circle(srcX, srcY, 10, 0xffcc00, 1).setDepth(depth + 2);
         const srcPulse = this.scene.add.circle(srcX, srcY, 18, 0xffcc00, 0.3).setDepth(depth + 1);
-        this.scene.tweens.add({
-            targets: srcPulse, alpha: { from: 0.3, to: 0.05 }, scale: { from: 1, to: 1.8 },
-            duration: 900, repeat: -1,
-        });
         const srcLbl = this.scene.add.text(srcX - 10, srcY, 'PWR', {
             fontFamily: 'monospace', fontSize: '10px', color: '#ffcc44',
         }).setOrigin(1, 0.5).setDepth(depth + 2);
@@ -259,12 +261,16 @@ export default class CircuitRouting extends MinigameBase {
             if (!label) continue;
             const ox = this.boardX + this.cols * this.cellSize + 40;
             const oy = this.boardY + y * this.cellSize + this.cellSize / 2;
+            const glow = this.scene.add.circle(ox, oy, 19, 0xaaffee, 0).setDepth(depth + 1);
+            const ring = this.scene.add.circle(ox, oy, 15, 0x00ffcc, 0)
+                .setDepth(depth + 1)
+                .setStrokeStyle(2, 0xaefdf3, 0);
             const dot = this.scene.add.circle(ox, oy, 10, 0x225533, 1).setDepth(depth + 2);
             const lbl = this.scene.add.text(ox + 16, oy, label, {
                 fontFamily: 'monospace', fontSize: '11px', color: '#556666',
             }).setOrigin(0, 0.5).setDepth(depth + 2);
-            this.container.add([dot, lbl]);
-            this._outputDots[y] = { dot, lbl };
+            this.container.add([glow, ring, dot, lbl]);
+            this._outputDots[y] = { glow, ring, dot, lbl };
         }
 
         this._buildRepairTargetPanel(depth + 2);
@@ -290,10 +296,7 @@ export default class CircuitRouting extends MinigameBase {
         closeBg.on('pointerover', () => closeBg.setFillStyle(0x00aaaa, 0.45));
         closeBg.on('pointerout',  () => closeBg.setFillStyle(0x003344, 0.85));
         closeBg.on('pointerdown', () => this._finalizeAndClose());
-        this.container.add(closeBg);
-        this.container.add(closeTxt);
-        this._closeButton = closeBg;
-        this._closeButtonLabel = closeTxt;
+        this.container.add([closeBg, closeTxt]);
 
         this._escKey = this.scene.input.keyboard?.addKey('ESC');
         this._escHandler = () => { if (this.active) this._finalizeAndClose(); };
@@ -360,7 +363,7 @@ export default class CircuitRouting extends MinigameBase {
         const cy = this.boardY + y * this.cellSize + this.cellSize / 2;
         const isForbidden = this._forbidden.has(`${x},${y}`);
         const tile = this._tiles[y][x];
-        const locked = tile.locked === true;
+        const locked = tile.locked === true || isForbidden;
 
         // bg is a direct child of this.container (not nested inside tileContainer)
         // so Phaser's input hit-testing reliably reaches it.
@@ -397,13 +400,17 @@ export default class CircuitRouting extends MinigameBase {
             rotationTween: null,
         };
 
-        bg.on('pointerdown', () => {
+        bg.on('pointerdown', (_pointer, _localX, _localY, event) => {
+            event?.stopPropagation?.();
             if (locked || tile.type === 'empty') return;
-            const nextRotation = (tile.rotation + 1) % 4;
-            tile.rotation = nextRotation;
+
+            tile.rotation = (tile.rotation + 1) % 4;
+            this._animateTileRotation(tileView, tile.rotation);
             this._playWireTurnSound();
-            this._animateTileRotation(tileView, nextRotation);
             this._updateAll();
+        });
+        bg.on('pointerup', (_pointer, _localX, _localY, event) => {
+            event?.stopPropagation?.();
         });
         bg.on('pointerover', () => {
             if (!locked && tile.type !== 'empty') bg.setStrokeStyle(1, 0x66ccff, 1);
@@ -422,6 +429,8 @@ export default class CircuitRouting extends MinigameBase {
         this.scene.tweens.killTweensOf(tileView.container);
         tileView.rotationTween = null;
 
+        // Always rotate forward one quarter-turn per click for clear turn feedback.
+        const tweenTargetAngle = tileView.container.angle + 90;
         const finalAngle = targetRotation * 90;
         // Snap to the previous clean step so the tween always covers exactly 90°,
         // preventing a jump when a rapid click interrupts a mid-animation tween.
@@ -429,10 +438,14 @@ export default class CircuitRouting extends MinigameBase {
 
         tileView.rotationTween = this.scene.tweens.add({
             targets: tileView.container,
-            angle: finalAngle,
+            angle: tileView.container.angle + 90,
             duration: 170,
             ease: 'Sine.Out',
             onComplete: () => {
+                tileView.rotationTween = null;
+                tileView.container.angle = finalAngle;
+            },
+            onStop: () => {
                 tileView.rotationTween = null;
                 tileView.container.angle = finalAngle;
             },
@@ -445,11 +458,15 @@ export default class CircuitRouting extends MinigameBase {
             : (this.scene.cache.audio.has(SOUND_ASSETS.inspectionReveal.key) ? SOUND_ASSETS.inspectionReveal : null);
         if (!preferred) return;
 
-        const sound = this.scene.sound.add(preferred.key, {
-            volume: preferred === SOUND_ASSETS.fuseRotate ? SOUND_VOLUMES.puzzleRotate : SOUND_VOLUMES.reveal,
-        });
-        sound.once('complete', () => sound.destroy());
-        sound.play();
+        try {
+            const sound = this.scene.sound.add(preferred.key, {
+                volume: preferred === SOUND_ASSETS.fuseRotate ? SOUND_VOLUMES.puzzleRotate : SOUND_VOLUMES.reveal,
+            });
+            sound.once('complete', () => sound.destroy());
+            sound.play();
+        } catch (error) {
+            // Audio errors should never interrupt tile interaction.
+        }
     }
 
     _buildProgressSnapshot(result = this._lastResult) {
@@ -509,6 +526,14 @@ export default class CircuitRouting extends MinigameBase {
         if (!gfx.rotationTween) {
             container.angle = tile.rotation * 90;
         }
+        if (isForbidden) {
+            pipe.fillStyle(0xffb347, 0.18);
+            pipe.fillRoundedRect(-(this.cellSize / 2) + 8, -(this.cellSize / 2) + 8, this.cellSize - 16, this.cellSize - 16, 12);
+            pipe.lineStyle(4, 0xffcc77, 0.9);
+            pipe.lineBetween(-(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12, (this.cellSize / 2) - 12);
+            pipe.lineBetween((this.cellSize / 2) - 12, -(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12);
+            return;
+        }
         if (tile.type === 'empty') return;
 
         const color = isForbidden && reached ? 0xffaa00
@@ -536,31 +561,31 @@ export default class CircuitRouting extends MinigameBase {
         energy.clear();
         if (!energyActive || !reached || tile.type === 'empty') return;
 
-        const half = this.cellSize / 2 - 2;
-        const dashLength = 14;
+        const half = this.cellSize / 2 - 6;
+        const dashLength = 10;
         const directionVectors = [
             { x: 0, y: -1 },
             { x: 1, y: 0 },
             { x: 0, y: 1 },
             { x: -1, y: 0 },
         ];
-        const phase = (this._energyPhase + (((x * 0.09) + (y * 0.13)) % 1)) % 1;
-        const dashHead = phase * (half + dashLength + 4);
+        const phase = (this._energyPhase + (((x * 0.07) + (y * 0.11)) % 1)) % 1;
+        const dashHead = 3 + (phase * (half + dashLength - 2));
         const dashTail = Math.max(0, dashHead - dashLength);
 
-        energy.lineStyle(7, 0x7dfdff, 0.18);
-        energy.fillStyle(0xe7fffb, 0.2);
+        energy.lineStyle(4, 0xb6fff7, 0.12);
+        energy.fillStyle(0xe7fffb, 0.12);
         directionVectors.forEach((vector, index) => {
             if (!conns[index]) return;
 
             const tail = Math.min(half, dashTail);
             const head = Math.min(half, dashHead);
             energy.lineBetween(vector.x * tail, vector.y * tail, vector.x * head, vector.y * head);
-            energy.fillCircle(vector.x * head, vector.y * head, 4.5);
+            energy.fillCircle(vector.x * head, vector.y * head, 2.8);
         });
 
-        energy.fillStyle(0xd9fff2, 0.38);
-        energy.fillCircle(0, 0, 5.5);
+        energy.fillStyle(0xd9fff2, 0.16);
+        energy.fillCircle(0, 0, 4.2);
     }
 
     _computeReached() {
@@ -572,7 +597,9 @@ export default class CircuitRouting extends MinigameBase {
         const startX = 0, startY = this._sourceRow;
         const startTile = this._tiles[startY][startX];
         const startConns = rotatedConnections(startTile.type, startTile.rotation);
-        if (!startConns[3]) return { reached, reachedOutputs, forbiddenHit, flowSegments };
+        if (!startConns[3]) {
+            return { reached, reachedOutputs, forbiddenHit, flowSegments };
+        }
 
         const queue = [[startX, startY]];
         reached.add(`${startX},${startY}`);
@@ -582,8 +609,6 @@ export default class CircuitRouting extends MinigameBase {
             const [x, y] = queue.shift();
             const tile = this._tiles[y][x];
             const conns = rotatedConnections(tile.type, tile.rotation);
-
-            if (this._forbidden.has(`${x},${y}`)) forbiddenHit.push([x, y]);
 
             for (const d of DIRS) {
                 if (!conns[d.idx]) continue;
@@ -596,6 +621,7 @@ export default class CircuitRouting extends MinigameBase {
                     continue;
                 }
                 if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
+                if (this._forbidden.has(`${nx},${ny}`)) continue;
                 const neighbor = this._tiles[ny][nx];
                 const nconns = rotatedConnections(neighbor.type, neighbor.rotation);
                 if (!nconns[d.opp]) continue;
@@ -606,6 +632,7 @@ export default class CircuitRouting extends MinigameBase {
                 queue.push([nx, ny]);
             }
         }
+
         return { reached, reachedOutputs, forbiddenHit, flowSegments };
     }
 
@@ -638,14 +665,14 @@ export default class CircuitRouting extends MinigameBase {
             return {
                 from,
                 to,
-                length: Phaser.Math.Distance.Between(from.x, from.y, to.x, to.y),
+                length: Math.hypot(to.x - from.x, to.y - from.y),
             };
         }).filter((segment) => segment.length > 0);
 
         if (segments.length === 0) return;
 
         const totalLength = segments.reduce((sum, segment) => sum + segment.length, 0);
-        let remaining = (this._energyPhase * 1.35 % 1) * totalLength;
+        let remaining = (this._energyPhase * 0.85 % 1) * totalLength;
         let activeSegment = segments[segments.length - 1];
 
         for (const segment of segments) {
@@ -657,19 +684,20 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         const progress = activeSegment.length <= 0 ? 0 : remaining / activeSegment.length;
-        const x = Phaser.Math.Linear(activeSegment.from.x, activeSegment.to.x, progress);
-        const y = Phaser.Math.Linear(activeSegment.from.y, activeSegment.to.y, progress);
+        const x = activeSegment.from.x + ((activeSegment.to.x - activeSegment.from.x) * progress);
+        const y = activeSegment.from.y + ((activeSegment.to.y - activeSegment.from.y) * progress);
 
-        this._sourceFlowGfx.fillStyle(0xc7fff9, 0.22);
-        this._sourceFlowGfx.fillCircle(x, y, 13);
-        this._sourceFlowGfx.fillStyle(0xf6fff8, 0.95);
-        this._sourceFlowGfx.fillRoundedRect(x - 6, y - 6, 12, 12, 3);
+        this._sourceFlowGfx.fillStyle(0xc7fff9, 0.1);
+        this._sourceFlowGfx.fillCircle(x, y, 9);
+        this._sourceFlowGfx.fillStyle(0xf6fff8, 0.52);
+        this._sourceFlowGfx.fillCircle(x, y, 4.2);
     }
 
     _refreshAnimatedCircuitEffects() {
         const renderState = this._lastCircuitRenderState;
         const reached = renderState?.reached || new Set();
-        const energyActive = Boolean(renderState?.completed);
+        const energyActive = reached.size > 0;
+        const reachedOutputs = new Set(renderState?.reachedOutputs || []);
 
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
@@ -677,13 +705,22 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
 
+        Object.entries(this._outputDots).forEach(([row, view]) => {
+            const active = reachedOutputs.has(this._outputs[row]);
+            const pulse = 0.18 + (Math.sin((this._energyPhase * Math.PI * 2) + (Number(row) * 0.65)) * 0.08);
+
+            view.glow?.setAlpha(active ? pulse : 0);
+            view.ring?.setStrokeStyle(2, 0xaefdf3, active ? 0.42 + pulse : 0);
+            view.dot?.setScale(active ? 1.02 + (pulse * 0.08) : 1);
+        });
+
         if (energyActive) {
             this._drawSourceFlowBlock(renderState.flowSegments);
-            this._sourcePulse?.setAlpha(0.14 + (Math.sin(this._energyPhase * Math.PI * 2) * 0.08) + 0.16);
-            this._sourceDot?.setFillStyle(0xe9fff3, 1);
+            this._sourcePulse?.setAlpha(0.12 + (Math.sin(this._energyPhase * Math.PI * 2) * 0.03) + 0.05);
+            this._sourceDot?.setFillStyle(renderState?.completed ? 0xe9fff3 : 0xffe8a3, 1);
         } else {
             this._sourceFlowGfx?.clear();
-            this._sourcePulse?.setAlpha(0.3);
+            this._sourcePulse?.setAlpha(0.18);
             this._sourceDot?.setFillStyle(0xffcc00, 1);
         }
     }
@@ -691,11 +728,11 @@ export default class CircuitRouting extends MinigameBase {
     _startCircuitAnimationLoop() {
         this._stopCircuitAnimationLoop();
         this._energyTickEvent = this.scene.time.addEvent({
-            delay: 60,
+            delay: 75,
             loop: true,
             callback: () => {
                 if (!this.active) return;
-                this._energyPhase = (this._energyPhase + 0.08) % 1;
+                this._energyPhase = (this._energyPhase + 0.045) % 1;
                 this._refreshAnimatedCircuitEffects();
             },
         });
@@ -708,12 +745,14 @@ export default class CircuitRouting extends MinigameBase {
 
     _updateAll() {
         const { reached, reachedOutputs, forbiddenHit, flowSegments } = this._computeReached();
+
         const completed = reachedOutputs.length === this._repairTargets.length && forbiddenHit.length === 0;
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
                 this._drawTile(x, y, reached.has(`${x},${y}`));
             }
         }
+
         Object.entries(this._outputDots).forEach(([y, { dot, lbl }]) => {
             const label = this._outputs[y];
             if (reachedOutputs.includes(label)) {
@@ -724,10 +763,14 @@ export default class CircuitRouting extends MinigameBase {
                 lbl.setColor('#556666');
             }
         });
+
         this._refreshRepairTargets(reachedOutputs, forbiddenHit.length > 0);
-        this._lastResult = { reachedOutputs, forbiddenHit };
-        this._lastCircuitRenderState = { reached, flowSegments, completed };
+
+        this._lastResult = { reached, reachedOutputs, forbiddenHit, flowSegments, completed };
+    this._lastCircuitRenderState = { reached, reachedOutputs, flowSegments, completed };
+
         this._refreshAnimatedCircuitEffects();
+
         this._syncCircuitProgress(this._lastResult);
     }
 
@@ -739,6 +782,17 @@ export default class CircuitRouting extends MinigameBase {
 
     hide() {
         this._stopCircuitAnimationLoop();
+        this._tileGfx?.forEach((row) => {
+            row?.forEach((tileView) => {
+                tileView?.rotationTween?.stop();
+                if (tileView?.container) {
+                    this.scene.tweens.killTweensOf(tileView.container);
+                }
+                if (tileView) {
+                    tileView.rotationTween = null;
+                }
+            });
+        });
         this._lastCircuitRenderState = null;
         this._sourceFlowGfx = null;
         this._sourceDot = null;

@@ -14,11 +14,13 @@ import {
     SOUND_VOLUMES,
     getShiftClockStepMs,
 } from '../constants/gameConstants.js';
+import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections, isGearType } from '../core/gearPuzzleLogic.js';
 import { createMachineVariant, resolveMachineTexture } from '../data/machineCatalog.js';
 import { getMusicVolume } from '../state/gameSettings.js';
 
 import StateMachine from '../core/StateMachine.js';
 import CircuitRouting from '../systems/minigames/CircuitRouting.js';
+import GearGridPuzzle from '../systems/minigames/GearGridPuzzle.js';
 
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
@@ -61,6 +63,7 @@ export default class GameScene extends Phaser.Scene {
         this._currentMachineVariant = null;
         this._settingsOpen = false;
         this._gameplayPaused = false;
+        this._overlayModalOpen = false;
         this._nextCaseEvent = null;
         this._advanceCaseEvent = null;
         this._commTypingEvent = null;
@@ -72,14 +75,46 @@ export default class GameScene extends Phaser.Scene {
         this._shiftEnding = false;
         this._shiftAwaitingFinalRuling = false;
         this._otherPuzzleReturnPhoneState = null;
+        this._gearPuzzleReturnPhoneState = null;
         this._otherPuzzleReturnVoiceBroken = false;
         this._machineWorklightFlickerEvent = null;
         this._phoneBodyScrollOffset = 0;
         this._phoneStickToBottom = true;
         this._phoneScrollHover = false;
+        this._phoneViewMode = 'info';
+        this._phoneInfoNote = null;
+        this._phoneUnreadNotifications = 0;
+        this._phoneNotificationSerial = 0;
+        this._phoneNotifications = [];
+        this._phoneViews = {
+            info: {
+                header: 'UNIT DOSSIER',
+                body: 'No unit latched to the line.',
+                status: 'LINE STANDBY',
+                scrollOffset: 0,
+                stickToBottom: false,
+            },
+            notifications: {
+                header: 'WORLD FEED',
+                body: 'Shift feed is idle.',
+                status: 'NO ALERTS',
+                scrollOffset: 0,
+                stickToBottom: false,
+            },
+            chat: {
+                header: 'FACTORY LINK',
+                body: 'Awaiting unit connection.',
+                status: 'CHANNEL IDLE',
+                scrollOffset: 0,
+                stickToBottom: true,
+            },
+        };
         this._deskItems = [];
         this._selectedDeskItem = null;
         this._deskItemIntent = null;
+        this._miniGearPreviewPhase = 0;
+        this._miniGearPreviewTimer = 0;
+        this._currentMiniGearPreviewRect = null;
 
         this._caseSM = new StateMachine('intake');
 
@@ -95,6 +130,8 @@ export default class GameScene extends Phaser.Scene {
         });
         this._otherPuzzleOverlay = new CircuitRouting(this, { depth: 360 });
         this._otherPuzzleOverlay.onClose = (evidence) => this._handleOtherPuzzleClosed(evidence);
+        this._gearPuzzleOverlay = new GearGridPuzzle(this, { depth: 360 });
+        this._gearPuzzleOverlay.onClose = (evidence) => this._handleGearPuzzleClosed(evidence);
 
         const newRuleIds = allRules.filter((rule) => rule.period === period).map((rule) => rule.id);
         this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds, {
@@ -121,6 +158,7 @@ export default class GameScene extends Phaser.Scene {
             this._rulebook?.destroy();
             this._machinePuzzleOverlay.destroy();
             this._otherPuzzleOverlay.destroy();
+            this._gearPuzzleOverlay.destroy();
             this._settingsOverlay.destroy();
             if (this._currentMusic) {
                 this._currentMusic.stop();
@@ -144,6 +182,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     update(_time, delta) {
+        this._updateMiniGearPreview(delta);
+
         if (!this._shiftRunning || this._gameplayPaused || this._shiftEnding) return;
 
         this._elapsed = Math.min(this._elapsed + delta, this._shiftDuration);
@@ -225,6 +265,46 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'Courier New', fontSize: '24px', color: '#ccefff',
         }).setOrigin(0, 0.5);
         this._hudContainer.add(this._clockText);
+
+        this._clockPauseNotice = this.add.container(986, 700).setVisible(false).setAlpha(0);
+        const pauseGlow = this.add.rectangle(0, 0, 274, 32, 0xffffff, 0.04)
+            .setOrigin(0, 0)
+            .setStrokeStyle(1, 0xeefbff, 0.14);
+        const pausePlate = this.add.rectangle(4, 4, 266, 24, 0xf7ffff, 0.08)
+            .setOrigin(0, 0)
+            .setStrokeStyle(1, 0xeefbff, 0.3);
+        const pauseTagLeft = this.add.rectangle(10, 8, 44, 16, 0xf6ffff, 0.18)
+            .setOrigin(0, 0)
+            .setStrokeStyle(1, 0xf6ffff, 0.36);
+        const pauseTagRight = this.add.rectangle(216, 8, 44, 16, 0xf6ffff, 0.12)
+            .setOrigin(0, 0)
+            .setStrokeStyle(1, 0xf6ffff, 0.22);
+        const pauseScan = this.add.graphics();
+        pauseScan.fillStyle(0xffffff, 0.09);
+        for (let offset = 0; offset < 24; offset += 6) {
+            pauseScan.fillRect(64, 7 + offset, 142, 2);
+        }
+        const pauseBroadcastBars = this.add.graphics();
+        pauseBroadcastBars.fillStyle(0xf6ffff, 0.16);
+        pauseBroadcastBars.fillRect(58, 8, 3, 16);
+        pauseBroadcastBars.fillRect(209, 8, 3, 16);
+        pauseBroadcastBars.fillRect(214, 8, 1, 16);
+        const pauseText = this.add.text(136, 16, 'TIMER PAUSED', {
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            color: '#f7ffff',
+            letterSpacing: 2,
+        }).setOrigin(0.5).setAlpha(0.74);
+        this._clockPauseNotice.add([
+            pauseGlow,
+            pausePlate,
+            pauseTagLeft,
+            pauseTagRight,
+            pauseScan,
+            pauseBroadcastBars,
+            pauseText,
+        ]);
+        this._hudContainer.add(this._clockPauseNotice);
 
         this._buildMiniMachinePanel();
     }
@@ -649,16 +729,15 @@ export default class GameScene extends Phaser.Scene {
         const screenMaskGraphics = this.make.graphics({ x: hiddenX, y: hiddenY, add: false });
         screenMaskGraphics.fillStyle(0xffffff, 1);
         screenMaskGraphics.fillRoundedRect(screenLeft, screenTop, screenWidth, screenHeight, 18);
-        const screenMask = screenMaskGraphics.createGeometryMask();
         this._miniMachineScreenMaskSource = screenMaskGraphics;
-        this._miniMachineImage.setMask(screenMask);
-        this._miniMachineShadow.setMask(screenMask);
 
         this._miniPuzzleLinkGfx = this.add.graphics();
         this._miniPuzzleGfx = this.add.graphics();
         this._miniPuzzleLabelContainer = this.add.container(0, 0);
         this._miniFlowGfx = this.add.graphics();
         this._miniFlowLabelContainer = this.add.container(0, 0);
+        this._miniGearGfx = this.add.graphics();
+        this._miniGearLabelContainer = this.add.container(0, 0);
 
         const gridPortFrame = this.add.rectangle(92, 102, 96, 54, 0x091116, 0.2)
             .setStrokeStyle(2, 0x8bb8ff, 0.82);
@@ -682,6 +761,17 @@ export default class GameScene extends Phaser.Scene {
             letterSpacing: 1,
         });
 
+        const gearPortFrame = this.add.rectangle(196, 180, 116, 42, 0x091116, 0.2)
+            .setStrokeStyle(2, 0x8bb8ff, 0.82);
+        const gearPortHit = this.add.rectangle(196, 180, 116, 42, 0xffffff, 0.001)
+            .setInteractive({ useHandCursor: true });
+        const gearPortLabel = this.add.text(150, 204, 'GEAR', {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            color: '#d7e7ff',
+            letterSpacing: 1,
+        });
+
         gridPortHit.on('pointerover', () => this._setMiniMachinePanelHover('grid', true));
         gridPortHit.on('pointerout', () => this._setMiniMachinePanelHover('grid', false));
         gridPortHit.on('pointerdown', () => {
@@ -698,8 +788,17 @@ export default class GameScene extends Phaser.Scene {
             this._openOtherPuzzle();
         });
 
+        gearPortHit.on('pointerover', () => this._setMiniMachinePanelHover('gear', true));
+        gearPortHit.on('pointerout', () => this._setMiniMachinePanelHover('gear', false));
+        gearPortHit.on('pointerdown', () => {
+            if (!this._currentMachineVariant || !this._miniMachinePanelVisible) return;
+            this._playMiniMachinePortSound('gear');
+            this._openGearPuzzle();
+        });
+
         this._miniGridPort = { frame: gridPortFrame, hit: gridPortHit, label: gridPortLabel };
         this._miniFlowPort = { frame: flowPortFrame, hit: flowPortHit, label: flowPortLabel };
+        this._miniGearPort = { frame: gearPortFrame, hit: gearPortHit, label: gearPortLabel };
 
         this._miniMachinePanel.add([
             outer,
@@ -726,6 +825,11 @@ export default class GameScene extends Phaser.Scene {
             this._miniFlowLabelContainer,
             flowPortHit,
             flowPortLabel,
+            gearPortFrame,
+            this._miniGearGfx,
+            this._miniGearLabelContainer,
+            gearPortHit,
+            gearPortLabel,
         ]);
         this._hudContainer.add(this._miniMachinePanel);
     }
@@ -741,8 +845,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _playMiniMachinePortSound(portKey) {
-        const preferredAsset = portKey === 'flow' ? SOUND_ASSETS.fuseRotate : SOUND_ASSETS.inspectionReveal;
-        const fallbackAsset = portKey === 'flow' ? SOUND_ASSETS.inspectionReveal : SOUND_ASSETS.fuseRotate;
+        const preferredAsset = portKey === 'flow'
+            ? SOUND_ASSETS.fuseRotate
+            : (portKey === 'gear' ? SOUND_ASSETS.circuitLock : SOUND_ASSETS.inspectionReveal);
+        const fallbackAsset = portKey === 'gear'
+            ? SOUND_ASSETS.inspectionReveal
+            : (portKey === 'flow' ? SOUND_ASSETS.inspectionReveal : SOUND_ASSETS.fuseRotate);
         const soundAsset = this.cache.audio.has(preferredAsset.key)
             ? preferredAsset
             : (this.cache.audio.has(fallbackAsset.key) ? fallbackAsset : null);
@@ -750,7 +858,9 @@ export default class GameScene extends Phaser.Scene {
         if (!soundAsset) return;
 
         this._playOneShot(soundAsset, {
-            volume: portKey === 'flow' ? SOUND_VOLUMES.puzzleRotate : SOUND_VOLUMES.reveal,
+            volume: portKey === 'flow'
+                ? SOUND_VOLUMES.puzzleRotate
+                : (portKey === 'gear' ? SOUND_VOLUMES.puzzleLock : SOUND_VOLUMES.reveal),
         });
     }
 
@@ -825,6 +935,12 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xc9ffff, 0.25);
         const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 30, screenWidth - 10, 46, 0xffffff, 0.08).setOrigin(0.5);
         const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 38, 10, 0x1b1812, 1).setOrigin(0.5);
+        const messageBoardShadow = this.add.rectangle(146, 98, 232, 88, 0x000000, 0.12)
+            .setOrigin(0.5)
+            .setStrokeStyle(1, 0x163136, 0.16);
+        const messageBoard = this.add.rectangle(146, 98, 228, 84, 0xf3ffff, 0.22)
+            .setOrigin(0.5)
+            .setStrokeStyle(1, 0x17363d, 0.28);
 
         const scanlines = this.add.graphics();
         scanlines.fillStyle(0xffffff, 0.07);
@@ -833,16 +949,20 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._phoneHeaderText = this.add.text(34, 30, 'FACTORY LINK', {
-            fontFamily: 'Arial Black', fontSize: '17px', color: '#101010',
+            fontFamily: 'Arial Black', fontSize: '16px', color: '#0c171b',
         });
-        this._phoneBodyText = this.add.text(36, 70, '', {
-            fontFamily: 'Arial', fontSize: '18px', color: '#101010',
-            wordWrap: { width: 216 }, lineSpacing: 7,
+        this._phoneBodyText = this.add.text(36, 60, '', {
+            fontFamily: 'Arial', fontSize: '14px', color: '#101010',
+            wordWrap: { width: 218 }, lineSpacing: 6,
         });
-        this._phoneStatusText = this.add.text(36, 184, 'CHANNEL IDLE', {
-            fontFamily: 'Arial', fontSize: '12px', color: '#15313a',
+        this._phoneStatusText = this.add.text(36, 146, 'CHANNEL IDLE', {
+            fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
         });
 
+        this._phoneBodyViewport = { x: 36, y: 60, width: 218, height: 72 };
+        this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
+        this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
+        this._phoneBodyText.setCrop(0, 0, this._phoneBodyViewport.width, this._phoneBodyViewport.height);
         this._phoneBodyViewport = { x: 36, y: 56, width: 216, height: 110 };
         const phoneBodyMaskGraphics = this.make.graphics({ x: panelX, y: panelY, add: false });
         phoneBodyMaskGraphics.fillStyle(0xffffff, 1);
@@ -864,9 +984,9 @@ export default class GameScene extends Phaser.Scene {
         ).setOrigin(0.5).setInteractive({ useHandCursor: true });
         this._phoneBodyScrollZone.on('pointerover', () => { this._phoneScrollHover = true; });
         this._phoneBodyScrollZone.on('pointerout', () => { this._phoneScrollHover = false; });
-        this._phoneScrollTrack = this.add.rectangle(264, this._phoneBodyViewport.y, 5, this._phoneBodyViewport.height, 0x3d7c88, 0.22)
+        this._phoneScrollTrack = this.add.rectangle(264, this._phoneScrollTrackTop, 5, this._phoneScrollTrackHeight, 0x3d7c88, 0.22)
             .setOrigin(0.5, 0);
-        this._phoneScrollThumb = this.add.rectangle(264, this._phoneBodyViewport.y, 5, 20, 0x14313a, 0.56)
+        this._phoneScrollThumb = this.add.rectangle(264, this._phoneScrollTrackTop, 5, 20, 0x14313a, 0.56)
             .setOrigin(0.5, 0)
             .setStrokeStyle(1, 0xe8ffff, 0.24);
         this.input.on('wheel', this._handlePhoneWheel, this);
@@ -902,6 +1022,9 @@ export default class GameScene extends Phaser.Scene {
             fontSize: '23px',
             glowColor: 0xffdddd,
         });
+        const infoButton = this._createPhoneChannelButton(214, 160, 'INFO', 30);
+        const chatButton = this._createPhoneChannelButton(246, 160, 'CHAT', 30);
+        const alertButton = this._createPhoneChannelButton(274, 160, '!', 18);
 
         accept.bg.on('pointerover', () => this._setPhoneButtonHover(accept, true));
         accept.bg.on('pointerout', () => this._setPhoneButtonHover(accept, false));
@@ -911,12 +1034,30 @@ export default class GameScene extends Phaser.Scene {
         reject.bg.on('pointerout', () => this._setPhoneButtonHover(reject, false));
         reject.bg.on('pointerdown', () => this._onPhoneChoice('reject'));
 
+        [infoButton, chatButton, alertButton].forEach((button) => {
+            button.bg.on('pointerover', () => {
+                button.glow.setScale(1.08);
+                button.bg.setScale(1.06);
+                button.label.setScale(1.04);
+            });
+            button.bg.on('pointerout', () => {
+                button.glow.setScale(1);
+                button.bg.setScale(1);
+                button.label.setScale(1);
+            });
+        });
+        infoButton.bg.on('pointerdown', () => this._setPhoneView('info'));
+        chatButton.bg.on('pointerdown', () => this._setPhoneView('chat'));
+        alertButton.bg.on('pointerdown', () => this._setPhoneView('notifications', { clearUnread: true }));
+
         this._phonePanel.add([
             frame,
             inner,
             screen,
             gloss,
             tray,
+            messageBoardShadow,
+            messageBoard,
             scanlines,
             this._phoneBodyText,
             this._phoneBodyScrollZone,
@@ -925,6 +1066,15 @@ export default class GameScene extends Phaser.Scene {
             // header, status, and buttons rendered after body so they paint on top
             this._phoneHeaderText,
             this._phoneStatusText,
+            infoButton.glow,
+            infoButton.bg,
+            infoButton.label,
+            chatButton.glow,
+            chatButton.bg,
+            chatButton.label,
+            alertButton.glow,
+            alertButton.bg,
+            alertButton.label,
             this._settingsButtonBg,
             this._settingsButtonLabel,
             accept.glow,
@@ -936,10 +1086,58 @@ export default class GameScene extends Phaser.Scene {
         ]);
 
         this._phoneButtons = { accept, reject };
+        this._phoneViewButtons = {
+            info: infoButton,
+            chat: chatButton,
+            alert: alertButton,
+        };
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE');
+        this._refreshPhoneInfoBoard();
+        this._refreshPhoneNotificationBoard();
+        this._setPhoneView('info');
+    }
+
+    _getPhoneViewState(viewMode = this._phoneViewMode) {
+        return this._phoneViews?.[viewMode] || this._phoneViews.chat;
+    }
+
+    _persistPhoneViewScroll(viewMode = this._phoneViewMode) {
+        const view = this._getPhoneViewState(viewMode);
+        view.scrollOffset = this._phoneBodyScrollOffset;
+        view.stickToBottom = this._phoneStickToBottom;
+    }
+
+    _restorePhoneViewScroll(viewMode = this._phoneViewMode) {
+        const view = this._getPhoneViewState(viewMode);
+        this._phoneBodyScrollOffset = view.scrollOffset || 0;
+        this._phoneStickToBottom = view.stickToBottom !== false;
+    }
+
+    _refreshPhonePanelDisplay() {
+        const view = this._getPhoneViewState();
+        if (!view || !this._phoneHeaderText || !this._phoneBodyText || !this._phoneStatusText) return;
+
+        this._phoneHeaderText.setText(view.header || '');
+        this._phoneBodyText.setText(view.body || '');
+        this._phoneStatusText.setText(view.status || '');
+        this._restorePhoneViewScroll();
         this._syncPhoneBodyLayout();
+        this._refreshPhoneChannelButtons();
+    }
+
+    _setPhoneView(viewMode, { clearUnread = false } = {}) {
+        if (!this._phoneViews?.[viewMode]) return;
+
+        this._persistPhoneViewScroll();
+        this._phoneViewMode = viewMode;
+        if (viewMode === 'notifications' && clearUnread) {
+            this._markPhoneNotificationsRead();
+        }
+
+        this._phonePanel?.setVisible(true);
+        this._phonePanel?.setAlpha(1);
+        this._refreshPhonePanelDisplay();
     }
 
     _syncPhoneBodyLayout() {
@@ -950,7 +1148,13 @@ export default class GameScene extends Phaser.Scene {
             this._phoneBodyScrollOffset = overflow;
         }
 
-        this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y - this._phoneBodyScrollOffset);
+        this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y);
+        this._phoneBodyText.setCrop(
+            0,
+            this._phoneBodyScrollOffset,
+            this._phoneBodyViewport.width,
+            this._phoneBodyViewport.height,
+        );
 
         if (!this._phoneScrollTrack || !this._phoneScrollThumb) return;
         if (overflow <= 0) {
@@ -961,11 +1165,14 @@ export default class GameScene extends Phaser.Scene {
 
         this._phoneScrollTrack.setVisible(true);
         this._phoneScrollThumb.setVisible(true);
-        const thumbHeight = Math.max(16, (this._phoneBodyViewport.height / this._phoneBodyText.height) * this._phoneBodyViewport.height);
-        const travel = this._phoneBodyViewport.height - thumbHeight;
+        const trackTop = this._phoneScrollTrackTop ?? this._phoneBodyViewport.y;
+        const trackHeight = this._phoneScrollTrackHeight || this._phoneBodyViewport.height;
+        const thumbHeight = Math.max(14, (this._phoneBodyViewport.height / this._phoneBodyText.height) * trackHeight);
+        const travel = trackHeight - thumbHeight;
         const progress = overflow <= 0 ? 0 : this._phoneBodyScrollOffset / overflow;
         this._phoneScrollThumb.height = thumbHeight;
-        this._phoneScrollThumb.y = this._phoneBodyViewport.y + (travel * progress);
+        this._phoneScrollThumb.y = trackTop + (travel * progress);
+        this._persistPhoneViewScroll();
     }
 
     _handlePhoneWheel(_pointer, _gameObjects, _deltaX, deltaY) {
@@ -980,6 +1187,77 @@ export default class GameScene extends Phaser.Scene {
             this._phoneStickToBottom = true;
         }
         this._syncPhoneBodyLayout();
+    }
+
+    _createPhoneChannelButton(x, y, text, width = 28) {
+        const glow = this.add.rectangle(x, y, width + 10, 20, 0xffffff, 0)
+            .setOrigin(0.5)
+            .setStrokeStyle(1, 0xffffff, 0);
+        const bg = this.add.rectangle(x, y, width, 16, 0x18343a, 0.9)
+            .setOrigin(0.5)
+            .setStrokeStyle(1, 0xd7fdff, 0.22)
+            .setInteractive({ useHandCursor: true });
+        const label = this.add.text(x, y, text, {
+            fontFamily: 'Arial Black', fontSize: '7px', color: '#d7fdff',
+        }).setOrigin(0.5);
+
+        return { glow, bg, label, width, pulseTween: null };
+    }
+
+    _refreshPhoneChannelButtons() {
+        const refresh = (button, { active = false, unread = false } = {}) => {
+            if (!button) return;
+
+            if (button.pulseTween) {
+                button.pulseTween.stop();
+                button.pulseTween = null;
+            }
+
+            let fill = 0x18343a;
+            let stroke = 0xd7fdff;
+            let strokeAlpha = 0.18;
+            let textColor = '#d7fdff';
+            let glowAlpha = 0;
+
+            if (active) {
+                fill = 0xf4ffff;
+                stroke = 0xffffff;
+                strokeAlpha = 0.65;
+                textColor = '#0d2328';
+                glowAlpha = 0.18;
+            }
+
+            if (unread) {
+                fill = 0xffd9bc;
+                stroke = 0xff875a;
+                strokeAlpha = 0.95;
+                textColor = '#5a1f00';
+                glowAlpha = 0.36;
+                button.pulseTween = this.tweens.add({
+                    targets: button.glow,
+                    alpha: 0.55,
+                    duration: 280,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.InOut',
+                });
+            }
+
+            button.glow
+                .setFillStyle(0xffffff, 0.08)
+                .setStrokeStyle(1, stroke, glowAlpha > 0 ? 0.9 : 0)
+                .setAlpha(glowAlpha);
+            button.bg.setFillStyle(fill, 0.95);
+            button.bg.setStrokeStyle(1, stroke, strokeAlpha);
+            button.label.setColor(textColor);
+        };
+
+        refresh(this._phoneViewButtons?.info, { active: this._phoneViewMode === 'info' });
+        refresh(this._phoneViewButtons?.chat, { active: this._phoneViewMode === 'chat' });
+        refresh(this._phoneViewButtons?.alert, {
+            active: this._phoneViewMode === 'notifications' && this._phoneUnreadNotifications === 0,
+            unread: this._phoneUnreadNotifications > 0,
+        });
     }
 
     _createPhoneButton(x, y, text, inactiveFill, activeFill, inactiveText, activeText, options = {}) {
@@ -1085,36 +1363,59 @@ export default class GameScene extends Phaser.Scene {
         button.label.setScale(isHovering ? 1.08 : 1);
     }
 
-    _setPhoneMessage(header, body, status = this._phoneStatusText?.text || '') {
-        this._phoneHeaderText.setText(header || '');
-        this._phoneBodyText.setText(body || '');
-        this._phoneStickToBottom = true;
-        this._syncPhoneBodyLayout();
-        if (this._phoneStatusText) this._phoneStatusText.setText(status || '');
+    _setPhoneMessage(header, body, status = this._getPhoneViewState('chat')?.status || '', mode = 'chat', options = {}) {
+        const view = this._getPhoneViewState(mode);
+        if (!view) return;
+
+        view.header = header || '';
+        view.body = body || '';
+        view.status = status || '';
+        view.stickToBottom = options.stickToBottom ?? (mode === 'chat');
+        view.scrollOffset = view.stickToBottom ? 0 : (options.scrollOffset ?? view.scrollOffset ?? 0);
+
+        if (this._phoneViewMode === mode) {
+            this._refreshPhonePanelDisplay();
+            return;
+        }
+
+        this._refreshPhoneChannelButtons();
     }
 
-    _showPhonePanel(header, body, status = '') {
-        this._setPhoneMessage(header, body, status);
-        this._phonePanel.setVisible(true);
-        this._phonePanel.setAlpha(1);
+    _showPhonePanel(header, body, status = '', mode = 'chat', options = {}) {
+        const activate = options.activate !== false;
+        const clearUnread = options.clearUnread === true;
+
+        this._setPhoneMessage(header, body, status, mode, options);
+        this._phonePanel?.setVisible(true);
+        this._phonePanel?.setAlpha(1);
+
+        if (activate && this._phoneViewMode !== mode) {
+            this._setPhoneView(mode, { clearUnread });
+            return;
+        }
+
+        if (activate && mode === 'notifications' && clearUnread) {
+            this._markPhoneNotificationsRead();
+            this._refreshPhonePanelDisplay();
+        }
     }
 
     _capturePhonePanelState() {
         return {
-            header: this._phoneHeaderText?.text || '',
-            body: this._phoneBodyText?.text || '',
-            status: this._phoneStatusText?.text || '',
+            viewMode: this._phoneViewMode,
         };
     }
 
     _restorePhonePanelState(snapshot) {
         if (!snapshot) return;
-        this._showPhonePanel(snapshot.header, snapshot.body, snapshot.status);
+        this._setPhoneView(snapshot.viewMode || 'chat', {
+            clearUnread: (snapshot.viewMode || 'chat') === 'notifications',
+        });
     }
 
     _hidePhonePanel() {
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', '', 'CHANNEL IDLE');
+        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE', 'chat');
     }
 
     _setCommStandbyState(message = 'Awaiting next unit.', status = 'CHANNEL IDLE') {
@@ -1122,7 +1423,195 @@ export default class GameScene extends Phaser.Scene {
         this._phoneChoicePhase = 'inactive';
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', message, status);
+        this._showPhonePanel('FACTORY LINK', message, status, 'chat');
+    }
+
+    _setPhoneInfoNote(message = '', status = 'UNIT NOTE') {
+        this._phoneInfoNote = message
+            ? { message, status }
+            : null;
+        this._refreshPhoneInfoBoard();
+    }
+
+    _refreshPhoneInfoBoard(machineVariant = this._currentMachineVariant) {
+        const view = this._getPhoneViewState('info');
+
+        if (!machineVariant) {
+            view.header = 'UNIT DOSSIER';
+            view.body = [
+                `PERIOD ${GameState.period} // DAY ${GameState.day}`,
+                '',
+                this._shiftRunning ? 'Conveyor line is active.' : 'Conveyor line is in standby.',
+                'No robot is currently latched to the inspection bay.',
+                '',
+                'INFO shows the active unit.',
+                'CHAT is only for live robot dialogue.',
+                '! stores world events and broadcast alerts.',
+            ].join('\n');
+            view.status = this._shiftRunning ? 'LINE ACTIVE' : 'LINE STANDBY';
+        } else {
+            const gateState = this._getPuzzleGateState(machineVariant);
+            const flowState = this._getMachineFlowState(machineVariant);
+            const gearState = this._getMachineGearState(machineVariant);
+            const brokenTargets = this._getBrokenRepairTargetDisplayNames(machineVariant, flowState);
+            const repairedTargets = this._getRepairedRepairTargetDisplayNames(machineVariant, flowState);
+            const gridState = gateState.evaluation.solved
+                ? 'GRID STABLE'
+                : (gateState.evaluation.impossible
+                    ? (gateState.mainInspected ? 'IMPOSSIBLE VERIFIED' : 'IMPOSSIBLE FLAGGED')
+                    : 'GRID UNRESOLVED');
+            const flowLine = machineVariant._uiOtherPuzzleRequired
+                ? (machineVariant._uiOtherPuzzleSolved || flowState?.completed
+                    ? 'FLOW ROUTED'
+                    : 'FLOW INCOMPLETE')
+                : 'NO FLOW MODULE';
+            const gearLine = machineVariant._uiGearPuzzleRequired
+                ? (machineVariant._uiGearPuzzleSolved || gearState?.completed
+                    ? 'GEAR SYNCHRONIZED'
+                    : (gearState?.sinkPowered ? 'OUTPUT SHAFT LIVE' : 'GEAR STALLED'))
+                : 'NO GEAR MODULE';
+            const commsLine = !machineVariant.hasCommunication
+                ? 'NO SIGNAL'
+                : (this._hasBrokenVoiceBox(machineVariant) ? 'VOICE BOX OFFLINE' : 'VOICE CHANNEL CLEAR');
+            const directiveLine = gateState.ready
+                ? (gateState.evaluation.impossible ? 'SCRAP BONUS READY' : 'ACCEPT READY')
+                : this._getAuxiliaryDirectiveText(machineVariant);
+            const noteLines = this._phoneInfoNote
+                ? [
+                    '',
+                    `NOTE // ${this._phoneInfoNote.status}`,
+                    this._phoneInfoNote.message,
+                ]
+                : [];
+
+            view.header = `${machineVariant.name.toUpperCase()} DOSSIER`;
+            view.body = [
+                `UNIT: ${this._currentCase?.id || 'UNKNOWN'}`,
+                `MODEL: ${machineVariant.name}`,
+                '',
+                `GRID: ${gridState}`,
+                `COMMS: ${commsLine}`,
+                `FLOW: ${flowLine}`,
+                `GEAR: ${gearLine}`,
+                `LIVE: ${repairedTargets.length > 0 ? repairedTargets.join(', ') : 'NONE'}`,
+                `OFFLINE: ${brokenTargets.length > 0 ? brokenTargets.join(', ') : 'NONE'}`,
+                `DIRECTIVE: ${directiveLine}`,
+                ...noteLines,
+            ].join('\n');
+            view.status = gateState.ready ? 'READY TO FILE' : 'UNIT STATUS';
+        }
+
+        view.scrollOffset = 0;
+        view.stickToBottom = false;
+
+        if (this._phoneViewMode === 'info') {
+            this._refreshPhonePanelDisplay();
+            return;
+        }
+
+        this._refreshPhoneChannelButtons();
+    }
+
+    _parseNotificationFeedText(text = '') {
+        const separatorIndex = text.indexOf(':');
+        if (separatorIndex <= 0) {
+            return {
+                title: 'WORLD FEED',
+                message: text,
+            };
+        }
+
+        return {
+            title: text.slice(0, separatorIndex).trim(),
+            message: text.slice(separatorIndex + 1).trim(),
+        };
+    }
+
+    _refreshPhoneNotificationBoard() {
+        const view = this._getPhoneViewState('notifications');
+        const total = this._phoneNotifications.length;
+
+        view.header = 'WORLD FEED';
+        view.body = total > 0
+            ? this._phoneNotifications.map((entry) => {
+                const footer = entry.status ? `STATUS: ${entry.status}` : null;
+                return [
+                    `${entry.title} // ${entry.stamp}`,
+                    entry.message,
+                    footer,
+                ].filter(Boolean).join('\n');
+            }).join('\n\n')
+            : 'Shift feed is idle.';
+        view.status = total === 0
+            ? 'NO ALERTS'
+            : (this._phoneUnreadNotifications > 0
+                ? `${this._phoneUnreadNotifications} NEW // ${total} LOGGED`
+                : `${total} LOGGED // DAY ${GameState.day}`);
+        view.scrollOffset = 0;
+        view.stickToBottom = false;
+
+        if (this._phoneViewMode === 'notifications') {
+            this._refreshPhonePanelDisplay();
+            return;
+        }
+
+        this._refreshPhoneChannelButtons();
+    }
+
+    _markPhoneNotificationsRead() {
+        if (this._phoneUnreadNotifications <= 0) {
+            this._refreshPhoneChannelButtons();
+            return;
+        }
+
+        this._phoneUnreadNotifications = 0;
+        this._refreshPhoneNotificationBoard();
+    }
+
+    _pushPhoneNotification(title, message, status = 'NOTICE', options = {}) {
+        const activate = options.activate === true;
+        const unread = options.unread !== false;
+        const soundAsset = options.soundAsset === undefined
+            ? SOUND_ASSETS.notificationAlert
+            : options.soundAsset;
+
+        this._phoneNotifications.unshift({
+            id: ++this._phoneNotificationSerial,
+            title: title || 'NOTICE',
+            message: message || '',
+            status: status || '',
+            stamp: `DAY ${GameState.day} // PERIOD ${GameState.period}`,
+        });
+        if (unread) {
+            this._phoneUnreadNotifications += 1;
+        }
+
+        this._refreshPhoneNotificationBoard();
+        if (activate) {
+            this._setPhoneView('notifications', { clearUnread: true });
+        }
+
+        if (soundAsset) {
+            this._playOneShot(soundAsset, {
+                volume: soundAsset === SOUND_ASSETS.puzzleFixed ? SOUND_VOLUMES.puzzleFixed : SOUND_VOLUMES.notification,
+            });
+        }
+    }
+
+    _seedShiftNotifications() {
+        const authoredNotifications = this.cache.json.get('notifications') || [];
+        const matches = authoredNotifications.filter(
+            (entry) => entry.day === GameState.day && entry.period === GameState.period,
+        );
+
+        matches.forEach((entry) => {
+            const parsed = this._parseNotificationFeedText(entry.text);
+            this._pushPhoneNotification(parsed.title, parsed.message, 'WORLD FEED', {
+                activate: false,
+                soundAsset: null,
+                unread: this._phoneViewMode !== 'notifications',
+            });
+        });
     }
 
     _showShiftPendingDecisionNotice() {
@@ -1160,9 +1649,14 @@ export default class GameScene extends Phaser.Scene {
     _typePhoneMessage(text, { append = false, onComplete = null } = {}) {
         this._clearPhoneTyping();
 
-        const prefix = append ? this._phoneBodyText.text : '';
-        if (!append) this._phoneBodyText.setText('');
-        this._phoneStickToBottom = true;
+        const view = this._getPhoneViewState('chat');
+        const prefix = append ? view.body : '';
+        if (!append) view.body = '';
+        view.stickToBottom = true;
+        view.scrollOffset = 0;
+        if (this._phoneViewMode === 'chat') {
+            this._refreshPhonePanelDisplay();
+        }
 
         if (!text) {
             onComplete?.();
@@ -1176,8 +1670,12 @@ export default class GameScene extends Phaser.Scene {
             callback: () => {
                 const nextChar = text[charIndex];
                 charIndex += 1;
-                this._phoneBodyText.setText(prefix + text.slice(0, charIndex));
-                this._syncPhoneBodyLayout();
+                view.body = prefix + text.slice(0, charIndex);
+                if (this._phoneViewMode === 'chat') {
+                    this._phoneBodyText.setText(view.body);
+                    this._phoneStickToBottom = true;
+                    this._syncPhoneBodyLayout();
+                }
                 if (nextChar && nextChar.trim()) this._playTypeBeep();
 
                 if (charIndex >= text.length) {
@@ -1218,6 +1716,53 @@ export default class GameScene extends Phaser.Scene {
     _getMachineFlowState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.flowPuzzle) return null;
         return machineVariant._uiOtherPuzzleEvidence || machineVariant.flowPuzzle.progress || null;
+    }
+
+    _getMachineGearState(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant?.gearPuzzle) return null;
+        return machineVariant._uiGearPuzzleEvidence || machineVariant.gearPuzzle.progress || null;
+    }
+
+    _getAuxiliaryPuzzleState(machineVariant = this._currentMachineVariant) {
+        const flowRequired = Boolean(machineVariant?.flowPuzzle);
+        const gearRequired = Boolean(machineVariant?.gearPuzzle);
+        const flowState = this._getMachineFlowState(machineVariant);
+        const gearState = this._getMachineGearState(machineVariant);
+        const flowSolved = !flowRequired || Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
+        const gearSolved = !gearRequired || Boolean(machineVariant?._uiGearPuzzleSolved) || Boolean(gearState?.completed);
+
+        if (machineVariant && flowSolved) machineVariant._uiOtherPuzzleSolved = true;
+        if (machineVariant && gearSolved) machineVariant._uiGearPuzzleSolved = true;
+
+        const entries = [
+            { key: 'flow', label: 'FLOW', required: flowRequired, solved: flowSolved, state: flowState },
+            { key: 'gear', label: 'GEAR', required: gearRequired, solved: gearSolved, state: gearState },
+        ];
+        const requiredEntries = entries.filter((entry) => entry.required);
+        const solvedEntries = requiredEntries.filter((entry) => entry.solved);
+        const pendingEntries = requiredEntries.filter((entry) => !entry.solved);
+
+        return {
+            entries,
+            requiredEntries,
+            solvedEntries,
+            pendingEntries,
+            requiredCount: requiredEntries.length,
+            solvedCount: solvedEntries.length,
+            pendingCount: pendingEntries.length,
+            allSolved: pendingEntries.length === 0,
+        };
+    }
+
+    _getPendingAuxiliaryLabels(machineVariant = this._currentMachineVariant) {
+        return this._getAuxiliaryPuzzleState(machineVariant).pendingEntries.map((entry) => entry.label);
+    }
+
+    _getAuxiliaryDirectiveText(machineVariant = this._currentMachineVariant) {
+        const pendingLabels = this._getPendingAuxiliaryLabels(machineVariant);
+        if (pendingLabels.length === 0) return 'FILE YOUR RULING';
+        if (pendingLabels.length === 1) return `FINISH ${pendingLabels[0]} PUZZLE`;
+        return 'FINISH REMAINING PUZZLES';
     }
 
     _getMachineRepairTargets(machineVariant = this._currentMachineVariant) {
@@ -1298,40 +1843,103 @@ export default class GameScene extends Phaser.Scene {
             : text;
     }
 
+    _buildMachineConversationSnapshot(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant?.hasCommunication) {
+            return 'No transmission. Process the unit cold.';
+        }
+
+        const stage = machineVariant._uiConversationStage || 'opening';
+        const prompt = machineVariant.questionDialogue?.prompt || '';
+        const segments = [];
+
+        if (machineVariant.openingDialogue) {
+            segments.push(this._formatMachineSpeech(machineVariant.openingDialogue, machineVariant));
+        }
+
+        if ((stage === 'question' || stage === 'answered') && prompt) {
+            segments.push(`\n\nQ> ${this._formatMachineSpeech(prompt, machineVariant)}`);
+        }
+
+        if (stage === 'answered') {
+            const choice = machineVariant._uiConversationChoice;
+            const responseText = choice === 'accept'
+                ? machineVariant.questionDialogue?.yesDialogue
+                : machineVariant.questionDialogue?.noDialogue;
+            if (responseText) {
+                segments.push(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`);
+            }
+        }
+
+        return segments.join('');
+    }
+
+    _refreshMachineConversationPanel(machineVariant = this._currentMachineVariant, status = null, options = {}) {
+        if (!machineVariant) return false;
+
+        this._showPhonePanel(
+            this._getMachineLinkHeader(machineVariant),
+            this._buildMachineConversationSnapshot(machineVariant),
+            status || this._getPhoneViewState('chat').status || 'SIGNAL LIVE',
+            'chat',
+            options,
+        );
+        return true;
+    }
+
     _playMachineConversation(machineVariant) {
         const prompt = machineVariant?.questionDialogue?.prompt || '';
         const header = this._getMachineLinkHeader(machineVariant);
         const voiceBroken = this._hasBrokenVoiceBox(machineVariant);
 
+        machineVariant._uiConversationChoice = null;
+
         if (!machineVariant?.hasCommunication) {
+            machineVariant._uiConversationStage = 'no-signal';
             this._phoneChoicePhase = 'inactive';
             this._setPhoneButtonsActive(false);
             this._setPhoneButtonSelection(null);
-            this._showPhonePanel(header, 'No transmission. Process the unit cold.', 'NO SIGNAL');
+            this._showPhonePanel(header, 'No transmission. Process the unit cold.', 'NO SIGNAL', 'chat');
             return;
         }
 
+        machineVariant._uiConversationStage = 'opening';
         this._phoneChoicePhase = 'machine-opening';
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE');
+        this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE', 'chat');
 
         this._typePhoneMessage(this._formatMachineSpeech(machineVariant.openingDialogue || '', machineVariant), {
             onComplete: () => {
                 if (!prompt) {
                     this._phoneChoicePhase = 'inactive';
-                    this._showPhonePanel(header, this._phoneBodyText.text, voiceBroken ? 'VOICE DEGRADED' : 'NO QUERY');
+                    this._showPhonePanel(
+                        header,
+                        this._getPhoneViewState('chat').body,
+                        voiceBroken ? 'VOICE DEGRADED' : 'NO QUERY',
+                        'chat',
+                    );
                     return;
                 }
 
                 this._commSequenceEvent = this.time.delayedCall(180, () => {
-                    this._showPhonePanel(header, this._phoneBodyText.text, voiceBroken ? 'VOICE FRAGMENT' : 'INCOMING QUESTION');
+                    this._showPhonePanel(
+                        header,
+                        this._getPhoneViewState('chat').body,
+                        voiceBroken ? 'VOICE FRAGMENT' : 'INCOMING QUESTION',
+                        'chat',
+                    );
                     this._typePhoneMessage(`\n\nQ> ${this._formatMachineSpeech(prompt, machineVariant)}`, {
                         append: true,
                         onComplete: () => {
+                            machineVariant._uiConversationStage = 'question';
                             this._phoneChoicePhase = 'machine-question';
                             this._setPhoneButtonsActive(true);
-                            this._showPhonePanel(header, this._phoneBodyText.text, voiceBroken ? 'BROKEN VOICE // ✓ OR X' : 'PRESS ✓ OR X');
+                            this._showPhonePanel(
+                                header,
+                                this._getPhoneViewState('chat').body,
+                                voiceBroken ? 'BROKEN VOICE // ✓ OR X' : 'PRESS ✓ OR X',
+                                'chat',
+                            );
                         },
                     });
                 });
@@ -1343,7 +1951,7 @@ export default class GameScene extends Phaser.Scene {
         this._setCommStandbyState('Factory monitor online.', 'LISTENING');
         this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.silenceBeforePhoneMs, () => {
             this._phoneChoicePhase = 'incoming';
-            this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, FIRST_SHIFT_INTRO.incomingBody, 'PRESS ✓ OR X');
+            this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, FIRST_SHIFT_INTRO.incomingBody, 'PRESS ✓ OR X', 'chat');
             this._setPhoneButtonSelection(null);
             this._setPhoneButtonsActive(true);
             this._playOneShot(SOUND_ASSETS.phoneRing, { volume: SOUND_VOLUMES.phoneRing });
@@ -1356,7 +1964,12 @@ export default class GameScene extends Phaser.Scene {
         if (this._phoneChoicePhase === 'incoming') {
             if (choice === 'accept') {
                 this._setPhoneButtonSelection('accept');
-                this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, this._phoneBodyText.text, 'VOICE CONNECTED');
+                this._showPhonePanel(
+                    FIRST_SHIFT_INTRO.incomingHeader,
+                    this._getPhoneViewState('chat').body,
+                    'VOICE CONNECTED',
+                    'chat',
+                );
                 this._phoneChoicePhase = 'voice';
                 this._setPhoneButtonsActive(false);
 
@@ -1384,6 +1997,8 @@ export default class GameScene extends Phaser.Scene {
             const header = this._getMachineLinkHeader(this._currentMachineVariant);
             const voiceBroken = this._hasBrokenVoiceBox(this._currentMachineVariant);
 
+            this._currentMachineVariant._uiConversationChoice = choice;
+            this._currentMachineVariant._uiConversationStage = 'answered';
             this._phoneChoicePhase = 'machine-answered';
             this._setPhoneButtonSelection(choice);
             this._setPhoneButtonsActive(false);
@@ -1391,10 +2006,11 @@ export default class GameScene extends Phaser.Scene {
             const responseText = choice === 'accept' ? question.yesDialogue : question.noDialogue;
             this._showPhonePanel(
                 header,
-                this._phoneBodyText.text,
+                this._getPhoneViewState('chat').body,
                 voiceBroken
                     ? (choice === 'accept' ? '✓ SENT // VOICE DEGRADED' : 'X SENT // VOICE DEGRADED')
-                    : (choice === 'accept' ? '✓ SENT' : 'X SENT')
+                    : (choice === 'accept' ? '✓ SENT' : 'X SENT'),
+                'chat'
             );
 
             if (!responseText) return;
@@ -1405,8 +2021,9 @@ export default class GameScene extends Phaser.Scene {
                     onComplete: () => {
                         this._showPhonePanel(
                             header,
-                            this._phoneBodyText.text,
-                            voiceBroken ? 'VOICE LOGGED // DEGRADED' : 'RESPONSE LOGGED'
+                            this._getPhoneViewState('chat').body,
+                            voiceBroken ? 'VOICE LOGGED // DEGRADED' : 'RESPONSE LOGGED',
+                            'chat'
                         );
                     },
                 });
@@ -1434,6 +2051,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._shiftRunning = true;
         this._startMusic();
+        this._seedShiftNotifications();
         this._setFactoryIdleState('LINE ACTIVE\n\nSTATUS: READY');
         this._scheduleNextCase(FIRST_SHIFT_INTRO.caseArrivalDelayMs);
     }
@@ -1446,7 +2064,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._rulebook?.hide(true);
         this._machinePuzzleOverlay?.close(true);
-        this._otherPuzzleOverlay?.hide();
+        this._hideAuxiliaryOverlays();
         this._settingsOverlay?.open();
     }
 
@@ -1456,13 +2074,30 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._machinePuzzleOverlay?.close(true);
-        this._otherPuzzleOverlay?.hide();
+        this._hideAuxiliaryOverlays();
         this._rulebook?.toggle();
     }
 
-    _setGameplayPaused(paused) {
-        this._settingsOpen = paused;
+    _setUnderlyingSceneInputsEnabled(enabled) {
+        const setEnabled = (target) => {
+            if (!target?.input) return;
+            target.input.enabled = enabled;
+        };
+
+        setEnabled(this._conveyorUnitSprite);
+        setEnabled(this._settingsButtonBg);
+        setEnabled(this._phoneBodyScrollZone);
+        Object.values(this._phoneButtons || {}).forEach((button) => setEnabled(button.bg));
+        Object.values(this._phoneViewButtons || {}).forEach((button) => setEnabled(button.bg));
+        Object.values(this._conveyorRulingButtons || {}).forEach((button) => setEnabled(button.bgRect));
+        [this._miniGridPort?.hit, this._miniFlowPort?.hit, this._miniGearPort?.hit].forEach((target) => setEnabled(target));
+        (this._deskItems || []).forEach((item) => setEnabled(item.inputZone));
+    }
+
+    _syncModalInteractionState() {
+        const paused = this._settingsOpen || this._overlayModalOpen;
         this._gameplayPaused = paused;
+        this._setUnderlyingSceneInputsEnabled(!paused);
 
         if (this._unitMoveTween) {
             if (paused) this._unitMoveTween.pause();
@@ -1473,6 +2108,51 @@ export default class GameScene extends Phaser.Scene {
         if (this._commSequenceEvent) this._commSequenceEvent.paused = paused;
         if (this._nextCaseEvent) this._nextCaseEvent.paused = paused;
         if (this._advanceCaseEvent) this._advanceCaseEvent.paused = paused;
+        this._syncClockPauseNotice();
+    }
+
+    _setAuxiliaryOverlayModalOpen(open) {
+        this._overlayModalOpen = Boolean(open);
+        this._syncModalInteractionState();
+    }
+
+    _hideAuxiliaryOverlays() {
+        this._otherPuzzleOverlay?.hide();
+        this._gearPuzzleOverlay?.hide();
+        this._setAuxiliaryOverlayModalOpen(false);
+    }
+
+    _setGameplayPaused(paused) {
+        this._settingsOpen = paused;
+        this._syncModalInteractionState();
+    }
+
+    _syncClockPauseNotice() {
+        if (!this._clockPauseNotice) return;
+
+        const shouldShow = Boolean(this._rulebook?.isVisible() || this._settingsOverlay?.isVisible());
+        this.tweens.killTweensOf(this._clockPauseNotice);
+
+        if (shouldShow) {
+            this._clockPauseNotice.setVisible(true);
+            this.tweens.add({
+                targets: this._clockPauseNotice,
+                alpha: 1,
+                y: 696,
+                duration: 160,
+                ease: 'Quad.Out',
+            });
+            return;
+        }
+
+        this.tweens.add({
+            targets: this._clockPauseNotice,
+            alpha: 0,
+            y: 700,
+            duration: 140,
+            ease: 'Quad.In',
+            onComplete: () => this._clockPauseNotice.setVisible(false),
+        });
     }
 
     _scheduleNextCase(delayMs) {
@@ -1717,6 +2397,7 @@ export default class GameScene extends Phaser.Scene {
         this._clearUnsafeAcceptConfirmation();
         this._shiftAwaitingFinalRuling = false;
         this._otherPuzzleReturnPhoneState = null;
+        this._gearPuzzleReturnPhoneState = null;
         if (this._monitorText) this._monitorText.setText(message);
         if (this._unitContainer) this._unitContainer.setVisible(false);
         this._setMachineWorklightVisible(false);
@@ -1729,15 +2410,18 @@ export default class GameScene extends Phaser.Scene {
         }
         this._setCommStandbyState('Awaiting next unit.', 'CHANNEL IDLE');
         this._machinePuzzleOverlay?.close(true);
-        this._otherPuzzleOverlay?.hide();
+        this._hideAuxiliaryOverlays();
         this._hideMiniMachinePanel(true);
         this._currentMachineVariant = null;
+        this._phoneInfoNote = null;
+        this._refreshPhoneInfoBoard();
         this._refreshFactoryActionButtons();
     }
 
     _openMachinePuzzle() {
         if (!this._currentMachineVariant) return;
         if (this._otherPuzzleOverlay?.active) return;
+        if (this._gearPuzzleOverlay?.active) return;
 
         this._clearUnsafeAcceptConfirmation();
         this._currentMachineVariant._uiPuzzleOpened = true;
@@ -1752,7 +2436,8 @@ export default class GameScene extends Phaser.Scene {
             && !this._settingsOpen
             && Boolean(this._currentCase)
             && !this._machinePuzzleOverlay?.isVisible()
-            && !this._otherPuzzleOverlay?.active;
+            && !this._otherPuzzleOverlay?.active
+            && !this._gearPuzzleOverlay?.active;
     }
 
     _setConveyorRulingButtonsVisible(visible) {
@@ -1794,12 +2479,18 @@ export default class GameScene extends Phaser.Scene {
         this._updateConveyorDecisionHint();
         this._refreshOtherPuzzleButton();
         this._refreshFactoryActionButtons();
+        this._refreshPhoneInfoBoard(machineVariant);
 
         if (isSolved && !wasSolved && !this._actionLocked) {
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
-            const followUpNeeded = Boolean(machineVariant?._uiOtherPuzzleRequired) && !machineVariant?._uiOtherPuzzleSolved;
+            const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
+            const followUpNeeded = auxiliaryState.pendingCount > 0;
             this._showFeedback(
-                followUpNeeded ? 'MAIN PUZZLE CLEARED // COMPLETE OTHER PUZZLE' : 'GRID FIXED // ACCEPT IS SAFE',
+                followUpNeeded
+                    ? (auxiliaryState.pendingCount === 1
+                        ? `MAIN PUZZLE CLEARED // COMPLETE ${auxiliaryState.pendingEntries[0].label} PUZZLE`
+                        : 'MAIN PUZZLE CLEARED // COMPLETE AUX PUZZLES')
+                    : 'GRID FIXED // ACCEPT IS SAFE',
                 '#c7ff86'
             );
         }
@@ -1812,7 +2503,8 @@ export default class GameScene extends Phaser.Scene {
         let color = '#8fc1cf';
 
         const gateState = this._getPuzzleGateState();
-        const { evaluation, mainInspected, mainReady, otherRequired, otherSolved } = gateState;
+        const { evaluation, mainInspected, mainReady, otherRequired, otherSolved, auxiliaryState } = gateState;
+        const pendingLabels = auxiliaryState.pendingEntries.map((entry) => entry.label);
 
         if (!this._currentMachineVariant) {
             this._conveyorDecisionHint.setText(text).setColor(color);
@@ -1834,21 +2526,29 @@ export default class GameScene extends Phaser.Scene {
                 color = '#ffd685';
             } else {
                 text = otherRequired
-                    ? 'SOLVE MAIN PUZZLE // THEN CLEAR OTHER PUZZLE'
+                    ? (pendingLabels.length === 1
+                        ? `SOLVE MAIN PUZZLE // THEN CLEAR ${pendingLabels[0]} PUZZLE`
+                        : 'SOLVE MAIN PUZZLE // THEN CLEAR AUX PUZZLES')
                     : 'SOLVE THE MAIN PUZZLE BEFORE FILING A RULING';
                 color = '#8fc1cf';
             }
         } else if (!otherSolved) {
             text = evaluation.impossible
-                ? 'GRID IMPOSSIBLE // COMPLETE OTHER PUZZLE TO SCRAP'
-                : 'MAIN PUZZLE CLEARED // FINISH OTHER PUZZLE';
+                ? (pendingLabels.length === 1
+                    ? `GRID IMPOSSIBLE // CLEAR ${pendingLabels[0]} PUZZLE TO SCRAP`
+                    : 'GRID IMPOSSIBLE // CLEAR AUX PUZZLES TO SCRAP')
+                : (pendingLabels.length === 1
+                    ? `MAIN PUZZLE CLEARED // FINISH ${pendingLabels[0]} PUZZLE`
+                    : 'MAIN PUZZLE CLEARED // FINISH AUX PUZZLES');
             color = '#9bc2ff';
         } else if (evaluation.impossible) {
-            text = 'IMPOSSIBLE GRID CONFIRMED // SCRAP BONUS READY';
+            text = otherRequired
+                ? 'ALL REQUIRED PUZZLES CLEARED // SCRAP BONUS READY'
+                : 'IMPOSSIBLE GRID CONFIRMED // SCRAP BONUS READY';
             color = '#ffd685';
         } else {
             text = otherRequired
-                ? 'BOTH PUZZLES CLEARED // ACCEPT FOR CLEAN PAY'
+                ? 'ALL REQUIRED PUZZLES CLEARED // ACCEPT FOR CLEAN PAY'
                 : 'GRID FIXED // ACCEPT IS SAFE';
             color = '#c7ff86';
         }
@@ -1857,11 +2557,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _showFactoryNotification(message, status, soundAsset = SOUND_ASSETS.notificationAlert) {
-        const header = this._currentMachineVariant
-            ? this._getMachineLinkHeader(this._currentMachineVariant)
-            : 'FACTORY LINK';
-
-        this._showPhonePanel(header, message, status);
+        this._setPhoneInfoNote(message, status);
 
         if (soundAsset) {
             this._playOneShot(soundAsset, {
@@ -1911,7 +2607,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (name !== 'conveyor') {
             this._machinePuzzleOverlay?.close(true);
-            this._otherPuzzleOverlay?.hide();
+            this._hideAuxiliaryOverlays();
             this._hideMiniMachinePanel(true);
         }
 
@@ -1924,13 +2620,9 @@ export default class GameScene extends Phaser.Scene {
             impossible: false,
         };
         const mainInspected = Boolean(machineVariant?._uiPuzzleOpened);
-        const otherRequired = Boolean(machineVariant?._uiOtherPuzzleRequired);
-        const flowState = this._getMachineFlowState(machineVariant);
-        const otherSolved = !otherRequired || Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
-
-        if (machineVariant && otherSolved) {
-            machineVariant._uiOtherPuzzleSolved = true;
-        }
+        const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
+        const otherRequired = auxiliaryState.requiredCount > 0;
+        const otherSolved = auxiliaryState.allSolved;
         const mainReady = evaluation.solved || (evaluation.impossible && mainInspected);
 
         return {
@@ -1939,6 +2631,7 @@ export default class GameScene extends Phaser.Scene {
             mainReady,
             otherRequired,
             otherSolved,
+            auxiliaryState,
             ready: mainReady && otherSolved,
         };
     }
@@ -2007,6 +2700,70 @@ export default class GameScene extends Phaser.Scene {
         };
     }
 
+    _getGearPuzzleButtonState(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant) {
+            return {
+                subtitle: 'AWAITING UNIT',
+                fillColor: 0x28334a,
+                strokeColor: 0x8bb8ff,
+                labelColor: '#dbe7ff',
+                subtitleColor: '#9bc2ff',
+            };
+        }
+
+        if (!machineVariant._uiGearPuzzleRequired) {
+            return {
+                subtitle: 'NOT REQUIRED',
+                fillColor: 0x18352d,
+                strokeColor: 0x65c4af,
+                labelColor: '#d7fff3',
+                subtitleColor: '#9de7d5',
+            };
+        }
+
+        const gearState = this._getMachineGearState(machineVariant);
+        const solved = Boolean(machineVariant._uiGearPuzzleSolved) || Boolean(gearState?.completed);
+
+        if (solved) {
+            machineVariant._uiGearPuzzleSolved = true;
+            return {
+                subtitle: 'CLEARED',
+                fillColor: 0x174b2a,
+                strokeColor: 0x75ffaf,
+                labelColor: '#d4ffea',
+                subtitleColor: '#aef3c6',
+            };
+        }
+
+        if (gearState?.sinkPowered) {
+            return {
+                subtitle: 'LIVE PATH',
+                fillColor: 0x215447,
+                strokeColor: 0x90ffd3,
+                labelColor: '#dfffee',
+                subtitleColor: '#b5ffe3',
+            };
+        }
+
+        if (gearState) {
+            return {
+                subtitle: 'STALLED',
+                fillColor: 0x4b3520,
+                strokeColor: 0xffcc77,
+                labelColor: '#ffe5bb',
+                subtitleColor: '#ffd685',
+            };
+        }
+
+        return {
+            subtitle: 'REQUIRED',
+            fillColor: 0x28334a,
+            strokeColor: 0x8bb8ff,
+            labelColor: '#dbe7ff',
+            subtitleColor: '#9bc2ff',
+        };
+    }
+
     _refreshOtherPuzzleButton() {
         this._updateMiniMachinePortStyles();
     }
@@ -2037,19 +2794,14 @@ export default class GameScene extends Phaser.Scene {
     _openOtherPuzzle() {
         if (!this._currentMachineVariant) return;
         if (this._otherPuzzleOverlay?.active) return;
+        if (this._gearPuzzleOverlay?.active) return;
 
         if (!this._currentMachineVariant._uiOtherPuzzleRequired) {
             this._showFeedback('NO OTHER PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
-            this._showPhonePanel(
-                `${this._currentMachineVariant.name.toUpperCase()} LINK`,
+            this._setPhoneInfoNote(
                 'No secondary diagnostic is attached to this unit.',
                 'MAIN PUZZLE ONLY'
             );
-            return;
-        }
-
-        if (this._currentMachineVariant._uiOtherPuzzleSolved) {
-            this._showFeedback('OTHER PUZZLE ALREADY CLEARED', '#c7ff86');
             return;
         }
 
@@ -2057,6 +2809,8 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleReturnPhoneState = this._capturePhonePanelState();
         this._otherPuzzleReturnVoiceBroken = this._hasBrokenVoiceBox(this._currentMachineVariant);
         this._machinePuzzleOverlay?.close(true);
+        this._gearPuzzleOverlay?.hide();
+        this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
         this._otherPuzzleOverlay.show({
             circuit: this._currentMachineVariant.flowPuzzle,
@@ -2066,6 +2820,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _handleOtherPuzzleClosed(evidence) {
+        this._setAuxiliaryOverlayModalOpen(false);
         if (!this._currentMachineVariant) return;
 
         this._clearUnsafeAcceptConfirmation();
@@ -2089,27 +2844,47 @@ export default class GameScene extends Phaser.Scene {
 
         const voiceBrokenNow = this._hasBrokenVoiceBox(this._currentMachineVariant);
         const voiceRestoredNow = voiceWasBroken && !voiceBrokenNow;
+        const shouldRestoreChatView = returnPhoneState?.viewMode === 'chat';
+
+        if (voiceRestoredNow && this._currentMachineVariant?.hasCommunication) {
+            this._refreshMachineConversationPanel(this._currentMachineVariant, null, { activate: false });
+        }
+
+        this._refreshPhoneInfoBoard(this._currentMachineVariant);
 
         if (evidence?.completed) {
             const gateState = this._getPuzzleGateState();
+            const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
             this._showFeedback(
-                gateState.mainReady ? 'BOTH PUZZLES CLEARED // FILE YOUR RULING' : 'OTHER PUZZLE CLEARED // FINISH MAIN PUZZLE',
+                gateState.ready
+                    ? 'ALL PUZZLES CLEARED // FILE YOUR RULING'
+                    : gateState.mainReady
+                        ? (pendingLabels.length === 1
+                            ? `FLOW CLEAR // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'FLOW CLEAR // FINISH REMAINING PUZZLES')
+                        : 'FLOW PUZZLE CLEARED // FINISH MAIN PUZZLE',
                 '#c7ff86'
             );
             if (voiceRestoredNow) {
-                this._showPhonePanel(
-                    header,
-                    repairedTargets.length > 0
-                        ? `Voice box stabilized. Restored: ${repairedTargets.join(', ')}.`
-                        : 'Voice box stabilized. Signal is clear again.',
-                    'VOICE RESTORED'
-                );
+                const repairMessage = repairedTargets.length > 0
+                    ? `Voice box stabilized. Restored: ${repairedTargets.join(', ')}.`
+                    : 'Voice box stabilized. Signal is clear again.';
+                this._setPhoneInfoNote(repairMessage, 'VOICE RESTORED');
+
+                if (returnPhoneState) {
+                    this._restorePhonePanelState(returnPhoneState);
+                }
+
+                if (shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
+                    this._refreshMachineConversationPanel(this._currentMachineVariant, 'VOICE RESTORED', {
+                        activate: true,
+                    });
+                }
             } else if (returnPhoneState) {
                 this._restorePhonePanelState(returnPhoneState);
             } else {
-                this._showPhonePanel(
-                    header,
+                this._setPhoneInfoNote(
                     repairedTargets.length > 0
                         ? `Secondary diagnostic cleared. Restored: ${repairedTargets.join(', ')}.`
                         : 'Secondary diagnostic cleared. Routing report logged.',
@@ -2122,31 +2897,124 @@ export default class GameScene extends Phaser.Scene {
         if (evidence?.forbiddenUsed) {
             glitchBurst(this, this._cmFilter, 320);
             this._showFeedback('OTHER PUZZLE FAILED // UNAUTHORIZED MODIFICATION', '#ff7f73');
+            this._setPhoneInfoNote(
+                brokenTargets.length > 0
+                    ? `Unauthorized modification detected. Still offline: ${brokenTargets.join(', ')}.`
+                    : 'Unauthorized modification detected in the secondary diagnostic.',
+                'OTHER PUZZLE MODIFIED'
+            );
             if (returnPhoneState) {
                 this._restorePhonePanelState(returnPhoneState);
-            } else {
-                this._showPhonePanel(
-                    header,
-                    brokenTargets.length > 0
-                        ? `Unauthorized modification detected. Still offline: ${brokenTargets.join(', ')}.`
-                        : 'Unauthorized modification detected in the secondary diagnostic.',
-                    'OTHER PUZZLE MODIFIED'
-                );
+                if (voiceRestoredNow && shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
+                    this._refreshMachineConversationPanel(this._currentMachineVariant, 'VOICE RESTORED', {
+                        activate: true,
+                    });
+                }
             }
             return;
         }
 
         this._showFeedback('OTHER PUZZLE INCOMPLETE // OUTPUTS UNREACHED', '#ffd685');
+        this._setPhoneInfoNote(
+            brokenTargets.length > 0
+                ? `Secondary diagnostic incomplete. Still offline: ${brokenTargets.join(', ')}.`
+                : 'Secondary diagnostic incomplete. Required outputs remain offline.',
+            voiceRestoredNow ? 'VOICE RESTORED // FLOW INCOMPLETE' : 'OTHER PUZZLE INCOMPLETE'
+        );
         if (returnPhoneState) {
             this._restorePhonePanelState(returnPhoneState);
+            if (voiceRestoredNow && shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
+                this._refreshMachineConversationPanel(this._currentMachineVariant, 'VOICE RESTORED', {
+                    activate: true,
+                });
+            }
         } else {
-            this._showPhonePanel(
-                header,
-                brokenTargets.length > 0
-                    ? `Secondary diagnostic incomplete. Still offline: ${brokenTargets.join(', ')}.`
-                    : 'Secondary diagnostic incomplete. Required outputs remain offline.',
-                'OTHER PUZZLE INCOMPLETE'
+            if (voiceRestoredNow && this._currentMachineVariant?.hasCommunication) {
+                this._refreshMachineConversationPanel(this._currentMachineVariant, 'VOICE RESTORED', {
+                    activate: false,
+                });
+            }
+        }
+    }
+
+    _openGearPuzzle() {
+        if (!this._currentMachineVariant) return;
+        if (this._gearPuzzleOverlay?.active) return;
+        if (this._otherPuzzleOverlay?.active) return;
+
+        if (!this._currentMachineVariant._uiGearPuzzleRequired) {
+            this._showFeedback('NO GEAR PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
+            this._setPhoneInfoNote(
+                'No gear-train diagnostic is attached to this unit.',
+                'GEAR PANEL IDLE'
             );
+            return;
+        }
+
+        this._clearUnsafeAcceptConfirmation();
+        this._gearPuzzleReturnPhoneState = this._capturePhonePanelState();
+        this._machinePuzzleOverlay?.close(true);
+        this._otherPuzzleOverlay?.hide();
+        this._setAuxiliaryOverlayModalOpen(true);
+        this._showMiniMachinePanel();
+        this._gearPuzzleOverlay.show({
+            gearPuzzle: this._currentMachineVariant.gearPuzzle,
+            evidence: this._getMachineGearState(this._currentMachineVariant),
+        });
+        this._refreshFactoryActionButtons();
+    }
+
+    _handleGearPuzzleClosed(evidence) {
+        this._setAuxiliaryOverlayModalOpen(false);
+        if (!this._currentMachineVariant) return;
+
+        this._clearUnsafeAcceptConfirmation();
+        const returnPhoneState = this._gearPuzzleReturnPhoneState;
+        this._gearPuzzleReturnPhoneState = null;
+        this._currentMachineVariant._uiGearPuzzleEvidence = evidence || null;
+        if (this._currentMachineVariant.gearPuzzle && evidence) {
+            this._currentMachineVariant.gearPuzzle.progress = evidence;
+        }
+        this._currentMachineVariant._uiGearPuzzleSolved = Boolean(evidence?.completed);
+
+        const header = this._getMachineLinkHeader(this._currentMachineVariant);
+        const gateState = this._getPuzzleGateState();
+        const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
+
+        this._updateConveyorDecisionHint();
+        this._refreshOtherPuzzleButton();
+        this._refreshFactoryActionButtons();
+        this._refreshPhoneInfoBoard(this._currentMachineVariant);
+
+        if (evidence?.completed) {
+            this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
+            this._showFeedback(
+                gateState.ready
+                    ? 'ALL PUZZLES CLEARED // FILE YOUR RULING'
+                    : gateState.mainReady
+                        ? (pendingLabels.length === 1
+                            ? `GEAR CLEAR // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'GEAR CLEAR // FINISH REMAINING PUZZLES')
+                        : 'GEAR PUZZLE CLEARED // FINISH MAIN PUZZLE',
+                '#c7ff86'
+            );
+            this._setPhoneInfoNote(
+                'Gear train synchronized. Output axle is spinning cleanly again.',
+                gateState.ready ? 'GEAR CLEAR' : 'GEAR LIVE'
+            );
+            if (returnPhoneState) {
+                this._restorePhonePanelState(returnPhoneState);
+            }
+            return;
+        }
+
+        this._showFeedback('GEAR PUZZLE INCOMPLETE // OUTPUT SHAFT STALLED', '#ffd685');
+        this._setPhoneInfoNote(
+            'Gear train still stalls before the output axle. Reposition the loose parts and try again.',
+            'GEAR STALLED'
+        );
+        if (returnPhoneState) {
+            this._restorePhonePanelState(returnPhoneState);
         }
     }
 
@@ -2165,7 +3033,7 @@ export default class GameScene extends Phaser.Scene {
         this._typePhoneMessage('Are you sure? Not all the puzzles are fixed.', {
             onComplete: () => {
                 if (!this._pendingUnsafeAcceptConfirmation) return;
-                this._showPhonePanel(header, this._phoneBodyText.text, 'PRESS ACCEPT AGAIN');
+                this._showPhonePanel(header, this._getPhoneViewState('chat').body, 'PRESS ACCEPT AGAIN', 'chat');
             },
         });
         this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.45 });
@@ -2193,8 +3061,9 @@ export default class GameScene extends Phaser.Scene {
         if (this._currentMachineVariant) {
             this._showPhonePanel(
                 `${this._currentMachineVariant.name.toUpperCase()} LINK`,
-                this._phoneBodyText.text,
-                `PROCESSING ${action.toUpperCase()}`
+                this._getPhoneViewState('chat').body,
+                `PROCESSING ${action.toUpperCase()}`,
+                'chat'
             );
         }
 
@@ -2210,11 +3079,19 @@ export default class GameScene extends Phaser.Scene {
         let notificationStatus = panelStatus;
 
         if (action === 'scrap') {
-            if (evaluation.impossible) {
+            if (evaluation.impossible && gateState.ready) {
                 payDelta = PAYCHECK_DELTA * SCRAP_BONUS_MULTIPLIER;
                 feedbackText = 'IMPOSSIBLE UNIT SCRAPPED // BONUS AWARDED';
                 feedbackColor = '#ffd685';
                 panelStatus = 'SCRAP BONUS';
+            } else if (evaluation.impossible) {
+                payDelta = -PAYCHECK_DELTA;
+                wasPenalty = true;
+                feedbackText = 'IMPOSSIBLE GRID UNCONFIRMED // DEDUCTION APPLIED';
+                feedbackColor = '#ff7f73';
+                panelStatus = 'SCRAP PENALTY';
+                notificationMessage = 'DOC NOTE: Required diagnostics were not cleared before scrapping. Payroll deduction applied.';
+                notificationStatus = 'DOC NOTICE';
             } else {
                 payDelta = -PAYCHECK_DELTA;
                 wasPenalty = true;
@@ -2224,9 +3101,11 @@ export default class GameScene extends Phaser.Scene {
                 notificationMessage = 'DOC NOTE: This unit was still repairable. Payroll deduction applied.';
                 notificationStatus = 'DOC NOTICE';
             }
-        } else if (evaluation.solved) {
+        } else if (gateState.ready && !evaluation.impossible) {
             payDelta = PAYCHECK_DELTA;
-            feedbackText = 'BOTH PUZZLES CLEARED // UNIT ACCEPTED';
+            feedbackText = gateState.otherRequired
+                ? 'ALL REQUIRED PUZZLES CLEARED // UNIT ACCEPTED'
+                : 'GRID FIXED // UNIT ACCEPTED';
             feedbackColor = '#9aff91';
             panelStatus = 'UNIT ACCEPTED';
         } else {
@@ -2255,14 +3134,12 @@ export default class GameScene extends Phaser.Scene {
             this.cameras.main.flash(180, flashColor.red, flashColor.green, flashColor.blue, false);
 
             if (action === 'approve') {
-                this._showPhonePanel(
-                    `${this._currentMachineVariant.name.toUpperCase()} LINK`,
+                this._setPhoneInfoNote(
                     'All required puzzles cleared. Unit forwarded downline.',
                     panelStatus
                 );
             } else {
-                this._showPhonePanel(
-                    `${this._currentMachineVariant.name.toUpperCase()} LINK`,
+                this._setPhoneInfoNote(
                     'Impossible grid confirmed. Scrap bonus logged.',
                     panelStatus
                 );
@@ -2296,6 +3173,7 @@ export default class GameScene extends Phaser.Scene {
         if (!this._shiftRunning) return;
 
         this._clearUnsafeAcceptConfirmation();
+        this._phoneInfoNote = null;
         this._currentCase = this._queue[this._queueIndex];
         if (!this._currentCase) {
             this._setFactoryIdleState('QUEUE EMPTY\n\nSTATUS: HOLD');
@@ -2312,9 +3190,14 @@ export default class GameScene extends Phaser.Scene {
         });
         this._currentMachineVariant._uiPuzzleOpened = false;
         this._currentMachineVariant._uiPuzzleSolved = false;
+        this._currentMachineVariant._uiConversationStage = 'opening';
+        this._currentMachineVariant._uiConversationChoice = null;
         this._currentMachineVariant._uiOtherPuzzleRequired = Boolean(this._currentMachineVariant.flowPuzzle);
         this._currentMachineVariant._uiOtherPuzzleSolved = !this._currentMachineVariant._uiOtherPuzzleRequired;
         this._currentMachineVariant._uiOtherPuzzleEvidence = null;
+        this._currentMachineVariant._uiGearPuzzleRequired = Boolean(this._currentMachineVariant.gearPuzzle);
+        this._currentMachineVariant._uiGearPuzzleSolved = !this._currentMachineVariant._uiGearPuzzleRequired;
+        this._currentMachineVariant._uiGearPuzzleEvidence = null;
         this._hideMiniMachinePanel(true);
 
         this._monitorText.setText(
@@ -2324,6 +3207,7 @@ export default class GameScene extends Phaser.Scene {
         this._machineDialogueText.setText('');
         this._handlePuzzleStateChanged(this._currentMachineVariant, this._currentMachineVariant.puzzleState);
         this._playMachineConversation(this._currentMachineVariant);
+        this._refreshPhoneInfoBoard(this._currentMachineVariant);
         this._syncMiniMachinePanel();
 
         this._applyMachineSprite(this._conveyorUnitSprite, 1.0);
@@ -2365,7 +3249,7 @@ export default class GameScene extends Phaser.Scene {
         this._clearUnsafeAcceptConfirmation();
         this._clearPhoneTyping();
         this._machinePuzzleOverlay?.close(true);
-        this._otherPuzzleOverlay?.hide();
+        this._hideAuxiliaryOverlays();
         this._hideMiniMachinePanel(true);
         this._setScreen('conveyor');
         this._pendingExitAction = this._pendingExitAction || 'approve';
@@ -2450,7 +3334,7 @@ export default class GameScene extends Phaser.Scene {
         this._setMachineWorklightVisible(false);
         this._clearUnsafeAcceptConfirmation();
         this._machinePuzzleOverlay?.close(true);
-        this._otherPuzzleOverlay?.hide();
+        this._hideAuxiliaryOverlays();
         this._hideMiniMachinePanel(true);
         this._nextCaseEvent?.remove(false);
         this._advanceCaseEvent?.remove(false);
@@ -2670,33 +3554,30 @@ export default class GameScene extends Phaser.Scene {
         this._miniPuzzleLabelContainer?.removeAll(true);
         this._miniFlowGfx?.clear();
         this._miniFlowLabelContainer?.removeAll(true);
+        this._miniGearGfx?.clear();
+        this._miniGearLabelContainer?.removeAll(true);
     }
 
     _getMiniMachinePanelStatusText(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.puzzleState?.getEvaluation) return 'CLICK A UNIT TO INSPECT';
 
         const gridEvaluation = machineVariant.puzzleState.getEvaluation();
-        const flowOutputs = Object.keys(machineVariant.flowPuzzle?.outputs || {});
-        const flowState = this._getMachineFlowState(machineVariant);
-        const otherSolved = Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
-        const flowConnected = otherSolved
-            ? flowOutputs.length
-            : (flowState?.connected?.length || 0);
+        const gridMatched = gridEvaluation.matchedChargeCells + gridEvaluation.matchedEqualityPairs + gridEvaluation.matchedChargeGroups;
+        const gridTotal = gridEvaluation.totalChargeCells + gridEvaluation.totalEqualityPairs + gridEvaluation.totalChargeGroups;
+        const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
 
         const gridText = gridEvaluation.solved
             ? 'GRID CLEAR'
             : gridEvaluation.impossible && machineVariant._uiPuzzleOpened
                 ? 'GRID MARKED'
-                : `GRID ${gridEvaluation.matchedChargeCells}/${gridEvaluation.totalChargeCells}`;
-        const flowText = !machineVariant.flowPuzzle
-            ? 'FLOW NONE'
-            : otherSolved
-                ? 'FLOW CLEAR'
-                : flowState?.forbiddenUsed
-                    ? 'FLOW MOD'
-                    : `FLOW ${flowConnected}/${flowOutputs.length}`;
+                : `GRID ${gridMatched}/${gridTotal}`;
+        const auxiliaryText = auxiliaryState.requiredCount === 0
+            ? 'AUX NONE'
+            : auxiliaryState.allSolved
+                ? 'AUX CLEAR'
+                : `AUX ${auxiliaryState.solvedCount}/${auxiliaryState.requiredCount}`;
 
-        return `${gridText} // ${flowText}`;
+        return `${gridText} // ${auxiliaryText}`;
     }
 
     _layoutMiniMachinePort(port, rect) {
@@ -2719,13 +3600,18 @@ export default class GameScene extends Phaser.Scene {
         this._miniPuzzleLabelContainer?.removeAll(true);
         this._miniFlowGfx?.clear();
         this._miniFlowLabelContainer?.removeAll(true);
+        this._miniGearGfx?.clear();
+        this._miniGearLabelContainer?.removeAll(true);
+        this._currentMiniGearPreviewRect = null;
 
         if (!this._currentMachineVariant) {
             this._miniMachinePanelTitle?.setText('MACHINE PORTS');
             this._miniPuzzleStatusText?.setText('CLICK A UNIT TO INSPECT');
-            this._miniMachineHintText?.setText('CLICK GRID OR FLOW PORT');
+            this._miniMachineHintText?.setText('CLICK GRID, FLOW, OR GEAR PORT');
             this._miniMachineImage?.setTexture('unit_placeholder').setScale(1.28).setAngle(0).setPosition(190, 152);
             this._miniMachineShadow?.setPosition(188, 184).setAlpha(0.12);
+            this._miniGearPreviewPhase = 0;
+            this._miniGearPreviewTimer = 0;
             this._updateMiniMachinePortStyles();
             return;
         }
@@ -2744,6 +3630,19 @@ export default class GameScene extends Phaser.Scene {
                 label: baseRect.label || fallback.label,
             };
         };
+        const clampRect = (rect) => {
+            const margin = 10;
+            const labelRoom = 18;
+            const width = Math.min(rect.width, panelSize.width - (margin * 2));
+            const height = Math.min(rect.height, panelSize.height - labelRoom - (margin * 2));
+            return {
+                ...rect,
+                width,
+                height,
+                x: Phaser.Math.Clamp(rect.x, margin, panelSize.width - width - margin),
+                y: Phaser.Math.Clamp(rect.y, margin, panelSize.height - height - labelRoom),
+            };
+        };
 
         const layout = this._currentMachineVariant.miniDisplay || {
             artX: 106,
@@ -2752,16 +3651,18 @@ export default class GameScene extends Phaser.Scene {
             artAngle: 0,
             gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
             flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+            gearPreview: { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' },
         };
-        const resolvedGridPreview = scaleRect(layout.gridPreview, { x: 42, y: 72, width: 58, height: 40, label: 'GRID' });
-        const resolvedFlowPreview = scaleRect(layout.flowPreview, { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' });
+        const resolvedGridPreview = clampRect(scaleRect(layout.gridPreview, { x: 42, y: 72, width: 58, height: 40, label: 'GRID' }));
+        const resolvedFlowPreview = clampRect(scaleRect(layout.flowPreview, { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' }));
+        const resolvedGearPreview = clampRect(scaleRect(layout.gearPreview, { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' }));
         const resolvedArtX = (layout.artX ?? 106) * scaleX;
         const resolvedArtY = (layout.artY ?? 132) * scaleY;
         const resolvedArtScale = (layout.artScale || 0.92) * 1.42;
 
         this._miniMachinePanelTitle?.setText(`${this._currentMachineVariant.name.toUpperCase()} PORT MAP`);
         this._miniPuzzleStatusText?.setText(this._getMiniMachinePanelStatusText(this._currentMachineVariant));
-        this._miniMachineHintText?.setText('CLICK GRID OR FLOW PORT');
+        this._miniMachineHintText?.setText('CLICK GRID, FLOW, OR GEAR PORT');
         this._applyMachineSprite(this._miniMachineImage, resolvedArtScale);
         this._miniMachineImage
             .setPosition(resolvedArtX, resolvedArtY)
@@ -2773,6 +3674,9 @@ export default class GameScene extends Phaser.Scene {
 
         this._layoutMiniMachinePort(this._miniGridPort, resolvedGridPreview);
         this._layoutMiniMachinePort(this._miniFlowPort, resolvedFlowPreview);
+        this._layoutMiniMachinePort(this._miniGearPort, resolvedGearPreview);
+        this._currentMiniGearPreviewRect = { ...resolvedGearPreview };
+        this._miniGearPreviewTimer = 0;
 
         const puzzleState = this._currentMachineVariant.puzzleState;
         if (puzzleState?.grid) {
@@ -2804,19 +3708,33 @@ export default class GameScene extends Phaser.Scene {
             height: resolvedFlowPreview.height,
         });
 
+        this._drawGearPreviewLayer({
+            gearPuzzle: this._currentMachineVariant.gearPuzzle,
+            evidence: this._getMachineGearState(this._currentMachineVariant),
+            graphics: this._miniGearGfx,
+            labelContainer: this._miniGearLabelContainer,
+            left: resolvedGearPreview.x,
+            top: resolvedGearPreview.y,
+            width: resolvedGearPreview.width,
+            height: resolvedGearPreview.height,
+            spinPhase: this._miniGearPreviewPhase,
+        });
+
         this._updateMiniMachinePortStyles();
     }
 
     _updateMiniMachinePortStyles() {
-        if (!this._miniGridPort || !this._miniFlowPort) return;
+        if (!this._miniGridPort || !this._miniFlowPort || !this._miniGearPort) return;
 
         const hasMachine = Boolean(this._currentMachineVariant);
         const canInteract = this._screen === 'conveyor' && hasMachine && !this._settingsOpen && !this._actionLocked;
         const evaluation = this._currentMachineVariant?.puzzleState?.getEvaluation?.() || { solved: false, impossible: false };
         const flowState = this._getOtherPuzzleButtonState();
+        const gearState = this._getGearPuzzleButtonState();
         const alpha = canInteract ? 1 : (hasMachine ? 0.74 : 0.36);
         const gridHovered = this._miniMachinePanelHoverPort === 'grid';
         const flowHovered = this._miniMachinePanelHoverPort === 'flow';
+        const gearHovered = this._miniMachinePanelHoverPort === 'gear';
 
         let gridStroke = 0x8bb8ff;
         let gridFill = 0x243041;
@@ -2847,6 +3765,14 @@ export default class GameScene extends Phaser.Scene {
         this._miniFlowPort.label
             .setColor(flowState.labelColor)
             .setAlpha(alpha);
+
+        this._miniGearPort.frame
+            .setFillStyle(gearState.fillColor, gearHovered ? 0.32 : 0.18)
+            .setStrokeStyle(gearHovered ? 3 : 2, gearState.strokeColor, 0.92)
+            .setAlpha(alpha);
+        this._miniGearPort.label
+            .setColor(gearState.labelColor)
+            .setAlpha(alpha);
     }
 
     _getMiniPuzzleStatusText(puzzleState) {
@@ -2856,7 +3782,15 @@ export default class GameScene extends Phaser.Scene {
         if (evaluation.solved) return 'GRID STABLE // ACCEPT SAFE';
         if (evaluation.impossible) return 'IMPOSSIBLE GRID // SCRAP BONUS';
 
-        return `CHG ${evaluation.matchedChargeCells}/${evaluation.totalChargeCells}  EQ ${evaluation.matchedEqualityPairs}/${evaluation.totalEqualityPairs}`;
+        const segments = [`CHG ${evaluation.matchedChargeCells}/${evaluation.totalChargeCells}`];
+        if (evaluation.totalChargeGroups > 0) {
+            segments.push(`GRP ${evaluation.matchedChargeGroups}/${evaluation.totalChargeGroups}`);
+        }
+        if (evaluation.totalEqualityPairs > 0) {
+            segments.push(`EQ ${evaluation.matchedEqualityPairs}/${evaluation.totalEqualityPairs}`);
+        }
+
+        return segments.join('  ');
     }
 
     _drawMachineShapeGrid(shapeGrid) {
@@ -2870,6 +3804,27 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._syncMiniMachinePanel();
+    }
+
+    _updateMiniGearPreview(delta) {
+        if (!this._miniMachinePanelVisible || !this._currentMachineVariant?.gearPuzzle || !this._currentMiniGearPreviewRect) return;
+
+        this._miniGearPreviewTimer += delta;
+        if (this._miniGearPreviewTimer < 72) return;
+
+        this._miniGearPreviewTimer = 0;
+        this._miniGearPreviewPhase = (this._miniGearPreviewPhase + (delta * 0.008)) % (Math.PI * 2);
+        this._drawGearPreviewLayer({
+            gearPuzzle: this._currentMachineVariant.gearPuzzle,
+            evidence: this._getMachineGearState(this._currentMachineVariant),
+            graphics: this._miniGearGfx,
+            labelContainer: this._miniGearLabelContainer,
+            left: this._currentMiniGearPreviewRect.x,
+            top: this._currentMiniGearPreviewRect.y,
+            width: this._currentMiniGearPreviewRect.width,
+            height: this._currentMiniGearPreviewRect.height,
+            spinPhase: this._miniGearPreviewPhase,
+        });
     }
 
     _drawPuzzlePreviewLayer({
@@ -2902,6 +3857,8 @@ export default class GameScene extends Phaser.Scene {
         const placedDominoes = Array.isArray(puzzleState?.dominoes)
             ? puzzleState.dominoes.filter((domino) => Array.isArray(domino.placedCells) && domino.placedCells.length === 2)
             : [];
+        const chargeGroupSummaries = puzzleState?.getChargeGroupSummaries?.() || [];
+        const chargeGroupMap = new Map(chargeGroupSummaries.map((group) => [group.key, group]));
 
         placedDominoes.forEach((domino) => {
             const [firstCell, secondCell] = domino.placedCells;
@@ -2923,6 +3880,70 @@ export default class GameScene extends Phaser.Scene {
             graphics.moveTo(start.x, start.y);
             graphics.lineTo(end.x, end.y);
             graphics.strokePath();
+        });
+
+        chargeGroupSummaries.forEach((group) => {
+            const groupKeys = new Set(group.cells.map((cell) => `${cell.row}:${cell.col}`));
+            const glowColor = group.matched ? 0xf1ffd1 : 0xb5d4e3;
+            const lineColor = group.matched ? 0xe6ffb0 : 0x9cbfd0;
+            const groupCenter = group.cells.reduce((center, cell) => {
+                center.x += startX + (cell.col * cellSize) + (cellSize / 2);
+                center.y += startY + (cell.row * cellSize) + (cellSize / 2);
+                return center;
+            }, { x: 0, y: 0 });
+            groupCenter.x /= Math.max(1, group.cells.length);
+            groupCenter.y /= Math.max(1, group.cells.length);
+
+            lineGraphics.lineStyle(glowWidth + 1, glowColor, group.matched ? 0.3 : 0.16);
+            group.cells.forEach((cell) => {
+                const leftEdge = startX + (cell.col * cellSize);
+                const topEdge = startY + (cell.row * cellSize);
+                const rightEdge = leftEdge + cellSize;
+                const bottomEdge = topEdge + cellSize;
+
+                if (!groupKeys.has(`${cell.row - 1}:${cell.col}`)) {
+                    lineGraphics.lineBetween(leftEdge, topEdge, rightEdge, topEdge);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col + 1}`)) {
+                    lineGraphics.lineBetween(rightEdge, topEdge, rightEdge, bottomEdge);
+                }
+                if (!groupKeys.has(`${cell.row + 1}:${cell.col}`)) {
+                    lineGraphics.lineBetween(leftEdge, bottomEdge, rightEdge, bottomEdge);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col - 1}`)) {
+                    lineGraphics.lineBetween(leftEdge, topEdge, leftEdge, bottomEdge);
+                }
+            });
+
+            lineGraphics.lineStyle(lineWidth, lineColor, 0.94);
+            group.cells.forEach((cell) => {
+                const leftEdge = startX + (cell.col * cellSize);
+                const topEdge = startY + (cell.row * cellSize);
+                const rightEdge = leftEdge + cellSize;
+                const bottomEdge = topEdge + cellSize;
+
+                if (!groupKeys.has(`${cell.row - 1}:${cell.col}`)) {
+                    lineGraphics.lineBetween(leftEdge, topEdge, rightEdge, topEdge);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col + 1}`)) {
+                    lineGraphics.lineBetween(rightEdge, topEdge, rightEdge, bottomEdge);
+                }
+                if (!groupKeys.has(`${cell.row + 1}:${cell.col}`)) {
+                    lineGraphics.lineBetween(leftEdge, bottomEdge, rightEdge, bottomEdge);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col - 1}`)) {
+                    lineGraphics.lineBetween(leftEdge, topEdge, leftEdge, bottomEdge);
+                }
+            });
+
+            const label = this.add.text(groupCenter.x, groupCenter.y, group.displayTarget, {
+                fontFamily: 'Courier New',
+                fontSize: `${Math.max(8, fontSize + 2)}px`,
+                color: group.matched ? '#efffd0' : '#d8edf7',
+                stroke: '#000000',
+                strokeThickness: 2,
+            }).setOrigin(0.5);
+            labelContainer?.add(label);
         });
 
         const equalPairs = puzzleState?.getEqualLinkPairs?.() || [];
@@ -2960,6 +3981,9 @@ export default class GameScene extends Phaser.Scene {
                 const matchedCharge = puzzleState?.isChargeMatched?.(rowIndex, colIndex) ?? false;
                 const hasEqualLink = puzzleState?.isEqualLinkCell?.(rowIndex, colIndex) ?? false;
                 const matchedEqualLink = puzzleState?.isEqualMatched?.(rowIndex, colIndex) ?? false;
+                const chargeGroup = puzzleState?.getChargeGroupAt?.(rowIndex, colIndex) || null;
+                const chargeGroupSummary = chargeGroup ? chargeGroupMap.get(chargeGroup.key) : null;
+                const matchedGroup = chargeGroupSummary?.matched ?? false;
                 const placedPipCount = puzzleState?.getPlacedPipCount?.(rowIndex, colIndex) ?? null;
                 const isPlaced = placedPipCount !== null;
 
@@ -2975,6 +3999,14 @@ export default class GameScene extends Phaser.Scene {
                     fillColor = matchedCharge ? 0x97a53b : 0x4b5f32;
                     fillAlpha = 0.92;
                     strokeColor = matchedCharge ? 0xfff2ba : 0xf0df95;
+                } else if (chargeGroupSummary) {
+                    fillColor = matchedGroup
+                        ? 0x4d7441
+                        : isPlaced
+                            ? 0x2f5960
+                            : 0x223440;
+                    fillAlpha = 0.92;
+                    strokeColor = matchedGroup ? 0xebffb8 : 0xbad6e2;
                 } else if (hasEqualLink) {
                     fillColor = matchedEqualLink
                         ? 0x8a7e31
@@ -2999,6 +4031,8 @@ export default class GameScene extends Phaser.Scene {
                 if (chargeLevel > 0) {
                     overlayText = String(chargeLevel);
                     overlayColor = matchedCharge ? '#fff7b9' : '#ffe684';
+                } else if (chargeGroupSummary) {
+                    overlayText = '';
                 } else if (hasEqualLink) {
                     overlayText = '=';
                     overlayColor = matchedEqualLink ? '#fff7b9' : '#ffe684';
@@ -3039,6 +4073,203 @@ export default class GameScene extends Phaser.Scene {
                 }
             });
         });
+    }
+
+    _drawGearPreviewLayer({
+        gearPuzzle,
+        evidence,
+        graphics,
+        labelContainer,
+        left,
+        top,
+        width,
+        height,
+        spinPhase = 0,
+    }) {
+        graphics.clear();
+        labelContainer?.removeAll(true);
+
+        if (!gearPuzzle?.board) {
+            const emptyText = this.add.text(left + (width / 2), top + (height / 2), 'NO GEAR', {
+                fontFamily: 'Courier New',
+                fontSize: '8px',
+                color: '#9bc2ff',
+                stroke: '#000000',
+                strokeThickness: 2,
+            }).setOrigin(0.5);
+            labelContainer?.add(emptyText);
+            return;
+        }
+
+        const board = gearPuzzle.board;
+        const pieces = evidence?.pieces || gearPuzzle.progress?.pieces || gearPuzzle.pieces || [];
+        const evaluation = evaluateGearPuzzleBoard(board, pieces);
+        const rows = board.length;
+        const cols = Math.max(...board.map((row) => row.length));
+        const cellSize = Math.max(8, Math.min(14, Math.floor(Math.min(width / cols, height / rows))));
+        const gridWidth = cols * cellSize;
+        const gridHeight = rows * cellSize;
+        const startX = left + ((width - gridWidth) / 2);
+        const startY = top + ((height - gridHeight) / 2);
+
+        board.forEach((row, rowIndex) => {
+            row.forEach((baseCode, colIndex) => {
+                const x = startX + (colIndex * cellSize);
+                const y = startY + (rowIndex * cellSize);
+                const slotFill = baseCode === GEAR_CODES.WALL ? 0x332b26 : 0x10212a;
+                const slotStroke = baseCode === GEAR_CODES.WALL ? 0xb89e89 : 0x577585;
+                const key = gearCellKey(rowIndex, colIndex);
+                const occupied = evaluation.occupancy.get(key);
+
+                graphics.fillStyle(slotFill, 0.95);
+                graphics.fillRect(x, y, cellSize - 1, cellSize - 1);
+                graphics.lineStyle(1, slotStroke, 0.75);
+                graphics.strokeRect(x, y, cellSize - 1, cellSize - 1);
+
+                if (baseCode === GEAR_CODES.WALL && !occupied) {
+                    graphics.fillStyle(0xc0c8cf, 0.82);
+                    graphics.fillRect(x + 2, y + 2, Math.max(2, Math.floor(cellSize * 0.18)), cellSize - 5);
+                    graphics.fillStyle(0x727a82, 0.82);
+                    graphics.fillRect(x + Math.max(4, Math.floor(cellSize * 0.38)), y + 2, Math.max(2, Math.floor(cellSize * 0.18)), cellSize - 5);
+                }
+
+                if (!occupied) return;
+
+                const active = evaluation.powered.has(key);
+                const outputLive = occupied.type === GEAR_CODES.SINK && evaluation.sinkPowered;
+
+                if (occupied.type === GEAR_CODES.MOVABLE_WALL) {
+                    graphics.fillStyle(0xc9d1d8, 0.9);
+                    graphics.fillRect(x + 2, y + 2, Math.max(2, Math.floor(cellSize * 0.2)), cellSize - 5);
+                    graphics.fillStyle(0x707980, 0.88);
+                    graphics.fillRect(x + Math.max(4, Math.floor(cellSize * 0.42)), y + 2, Math.max(2, Math.floor(cellSize * 0.2)), cellSize - 5);
+                    return;
+                }
+
+                const centerX = x + (cellSize / 2);
+                const centerY = y + (cellSize / 2);
+                const connectionDirs = getGearConnections(occupied.type);
+                const isPairedPiece = connectionDirs.length === 2
+                    && occupied.type !== GEAR_CODES.FULL
+                    && occupied.type !== GEAR_CODES.SOURCE
+                    && occupied.type !== GEAR_CODES.SINK;
+                const linkColor = outputLive ? 0xffd58f : active ? 0xf1e4b2 : 0x8a9079;
+                const gearColor = outputLive ? 0xffd9a8 : active ? 0xf2dfae : occupied.movable ? 0xcfba85 : 0xaa9467;
+                const toothColor = outputLive ? 0xfff1cc : active ? 0xffefc1 : 0x7f6840;
+                const radius = Math.max(2.2, cellSize * 0.19);
+                const nodeRadius = Math.max(2.1, cellSize * 0.15);
+                const reach = Math.max(4.2, cellSize * 0.39);
+                const drawPreviewGear = (gearX, gearY, gearRadius, direction = 1, drawSpokes = true) => {
+                    const angleOffset = active ? spinPhase * direction : 0;
+                    for (let index = 0; index < 8; index += 1) {
+                        const angle = angleOffset + (index * (Math.PI / 4));
+                        graphics.fillStyle(toothColor, 0.84);
+                        graphics.fillCircle(
+                            gearX + (Math.cos(angle) * (gearRadius + 1.5)),
+                            gearY + (Math.sin(angle) * (gearRadius + 1.5)),
+                            Math.max(0.85, gearRadius * 0.34),
+                        );
+                    }
+                    graphics.fillStyle(gearColor, 0.96);
+                    graphics.fillCircle(gearX, gearY, gearRadius);
+                    graphics.lineStyle(1, active ? 0x2c2a1a : 0x242119, 0.72);
+                    graphics.strokeCircle(gearX, gearY, gearRadius);
+
+                    if (!drawSpokes) return;
+
+                    const spokeLength = Math.max(1.4, gearRadius - 0.8);
+                    const spokeAngle = angleOffset + (Math.PI / 4);
+                    graphics.lineStyle(1, active ? 0x5c4d29 : 0x5c5132, 0.9);
+                    graphics.lineBetween(
+                        gearX - (Math.cos(spokeAngle) * spokeLength),
+                        gearY - (Math.sin(spokeAngle) * spokeLength),
+                        gearX + (Math.cos(spokeAngle) * spokeLength),
+                        gearY + (Math.sin(spokeAngle) * spokeLength),
+                    );
+                    graphics.lineBetween(
+                        gearX - (Math.cos(spokeAngle + (Math.PI / 2)) * spokeLength),
+                        gearY - (Math.sin(spokeAngle + (Math.PI / 2)) * spokeLength),
+                        gearX + (Math.cos(spokeAngle + (Math.PI / 2)) * spokeLength),
+                        gearY + (Math.sin(spokeAngle + (Math.PI / 2)) * spokeLength),
+                    );
+                };
+                const nodePositions = connectionDirs.map((dir) => {
+                    if (dir === 'N') return { dir, x: centerX, y: centerY - reach };
+                    if (dir === 'E') return { dir, x: centerX + reach, y: centerY };
+                    if (dir === 'S') return { dir, x: centerX, y: centerY + reach };
+                    return { dir, x: centerX - reach, y: centerY };
+                });
+                const connectionPairs = connectionDirs.length === 2
+                    ? [[nodePositions[0], nodePositions[1]]]
+                    : connectionDirs.length === 4
+                        ? [
+                            [nodePositions.find((node) => node.dir === 'N'), nodePositions.find((node) => node.dir === 'S')],
+                            [nodePositions.find((node) => node.dir === 'E'), nodePositions.find((node) => node.dir === 'W')],
+                        ].filter((pair) => pair[0] && pair[1])
+                        : [];
+
+                graphics.fillStyle(occupied.movable ? 0x263038 : 0x1b252c, 0.94);
+                graphics.fillRoundedRect(x + 1, y + 1, cellSize - 3, cellSize - 3, 3);
+                if (occupied.movable) {
+                    graphics.lineStyle(1, 0xa6f6ff, 0.78);
+                    graphics.lineBetween(x + 2, y + 5, x + 2, y + Math.max(6, cellSize * 0.24));
+                    graphics.lineBetween(x + 2, y + 5, x + Math.max(6, cellSize * 0.24), y + 5);
+                    graphics.lineBetween(x + cellSize - 3, y + 5, x + cellSize - 3, y + Math.max(6, cellSize * 0.24));
+                    graphics.lineBetween(x + cellSize - 3, y + 5, x + cellSize - Math.max(6, cellSize * 0.24) - 1, y + 5);
+                    graphics.lineBetween(x + 2, y + cellSize - 4, x + 2, y + cellSize - Math.max(6, cellSize * 0.24) - 1);
+                    graphics.lineBetween(x + 2, y + cellSize - 4, x + Math.max(6, cellSize * 0.24), y + cellSize - 4);
+                    graphics.lineBetween(x + cellSize - 3, y + cellSize - 4, x + cellSize - 3, y + cellSize - Math.max(6, cellSize * 0.24) - 1);
+                    graphics.lineBetween(x + cellSize - 3, y + cellSize - 4, x + cellSize - Math.max(6, cellSize * 0.24) - 1, y + cellSize - 4);
+                }
+                if (isPairedPiece) {
+                    const pairReach = Math.max(3.4, cellSize * 0.27);
+                    const pairRadius = Math.max(2.4, cellSize * 0.2);
+                    const pairPositions = connectionDirs.map((dir) => {
+                        if (dir === 'N') return { x: centerX, y: centerY - pairReach };
+                        if (dir === 'E') return { x: centerX + pairReach, y: centerY };
+                        if (dir === 'S') return { x: centerX, y: centerY + pairReach };
+                        return { x: centerX - pairReach, y: centerY };
+                    });
+
+                    graphics.lineStyle(Math.max(1, cellSize * 0.07), linkColor, 0.38);
+                    graphics.lineBetween(pairPositions[0].x, pairPositions[0].y, pairPositions[1].x, pairPositions[1].y);
+                    drawPreviewGear(pairPositions[0].x, pairPositions[0].y, pairRadius, 1, true);
+                    drawPreviewGear(pairPositions[1].x, pairPositions[1].y, pairRadius, -1, true);
+                } else {
+                    connectionPairs.forEach(([from, to]) => {
+                        graphics.lineStyle(Math.max(1, cellSize * 0.07), linkColor, 0.45);
+                        graphics.lineBetween(from.x, from.y, to.x, to.y);
+                    });
+                    nodePositions.forEach((node, index) => {
+                        drawPreviewGear(node.x, node.y, nodeRadius, index % 2 === 0 ? 1 : -1, false);
+                    });
+
+                    graphics.fillStyle(active ? 0xffe8b7 : 0xdbc89a, active ? 0.16 : 0.08);
+                    graphics.fillCircle(centerX, centerY, radius + (active ? 3 : 1));
+                    drawPreviewGear(centerX, centerY, radius, outputLive ? 1 : -1, true);
+                }
+
+                if (occupied.type === GEAR_CODES.SOURCE || occupied.type === GEAR_CODES.SINK) {
+                    const label = this.add.text(centerX, centerY, occupied.type === GEAR_CODES.SOURCE ? 'I' : 'O', {
+                        fontFamily: 'Courier New',
+                        fontSize: '6px',
+                        color: outputLive ? '#fff1d0' : '#e0edf2',
+                        stroke: '#000000',
+                        strokeThickness: 2,
+                    }).setOrigin(0.5);
+                    labelContainer?.add(label);
+                }
+            });
+        });
+
+        const progressLabel = this.add.text(left + 2, top + height - 10, evaluation.completed ? 'GEAR CLEAR' : 'GEAR STALL', {
+            fontFamily: 'Courier New',
+            fontSize: '7px',
+            color: evaluation.completed ? '#d8ffe6' : '#ffd6a8',
+            stroke: '#000000',
+            strokeThickness: 2,
+        });
+        labelContainer?.add(progressLabel);
     }
 
     _drawFlowPreviewLayer({

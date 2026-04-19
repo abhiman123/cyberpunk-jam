@@ -114,16 +114,17 @@ export default class RulebookOverlay {
         this._tablet = this.scene.add.container(640, 360);
 
         const shellShadow = this.scene.add.rectangle(8, 10, 932, 624, 0x000000, 0.34);
-        const shell = this.scene.add.rectangle(0, 0, 920, 612, 0x181d23, 1)
-            .setStrokeStyle(3, 0x49515a, 0.95);
-        const bezel = this.scene.add.rectangle(0, 0, 880, 572, 0x11151a, 1)
-            .setStrokeStyle(1, 0x69737f, 0.72);
-        const screen = this.scene.add.rectangle(8, 0, 830, 520, 0x10191e, 1)
-            .setStrokeStyle(1, 0x5c666f, 0.42);
-        const topBar = this.scene.add.rectangle(8, -236, 830, 52, 0x1c2630, 1)
-            .setStrokeStyle(1, 0x5b6773, 0.6);
-        const sideRail = this.scene.add.rectangle(-308, 0, 166, 520, 0x182228, 1)
-            .setStrokeStyle(1, 0x4f5963, 0.58);
+        const shell = this.scene.add.rectangle(0, 0, 920, 612, 0x161b21, 1)
+            .setStrokeStyle(3, 0x55616c, 0.95);
+        const bezel = this.scene.add.rectangle(0, 0, 880, 572, 0x0f1419, 1)
+            .setStrokeStyle(1, 0x72808c, 0.72);
+        const screen = this.scene.add.rectangle(8, 0, 830, 520, 0x0f181d, 1)
+            .setStrokeStyle(1, 0x62707c, 0.42);
+        const topBar = this.scene.add.rectangle(8, -236, 830, 52, 0x1b2732, 1)
+            .setStrokeStyle(1, 0x70808c, 0.6);
+        const accentStrip = this.scene.add.rectangle(8, -212, 830, 3, 0x89d3c8, 0.5);
+        const sideRail = this.scene.add.rectangle(-308, 0, 166, 520, 0x172228, 1)
+            .setStrokeStyle(1, 0x52606b, 0.58);
 
         const title = this.scene.add.text(-374, -248, 'INSPECTOR TABLET', {
             fontFamily: 'Courier New', fontSize: '18px', color: '#dfeaf1', letterSpacing: 2,
@@ -135,6 +136,11 @@ export default class RulebookOverlay {
         const subtitle = this.scene.add.text(-374, -214, 'Tap the desk tablet or press B. Scroll the pane to read older entries.', {
             fontFamily: 'monospace', fontSize: '11px', color: '#7f8f9d',
         });
+
+        const railTitle = this.scene.add.text(-366, -206, 'SHIFT SNAPSHOT', {
+            fontFamily: 'Courier New', fontSize: '12px', color: '#dcecf3', letterSpacing: 2,
+        });
+        const railRule = this.scene.add.rectangle(-308, -186, 126, 1, 0x586570, 1);
 
         const closeBg = this.scene.add.rectangle(382, -236, 92, 28, 0x25313c, 1)
             .setStrokeStyle(1, 0x74808b, 0.84)
@@ -169,7 +175,27 @@ export default class RulebookOverlay {
             this._sectionButtons.set(section.key, { bg, label });
         });
 
-        this._contentViewport = { x: -214, y: -188, width: 600, height: 424 };
+        const summaryPanel = this.scene.add.rectangle(-308, 94, 132, 164, 0x101a20, 0.94)
+            .setStrokeStyle(1, 0x5c6973, 0.7);
+        this._sidebarShiftText = this.scene.add.text(-362, 28, '', {
+            fontFamily: 'Courier New', fontSize: '12px', color: '#f0f7fb', letterSpacing: 1,
+        });
+        this._sidebarDateText = this.scene.add.text(-362, 58, '', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#93adb9', wordWrap: { width: 110 }, lineSpacing: 2,
+        });
+        this._sidebarRuleCountText = this.scene.add.text(-362, 100, '', {
+            fontFamily: 'Courier New', fontSize: '12px', color: '#dbe8ee',
+        });
+        this._sidebarSectionText = this.scene.add.text(-362, 132, '', {
+            fontFamily: 'Courier New', fontSize: '11px', color: '#f4f0d2', letterSpacing: 1,
+        });
+        this._sidebarHintText = this.scene.add.text(-362, 162, '', {
+            fontFamily: 'monospace', fontSize: '10px', color: '#8eb1bd', wordWrap: { width: 110 }, lineSpacing: 4,
+        });
+
+        this._contentViewport = { x: -214, y: -188, width: 600, height: 382 };
+        this._scrollTrackTop = -182;
+        this._scrollTrackHeight = 368;
         this._contentClip = this.scene.add.rectangle(
             this._contentViewport.x + (this._contentViewport.width / 2),
             this._contentViewport.y + (this._contentViewport.height / 2),
@@ -182,21 +208,10 @@ export default class RulebookOverlay {
         this._contentClip.on('pointerout', () => { this._contentHover = false; });
 
         this._contentContainer = this.scene.add.container(this._contentViewport.x, this._contentViewport.y);
-        const contentMaskGraphics = this.scene.make.graphics({ x: 640, y: 360, add: false });
-        contentMaskGraphics.fillStyle(0xffffff, 1);
-        contentMaskGraphics.fillRoundedRect(
-            this._contentViewport.x,
-            this._contentViewport.y,
-            this._contentViewport.width,
-            this._contentViewport.height,
-            18,
-        );
-        this._contentMaskSource = contentMaskGraphics;
-        this._contentContainer.setMask(contentMaskGraphics.createGeometryMask());
 
-        this._scrollTrack = this.scene.add.rectangle(410, 24, 8, 412, 0x2b353d, 1)
+        this._scrollTrack = this.scene.add.rectangle(410, this._scrollTrackTop + (this._scrollTrackHeight / 2), 8, this._scrollTrackHeight, 0x2b353d, 1)
             .setStrokeStyle(1, 0x59646d, 0.45);
-        this._scrollThumb = this.scene.add.rectangle(410, -182, 8, 72, 0xa2d4ff, 0.9)
+        this._scrollThumb = this.scene.add.rectangle(410, this._scrollTrackTop, 8, 72, 0xa2d4ff, 0.9)
             .setStrokeStyle(1, 0xe5fbff, 0.46);
 
         this._tablet.add([
@@ -205,13 +220,22 @@ export default class RulebookOverlay {
             bezel,
             screen,
             topBar,
+            accentStrip,
             sideRail,
             title,
             this._tabletStatus,
             subtitle,
+            railTitle,
+            railRule,
             closeBg,
             closeLabel,
             ...Array.from(this._sectionButtons.values()).flatMap((button) => [button.bg, button.label]),
+            summaryPanel,
+            this._sidebarShiftText,
+            this._sidebarDateText,
+            this._sidebarRuleCountText,
+            this._sidebarSectionText,
+            this._sidebarHintText,
             this._scrollTrack,
             this._scrollThumb,
             this._contentClip,
@@ -267,7 +291,72 @@ export default class RulebookOverlay {
                     ? 'BOOTH STATUS'
                     : 'REFERENCE FILES'
         );
+        this._refreshSidebarSummary();
         this._syncScroll();
+    }
+
+    _syncContentNodeClip() {
+        const viewportTop = this._tablet.y + this._contentViewport.y;
+        const viewportBottom = viewportTop + this._contentViewport.height;
+        const viewportLeft = this._tablet.x + this._contentViewport.x;
+        const viewportRight = viewportLeft + this._contentViewport.width;
+
+        this._contentNodes.forEach((node) => {
+            const bounds = node?.getBounds?.();
+            if (!bounds) return;
+
+            const overlaps = bounds.right > viewportLeft
+                && bounds.left < viewportRight
+                && bounds.bottom > viewportTop
+                && bounds.top < viewportBottom;
+
+            node.setVisible(overlaps);
+            if (!overlaps) {
+                node?.setCrop?.();
+                return;
+            }
+
+            if (!node?.setCrop || bounds.height <= 0 || bounds.width <= 0) {
+                return;
+            }
+
+            const cropTop = Math.max(0, viewportTop - bounds.top);
+            const cropBottom = Math.max(0, bounds.bottom - viewportBottom);
+
+            if (cropTop <= 0 && cropBottom <= 0) {
+                node.setCrop();
+                return;
+            }
+
+            const cropHeight = Math.max(0, bounds.height - cropTop - cropBottom);
+            if (cropHeight <= 0) {
+                node.setVisible(false);
+                return;
+            }
+
+            node.setCrop(0, cropTop, bounds.width, cropHeight);
+        });
+    }
+
+    _refreshSidebarSummary() {
+        if (!this._sidebarShiftText) return;
+
+        const sectionTitle = this._currentSection === 'rules'
+            ? 'DIRECTIVES'
+            : this._currentSection === 'booth'
+                ? 'BOOTH INFO'
+                : 'REFERENCE';
+        const sectionHint = this._currentSection === 'rules'
+            ? 'Active shift laws and any newly added directives.'
+            : this._currentSection === 'booth'
+                ? 'Live booth context for this run.'
+                : 'Quick legends for every puzzle layer.';
+
+        this._sidebarShiftText.setText(`DAY ${GameState.day}  //  P${GameState.period}`);
+        this._sidebarDateText.setText(GameState.formatCurrentShiftDate());
+        this._sidebarRuleCountText.setText(`ACTIVE RULES  ${this.activeRuleIds.length}`);
+        this._sidebarSectionText.setText(`OPEN: ${sectionTitle}`);
+        this._sidebarHintText.setText(sectionHint);
     }
 
     _buildRulesSection() {
@@ -309,23 +398,28 @@ export default class RulebookOverlay {
         ];
 
         stats.forEach((stat, index) => {
-            const rowY = y + (index * 54);
-            const plate = this.scene.add.rectangle(286, rowY, 572, 42, 0x182228, 1)
+            const column = index % 2;
+            const row = Math.floor(index / 2);
+            const cardX = column === 0 ? 138 : 434;
+            const rowY = y + (row * 92);
+            const plate = this.scene.add.rectangle(cardX, rowY + 34, 270, 72, 0x182228, 1)
                 .setOrigin(0.5, 0)
                 .setStrokeStyle(1, 0x46515a, 0.66);
-            const label = this.scene.add.text(18, rowY + 11, stat.label, {
+            const label = this.scene.add.text(cardX - 118, rowY + 14, stat.label, {
                 fontFamily: 'Courier New', fontSize: '12px', color: '#8ca0af', letterSpacing: 2,
             });
-            const value = this.scene.add.text(552, rowY + 10, stat.value, {
-                fontFamily: 'Courier New', fontSize: '18px', color: '#eef6fb', letterSpacing: 1,
-            }).setOrigin(1, 0);
+            const value = this.scene.add.text(cardX - 118, rowY + 38, stat.value, {
+                fontFamily: 'Courier New', fontSize: '20px', color: '#eef6fb', letterSpacing: 1,
+                wordWrap: { width: 228 },
+            });
             this._contentNodes.push(plate, label, value);
             this._contentContainer.add([plate, label, value]);
         });
-        y += 236;
+        y += 204;
 
-        y = this._addSectionParagraph('Workflow reminder: open the grid, clear any attached flow diagnostic, then file ACCEPT or SCRAP on the floor controls.', y, '#d9e5ec');
-        y = this._addSectionParagraph('Desk tablet shortcut stays available on B, but the physical tablet on the desk is the main diegetic entry point.', y + 6, '#98b2bf');
+        y = this._addSectionParagraph('Workflow reminder: clear the main grid, finish every attached auxiliary puzzle, then file ACCEPT or SCRAP from the floor controls.', y, '#d9e5ec');
+        y = this._addSectionParagraph('Desk tablet shortcut still works on B, but the physical tablet on the desk is the main diegetic entry point.', y + 6, '#98b2bf');
+        y = this._addSectionParagraph('If the unit carries both FLOW and GEAR diagnostics, both need to be resolved before you earn clean pay or scrap bonus credit.', y + 6, '#98b2bf');
 
         this._contentHeight = y + 20;
     }
@@ -335,7 +429,9 @@ export default class RulebookOverlay {
         y = this._addSectionHeader('REFERENCE NOTES', 'Quick reference for the current booth.', y);
         y = this._addSectionParagraph('Approve the compliant. Scrap the defective. Repair the redeemable.', y, '#f4f0d2');
         y = this._addSectionParagraph('Grid legend: walls stay blocked, numbered cells want a matching pip count, and = pairs must end on equal pip values.', y + 8, '#c8dbe5');
-        y = this._addSectionParagraph('Flow legend: power has to reach every listed subsystem. Amber modification nodes can be bypassed, but routing through them still flags the machine.', y + 8, '#c8dbe5');
+        y = this._addSectionParagraph('Grouped grid targets: outlined cell clusters add together as one total. Negative totals mean the cluster must stay below that number.', y + 8, '#c8dbe5');
+        y = this._addSectionParagraph('Flow legend: power has to reach every listed subsystem. Amber hazard nodes block the route, so the path has to go around them.', y + 8, '#c8dbe5');
+        y = this._addSectionParagraph('Gear legend: movable gears slide like puzzle parts. They do not rotate manually. The board clears once the output gear is powered and spinning.', y + 8, '#c8dbe5');
         y = this._addSectionParagraph('Comms note: a broken VOICE target corrupts the machine link until that subsystem is restored.', y + 8, '#a6c6d4');
 
         this._contentHeight = y + 20;
@@ -367,6 +463,7 @@ export default class RulebookOverlay {
         this._scrollMax = Math.max(0, this._contentHeight - this._contentViewport.height);
         this._scrollOffset = Phaser.Math.Clamp(this._scrollOffset, 0, this._scrollMax);
         this._contentContainer.setPosition(this._contentViewport.x, this._contentViewport.y - this._scrollOffset);
+        this._syncContentNodeClip();
 
         if (this._scrollMax <= 0) {
             this._scrollThumb.setVisible(false);
@@ -374,9 +471,10 @@ export default class RulebookOverlay {
         }
 
         this._scrollThumb.setVisible(true);
-        const thumbHeight = Math.max(54, (this._contentViewport.height / this._contentHeight) * 412);
-        const trackTop = -182;
-        const trackRange = 412 - thumbHeight;
+        const trackHeight = this._scrollTrackHeight || this._scrollTrack.displayHeight;
+        const trackTop = this._scrollTrackTop ?? (this._scrollTrack.y - (trackHeight / 2));
+        const thumbHeight = Math.max(54, (this._contentViewport.height / this._contentHeight) * trackHeight);
+        const trackRange = trackHeight - thumbHeight;
         const progress = this._scrollMax <= 0 ? 0 : this._scrollOffset / this._scrollMax;
         this._scrollThumb.height = thumbHeight;
         this._scrollThumb.y = trackTop + (thumbHeight / 2) + (trackRange * progress);
@@ -388,7 +486,6 @@ export default class RulebookOverlay {
         this._bKey?.off('down', this._handleToggle);
         this._escKey?.destroy();
         this._bKey?.destroy();
-        this._contentMaskSource?.destroy();
         this._root?.destroy(true);
     }
 }

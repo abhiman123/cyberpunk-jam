@@ -82,10 +82,12 @@ export default class MachinePuzzleOverlay {
         }).setOrigin(0.5, 0);
 
         this._gridBoardGfx = this.scene.add.graphics();
+        this._groupOutlineGfx = this.scene.add.graphics();
         this._equalLinkGfx = this.scene.add.graphics();
         this._tableGfx = this.scene.add.graphics();
         this._currentPulseGfx = this.scene.add.graphics();
         this._gridLayer = this.scene.add.container(0, 0);
+        this._groupLabelLayer = this.scene.add.container(0, 0);
         this._dominoLayer = this.scene.add.container(0, 0);
 
         this._messageText = this.scene.add.text(0, (panelHeight / 2) - 126, '', {
@@ -119,10 +121,12 @@ export default class MachinePuzzleOverlay {
             this._titleText,
             this._subtitleText,
             this._gridBoardGfx,
+            this._groupOutlineGfx,
             this._equalLinkGfx,
             this._tableGfx,
             this._currentPulseGfx,
             this._gridLayer,
+            this._groupLabelLayer,
             this._dominoLayer,
             this._messageText,
             backButtonBg,
@@ -193,6 +197,7 @@ export default class MachinePuzzleOverlay {
     _clearDynamic() {
         this._clearPreview();
         this._gridBoardGfx.clear();
+        this._groupOutlineGfx.clear();
         this._equalLinkGfx.clear();
         this._tableGfx.clear();
         this.scene.tweens.killTweensOf(this._currentPulseGfx);
@@ -216,6 +221,7 @@ export default class MachinePuzzleOverlay {
         });
         this._cellViews = [];
         this._cellViewMap.clear();
+        this._groupLabelLayer.removeAll(true);
 
         this._dominoViews.forEach((domino) => domino.container.destroy(true));
         this._dominoViews = [];
@@ -486,8 +492,8 @@ export default class MachinePuzzleOverlay {
         const secondCell = dominoView.dominoState.placedCells.find((cell) => cell.half === 'second');
 
         return {
-            firstGlow: !this._powerEffectsSuspended && Boolean(firstCell?.matchesCharge || firstCell?.matchesEquality),
-            secondGlow: !this._powerEffectsSuspended && Boolean(secondCell?.matchesCharge || secondCell?.matchesEquality),
+            firstGlow: !this._powerEffectsSuspended && Boolean(firstCell?.matchesCharge || firstCell?.matchesEquality || firstCell?.matchesGroup),
+            secondGlow: !this._powerEffectsSuspended && Boolean(secondCell?.matchesCharge || secondCell?.matchesEquality || secondCell?.matchesGroup),
             globalGlow: !this._powerEffectsSuspended && (evaluation.solved || dominoView.dominoState.isFullyGlowing),
         };
     }
@@ -578,6 +584,10 @@ export default class MachinePuzzleOverlay {
     }
 
     _handlePointerUp(pointer) {
+        if (!this.isVisible()) {
+            this._dragState = null;
+            return;
+        }
         if (!this._dragState || this._dragState.pointerId !== pointer.id) return;
 
         const { dominoView, dragging, startedFromTable, wasFloatingAtPointerDown } = this._dragState;
@@ -759,6 +769,11 @@ export default class MachinePuzzleOverlay {
 
     _placeDomino(dominoView, candidate, animated) {
         const previousEvaluation = this._puzzleState.getEvaluation();
+        const previousMatchedGroups = new Set(
+            this._puzzleState.getChargeGroupSummaries()
+                .filter((group) => group.matched)
+                .map((group) => group.key)
+        );
         const previousCellMatches = candidate.cells.map((cell) => ({
             row: cell.row,
             col: cell.col,
@@ -791,13 +806,14 @@ export default class MachinePuzzleOverlay {
             const before = previousCellMatches.find((entry) => entry.row === cell.row && entry.col === cell.col);
             return this._puzzleState.isChargeMatched(cell.row, cell.col) && !before?.charge;
         });
+        const hasNewGroup = this._puzzleState.getChargeGroupSummaries().some((group) => group.matched && !previousMatchedGroups.has(group.key));
         const solvedNow = nextEvaluation.solved && !previousEvaluation.solved;
 
         this._flashPlacement(candidate.cells);
-        this._playPlacementCurrent(candidate.cells, { boosted: hasNewCharge || hasNewEquality || solvedNow });
+        this._playPlacementCurrent(candidate.cells, { boosted: hasNewCharge || hasNewEquality || hasNewGroup || solvedNow });
         this._notifyGridChanged();
         this._playPuzzleSound(SOUND_ASSETS.circuitLock, SOUND_ASSETS.inspectionReveal, SOUND_VOLUMES.puzzleLock);
-        if (hasNewCharge || solvedNow) {
+        if (hasNewCharge || hasNewGroup || solvedNow) {
             this._playPuzzleSound(SOUND_ASSETS.circuitPower, SOUND_ASSETS.puzzleFixed, SOUND_VOLUMES.puzzlePower);
         } else if (hasNewEquality) {
             this._playPuzzleSound(SOUND_ASSETS.fuseConnect, SOUND_ASSETS.puzzleFixed, SOUND_VOLUMES.puzzleConnect);
@@ -930,7 +946,10 @@ export default class MachinePuzzleOverlay {
     }
 
     _refreshAllCells() {
+        this._chargeGroupSummaries = this._puzzleState.getChargeGroupSummaries();
+        this._chargeGroupSummaryMap = new Map(this._chargeGroupSummaries.map((group) => [group.key, group]));
         this._cellViews.forEach((cellView) => this._refreshCell(cellView));
+        this._refreshChargeGroupOutlines();
         this._refreshEqualLinkLines();
     }
 
@@ -945,6 +964,9 @@ export default class MachinePuzzleOverlay {
         const isMatchedCharge = !this._powerEffectsSuspended && this._puzzleState.isChargeMatched(cellView.row, cellView.col);
         const hasEqualLink = this._puzzleState.isEqualLinkCell(cellView.row, cellView.col);
         const isMatchedEqualLink = !this._powerEffectsSuspended && this._puzzleState.isEqualMatched(cellView.row, cellView.col);
+        const chargeGroup = this._puzzleState.getChargeGroupAt(cellView.row, cellView.col);
+        const chargeGroupSummary = chargeGroup ? this._chargeGroupSummaryMap?.get(chargeGroup.key) : null;
+        const isMatchedGroup = !this._powerEffectsSuspended && Boolean(chargeGroupSummary?.matched);
         const isPlaced = isPlacedCode(value);
 
         let fillColor = 0x2c241f;
@@ -956,6 +978,13 @@ export default class MachinePuzzleOverlay {
         } else if (chargeLevel > 0) {
             fillColor = isMatchedCharge ? 0x7e8832 : 0x4d5a2f;
             strokeColor = isMatchedCharge ? 0xfff0b5 : 0xe0dc92;
+        } else if (chargeGroupSummary) {
+            fillColor = isMatchedGroup
+                ? 0x55793a
+                : isPlaced
+                    ? 0x30595a
+                    : 0x2b3742;
+            strokeColor = isMatchedGroup ? 0xe8ffb3 : 0xbad6e2;
         } else if (hasEqualLink) {
             fillColor = isMatchedEqualLink
                 ? 0x8a7e31
@@ -976,7 +1005,7 @@ export default class MachinePuzzleOverlay {
             cellView.matchTween = null;
         }
 
-        if (isMatchedCharge || isMatchedEqualLink) {
+        if (isMatchedCharge || isMatchedEqualLink || isMatchedGroup) {
             cellView.matchRect.setFillStyle(0xfff1a3, 0.18).setStrokeStyle(2, 0xfff7c7, 0.75).setAlpha(0.45);
             cellView.matchTween = this.scene.tweens.add({
                 targets: cellView.matchRect,
@@ -995,6 +1024,9 @@ export default class MachinePuzzleOverlay {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText(String(chargeLevel));
             cellView.valueText.setColor(isMatchedCharge ? '#fff6b8' : '#ffe784');
+        } else if (chargeGroupSummary) {
+            cellView.valueText.setVisible(false);
+            cellView.valueText.setText('');
         } else if (hasEqualLink) {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText('=');
@@ -1007,6 +1039,76 @@ export default class MachinePuzzleOverlay {
             cellView.valueText.setVisible(false);
             cellView.valueText.setText('');
         }
+    }
+
+    _refreshChargeGroupOutlines() {
+        this._groupOutlineGfx.clear();
+        this._groupLabelLayer.removeAll(true);
+
+        (this._chargeGroupSummaries || []).forEach((group) => {
+            const groupKeys = new Set(group.cells.map((cell) => `${cell.row}:${cell.col}`));
+            const glowColor = group.matched ? 0xf2ffd1 : 0xb8d5e1;
+            const lineColor = group.matched ? 0xe4ffad : 0x9ec4d5;
+            const cellSize = MACHINE_PUZZLE.overlayCellSize;
+            const groupCenter = group.cells.reduce((center, cell) => {
+                center.x += this._gridLeft + (cell.col * cellSize) + (cellSize / 2);
+                center.y += this._gridTop + (cell.row * cellSize) + (cellSize / 2);
+                return center;
+            }, { x: 0, y: 0 });
+            groupCenter.x /= Math.max(1, group.cells.length);
+            groupCenter.y /= Math.max(1, group.cells.length);
+
+            this._groupOutlineGfx.lineStyle(6, glowColor, group.matched ? 0.18 : 0.1);
+            group.cells.forEach((cell) => {
+                const left = this._gridLeft + (cell.col * cellSize);
+                const top = this._gridTop + (cell.row * cellSize);
+                const right = left + cellSize;
+                const bottom = top + cellSize;
+
+                if (!groupKeys.has(`${cell.row - 1}:${cell.col}`)) {
+                    this._groupOutlineGfx.lineBetween(left, top, right, top);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col + 1}`)) {
+                    this._groupOutlineGfx.lineBetween(right, top, right, bottom);
+                }
+                if (!groupKeys.has(`${cell.row + 1}:${cell.col}`)) {
+                    this._groupOutlineGfx.lineBetween(left, bottom, right, bottom);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col - 1}`)) {
+                    this._groupOutlineGfx.lineBetween(left, top, left, bottom);
+                }
+            });
+
+            this._groupOutlineGfx.lineStyle(2, lineColor, 0.92);
+            group.cells.forEach((cell) => {
+                const left = this._gridLeft + (cell.col * cellSize);
+                const top = this._gridTop + (cell.row * cellSize);
+                const right = left + cellSize;
+                const bottom = top + cellSize;
+
+                if (!groupKeys.has(`${cell.row - 1}:${cell.col}`)) {
+                    this._groupOutlineGfx.lineBetween(left, top, right, top);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col + 1}`)) {
+                    this._groupOutlineGfx.lineBetween(right, top, right, bottom);
+                }
+                if (!groupKeys.has(`${cell.row + 1}:${cell.col}`)) {
+                    this._groupOutlineGfx.lineBetween(left, bottom, right, bottom);
+                }
+                if (!groupKeys.has(`${cell.row}:${cell.col - 1}`)) {
+                    this._groupOutlineGfx.lineBetween(left, top, left, bottom);
+                }
+            });
+
+            const label = this.scene.add.text(groupCenter.x, groupCenter.y, group.displayTarget, {
+                fontFamily: 'Courier New',
+                fontSize: '19px',
+                color: group.matched ? '#f3ffd5' : '#d9eef7',
+                stroke: '#000000',
+                strokeThickness: 3,
+            }).setOrigin(0.5);
+            this._groupLabelLayer.add(label);
+        });
     }
 
     _refreshEqualLinkLines() {

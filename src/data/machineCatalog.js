@@ -1,3 +1,10 @@
+import {
+    GEAR_CODES,
+    buildGearProgressSnapshot,
+    cloneGearBoard,
+    cloneGearPieces,
+} from '../core/gearPuzzleLogic.js';
+
 const MACHINE_SPRITE_FOLDER = 'assets/machines/sprites';
 const MACHINE_FALLBACK_KEY = 'unit_placeholder';
 const CELL_EMPTY = 0;
@@ -671,6 +678,7 @@ const createMiniDisplay = ({
     artAngle = 0,
     gridPreview,
     flowPreview,
+    gearPreview = { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' },
 }) => ({
     artX,
     artY,
@@ -678,6 +686,27 @@ const createMiniDisplay = ({
     artAngle,
     gridPreview: { ...gridPreview },
     flowPreview: { ...flowPreview },
+    gearPreview: { ...gearPreview },
+});
+
+const createGearPiece = (type, row, col, extra = {}) => ({
+    type,
+    row,
+    col,
+    movable: extra.movable !== false,
+    ...extra,
+});
+
+const createGearPuzzleOption = ({
+    board,
+    pieces,
+    previewTitle = 'GEAR TRAIN',
+    description = 'Restore the transmission path until the sink gear starts turning.',
+}) => ({
+    board,
+    pieces,
+    previewTitle,
+    description,
 });
 
 const DEFAULT_MACHINE_DAYS = Object.freeze([1]);
@@ -714,6 +743,68 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
     ]),
 });
 
+const SHARED_GEAR_OPTIONS = Object.freeze([
+    createGearPuzzleOption({
+        previewTitle: 'DRIVE TRAIN',
+        description: 'Slide the loose gears into place until power reaches the output axle.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 3),
+        ],
+    }),
+    createGearPuzzleOption({
+        previewTitle: 'TORQUE LOOP',
+        description: 'Free the stalled path and route torque through the fixed transfer gear.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.FULL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.MOVABLE_WALL, 3, 3),
+            createGearPiece(GEAR_CODES.CURVE_SW, 2, 4),
+            createGearPiece(GEAR_CODES.VERTICAL, 2, 3, { movable: false }),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1),
+        ],
+    }),
+    createGearPuzzleOption({
+        previewTitle: 'OUTPUT SHAFT',
+        description: 'Bridge the upper bus, feed the fixed hub, and spin the final shaft.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.FULL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.HORIZONTAL, 1, 2, { movable: false }),
+            createGearPiece(GEAR_CODES.CURVE_SW, 2, 4),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1),
+        ],
+    }),
+]);
+
+const MACHINE_GEAR_CATALOG = Object.freeze({
+    assembler_alpha: SHARED_GEAR_OPTIONS,
+    audit_drone: SHARED_GEAR_OPTIONS,
+    courier_shell: SHARED_GEAR_OPTIONS,
+    sentry_frame: SHARED_GEAR_OPTIONS,
+    breakroom_brewer: SHARED_GEAR_OPTIONS,
+    mechanic_broom: SHARED_GEAR_OPTIONS,
+    future_lounge_chair: SHARED_GEAR_OPTIONS,
+});
+
 const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     assembler_alpha: createMiniDisplay({
         artX: 104,
@@ -721,6 +812,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artScale: 0.94,
         gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
         flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 102, y: 150, width: 56, height: 30, label: 'GEAR' },
     }),
     audit_drone: createMiniDisplay({
         artX: 112,
@@ -729,6 +821,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artAngle: -4,
         gridPreview: { x: 138, y: 68, width: 54, height: 40, label: 'GRID' },
         flowPreview: { x: 44, y: 112, width: 62, height: 36, label: 'FLOW' },
+        gearPreview: { x: 92, y: 148, width: 64, height: 30, label: 'GEAR' },
     }),
     courier_shell: createMiniDisplay({
         artX: 102,
@@ -737,6 +830,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artAngle: 2,
         gridPreview: { x: 42, y: 70, width: 58, height: 40, label: 'GRID' },
         flowPreview: { x: 134, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 116, y: 56, width: 60, height: 34, label: 'GEAR' },
     }),
     sentry_frame: createMiniDisplay({
         artX: 108,
@@ -744,6 +838,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artScale: 0.97,
         gridPreview: { x: 136, y: 64, width: 56, height: 42, label: 'GRID' },
         flowPreview: { x: 44, y: 114, width: 64, height: 36, label: 'FLOW' },
+        gearPreview: { x: 48, y: 72, width: 60, height: 34, label: 'GEAR' },
     }),
     breakroom_brewer: createMiniDisplay({
         artX: 102,
@@ -752,6 +847,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artAngle: -4,
         gridPreview: { x: 42, y: 74, width: 58, height: 40, label: 'GRID' },
         flowPreview: { x: 134, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 48, y: 146, width: 60, height: 32, label: 'GEAR' },
     }),
     mechanic_broom: createMiniDisplay({
         artX: 104,
@@ -760,6 +856,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artAngle: 6,
         gridPreview: { x: 46, y: 70, width: 58, height: 40, label: 'GRID' },
         flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 136, y: 64, width: 58, height: 34, label: 'GEAR' },
     }),
     future_lounge_chair: createMiniDisplay({
         artX: 110,
@@ -768,6 +865,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artAngle: -7,
         gridPreview: { x: 136, y: 68, width: 56, height: 40, label: 'GRID' },
         flowPreview: { x: 46, y: 114, width: 64, height: 36, label: 'FLOW' },
+        gearPreview: { x: 104, y: 146, width: 60, height: 34, label: 'GEAR' },
     }),
 });
 
@@ -777,6 +875,7 @@ const createMachineDefinition = ({
     spriteFileName,
     possibleGrids,
     possibleCircuits = MACHINE_FLOW_CATALOG[id] || [],
+    possibleGears = MACHINE_GEAR_CATALOG[id] || [],
     miniDisplay = MACHINE_MINI_DISPLAY_CATALOG[id] || null,
     availableDays = DEFAULT_MACHINE_DAYS,
     availablePeriods = DEFAULT_MACHINE_PERIODS,
@@ -789,6 +888,7 @@ const createMachineDefinition = ({
     sprite: createMachineSprite(id, spriteFileName),
     possibleGrids,
     possibleCircuits,
+    possibleGears,
     miniDisplay,
     availableDays,
     availablePeriods,
@@ -806,6 +906,32 @@ const createDomino = (firstOptionAmount, secondOptionAmount, extra = {}) => ({
 });
 
 const linkCell = (row, col) => [row, col];
+
+const createChargeGroupAnchor = (target) => ({
+    kind: 'charge-group-anchor',
+    target: Number.isInteger(target) ? target : 0,
+});
+
+const createChargeGroupLink = (row, col) => ({
+    kind: 'charge-group-link',
+    row,
+    col,
+});
+
+function isChargeGroupAnchorCell(value) {
+    return Boolean(value)
+        && typeof value === 'object'
+        && value.kind === 'charge-group-anchor'
+        && Number.isInteger(value.target);
+}
+
+function isChargeGroupLinkCell(value) {
+    return Boolean(value)
+        && typeof value === 'object'
+        && value.kind === 'charge-group-link'
+        && Number.isInteger(value.row)
+        && Number.isInteger(value.col);
+}
 
 export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
@@ -1337,6 +1463,7 @@ function isLinkCell(value) {
 
 function cloneGridCell(cell) {
     if (isLinkCell(cell)) return [cell[0], cell[1]];
+    if (isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) return { ...cell };
     return cell;
 }
 
@@ -1379,6 +1506,34 @@ function cloneFlowPuzzleOption(flowPuzzleOption) {
     };
 }
 
+function cloneGearPuzzleOption(gearPuzzleOption) {
+    if (!gearPuzzleOption) return null;
+
+    return {
+        ...gearPuzzleOption,
+        board: cloneGearBoard(gearPuzzleOption.board),
+        pieces: cloneGearPieces(gearPuzzleOption.pieces),
+        progress: gearPuzzleOption.progress
+            ? {
+                ...gearPuzzleOption.progress,
+                pieces: cloneGearPieces(gearPuzzleOption.progress.pieces),
+                poweredCells: Array.isArray(gearPuzzleOption.progress.poweredCells)
+                    ? gearPuzzleOption.progress.poweredCells.map((cell) => ({ ...cell }))
+                    : [],
+                poweredPieces: Array.isArray(gearPuzzleOption.progress.poweredPieces)
+                    ? [...gearPuzzleOption.progress.poweredPieces]
+                    : [],
+                symptoms: Array.isArray(gearPuzzleOption.progress.symptoms)
+                    ? [...gearPuzzleOption.progress.symptoms]
+                    : [],
+                flags: Array.isArray(gearPuzzleOption.progress.flags)
+                    ? [...gearPuzzleOption.progress.flags]
+                    : [],
+            }
+            : null,
+    };
+}
+
 function cloneMiniDisplay(miniDisplay) {
     if (!miniDisplay) return null;
 
@@ -1386,7 +1541,90 @@ function cloneMiniDisplay(miniDisplay) {
         ...miniDisplay,
         gridPreview: miniDisplay.gridPreview ? { ...miniDisplay.gridPreview } : null,
         flowPreview: miniDisplay.flowPreview ? { ...miniDisplay.flowPreview } : null,
+        gearPreview: miniDisplay.gearPreview ? { ...miniDisplay.gearPreview } : null,
     };
+}
+
+const GRID_TRANSFORM_KEYS = Object.freeze([
+    'none',
+    'flip-h',
+    'flip-v',
+    'rotate-180',
+    'rotate-90',
+    'rotate-270',
+]);
+
+function getShapeGridDimensions(shapeGrid) {
+    const rows = Array.isArray(shapeGrid) ? shapeGrid.length : 0;
+    const cols = rows > 0 ? Math.max(...shapeGrid.map((row) => row.length)) : 0;
+    return { rows, cols };
+}
+
+function transformGridCoordinate(row, col, rows, cols, transformKey) {
+    if (transformKey === 'flip-h') return { row, col: cols - 1 - col };
+    if (transformKey === 'flip-v') return { row: rows - 1 - row, col };
+    if (transformKey === 'rotate-180') return { row: rows - 1 - row, col: cols - 1 - col };
+    if (transformKey === 'rotate-90') return { row: col, col: rows - 1 - row };
+    if (transformKey === 'rotate-270') return { row: cols - 1 - col, col: row };
+    return { row, col };
+}
+
+function transformGridCell(cell, rows, cols, transformKey) {
+    if (isLinkCell(cell)) {
+        const mapped = transformGridCoordinate(cell[0], cell[1], rows, cols, transformKey);
+        return [mapped.row, mapped.col];
+    }
+
+    if (isChargeGroupLinkCell(cell)) {
+        const mapped = transformGridCoordinate(cell.row, cell.col, rows, cols, transformKey);
+        return { ...cell, row: mapped.row, col: mapped.col };
+    }
+
+    return cloneGridCell(cell);
+}
+
+function transformShapeGrid(shapeGrid, transformKey = 'none') {
+    const { rows, cols } = getShapeGridDimensions(shapeGrid);
+    if (rows === 0 || cols === 0 || transformKey === 'none') {
+        return cloneShapeGrid(shapeGrid);
+    }
+
+    const nextRows = transformKey === 'rotate-90' || transformKey === 'rotate-270' ? cols : rows;
+    const nextCols = transformKey === 'rotate-90' || transformKey === 'rotate-270' ? rows : cols;
+    const transformedGrid = Array.from({ length: nextRows }, () => Array.from({ length: nextCols }, () => CELL_WALL));
+
+    for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+            const sourceCell = shapeGrid[row]?.[col] ?? CELL_WALL;
+            const mapped = transformGridCoordinate(row, col, rows, cols, transformKey);
+            transformedGrid[mapped.row][mapped.col] = transformGridCell(sourceCell, rows, cols, transformKey);
+        }
+    }
+
+    return transformedGrid;
+}
+
+function transformGridOption(gridOption, transformKey = 'none') {
+    const clonedGridOption = cloneGridOption(gridOption);
+    if (transformKey === 'none') return clonedGridOption;
+
+    return {
+        ...clonedGridOption,
+        grid: transformShapeGrid(clonedGridOption.grid, transformKey),
+        variantKey: `${clonedGridOption.variantKey || 'base'}:${transformKey}`,
+    };
+}
+
+function pickGridTransformKey(_gridOption, randomFn) {
+    return pickRandomEntry(GRID_TRANSFORM_KEYS, randomFn) || 'none';
+}
+
+function buildWeightedGridPool(gridOptions) {
+    if (!Array.isArray(gridOptions)) return [];
+
+    return gridOptions
+        .filter((gridOption) => Boolean(gridOption) && (gridOption.impossible || isPlayableGridOption(gridOption)))
+        .flatMap((gridOption) => (gridOption.impossible ? [gridOption] : [gridOption, gridOption]));
 }
 
 function isChargeCode(value) {
@@ -1430,17 +1668,264 @@ function pairKeyForCells(left, right) {
     return `${first.row}:${first.col}|${second.row}:${second.col}`;
 }
 
+function getOrthogonalCellNeighbors(row, col) {
+    return [
+        { row: row - 1, col },
+        { row, col: col + 1 },
+        { row: row + 1, col },
+        { row, col: col - 1 },
+    ];
+}
+
+function resolveChargeGroupAnchor(shapeGrid, row, col, seen = new Set()) {
+    const key = cellKey(row, col);
+    if (seen.has(key)) return null;
+    seen.add(key);
+
+    const rowData = shapeGrid[row];
+    if (!rowData || col < 0 || col >= rowData.length) return null;
+
+    const value = rowData[col];
+    if (isChargeGroupAnchorCell(value)) {
+        return { row, col, target: value.target };
+    }
+    if (isChargeGroupLinkCell(value)) {
+        return resolveChargeGroupAnchor(shapeGrid, value.row, value.col, seen);
+    }
+
+    return null;
+}
+
+function collectChargeComponents(shapeGrid) {
+    const visited = new Set();
+    const components = [];
+
+    shapeGrid.forEach((row, rowIndex) => {
+        row.forEach((value, colIndex) => {
+            const startKey = cellKey(rowIndex, colIndex);
+            if (!isChargeCode(value) || visited.has(startKey)) return;
+
+            const queue = [{ row: rowIndex, col: colIndex }];
+            const component = [];
+            visited.add(startKey);
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                component.push(current);
+
+                getOrthogonalCellNeighbors(current.row, current.col)
+                    .sort(compareCellPositions)
+                    .forEach((neighbor) => {
+                        const neighborKey = cellKey(neighbor.row, neighbor.col);
+                        if (visited.has(neighborKey)) return;
+                        if (!isChargeCode(shapeGrid[neighbor.row]?.[neighbor.col])) return;
+
+                        visited.add(neighborKey);
+                        queue.push(neighbor);
+                    });
+            }
+
+            components.push(component.sort(compareCellPositions));
+        });
+    });
+
+    return components.sort((left, right) => compareCellPositions(left[0], right[0]));
+}
+
+function shuffleCells(cells, randomFn) {
+    const shuffled = [...cells];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(randomFn() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+}
+
+function buildChargeGroupCluster(component, maxSize = 2, randomFn = Math.random) {
+    if (!Array.isArray(component) || component.length < 2) return [];
+
+    const componentMap = new Map(component.map((cell) => [cellKey(cell.row, cell.col), cell]));
+    const cluster = [shuffleCells(component, randomFn)[0]];
+    const clusterKeys = new Set([cellKey(cluster[0].row, cluster[0].col)]);
+
+    while (cluster.length < maxSize) {
+        const frontier = new Map();
+
+        cluster.forEach((cell) => {
+            getOrthogonalCellNeighbors(cell.row, cell.col)
+                .map((neighbor) => componentMap.get(cellKey(neighbor.row, neighbor.col)))
+                .filter(Boolean)
+                .forEach((neighbor) => {
+                    const neighborKey = cellKey(neighbor.row, neighbor.col);
+                    if (clusterKeys.has(neighborKey)) return;
+                    frontier.set(neighborKey, neighbor);
+                });
+        });
+
+        if (frontier.size === 0) break;
+
+        const nextCell = shuffleCells(Array.from(frontier.values()), randomFn)
+            .sort((left, right) => {
+                const leftNeighbors = getOrthogonalCellNeighbors(left.row, left.col)
+                    .filter((neighbor) => clusterKeys.has(cellKey(neighbor.row, neighbor.col))).length;
+                const rightNeighbors = getOrthogonalCellNeighbors(right.row, right.col)
+                    .filter((neighbor) => clusterKeys.has(cellKey(neighbor.row, neighbor.col))).length;
+                return rightNeighbors - leftNeighbors;
+            })[0];
+
+        cluster.push(nextCell);
+        clusterKeys.add(cellKey(nextCell.row, nextCell.col));
+    }
+
+    return cluster.sort(compareCellPositions);
+}
+
+function collectChargeSubcomponents(cells) {
+    if (!Array.isArray(cells) || cells.length === 0) return [];
+
+    const availableMap = new Map(cells.map((cell) => [cellKey(cell.row, cell.col), cell]));
+    const visited = new Set();
+    const components = [];
+
+    cells.forEach((cell) => {
+        const startKey = cellKey(cell.row, cell.col);
+        if (visited.has(startKey)) return;
+
+        const queue = [cell];
+        const component = [];
+        visited.add(startKey);
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            component.push(current);
+
+            getOrthogonalCellNeighbors(current.row, current.col)
+                .map((neighbor) => availableMap.get(cellKey(neighbor.row, neighbor.col)))
+                .filter(Boolean)
+                .forEach((neighbor) => {
+                    const neighborKey = cellKey(neighbor.row, neighbor.col);
+                    if (visited.has(neighborKey)) return;
+                    visited.add(neighborKey);
+                    queue.push(neighbor);
+                });
+        }
+
+        components.push(component.sort(compareCellPositions));
+    });
+
+    return components.sort((left, right) => {
+        if (right.length !== left.length) {
+            return right.length - left.length;
+        }
+        return compareCellPositions(left[0], right[0]);
+    });
+}
+
+function injectChargeGroupsIntoGridOption(gridOption, randomFn) {
+    if (!gridOption || gridOption.impossible) return gridOption;
+
+    const grid = cloneShapeGrid(gridOption.grid);
+    const alreadyGrouped = grid.some((row) => row.some((cell) => isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)));
+    if (alreadyGrouped) {
+        return {
+            ...gridOption,
+            grid,
+        };
+    }
+
+    const components = collectChargeComponents(grid).filter((component) => component.length >= 2);
+    if (components.length === 0) {
+        return {
+            ...gridOption,
+            grid,
+        };
+    }
+
+    const reservedCells = new Set();
+    let groupsPlaced = 0;
+    const maxGroups = Math.min(3, Math.max(1, components.length + (randomFn() < 0.55 ? 1 : 0)));
+
+    shuffleCells(components, randomFn).forEach((component) => {
+        while (groupsPlaced < maxGroups) {
+            const available = component.filter((cell) => !reservedCells.has(cellKey(cell.row, cell.col)));
+            const contiguousAvailable = collectChargeSubcomponents(available).find((subcomponent) => subcomponent.length >= 2);
+            if (!contiguousAvailable) break;
+
+            const preferredClusterSizes = [];
+            if (contiguousAvailable.length >= 4) {
+                preferredClusterSizes.push(4);
+            }
+            if (contiguousAvailable.length >= 3) {
+                preferredClusterSizes.push(3);
+            }
+            preferredClusterSizes.push(2);
+
+            let cluster = [];
+            preferredClusterSizes.some((clusterSize) => {
+                const attempts = clusterSize > 2 ? 3 : 1;
+                for (let attempt = 0; attempt < attempts; attempt += 1) {
+                    const candidateCluster = buildChargeGroupCluster(
+                        contiguousAvailable,
+                        Math.min(contiguousAvailable.length, clusterSize),
+                        randomFn,
+                    );
+                    if (candidateCluster.length === Math.min(contiguousAvailable.length, clusterSize)) {
+                        cluster = candidateCluster;
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            if (cluster.length < 2) break;
+
+            const anchor = cluster[0];
+            const exactTarget = cluster.reduce((sum, cell) => sum + (Number(grid[cell.row][cell.col]) - 1), 0);
+            const useLessThan = randomFn() < 0.4;
+            const threshold = exactTarget + 1 + Math.floor(randomFn() * Math.max(2, cluster.length));
+
+            grid[anchor.row][anchor.col] = createChargeGroupAnchor(useLessThan ? -threshold : exactTarget);
+            cluster.slice(1).forEach((cell) => {
+                grid[cell.row][cell.col] = createChargeGroupLink(anchor.row, anchor.col);
+            });
+
+            cluster.forEach((cell) => reservedCells.add(cellKey(cell.row, cell.col)));
+            groupsPlaced += 1;
+        }
+    });
+
+    return {
+        ...gridOption,
+        grid,
+    };
+}
+
 function normalizeGridDefinition(shapeGrid) {
     const baseGrid = cloneShapeGrid(shapeGrid).map((row) => row.map((cell) => {
-        if (isLinkCell(cell)) return CELL_EMPTY;
+        if (isLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) return CELL_EMPTY;
         return Number.isInteger(cell) ? cell : CELL_EMPTY;
     }));
 
     const equalLinks = new Map();
+    const groupAnchors = new Map();
+    const groupLinks = new Map();
     shapeGrid.forEach((row, rowIndex) => {
         row.forEach((cell, colIndex) => {
-            if (!isLinkCell(cell)) return;
-            equalLinks.set(cellKey(rowIndex, colIndex), { row: cell[0], col: cell[1] });
+            if (isLinkCell(cell)) {
+                equalLinks.set(cellKey(rowIndex, colIndex), { row: cell[0], col: cell[1] });
+                return;
+            }
+            if (isChargeGroupAnchorCell(cell)) {
+                groupAnchors.set(cellKey(rowIndex, colIndex), {
+                    key: cellKey(rowIndex, colIndex),
+                    anchor: { row: rowIndex, col: colIndex },
+                    target: cell.target,
+                });
+                return;
+            }
+            if (isChargeGroupLinkCell(cell)) {
+                groupLinks.set(cellKey(rowIndex, colIndex), { row: cell.row, col: cell.col });
+            }
         });
     });
 
@@ -1474,7 +1959,55 @@ function normalizeGridDefinition(shapeGrid) {
         });
     });
 
-    return { baseGrid, equalLinks, equalPairs };
+    const chargeGroupsByKey = new Map();
+    groupAnchors.forEach((group, groupKey) => {
+        chargeGroupsByKey.set(groupKey, {
+            key: groupKey,
+            anchor: { ...group.anchor },
+            target: group.target,
+            mode: group.target < 0 ? 'lt' : 'exact',
+            threshold: Math.abs(group.target),
+            cells: [{ ...group.anchor }],
+        });
+    });
+
+    const chargeGroupCells = new Map();
+    chargeGroupsByKey.forEach((group) => {
+        chargeGroupCells.set(cellKey(group.anchor.row, group.anchor.col), group.key);
+    });
+
+    const chargeGroupLinks = new Map();
+    groupLinks.forEach((target, sourceKey) => {
+        const source = parseCellKey(sourceKey);
+        const resolvedAnchor = resolveChargeGroupAnchor(shapeGrid, target.row, target.col);
+        if (!resolvedAnchor) {
+            throw new Error(`Invalid charge group link target at ${sourceKey}.`);
+        }
+
+        const anchorKey = cellKey(resolvedAnchor.row, resolvedAnchor.col);
+        const group = chargeGroupsByKey.get(anchorKey);
+        if (!group) {
+            throw new Error(`Charge group link at ${sourceKey} points to missing anchor ${anchorKey}.`);
+        }
+
+        chargeGroupLinks.set(sourceKey, { row: resolvedAnchor.row, col: resolvedAnchor.col });
+        chargeGroupCells.set(sourceKey, anchorKey);
+        group.cells.push({ row: source.row, col: source.col });
+    });
+
+    const chargeGroups = Array.from(chargeGroupsByKey.values()).map((group) => ({
+        ...group,
+        cells: group.cells.sort(compareCellPositions),
+    }));
+
+    return {
+        baseGrid,
+        equalLinks,
+        equalPairs,
+        chargeGroups,
+        chargeGroupCells,
+        chargeGroupLinks,
+    };
 }
 
 export class MachinePuzzleState {
@@ -1490,6 +2023,13 @@ export class MachinePuzzleState {
             a: { ...pair.a },
             b: { ...pair.b },
         }));
+        this.chargeGroups = normalizedGrid.chargeGroups.map((group) => ({
+            ...group,
+            anchor: { ...group.anchor },
+            cells: group.cells.map((cell) => ({ ...cell })),
+        }));
+        this.chargeGroupCells = new Map(normalizedGrid.chargeGroupCells);
+        this.chargeGroupLinks = new Map(normalizedGrid.chargeGroupLinks);
         this.impossible = Boolean(clonedGridOption.impossible);
         this.dominoes = clonedGridOption.dominos.map((domino, index) => ({
             ...domino,
@@ -1539,6 +2079,51 @@ export class MachinePuzzleState {
 
     isEqualLinkCell(row, col) {
         return this.equalLinks.has(cellKey(row, col));
+    }
+
+    isChargeGroupCell(row, col) {
+        return this.chargeGroupCells.has(cellKey(row, col));
+    }
+
+    getChargeGroupAt(row, col) {
+        const groupKey = this.chargeGroupCells.get(cellKey(row, col));
+        if (!groupKey) return null;
+        const group = this.chargeGroups.find((entry) => entry.key === groupKey);
+        if (!group) return null;
+
+        return {
+            key: group.key,
+            anchor: { ...group.anchor },
+            target: group.target,
+            mode: group.mode,
+            threshold: group.threshold,
+            cells: group.cells.map((cell) => ({ ...cell })),
+        };
+    }
+
+    getChargeGroupSummaries() {
+        return this.chargeGroups.map((group) => {
+            const placedCounts = group.cells.map((cell) => this.getPlacedPipCount(cell.row, cell.col));
+            const allPlaced = placedCounts.every((value) => Number.isInteger(value));
+            const sum = placedCounts.reduce((total, value) => total + (Number.isInteger(value) ? value : 0), 0);
+            const matched = allPlaced && (group.mode === 'lt' ? sum < group.threshold : sum === group.threshold);
+
+            return {
+                key: group.key,
+                anchor: { ...group.anchor },
+                target: group.target,
+                mode: group.mode,
+                threshold: group.threshold,
+                sum,
+                allPlaced,
+                matched,
+                displayTarget: group.mode === 'lt' ? `<${group.threshold}` : `${group.threshold}`,
+                cells: group.cells.map((cell) => ({
+                    ...cell,
+                    pipCount: this.getPlacedPipCount(cell.row, cell.col),
+                })),
+            };
+        });
     }
 
     getEqualLink(row, col) {
@@ -1605,7 +2190,10 @@ export class MachinePuzzleState {
         const matchedEqualityPairs = this.equalPairs.reduce((count, pair) => (
             count + (this.isEqualMatched(pair.a.row, pair.a.col) ? 1 : 0)
         ), 0);
-        const totalObjectives = totalChargeCells + totalEqualityPairs;
+        const chargeGroupSummaries = this.getChargeGroupSummaries();
+        const totalChargeGroups = chargeGroupSummaries.length;
+        const matchedChargeGroups = chargeGroupSummaries.reduce((count, group) => count + (group.matched ? 1 : 0), 0);
+        const totalObjectives = totalChargeCells + totalEqualityPairs + totalChargeGroups;
 
         return {
             impossible: this.impossible,
@@ -1613,9 +2201,12 @@ export class MachinePuzzleState {
             matchedChargeCells,
             totalEqualityPairs,
             matchedEqualityPairs,
+            totalChargeGroups,
+            matchedChargeGroups,
             solved: totalObjectives > 0
                 && matchedChargeCells === totalChargeCells
-                && matchedEqualityPairs === totalEqualityPairs,
+                && matchedEqualityPairs === totalEqualityPairs
+                && matchedChargeGroups === totalChargeGroups,
         };
     }
 
@@ -1681,6 +2272,13 @@ export class MachinePuzzleState {
 
     _syncGlowState() {
         const evaluation = this.getEvaluation();
+        const chargeGroupByCell = new Map();
+
+        this.getChargeGroupSummaries().forEach((group) => {
+            group.cells.forEach((cell) => {
+                chargeGroupByCell.set(cellKey(cell.row, cell.col), group);
+            });
+        });
 
         this.dominoes.forEach((domino) => {
             domino.isFullyGlowing = evaluation.solved;
@@ -1688,6 +2286,7 @@ export class MachinePuzzleState {
                 ...cell,
                 matchesCharge: this.isChargeMatched(cell.row, cell.col),
                 matchesEquality: this.isEqualMatched(cell.row, cell.col),
+                matchesGroup: Boolean(chargeGroupByCell.get(cellKey(cell.row, cell.col))?.matched),
             }));
         });
     }
@@ -1818,14 +2417,20 @@ export function createMachineVariant(options = {}) {
 
     const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
     const definition = pickRandomEntry(machinePool, randomFn) || machinePool[0] || MACHINE_CATALOG[0];
-    const playableGrids = Array.isArray(definition.possibleGrids)
-        ? definition.possibleGrids.filter((gridOption) => isPlayableGridOption(gridOption))
-        : [];
-    const gridPool = playableGrids.length > 0 ? playableGrids : definition.possibleGrids;
-    const selectedGrid = cloneGridOption(pickRandomEntry(gridPool, randomFn));
+    const weightedGridPool = buildWeightedGridPool(definition.possibleGrids);
+    const gridPool = weightedGridPool.length > 0 ? weightedGridPool : (definition.possibleGrids || []);
+    const selectedGridTemplate = pickRandomEntry(gridPool, randomFn) || gridPool[0] || { grid: [], dominos: [] };
+    const selectedGrid = injectChargeGroupsIntoGridOption(
+        transformGridOption(selectedGridTemplate, pickGridTransformKey(selectedGridTemplate, randomFn)),
+        randomFn,
+    );
     const selectedFlowPuzzle = cloneFlowPuzzleOption(pickRandomEntry(definition.possibleCircuits, randomFn));
+    const selectedGearPuzzle = cloneGearPuzzleOption(pickRandomEntry(definition.possibleGears, randomFn));
     if (selectedFlowPuzzle) {
         selectedFlowPuzzle.progress = createFlowProgress(selectedFlowPuzzle);
+    }
+    if (selectedGearPuzzle) {
+        selectedGearPuzzle.progress = buildGearProgressSnapshot(selectedGearPuzzle, selectedGearPuzzle.pieces);
     }
     const puzzleState = new MachinePuzzleState(selectedGrid);
     const hasCommunication = randomFn() <= (definition.communicationChance ?? 1);
@@ -1844,6 +2449,7 @@ export function createMachineVariant(options = {}) {
         fallbackKey: definition.sprite.fallbackKey,
         selectedGrid,
         flowPuzzle: selectedFlowPuzzle,
+        gearPuzzle: selectedGearPuzzle,
         miniDisplay: cloneMiniDisplay(definition.miniDisplay),
         availableDays: Array.isArray(definition.availableDays) ? [...definition.availableDays] : [],
         availablePeriods: Array.isArray(definition.availablePeriods) ? [...definition.availablePeriods] : [],
