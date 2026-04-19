@@ -299,7 +299,7 @@ export default class Animations {
      */
     static notify(scene, text, x, y, { color = '#00ffcc', duration = 2200, depth = 40 } = {}) {
         const t = scene.add.text(x, y, text, {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '14px',
             color,
             backgroundColor: '#000000bb',

@@ -143,7 +143,7 @@ export default class GearGridPuzzle extends MinigameBase {
             letterSpacing: 3,
         }).setOrigin(0, 0.5);
         this._subtitleText = this.scene.add.text(-474, -244, gearPuzzle.description || 'Slide the loose gears until the output axle spins.', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#9fc3cf',
             wordWrap: { width: 620 },
@@ -156,14 +156,14 @@ export default class GearGridPuzzle extends MinigameBase {
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
         this._statusHintText = this.scene.add.text(198, -178, 'Drag parts onto empty cells. Walls block power and cannot connect.', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '11px',
             color: '#8bb1bf',
             wordWrap: { width: 220 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
         this._summaryText = this.scene.add.text(198, -72, '', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '11px',
             color: '#d6edf2',
             lineSpacing: 6,
@@ -372,12 +372,12 @@ export default class GearGridPuzzle extends MinigameBase {
                 letterSpacing: 1,
             }).setOrigin(0, 0.5);
             const label = this.scene.add.text(246, y + 9, getPieceLabel(pieceView.piece.type) || 'GEAR', {
-                fontFamily: 'monospace',
+                fontFamily: 'Courier New',
                 fontSize: '10px',
                 color: '#8db2bf',
             }).setOrigin(0, 0.5);
             const hint = this.scene.add.text(246, y + 23, 'DRAGGABLE', {
-                fontFamily: 'monospace',
+                fontFamily: 'Courier New',
                 fontSize: '9px',
                 color: '#a6eef3',
                 letterSpacing: 1,

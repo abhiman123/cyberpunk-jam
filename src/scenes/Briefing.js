@@ -92,7 +92,7 @@ export default class BriefingScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
 
         const btnLabel = this.add.text(cx, 648, 'ACKNOWLEDGED', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#666666', letterSpacing: 4,
+            fontFamily: 'Courier New', fontSize: '12px', color: '#666666', letterSpacing: 4,
         }).setOrigin(0.5);
 
         const markTextDone = () => {

@@ -26,7 +26,7 @@ export default class CaseDisplay {
 
         // ── Unit name ────────────────────────────────────────────────────────
         const nameText = this.scene.add.text(cx, padY + 8, caseData.name, {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '18px',
             color: '#cccccc',
             stroke: '#000000',
@@ -36,7 +36,7 @@ export default class CaseDisplay {
 
         // ── Description ──────────────────────────────────────────────────────
         const descText = this.scene.add.text(cx, padY + 36, caseData.description, {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '11px',
             color: '#686868',
             wordWrap: { width: this.panelW - 40 },
@@ -73,7 +73,7 @@ export default class CaseDisplay {
             const hint = this.scene.add.text(
                 zx + zone.w / 2, zy + zone.h / 2,
                 '[ inspect ]',
-                { fontFamily: 'monospace', fontSize: '10px', color: '#505050' }
+                { fontFamily: 'Courier New', fontSize: '10px', color: '#505050' }
             ).setOrigin(0.5).setDepth(11).setAlpha(0);
             this._track(hint);
 
@@ -81,7 +81,7 @@ export default class CaseDisplay {
                 zx + 10, zy + zone.h / 2, // Slight padding from the left edge
                 zone.label,
                 {
-                    fontFamily: 'monospace', fontSize: '11px', color: '#00ffcc',
+                    fontFamily: 'Courier New', fontSize: '11px', color: '#00ffcc',
                     wordWrap: { width: zone.w - 14 },
                 }
             ).setOrigin(0, 0.5).setAlpha(0).setDepth(11);
@@ -121,7 +121,7 @@ export default class CaseDisplay {
             const flavor = this.scene.add.text(cx, fy,
                 `// ${caseData.moralFlavor}`,
                 {
-                    fontFamily: 'monospace', fontSize: '10px', color: '#484848',
+                    fontFamily: 'Courier New', fontSize: '10px', color: '#484848',
                     wordWrap: { width: this.panelW - 56 }, align: 'center',
                     fontStyle: 'italic',
                 }

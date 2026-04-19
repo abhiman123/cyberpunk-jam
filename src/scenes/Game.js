@@ -228,7 +228,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._hudPeriodText = this.add.text(12, 14,
             `PERIOD ${GameState.period}  |  DAY ${GameState.day}`, {
-                fontFamily: 'monospace', fontSize: '11px', color: '#cccccc',
+                fontFamily: 'Courier New', fontSize: '11px', color: '#cccccc',
             }
         );
         this._hudContainer.add(this._hudPeriodText);
@@ -265,7 +265,7 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer.add(this._clockIcon);
 
         const clockLabel = this.add.text(1120, 622, 'SHIFT CLOCK', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#66aacc', letterSpacing: 3,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#66aacc', letterSpacing: 3,
         });
         this._hudContainer.add(clockLabel);
 
@@ -298,7 +298,7 @@ export default class GameScene extends Phaser.Scene {
         pauseBroadcastBars.fillRect(209, 8, 3, 16);
         pauseBroadcastBars.fillRect(214, 8, 1, 16);
         const pauseText = this.add.text(136, 16, 'TIMER PAUSED', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '11px',
             color: '#f7ffff',
             letterSpacing: 2,
@@ -451,7 +451,7 @@ export default class GameScene extends Phaser.Scene {
                     fontFamily: 'Courier New', fontSize: '17px', color: '#dffafe', letterSpacing: 2,
                 }).setOrigin(0.5);
                 const sublabel = this.add.text(0, 14, 'Tap to open tablet', {
-                    fontFamily: 'monospace', fontSize: '10px', color: '#79becc',
+                    fontFamily: 'Courier New', fontSize: '10px', color: '#79becc',
                 }).setOrigin(0.5);
                 const camera = this.add.circle(0, -(height / 2) + 8, 3, 0x32404d, 1)
                     .setStrokeStyle(1, 0x8194a1, 0.55);
@@ -713,19 +713,19 @@ export default class GameScene extends Phaser.Scene {
         const screwBottomRight = this.add.circle(panelWidth - 24, panelHeight - 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
 
         this._miniMachinePanelTitle = this.add.text(22, 16, 'MACHINE PORTS', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#d6cfaa',
             letterSpacing: 2,
         });
         this._miniPuzzleStatusText = this.add.text(22, 36, 'CLICK A UNIT TO INSPECT', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#9ab894',
             wordWrap: { width: 360 },
         });
         this._miniMachineHintText = this.add.text(22, panelHeight - 24, 'CLICK GRID OR FLOW PORT', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#c8cf9f',
             letterSpacing: 1,
@@ -753,7 +753,7 @@ export default class GameScene extends Phaser.Scene {
         const gridPortHit = this.add.rectangle(92, 102, 96, 54, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
         const gridPortLabel = this.add.text(54, 138, 'GRID', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#d7e7ff',
             letterSpacing: 1,
@@ -764,7 +764,7 @@ export default class GameScene extends Phaser.Scene {
         const flowPortHit = this.add.rectangle(300, 128, 104, 54, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
         const flowPortLabel = this.add.text(256, 162, 'FLOW', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#d7e7ff',
             letterSpacing: 1,
@@ -775,7 +775,7 @@ export default class GameScene extends Phaser.Scene {
         const gearPortHit = this.add.rectangle(196, 180, 116, 42, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
         const gearPortLabel = this.add.text(150, 204, 'GEAR', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#d7e7ff',
             letterSpacing: 1,
@@ -2342,33 +2342,33 @@ export default class GameScene extends Phaser.Scene {
 
         this._monitorText = this.add.text(130, 375,
             'AWAITING UNIT\n\nSTATUS: READY', {
-                fontFamily: 'monospace', fontSize: '10px', color: '#301934',
+                fontFamily: 'Courier New', fontSize: '10px', color: '#301934',
                 align: 'center', lineSpacing: 4,
             }
         ).setOrigin(0.5);
         this._conveyorContainer.add(this._monitorText);
 
         this._machineDialogueText = this.add.text(966, 460, '', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#bceef8',
+            fontFamily: 'Courier New', fontSize: '11px', color: '#bceef8',
             align: 'left', wordWrap: { width: 260 }, lineSpacing: 6,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._machineDialogueText);
 
         this._shapeTitleText = this.add.text(964, 126, 'CHASSIS GRID', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._shapeTitleText);
 
         this._shapeLegendText = this.add.text(964, 294, '0 open  1 frame  2 block', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#88b7c6',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#88b7c6',
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._shapeLegendText);
 
         this._shapeHintText = this.add.text(964, 320, 'CLICK UNIT FOR DOMINO GRID', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#d9cc9f', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#d9cc9f', letterSpacing: 2,
             align: 'center', stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._shapeHintText);
@@ -2402,7 +2402,7 @@ export default class GameScene extends Phaser.Scene {
         this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 420).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText = this.add.text(0, 115, '', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#ccddee',
+            fontFamily: 'Courier New', fontSize: '13px', color: '#ccddee',
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5);
         this._unitIdText = this.add.text(0, 133, '', {
@@ -2451,7 +2451,7 @@ export default class GameScene extends Phaser.Scene {
                 stroke: '#000000', strokeThickness: 3,
             }).setOrigin(0.5);
             const subtitle = this.add.text(def.x, 664, def.subtitle, {
-                fontFamily: 'monospace', fontSize: '10px', color: def.textColor,
+                fontFamily: 'Courier New', fontSize: '10px', color: def.textColor,
                 stroke: '#000000', strokeThickness: 2,
             }).setOrigin(0.5);
 
@@ -2495,13 +2495,13 @@ export default class GameScene extends Phaser.Scene {
         });
 
         this._conveyorDecisionHint = this.add.text(controlsCenterX, 596, 'OPEN THE GRID AND DECIDE FROM THE FACTORY FLOOR', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#8fc1cf', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '11px', color: '#8fc1cf', letterSpacing: 2,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5).setVisible(false);
         this._factoryControlsContainer.add(this._conveyorDecisionHint);
 
         this._feedbackText = this.add.text(controlsCenterX, 562, '', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#ff4444',
+            fontFamily: 'Courier New', fontSize: '12px', color: '#ff4444',
             stroke: '#000000', strokeThickness: 2, align: 'center',
             wordWrap: { width: 460 },
         }).setOrigin(0.5).setAlpha(0);

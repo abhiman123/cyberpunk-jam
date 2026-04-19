@@ -73,7 +73,7 @@ export default class MachinePuzzleOverlay {
         }).setOrigin(0.5);
 
         this._subtitleText = this.scene.add.text(0, -(panelHeight / 2) + 84, '', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#d6c1a7',
             align: 'center',
@@ -91,7 +91,7 @@ export default class MachinePuzzleOverlay {
         this._dominoLayer = this.scene.add.container(0, 0);
 
         this._messageText = this.scene.add.text(0, (panelHeight / 2) - 126, '', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#ffdca8',
             align: 'center',

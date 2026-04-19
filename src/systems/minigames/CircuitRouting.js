@@ -230,12 +230,12 @@ export default class CircuitRouting extends MinigameBase {
         this.container.add(frame);
 
         const title = this.scene.add.text(640, 85, 'CIRCUIT DIAGNOSTIC — ROUTE POWER TO OUTPUTS', {
-            fontFamily: 'monospace', fontSize: '16px', color: '#00ffff', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '16px', color: '#00ffff', letterSpacing: 2,
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(title);
 
         const subtitle = this.scene.add.text(640, 108, 'Click tiles to rotate. Route PWR to every output. Amber [?] nodes are blocked and cannot carry power.', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#66aaaa',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#66aaaa',
             align: 'center', wordWrap: { width: 1000 },
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(subtitle);
@@ -246,7 +246,7 @@ export default class CircuitRouting extends MinigameBase {
         const srcDot = this.scene.add.circle(srcX, srcY, 10, 0xffcc00, 1).setDepth(depth + 2);
         const srcPulse = this.scene.add.circle(srcX, srcY, 18, 0xffcc00, 0.3).setDepth(depth + 1);
         const srcLbl = this.scene.add.text(srcX - 10, srcY, 'PWR', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#ffcc44',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#ffcc44',
         }).setOrigin(1, 0.5).setDepth(depth + 2);
         this._sourceDot = srcDot;
         this._sourcePulse = srcPulse;
@@ -267,7 +267,7 @@ export default class CircuitRouting extends MinigameBase {
                 .setStrokeStyle(2, 0xaefdf3, 0);
             const dot = this.scene.add.circle(ox, oy, 10, 0x225533, 1).setDepth(depth + 2);
             const lbl = this.scene.add.text(ox + 16, oy, label, {
-                fontFamily: 'monospace', fontSize: '11px', color: '#556666',
+                fontFamily: 'Courier New', fontSize: '11px', color: '#556666',
             }).setOrigin(0, 0.5).setDepth(depth + 2);
             this.container.add([glow, ring, dot, lbl]);
             this._outputDots[y] = { glow, ring, dot, lbl };
@@ -291,7 +291,7 @@ export default class CircuitRouting extends MinigameBase {
             .setInteractive({ useHandCursor: true })
             .setDepth(depth + 20);
         const closeTxt = this.scene.add.text(640, 640, 'CLOSE DIAGNOSTIC [ESC]', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#00eeee',
+            fontFamily: 'Courier New', fontSize: '13px', color: '#00eeee',
         }).setOrigin(0.5).setDepth(depth + 21);
         closeBg.on('pointerover', () => closeBg.setFillStyle(0x00aaaa, 0.45));
         closeBg.on('pointerout',  () => closeBg.setFillStyle(0x003344, 0.85));
@@ -332,10 +332,10 @@ export default class CircuitRouting extends MinigameBase {
         const bg = this.scene.add.rectangle(0, 0, 216, panelHeight, 0x04161a, 0.9)
             .setStrokeStyle(1, 0x1bbfcb, 0.7);
         const title = this.scene.add.text(-90, -(panelHeight / 2) + 16, 'REPAIR TARGETS', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#8ffcff', letterSpacing: 1,
+            fontFamily: 'Courier New', fontSize: '12px', color: '#8ffcff', letterSpacing: 1,
         }).setOrigin(0, 0.5);
         const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, 'Route power to restore each subsystem.', {
-            fontFamily: 'monospace', fontSize: '9px', color: '#6da4ad', wordWrap: { width: 178 },
+            fontFamily: 'Courier New', fontSize: '9px', color: '#6da4ad', wordWrap: { width: 178 },
         }).setOrigin(0, 0.5);
 
         panel.add([bg, title, hint]);
@@ -345,10 +345,10 @@ export default class CircuitRouting extends MinigameBase {
             const dot = this.scene.add.circle(-88, y, 7, 0x2f4a57, 1)
                 .setStrokeStyle(1, 0x7aa8b7, 0.8);
             const nameText = this.scene.add.text(-72, y - 8, target.displayName || target.label, {
-                fontFamily: 'monospace', fontSize: '11px', color: '#b8dbe1',
+                fontFamily: 'Courier New', fontSize: '11px', color: '#b8dbe1',
             }).setOrigin(0, 0.5);
             const statusText = this.scene.add.text(-72, y + 9, 'BROKEN', {
-                fontFamily: 'monospace', fontSize: '9px', color: '#ffb695',
+                fontFamily: 'Courier New', fontSize: '9px', color: '#ffb695',
             }).setOrigin(0, 0.5);
 
             panel.add([dot, nameText, statusText]);
@@ -385,7 +385,7 @@ export default class CircuitRouting extends MinigameBase {
 
         const mark = isForbidden
             ? this.scene.add.text(cx + this.cellSize / 2 - 10, cy - this.cellSize / 2 + 8, '?', {
-                fontFamily: 'monospace', fontSize: '12px', color: '#ffcc44',
+                fontFamily: 'Courier New', fontSize: '12px', color: '#ffcc44',
               }).setOrigin(1, 0).setDepth(depth + 1)
             : null;
         if (mark) this.container.add(mark);

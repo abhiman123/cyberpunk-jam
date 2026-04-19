@@ -41,7 +41,7 @@ export default class FactorySettingsOverlay {
             fontFamily: 'Courier New', fontSize: '28px', color: '#b9f4ff', letterSpacing: 4,
         });
         const subtitle = this.scene.add.text(36, 72, 'SYSTEM PAUSED // ADJUST LIVE FLOOR PREFERENCES', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#6fc7dc', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '12px', color: '#6fc7dc', letterSpacing: 2,
         });
 
         const scan = this.scene.add.graphics();
@@ -60,7 +60,7 @@ export default class FactorySettingsOverlay {
             fontFamily: 'Courier New', fontSize: '24px', color: '#d6fbff', letterSpacing: 3,
         });
         this._musicDesc = this.scene.add.text(68, 206, 'Ambient tracks across the shift and report scenes.', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#7dc4d2',
+            fontFamily: 'Courier New', fontSize: '13px', color: '#7dc4d2',
         });
 
         this._musicIconBars = [
@@ -113,7 +113,7 @@ export default class FactorySettingsOverlay {
         backButton.on('pointerdown', () => this.close());
 
         const footer = this.scene.add.text(36, PANEL_HEIGHT - 64, 'Close settings to resume the conveyor timer.', {
-            fontFamily: 'monospace', fontSize: '12px', color: '#75b5c1',
+            fontFamily: 'Courier New', fontSize: '12px', color: '#75b5c1',
         });
 
         this._panel.add([

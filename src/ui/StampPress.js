@@ -25,13 +25,13 @@ export default class StampPress {
         this.container.add(desk);
 
         const header = this.scene.add.text(0, -200, 'STAMP PRESS — FILE RULING', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#aa8855', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '11px', color: '#aa8855', letterSpacing: 2,
         }).setOrigin(0.5);
         this.container.add(header);
         this._header = header;
 
         this._gateMsg = this.scene.add.text(0, -180, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#ff9933',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#ff9933',
         }).setOrigin(0.5);
         this.container.add(this._gateMsg);
 
@@ -44,7 +44,7 @@ export default class StampPress {
         this.container.add([paper, paperLines]);
         this._paper = paper;
         this._stampMark = this.scene.add.text(0, -60, '', {
-            fontFamily: 'monospace', fontSize: '42px', color: '#000000',
+            fontFamily: 'Courier New', fontSize: '42px', color: '#000000',
         }).setOrigin(0.5).setAlpha(0);
         this.container.add(this._stampMark);
 
@@ -55,7 +55,7 @@ export default class StampPress {
             const body = this.scene.add.rectangle(x, y, 130, 100, 0x1a1a1a, 1)
                 .setStrokeStyle(2, s.color, 1);
             const lbl = this.scene.add.text(x, y, s.label, {
-                fontFamily: 'monospace', fontSize: '14px', color: '#ffffff',
+                fontFamily: 'Courier New', fontSize: '14px', color: '#ffffff',
                 stroke: '#000000', strokeThickness: 2,
             }).setOrigin(0.5);
 

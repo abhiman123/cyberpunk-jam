@@ -31,11 +31,11 @@ export default class SummaryScene extends Phaser.Scene {
         this.add.rectangle(cx, 0, W, 2, accentColor).setOrigin(0.5, 0);
 
         this.add.text(cx, 72, 'END OF SHIFT', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
+            fontFamily: 'Courier New', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
         }).setOrigin(0.5);
 
         this.add.text(cx, 102, `PERIOD ${GameState.period}  ·  DAY ${GameState.day} OF 2`, {
-            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa', letterSpacing: 4,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa', letterSpacing: 4,
         }).setOrigin(0.5);
 
         this._rule(140, 0x333333);
@@ -47,22 +47,22 @@ export default class SummaryScene extends Phaser.Scene {
             : 'NO VIOLATIONS';
 
         this.add.text(cx, 180, 'QC ASSESSMENT', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
         }).setOrigin(0.5);
 
         this.add.text(cx, 214, statusText, {
-            fontFamily: 'monospace', fontSize: '26px', color: statusColor,
+            fontFamily: 'Courier New', fontSize: '26px', color: statusColor,
         }).setOrigin(0.5);
 
         // Cases processed
         this.add.text(cx, 258, `CASES PROCESSED: ${this._casesProcessed}`, {
-            fontFamily: 'monospace', fontSize: '12px', color: '#888888', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '12px', color: '#888888', letterSpacing: 2,
         }).setOrigin(0.5);
 
         this._rule(288, 0x333333);
 
         this.add.text(cx, 316, 'COMPENSATION LOG', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
         }).setOrigin(0.5);
 
         const deltaSign = this._paycheckDelta >= 0 ? '+' : '-';
@@ -70,29 +70,29 @@ export default class SummaryScene extends Phaser.Scene {
         const totalStr  = `$${Math.max(0, GameState.paycheckTotal).toFixed(2)}`;
 
         this.add.text(cx - 80, 352, 'THIS SHIFT', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa',
         }).setOrigin(1, 0.5);
         this.add.text(cx - 64, 352, deltaStr, {
-            fontFamily: 'monospace', fontSize: '13px',
+            fontFamily: 'Courier New', fontSize: '13px',
             color: hasViolations ? '#ff5555' : '#aaaaaa',
         }).setOrigin(0, 0.5);
 
         this.add.text(cx - 80, 376, 'RUNNING', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#aaaaaa',
+            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa',
         }).setOrigin(1, 0.5);
         this.add.text(cx - 64, 376, totalStr, {
-            fontFamily: 'monospace', fontSize: '13px', color: '#44cc88',
+            fontFamily: 'Courier New', fontSize: '13px', color: '#44cc88',
         }).setOrigin(0, 0.5);
 
         if (this._notificationText) {
             this._rule(420, 0x333333);
 
             const tagText = this.add.text(cx, 450, '// INCOMING TRANSMISSION', {
-                fontFamily: 'monospace', fontSize: '10px', color: '#55cc55', letterSpacing: 3,
+                fontFamily: 'Courier New', fontSize: '10px', color: '#55cc55', letterSpacing: 3,
             }).setOrigin(0.5);
 
             const msgText = this.add.text(cx, 496, this._notificationText, {
-                fontFamily: 'monospace', fontSize: '14px', color: '#aaddaa',
+                fontFamily: 'Courier New', fontSize: '14px', color: '#aaddaa',
                 wordWrap: { width: 660 }, align: 'center', lineSpacing: 8,
             }).setOrigin(0.5);
 
@@ -117,7 +117,7 @@ export default class SummaryScene extends Phaser.Scene {
             .setStrokeStyle(1, 0x555555)
             .setInteractive({ useHandCursor: true });
         const btnLabel = this.add.text(cx, btnY, 'NEXT SHIFT', {
-            fontFamily: 'monospace', fontSize: '13px', color: '#cccccc', letterSpacing: 4,
+            fontFamily: 'Courier New', fontSize: '13px', color: '#cccccc', letterSpacing: 4,
         }).setOrigin(0.5);
 
         let transitioning = false;

@@ -40,13 +40,13 @@ export default class EndScene extends Phaser.Scene {
 
         // Dialogue text (hidden until step 4)
         this._dialogueText = this.add.text(640, 380, '', {
-            fontFamily: 'monospace', fontSize: '22px', color: '#aaaaaa',
+            fontFamily: 'Courier New', fontSize: '22px', color: '#aaaaaa',
             align: 'center', wordWrap: { width: 800 }, lineSpacing: 10,
         }).setOrigin(0.5).setDepth(3).setAlpha(0);
 
         // Title card (hidden)
         this._titleCard = this.add.text(640, 360, "you're just a machine.", {
-            fontFamily: 'monospace', fontSize: '28px', color: '#ffffff', align: 'center',
+            fontFamily: 'Courier New', fontSize: '28px', color: '#ffffff', align: 'center',
         }).setOrigin(0.5).setDepth(10).setAlpha(0);
 
         // Play again button (hidden, interactive from creation so handlers always fire)
@@ -54,7 +54,7 @@ export default class EndScene extends Phaser.Scene {
             .setStrokeStyle(1, 0x444444).setDepth(11).setAlpha(0)
             .setInteractive({ useHandCursor: true });
         this._playAgainText = this.add.text(640, 520, 'PLAY AGAIN', {
-            fontFamily: 'monospace', fontSize: '16px', color: '#888888',
+            fontFamily: 'Courier New', fontSize: '16px', color: '#888888',
         }).setOrigin(0.5).setDepth(12).setAlpha(0);
 
         this._playAgainBg.on('pointerover', () => {
