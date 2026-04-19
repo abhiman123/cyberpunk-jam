@@ -80,9 +80,7 @@ export default class RulebookOverlay {
         this.refresh();
         this._root.setVisible(true);
         this._root.setAlpha(1);
-
-        // Also show the mask graphics (it is scene-level, not inside _root)
-        this._maskGraphics.setVisible(false); // invisible but still participates in mask
+        this._updateContentMaskShape();
 
         this._tablet.setScale(0.96);
         this.scene.tweens.killTweensOf([this._backdrop, this._tablet]);
@@ -99,6 +97,7 @@ export default class RulebookOverlay {
             scaleY: 1,
             duration: 220,
             ease: 'Cubic.Out',
+            onUpdate: () => this._updateContentMaskShape(),
         });
         this._callbacks.onOpen?.();
     }
@@ -129,6 +128,7 @@ export default class RulebookOverlay {
             scaleY: 0.96,
             duration: 150,
             ease: 'Quad.In',
+            onUpdate: () => this._updateContentMaskShape(),
             onComplete: () => {
                 this._root.setVisible(false);
                 this._callbacks.onClose?.();
@@ -269,24 +269,19 @@ export default class RulebookOverlay {
         // Container that holds all dynamically built section content
         this._contentContainer = this.scene.add.container(VIEWPORT_X, VIEWPORT_Y);
 
-        // ── Geometry Mask ────────────────────────────────────────────────────
-        // CRITICAL: The mask Graphics MUST be added to the scene display list
-        // (not to any container) so its world transform is always computed.
-        // We position it at the absolute world-space coordinates of the viewport.
-        // It is added to the scene but set to depth -1 so it renders behind
-        // everything and doesn't interfere visually.
-        this._maskGraphics = this.scene.add.graphics();
-        this._maskGraphics.setPosition(
-            TABLET_CENTER_X + VIEWPORT_X,
-            TABLET_CENTER_Y + VIEWPORT_Y,
-        );
-        this._maskGraphics.fillStyle(0xffffff, 1);
-        this._maskGraphics.fillRect(0, 0, VIEWPORT_W, VIEWPORT_H);
-        this._maskGraphics.setVisible(false);
-        this._maskGraphics.setDepth(TABLET_DEPTH - 1);
+        // Phaser 4 WebGL-safe clipping for the viewport.
+        this._contentMaskShape = this.scene.add.rectangle(0, 0, VIEWPORT_W, VIEWPORT_H, 0xffffff, 1)
+            .setOrigin(0, 0);
+        this.scene.children.remove(this._contentMaskShape);
 
-        const geoMask = this._maskGraphics.createGeometryMask();
-        this._contentContainer.setMask(geoMask);
+        this._contentContainer.enableFilters();
+        this._contentMaskFilter = this._contentContainer.filters.external.addMask(
+            this._contentMaskShape,
+            false,
+            this.scene.cameras.main,
+            'world',
+        );
+        this._updateContentMaskShape();
 
         // ── Scroll track & thumb ─────────────────────────────────────────────
         this._scrollTrack = this.scene.add.rectangle(
@@ -561,12 +556,26 @@ export default class RulebookOverlay {
 
     // ── Scroll sync ──────────────────────────────────────────────────────────
 
+    _updateContentMaskShape() {
+        if (!this._contentMaskShape || !this._tablet) return;
+
+        const scaleX = this._tablet.scaleX || 1;
+        const scaleY = this._tablet.scaleY || 1;
+        const left = this._tablet.x + (VIEWPORT_X * scaleX);
+        const top = this._tablet.y + (VIEWPORT_Y * scaleY);
+
+        this._contentMaskShape
+            .setPosition(left, top)
+            .setScale(scaleX, scaleY);
+    }
+
     _syncScroll() {
         this._scrollMax = Math.max(0, this._contentHeight - VIEWPORT_H);
         this._scrollOffset = Phaser.Math.Clamp(this._scrollOffset, 0, this._scrollMax);
 
-        // Move the content container; the geometry mask handles clipping
+        // Move the content container; the viewport mask filter handles clipping
         this._contentContainer.setPosition(VIEWPORT_X, VIEWPORT_Y - this._scrollOffset);
+        this._updateContentMaskShape();
 
         // Hide scrollbar when no overflow
         if (this._scrollMax <= 0) {
@@ -592,7 +601,8 @@ export default class RulebookOverlay {
         this._bKey?.off('down', this._handleToggle);
         this._escKey?.destroy();
         this._bKey?.destroy();
-        this._maskGraphics?.destroy();
+        this._contentContainer?.filters?.external?.clear();
+        this._contentMaskShape?.destroy();
         this._root?.destroy(true);
     }
 }

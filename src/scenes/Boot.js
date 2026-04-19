@@ -34,14 +34,72 @@ export default class BootScene extends Phaser.Scene {
             this.load.image(sprite.key, sprite.path);
         });
 
+        // Source pixel art used to build a crisp, integer-upscaled machine texture.
+        this.load.image('machine_future_lounge_chair_source', 'Untitled_Artwork.png');
+        this.load.image('family_photo_source', 'Untitled_Artwork2.png');
+        this.load.image('manager_human_source', 'Untitled_Artwork4.png');
+        this.load.image('manager_robot_source', 'Untitled_Artwork3.png');
+
         // Pixel art backgrounds
         this.load.image('bg_mainview',    'mainview.jpeg');
         this.load.image('bg_inspectview', 'inspectview.jpeg');
     }
 
     create() {
+        this._createFutureLoungeChairFromSource();
+        this._createFamilyPhotoFromSource();
+        this._createManagerHumanFromSource();
+        this._createManagerRobotFromSource();
         this._generatePlaceholders();
         this.scene.start('Title');
+    }
+
+    _createFutureLoungeChairFromSource() {
+        this._createNearestUpscaledTexture('machine_future_lounge_chair_source', 'machine_future_lounge_chair', 5);
+    }
+
+    _createFamilyPhotoFromSource() {
+        this._createNearestUpscaledTexture('family_photo_source', 'family_photo', 5);
+    }
+
+    _createManagerHumanFromSource() {
+        this._createNearestUpscaledTexture('manager_human_source', 'manager_human', 5);
+    }
+
+    _createManagerRobotFromSource() {
+        this._createNearestUpscaledTexture('manager_robot_source', 'manager_robot', 5);
+    }
+
+    _createNearestUpscaledTexture(sourceKey, targetKey, integerScale = 5) {
+        if (!this.textures.exists(sourceKey)) return;
+
+        const sourceTexture = this.textures.get(sourceKey);
+        const sourceImage = sourceTexture?.getSourceImage();
+        const sourceWidth = sourceImage?.width || 0;
+        const sourceHeight = sourceImage?.height || 0;
+
+        if (sourceWidth <= 0 || sourceHeight <= 0) return;
+
+        const targetWidth = sourceWidth * integerScale;
+        const targetHeight = sourceHeight * integerScale;
+
+        if (this.textures.exists(targetKey)) {
+            this.textures.remove(targetKey);
+        }
+
+        const canvasTexture = this.textures.createCanvas(targetKey, targetWidth, targetHeight);
+        const context = canvasTexture.getContext();
+
+        context.imageSmoothingEnabled = false;
+        context.mozImageSmoothingEnabled = false;
+        context.webkitImageSmoothingEnabled = false;
+        context.msImageSmoothingEnabled = false;
+        context.clearRect(0, 0, targetWidth, targetHeight);
+        context.drawImage(sourceImage, 0, 0, targetWidth, targetHeight);
+        canvasTexture.refresh();
+
+        sourceTexture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+        this.textures.get(targetKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
 
     _generatePlaceholders() {
@@ -62,7 +120,9 @@ export default class BootScene extends Phaser.Scene {
         this._makeManagerRobot();
 
         // Desk props
-        this._makeRect('family_photo', 60, 40, 0x8a7060);
+        if (!this.textures.exists('family_photo')) {
+            this._makeRect('family_photo', 60, 40, 0x8a7060);
+        }
 
         // Conveyor tile
         this._makeConveyorTile();
@@ -127,6 +187,8 @@ export default class BootScene extends Phaser.Scene {
     }
 
     _makeManagerHuman() {
+        if (this.textures.exists('manager_human')) return;
+
         const g = this.make.graphics({ x: 0, y: 0, add: false });
         g.fillStyle(0xb07040); g.fillRect(10, 30, 40, 70);
         g.fillStyle(0xd09060); g.fillRect(15,  5, 30, 28);
@@ -138,6 +200,8 @@ export default class BootScene extends Phaser.Scene {
     }
 
     _makeManagerRobot() {
+        if (this.textures.exists('manager_robot')) return;
+
         const g = this.make.graphics({ x: 0, y: 0, add: false });
         g.fillStyle(0x4060a0); g.fillRect(10, 30, 40, 70);
         g.fillStyle(0x5070b0); g.fillRect(12,  5, 36, 28);
