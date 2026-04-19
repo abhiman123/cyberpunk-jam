@@ -19,12 +19,10 @@ export default class EndScene extends Phaser.Scene {
 
         applyCyberpunkLook(this);
 
-        // ── Stage 1: Scene setup ───────────────────────��─────────────────────
-        this.add.image(640, 360, 'bg_p3').setDisplaySize(1280, 720).setDepth(0);
+        // Background
+        this.cameras.main.setBackgroundColor('#0f140e');
 
-        const scan = this.add.graphics().setDepth(1);
-        scan.fillStyle(0x000000, 0.12);
-        for (let y = 0; y < 720; y += 4) scan.fillRect(0, y, 1280, 2);
+        // ── Stage 1: Scene setup ─────────────────────────────────────────────
 
         // Family photo on desk
         this._familyPhoto = this.add.image(1100, 580, 'family_photo')
@@ -40,36 +38,42 @@ export default class EndScene extends Phaser.Scene {
 
         // Dialogue text (hidden until step 4)
         this._dialogueText = this.add.text(640, 380, '', {
-            fontFamily: 'Courier New', fontSize: '22px', color: '#aaaaaa',
+            fontFamily: 'Courier New', fontSize: '22px', color: '#33ff00',
             align: 'center', wordWrap: { width: 800 }, lineSpacing: 10,
         }).setOrigin(0.5).setDepth(3).setAlpha(0);
 
         // Title card (hidden)
-        this._titleCard = this.add.text(640, 360, "you're just a machine.", {
-            fontFamily: 'Courier New', fontSize: '28px', color: '#ffffff', align: 'center',
+        this._titleCard = this.add.text(640, 360, "You're just a machine.", {
+            fontFamily: 'Courier New', fontSize: '28px', color: '#33ff00', align: 'center',
         }).setOrigin(0.5).setDepth(10).setAlpha(0);
 
         // Play again button (hidden, interactive from creation so handlers always fire)
-        this._playAgainBg = this.add.rectangle(640, 520, 220, 46, 0x111111)
-            .setStrokeStyle(1, 0x444444).setDepth(11).setAlpha(0)
+        this._playAgainBg = this.add.rectangle(640, 520, 220, 46, 0x0a0a0a)
+            .setStrokeStyle(1, 0x334455).setDepth(11).setAlpha(0)
             .setInteractive({ useHandCursor: true });
         this._playAgainText = this.add.text(640, 520, 'PLAY AGAIN', {
-            fontFamily: 'Courier New', fontSize: '16px', color: '#888888',
+            fontFamily: 'Courier New', fontSize: '16px', color: '#778899',
         }).setOrigin(0.5).setDepth(12).setAlpha(0);
 
         this._playAgainBg.on('pointerover', () => {
-            this._playAgainBg.setFillStyle(0x1e1e1e);
-            this._playAgainText.setColor('#ffffff');
+            this._playAgainBg.setStrokeStyle(1, 0x6688aa);
+            this._playAgainText.setColor('#aabbcc');
         });
         this._playAgainBg.on('pointerout', () => {
-            this._playAgainBg.setFillStyle(0x111111);
-            this._playAgainText.setColor('#888888');
+            this._playAgainBg.setStrokeStyle(1, 0x334455);
+            this._playAgainText.setColor('#778899');
         });
         this._playAgainBg.on('pointerdown', () => {
             GameState.reset();
             this.cameras.main.fade(400, 0, 0, 0);
             this.time.delayedCall(400, () => this.scene.start('Title'));
         });
+
+        // Scanlines
+        const scan = this.add.graphics();
+        scan.fillStyle(0x000000, 0.3);
+        for (let y = 0; y < 720; y += 4) scan.fillRect(0, y, 1280, 2);
+        scan.setDepth(100);
 
         // ── Step 1-2: Fade in, 2s silence, then manager enters ───────────────
         this.cameras.main.fadeIn(500, 0, 0, 0);
