@@ -17,6 +17,34 @@ const DIRS = [
     { dx: -1, dy:  0, idx: 3, opp: 1 }, // W
 ];
 
+const FLOW_POWER_PALETTES = Object.freeze({
+    neutral: { tint: 0x00ffcc, label: '#00ffcc', idle: '#66aaaa', dot: 0xffcc44 },
+    green: { tint: 0x73ffae, label: '#73ffae', idle: '#77b494', dot: 0x73ffae },
+    orange: { tint: 0xffbe6d, label: '#ffbe6d', idle: '#c79a66', dot: 0xffbe6d },
+    mixed: { tint: 0xff7167, label: '#ffb0a8', idle: '#cc847c', dot: 0xff7167 },
+});
+
+function getFlowPowerPalette(powerClass = 'neutral') {
+    return FLOW_POWER_PALETTES[powerClass] || FLOW_POWER_PALETTES.neutral;
+}
+
+function recordFlowFeed(targetMap, key, source) {
+    if (!targetMap[key]) {
+        targetMap[key] = [];
+    }
+
+    if (targetMap[key].some((entry) => entry.key === source.key)) {
+        return;
+    }
+
+    targetMap[key].push({
+        key: source.key,
+        powerClass: source.powerClass || 'neutral',
+        label: source.label || source.key,
+        row: source.row,
+    });
+}
+
 function cloneCircuitTiles(tiles) {
     if (!Array.isArray(tiles)) return [];
     return tiles.map((row) => row.map((cell) => ({ ...cell })));
@@ -144,9 +172,34 @@ export default class CircuitRouting extends MinigameBase {
         this._energyTickEvent = null;
         this._lastCircuitRenderState = null;
         this._sourceFlowGfx = null;
+        this._sourceViews = {};
+        this._sources = [];
+        this._outputSpecs = [];
+        this._inspectionFaultGfx = null;
+        this._inspectionFault = null;
         this._closeButton = null;
         this._closeButtonLabel = null;
         this._escKeyDown = null;
+    }
+
+    _defaultEvidence() {
+        return {
+            connected: [],
+            missing: [],
+            repairedTargets: [],
+            brokenTargets: [],
+            repairStates: [],
+            forbiddenUsed: false,
+            completed: false,
+            reviewed: false,
+            scrapRequired: false,
+            scrapKind: null,
+            scrapStatus: null,
+            scrapReason: null,
+            outputFeeds: {},
+            flags: [],
+            symptoms: [],
+        };
     }
 
     _build(caseData) {
@@ -158,10 +211,36 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         this._circuit = circuit;
-        this._outputs = circuit.outputs || {};
-        this._sourceRow = circuit.sourceRow ?? 2;
+        this.evidence = {
+            ...this._defaultEvidence(),
+            ...(circuit.progress || {}),
+            flags: Array.isArray(circuit.progress?.flags) ? [...circuit.progress.flags] : [],
+            symptoms: Array.isArray(circuit.progress?.symptoms) ? [...circuit.progress.symptoms] : [],
+        };
+        this._sources = Array.isArray(circuit.sources) && circuit.sources.length > 0
+            ? circuit.sources.map((source) => ({ ...source }))
+            : [{ key: 'main', row: circuit.sourceRow ?? 2, powerClass: 'neutral', label: 'PWR' }];
+        this._outputSpecs = Array.isArray(circuit.outputSpecs) && circuit.outputSpecs.length > 0
+            ? circuit.outputSpecs.map((outputSpec) => ({ ...outputSpec }))
+            : Object.entries(circuit.outputs || {}).map(([row, label]) => ({
+                key: label,
+                label,
+                row: Number(row),
+                displayName: humanizeTargetLabel(label),
+                brokenLabel: `${humanizeTargetLabel(label)} offline.`,
+                fixedLabel: `${humanizeTargetLabel(label)} restored.`,
+                powerClass: 'neutral',
+                exactFeeds: 1,
+                sourceKey: 'main',
+            }));
+        this._outputs = Object.fromEntries(this._outputSpecs.map((outputSpec) => [outputSpec.row, outputSpec.label]));
+        this._sourceRow = this._sources[0]?.row ?? circuit.sourceRow ?? 2;
+        this._inspectionFault = circuit.progress?.inspectionFault || circuit.inspectionFault || null;
         this._repairTargets = this._resolveRepairTargets(circuit);
         this._repairTargetViews = [];
+        if (this.evidence.scrapRequired && !this.evidence.reviewed) {
+            this.emitEvidence({ reviewed: true });
+        }
 
         let tiles, forbiddenList;
         if (Array.isArray(circuit.progress?.tiles) && circuit.progress.tiles.length > 0) {
@@ -234,12 +313,18 @@ export default class CircuitRouting extends MinigameBase {
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(title);
 
-        const subtitle = this.scene.add.text(640, 108, 'Click tiles to rotate. Route PWR to every output. Amber [?] nodes are blocked and cannot carry power.', {
+        const stage = Number(circuit.dayStage || this.evidence.dayStage || 1);
+        const subtitle = this.scene.add.text(640, 108, stage <= 1
+            ? 'Click tiles to rotate. Route power to every output. Severed lines mean immediate scrap.'
+            : (stage === 2
+                ? 'Click tiles to rotate. Match GRN and ORG feeds to the labeled outputs. Each port needs exactly one legal feed.'
+                : 'Click tiles to rotate. Match the labeled feeds and avoid overload. Red ports indicate unsafe discharge.'), {
             fontFamily: 'Courier New', fontSize: '10px', color: '#66aaaa',
             align: 'center', wordWrap: { width: 1000 },
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(subtitle);
 
+        // Source indicators
         // Source indicator
         const srcY = this.boardY + this._sourceRow * this.cellSize + this.cellSize / 2;
         const srcX = this.boardX - 40;
@@ -251,27 +336,45 @@ export default class CircuitRouting extends MinigameBase {
         this._sourceDot = srcDot;
         this._sourcePulse = srcPulse;
         this._sourceFlowGfx = this.scene.add.graphics().setDepth(depth + 1);
+        this._sourceViews = {};
         this.container.add(this._sourceFlowGfx);
-        this.container.add([srcDot, srcPulse, srcLbl]);
+        this._sources.forEach((source) => {
+            const palette = getFlowPowerPalette(source.powerClass);
+            const srcY = this.boardY + source.row * this.cellSize + this.cellSize / 2;
+            const srcX = this.boardX - 40;
+            const srcDot = this.scene.add.circle(srcX, srcY, 10, palette.dot, 1).setDepth(depth + 2);
+            const srcPulse = this.scene.add.circle(srcX, srcY, 18, palette.dot, 0.22).setDepth(depth + 1);
+            const srcLbl = this.scene.add.text(srcX - 10, srcY, source.label || source.key, {
+                fontFamily: 'monospace', fontSize: '10px', color: palette.label,
+            }).setOrigin(1, 0.5).setDepth(depth + 2);
+            this._sourceViews[source.key] = { source, dot: srcDot, pulse: srcPulse, label: srcLbl };
+            this.container.add([srcDot, srcPulse, srcLbl]);
+        });
 
         // Output indicators
         this._outputDots = {};
-        for (let y = 0; y < this.rows; y++) {
-            const label = this._outputs[y];
-            if (!label) continue;
+        this._outputSpecs.forEach((outputSpec) => {
+            const y = outputSpec.row;
             const ox = this.boardX + this.cols * this.cellSize + 40;
             const oy = this.boardY + y * this.cellSize + this.cellSize / 2;
+            const requiredPalette = getFlowPowerPalette(outputSpec.powerClass);
             const glow = this.scene.add.circle(ox, oy, 19, 0xaaffee, 0).setDepth(depth + 1);
             const ring = this.scene.add.circle(ox, oy, 15, 0x00ffcc, 0)
                 .setDepth(depth + 1)
                 .setStrokeStyle(2, 0xaefdf3, 0);
             const dot = this.scene.add.circle(ox, oy, 10, 0x225533, 1).setDepth(depth + 2);
-            const lbl = this.scene.add.text(ox + 16, oy, label, {
-                fontFamily: 'Courier New', fontSize: '11px', color: '#556666',
+            const lbl = this.scene.add.text(ox + 16, oy - 7, outputSpec.label, {
+                fontFamily: 'Courier New', fontSize: '11px', color: requiredPalette.idle,
             }).setOrigin(0, 0.5).setDepth(depth + 2);
-            this.container.add([glow, ring, dot, lbl]);
-            this._outputDots[y] = { glow, ring, dot, lbl };
-        }
+            const req = this.scene.add.text(ox + 16, oy + 8, `${String(outputSpec.powerClass || 'neutral').toUpperCase()} x${outputSpec.exactFeeds ?? 1}`, {
+                fontFamily: 'monospace', fontSize: '8px', color: requiredPalette.label,
+            }).setOrigin(0, 0.5).setDepth(depth + 2);
+            this.container.add([glow, ring, dot, lbl, req]);
+            this._outputDots[outputSpec.key] = { outputSpec, glow, ring, dot, lbl, req };
+        });
+
+        this._inspectionFaultGfx = this.scene.add.graphics().setDepth(depth + 4);
+        this.container.add(this._inspectionFaultGfx);
 
         this._buildRepairTargetPanel(depth + 2);
 
@@ -283,6 +386,7 @@ export default class CircuitRouting extends MinigameBase {
                 this._tileGfx[y][x] = gfx;
             }
         }
+        this._drawInspectionFault();
 
         // Close button — added to the container LAST so it sits on top of all tiles
         // in Phaser's render list and wins input hit-testing reliably.
@@ -315,6 +419,10 @@ export default class CircuitRouting extends MinigameBase {
             return circuit.repairTargets.map((target) => ({ ...target }));
         }
 
+        if (Array.isArray(circuit?.outputSpecs) && circuit.outputSpecs.length > 0) {
+            return circuit.outputSpecs.map((target) => ({ ...target }));
+        }
+
         return Object.entries(circuit?.outputs || {}).map(([row, label]) => ({
             key: label,
             label,
@@ -334,7 +442,9 @@ export default class CircuitRouting extends MinigameBase {
         const title = this.scene.add.text(-90, -(panelHeight / 2) + 16, 'REPAIR TARGETS', {
             fontFamily: 'Courier New', fontSize: '12px', color: '#8ffcff', letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, 'Route power to restore each subsystem.', {
+        const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, this._outputSpecs.some((target) => target.powerClass && target.powerClass !== 'neutral')
+            ? 'Match each output label to its feed color and keep the count exact.'
+            : 'Route power to restore each subsystem.', {
             fontFamily: 'Courier New', fontSize: '9px', color: '#6da4ad', wordWrap: { width: 178 },
         }).setOrigin(0, 0.5);
 
@@ -342,13 +452,16 @@ export default class CircuitRouting extends MinigameBase {
 
         this._repairTargetViews = this._repairTargets.map((target, index) => {
             const y = -(panelHeight / 2) + 48 + (index * 42);
+            const requirementPalette = getFlowPowerPalette(target.powerClass || 'neutral');
             const dot = this.scene.add.circle(-88, y, 7, 0x2f4a57, 1)
                 .setStrokeStyle(1, 0x7aa8b7, 0.8);
             const nameText = this.scene.add.text(-72, y - 8, target.displayName || target.label, {
                 fontFamily: 'Courier New', fontSize: '11px', color: '#b8dbe1',
             }).setOrigin(0, 0.5);
-            const statusText = this.scene.add.text(-72, y + 9, 'BROKEN', {
-                fontFamily: 'Courier New', fontSize: '9px', color: '#ffb695',
+            const statusText = this.scene.add.text(-72, y + 9, target.powerClass && target.powerClass !== 'neutral'
+                ? `${String(target.powerClass).toUpperCase()} x${target.exactFeeds ?? 1}`
+                : 'BROKEN', {
+                fontFamily: 'Courier New', fontSize: '9px', color: target.powerClass && target.powerClass !== 'neutral' ? requirementPalette.label : '#ffb695',
             }).setOrigin(0, 0.5);
 
             panel.add([dot, nameText, statusText]);
@@ -356,6 +469,26 @@ export default class CircuitRouting extends MinigameBase {
         });
 
         this.container.add(panel);
+    }
+
+    _drawInspectionFault() {
+        if (!this._inspectionFaultGfx) return;
+
+        this._inspectionFaultGfx.clear();
+        if (!this._inspectionFault) return;
+
+        const x = this.boardX + this._inspectionFault.x * this.cellSize + this.cellSize / 2;
+        const y = this.boardY + this._inspectionFault.y * this.cellSize + this.cellSize / 2;
+
+        this._inspectionFaultGfx.lineStyle(3, 0xff8b7a, 0.94);
+        this._inspectionFaultGfx.beginPath();
+        this._inspectionFaultGfx.moveTo(x - 22, y - 12);
+        this._inspectionFaultGfx.lineTo(x - 8, y - 2);
+        this._inspectionFaultGfx.lineTo(x - 2, y + 10);
+        this._inspectionFaultGfx.lineTo(x + 8, y + 2);
+        this._inspectionFaultGfx.lineTo(x + 22, y + 14);
+        this._inspectionFaultGfx.strokePath();
+        this._inspectionFaultGfx.lineBetween(x - 18, y + 18, x + 18, y - 18);
     }
 
     _buildTile(x, y, depth) {
@@ -470,15 +603,68 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     _buildProgressSnapshot(result = this._lastResult) {
-        const connected = Array.from(new Set(result?.reachedOutputs || []));
-        const connectedSet = new Set(connected);
+        const outputFeeds = result?.outputFeeds || {};
+        const stage = Number(this._circuit?.dayStage || this.evidence.dayStage || 1);
         const forbiddenUsed = (result?.forbiddenHit ?? []).length > 0;
-        const repairStates = this._repairTargets.map((target) => ({
-            ...target,
-            repaired: connectedSet.has(target.key),
-        }));
+        const repairStates = this._repairTargets.map((target) => {
+            const feeds = Array.isArray(outputFeeds[target.key])
+                ? outputFeeds[target.key].map((feed) => ({ ...feed }))
+                : [];
+            const feedClasses = Array.from(new Set(feeds.map((feed) => feed.powerClass || 'neutral')));
+            const exactFeeds = Math.max(1, Number(target.exactFeeds || 1));
+            const expectedClass = target.powerClass || 'neutral';
+            const classMismatch = feeds.length > 0
+                && expectedClass !== 'neutral'
+                && feedClasses.some((powerClass) => powerClass !== expectedClass);
+            const overload = feeds.length > exactFeeds;
+            const underpower = feeds.length > 0 && feeds.length < exactFeeds;
+            const repaired = feeds.length === exactFeeds
+                && (!classMismatch);
+            let issueCode = null;
+            let issueMessage = null;
+
+            if (classMismatch) {
+                issueCode = stage >= 3 ? 'unsafe-class' : 'class-mismatch';
+                issueMessage = `${target.displayName || target.label} received the wrong power class.`;
+            } else if (overload) {
+                issueCode = 'overload';
+                issueMessage = `${target.displayName || target.label} is taking too many live feeds.`;
+            } else if (underpower) {
+                issueCode = 'underpower';
+                issueMessage = `${target.displayName || target.label} is underpowered for the requested load.`;
+            }
+
+            return {
+                ...target,
+                repaired,
+                feeds,
+                feedCount: feeds.length,
+                feedClasses,
+                issueCode,
+                issueMessage,
+            };
+        });
+        const connected = repairStates.filter((target) => target.feedCount > 0).map((target) => target.key);
         const repairedTargets = repairStates.filter((target) => target.repaired).map((target) => target.key);
         const brokenTargets = repairStates.filter((target) => !target.repaired).map((target) => target.key);
+        const signalIssues = repairStates.filter((target) => target.feedCount > 0 && target.issueCode);
+        const scrapRequired = Boolean(this._inspectionFault) || signalIssues.length > 0;
+        const scrapKind = this._inspectionFault?.kind || (signalIssues.length > 0 ? (stage >= 3 ? 'hazard' : 'compliance') : null);
+        const scrapStatus = this._inspectionFault?.status || (signalIssues.length > 0
+            ? (stage >= 3 ? 'UNSAFE LOAD' : 'FEED MISMATCH')
+            : null);
+        const scrapReason = this._inspectionFault?.reason || signalIssues[0]?.issueMessage || null;
+        const flags = repairStates
+            .filter((target) => target.issueCode)
+            .map((target) => target.issueCode.toUpperCase());
+
+        if (this._inspectionFault?.type) {
+            flags.unshift(this._inspectionFault.type.toUpperCase());
+        }
+
+        if (forbiddenUsed) {
+            flags.push('UNAUTHORIZED MODIFICATION DETECTED');
+        }
 
         return {
             tiles: cloneCircuitTiles(this._tiles),
@@ -488,9 +674,17 @@ export default class CircuitRouting extends MinigameBase {
             brokenTargets,
             repairStates,
             forbiddenUsed,
-            completed: brokenTargets.length === 0 && !forbiddenUsed,
-            symptoms: repairStates.filter((target) => !target.repaired).map((target) => target.brokenLabel),
-            flags: forbiddenUsed ? ['UNAUTHORIZED MODIFICATION DETECTED'] : [],
+            completed: brokenTargets.length === 0 && !forbiddenUsed && !scrapRequired,
+            reviewed: Boolean(this.evidence.reviewed),
+            scrapRequired,
+            scrapKind,
+            scrapStatus,
+            scrapReason,
+            outputFeeds: Object.fromEntries(Object.entries(outputFeeds).map(([key, feeds]) => [key, feeds.map((feed) => ({ ...feed }))])),
+            symptoms: scrapRequired
+                ? [scrapReason].filter(Boolean)
+                : repairStates.filter((target) => !target.repaired).map((target) => target.brokenLabel),
+            flags,
         };
     }
 
@@ -502,17 +696,25 @@ export default class CircuitRouting extends MinigameBase {
         return snapshot;
     }
 
-    _refreshRepairTargets(connectedOutputs, forbiddenUsed) {
-        const connectedSet = new Set(connectedOutputs || []);
+    _refreshRepairTargets(repairStates, forbiddenUsed) {
+        const stateMap = new Map((repairStates || []).map((state) => [state.key, state]));
 
         this._repairTargetViews.forEach(({ target, dot, nameText, statusText }) => {
-            const repaired = connectedSet.has(target.key);
-            dot.setFillStyle(repaired ? 0x62ffb0 : 0x2f4a57, 1);
-            dot.setStrokeStyle(1, repaired ? 0xe8fff1 : 0x7aa8b7, 0.88);
-            nameText.setColor(repaired ? '#ddffed' : '#b8dbe1');
+            const state = stateMap.get(target.key) || target;
+            const repaired = Boolean(state.repaired);
+            const invalidSignal = Boolean(state.feedCount > 0 && state.issueCode);
+            dot.setFillStyle(repaired ? 0x62ffb0 : (invalidSignal ? 0xff7d77 : 0x2f4a57), 1);
+            dot.setStrokeStyle(1, repaired ? 0xe8fff1 : (invalidSignal ? 0xffd4cf : 0x7aa8b7), 0.88);
+            nameText.setColor(repaired ? '#ddffed' : (invalidSignal ? '#ffd7d1' : '#b8dbe1'));
             statusText
-                .setText(repaired ? 'REPAIRED' : (forbiddenUsed ? 'BROKEN // MOD' : 'BROKEN'))
-                .setColor(repaired ? '#7dffb6' : (forbiddenUsed ? '#ffd0c4' : '#ffb695'));
+                .setText(
+                    repaired
+                        ? 'REPAIRED'
+                        : (invalidSignal
+                            ? String(state.issueCode || 'MISMATCH').replace(/-/g, ' ').toUpperCase()
+                            : (forbiddenUsed ? 'BROKEN // MOD' : 'BROKEN'))
+                )
+                .setColor(repaired ? '#7dffb6' : (invalidSignal ? '#ffb4ae' : (forbiddenUsed ? '#ffd0c4' : '#ffb695')));
         });
     }
 
@@ -593,47 +795,65 @@ export default class CircuitRouting extends MinigameBase {
         const reachedOutputs = [];
         const forbiddenHit = [];
         const flowSegments = [];
+        const outputFeeds = {};
+        const sourceActivity = {};
 
-        const startX = 0, startY = this._sourceRow;
-        const startTile = this._tiles[startY][startX];
-        const startConns = rotatedConnections(startTile.type, startTile.rotation);
-        if (!startConns[3]) {
-            return { reached, reachedOutputs, forbiddenHit, flowSegments };
-        }
+        this._sources.forEach((source) => {
+            const startX = 0;
+            const startY = source.row;
+            const startTile = this._tiles[startY]?.[startX];
+            if (!startTile) return;
 
-        const queue = [[startX, startY]];
-        reached.add(`${startX},${startY}`);
-        flowSegments.push({ from: { x: -1, y: startY }, to: { x: startX, y: startY } });
-
-        while (queue.length) {
-            const [x, y] = queue.shift();
-            const tile = this._tiles[y][x];
-            const conns = rotatedConnections(tile.type, tile.rotation);
-
-            for (const d of DIRS) {
-                if (!conns[d.idx]) continue;
-                const nx = x + d.dx, ny = y + d.dy;
-                if (nx === this.cols && this._outputs[y]) {
-                    if (d.idx === 1) {
-                        reachedOutputs.push(this._outputs[y]);
-                        flowSegments.push({ from: { x, y }, to: { x: this.cols, y } });
-                    }
-                    continue;
-                }
-                if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
-                if (this._forbidden.has(`${nx},${ny}`)) continue;
-                const neighbor = this._tiles[ny][nx];
-                const nconns = rotatedConnections(neighbor.type, neighbor.rotation);
-                if (!nconns[d.opp]) continue;
-                const k = `${nx},${ny}`;
-                if (reached.has(k)) continue;
-                reached.add(k);
-                flowSegments.push({ from: { x, y }, to: { x: nx, y: ny } });
-                queue.push([nx, ny]);
+            const startConns = rotatedConnections(startTile.type, startTile.rotation);
+            if (!startConns[3]) {
+                sourceActivity[source.key] = false;
+                return;
             }
-        }
 
-        return { reached, reachedOutputs, forbiddenHit, flowSegments };
+            sourceActivity[source.key] = true;
+            const queue = [[startX, startY]];
+            const visited = new Set([`${startX},${startY}`]);
+            reached.add(`${startX},${startY}`);
+            flowSegments.push({ from: { x: -1, y: startY }, to: { x: startX, y: startY }, sourceKey: source.key });
+
+            while (queue.length) {
+                const [x, y] = queue.shift();
+                const tile = this._tiles[y][x];
+                const conns = rotatedConnections(tile.type, tile.rotation);
+
+                for (const d of DIRS) {
+                    if (!conns[d.idx]) continue;
+                    const nx = x + d.dx;
+                    const ny = y + d.dy;
+
+                    if (nx === this.cols) {
+                        const outputSpec = this._outputSpecs.find((candidate) => candidate.row === y);
+                        if (outputSpec && d.idx === 1) {
+                            recordFlowFeed(outputFeeds, outputSpec.key, source);
+                            if (!reachedOutputs.includes(outputSpec.key)) {
+                                reachedOutputs.push(outputSpec.key);
+                            }
+                            flowSegments.push({ from: { x, y }, to: { x: this.cols, y }, sourceKey: source.key });
+                        }
+                        continue;
+                    }
+
+                    if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
+                    if (this._forbidden.has(`${nx},${ny}`)) continue;
+                    const neighbor = this._tiles[ny][nx];
+                    const nconns = rotatedConnections(neighbor.type, neighbor.rotation);
+                    if (!nconns[d.opp]) continue;
+                    const key = `${nx},${ny}`;
+                    if (visited.has(key)) continue;
+                    visited.add(key);
+                    reached.add(key);
+                    flowSegments.push({ from: { x, y }, to: { x: nx, y: ny }, sourceKey: source.key });
+                    queue.push([nx, ny]);
+                }
+            }
+        });
+
+        return { reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity };
     }
 
     _getFlowLinkPosition(node) {
@@ -698,7 +918,7 @@ export default class CircuitRouting extends MinigameBase {
         const renderState = this._lastCircuitRenderState;
         const reached = renderState?.reached || new Set();
         const energyActive = reached.size > 0;
-        const reachedOutputs = new Set(renderState?.reachedOutputs || []);
+        const reachedOutputs = renderState?.outputFeeds || {};
 
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
@@ -706,23 +926,33 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
 
-        Object.entries(this._outputDots).forEach(([row, view]) => {
-            const active = reachedOutputs.has(this._outputs[row]);
-            const pulse = 0.18 + (Math.sin((this._energyPhase * Math.PI * 2) + (Number(row) * 0.65)) * 0.08);
+        Object.values(this._outputDots).forEach((view) => {
+            const feeds = reachedOutputs[view.outputSpec.key] || [];
+            const mixedFeed = new Set(feeds.map((feed) => feed.powerClass || 'neutral')).size > 1;
+            const palette = feeds.length > 0
+                ? getFlowPowerPalette(mixedFeed ? 'mixed' : (feeds[0]?.powerClass || 'neutral'))
+                : getFlowPowerPalette(view.outputSpec.powerClass || 'neutral');
+            const pulse = 0.18 + (Math.sin((this._energyPhase * Math.PI * 2) + (Number(view.outputSpec.row) * 0.65)) * 0.08);
+            const active = feeds.length > 0;
 
-            view.glow?.setAlpha(active ? pulse : 0);
-            view.ring?.setStrokeStyle(2, 0xaefdf3, active ? 0.42 + pulse : 0);
-            view.dot?.setScale(active ? 1.02 + (pulse * 0.08) : 1);
+            view.glow?.setFillStyle(palette.tint, 1).setAlpha(active ? pulse : 0);
+            view.ring?.setStrokeStyle(2, palette.tint, active ? 0.42 + pulse : 0);
+            view.dot?.setFillStyle(active ? palette.tint : 0x225533, 1).setScale(active ? 1.02 + (pulse * 0.08) : 1);
+            view.lbl?.setColor(active ? palette.label : palette.idle);
+            view.req?.setColor(palette.label);
+        });
+
+        Object.values(this._sourceViews).forEach((view) => {
+            const palette = getFlowPowerPalette(view.source.powerClass);
+            const active = Boolean(renderState?.sourceActivity?.[view.source.key]);
+            view.pulse?.setAlpha(active ? 0.12 + (Math.sin(this._energyPhase * Math.PI * 2) * 0.03) + 0.05 : 0.1);
+            view.dot?.setFillStyle(palette.dot, 1);
         });
 
         if (energyActive) {
             this._drawSourceFlowBlock(renderState.flowSegments);
-            this._sourcePulse?.setAlpha(0.12 + (Math.sin(this._energyPhase * Math.PI * 2) * 0.03) + 0.05);
-            this._sourceDot?.setFillStyle(renderState?.completed ? 0xe9fff3 : 0xffe8a3, 1);
         } else {
             this._sourceFlowGfx?.clear();
-            this._sourcePulse?.setAlpha(0.18);
-            this._sourceDot?.setFillStyle(0xffcc00, 1);
         }
     }
 
@@ -745,30 +975,33 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     _updateAll() {
-        const { reached, reachedOutputs, forbiddenHit, flowSegments } = this._computeReached();
+        const { reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity } = this._computeReached();
+        const snapshot = this._buildProgressSnapshot({ reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity });
 
-        const completed = reachedOutputs.length === this._repairTargets.length && forbiddenHit.length === 0;
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
                 this._drawTile(x, y, reached.has(`${x},${y}`));
             }
         }
 
-        Object.entries(this._outputDots).forEach(([y, { dot, lbl }]) => {
-            const label = this._outputs[y];
-            if (reachedOutputs.includes(label)) {
-                dot.setFillStyle(0x00ffcc, 1);
-                lbl.setColor('#00ffcc');
-            } else {
-                dot.setFillStyle(0x225533, 1);
-                lbl.setColor('#556666');
-            }
-        });
+        this._refreshRepairTargets(snapshot.repairStates, forbiddenHit.length > 0);
 
-        this._refreshRepairTargets(reachedOutputs, forbiddenHit.length > 0);
-
-        this._lastResult = { reached, reachedOutputs, forbiddenHit, flowSegments, completed };
-    this._lastCircuitRenderState = { reached, reachedOutputs, flowSegments, completed };
+        this._lastResult = {
+            reached,
+            reachedOutputs,
+            forbiddenHit,
+            flowSegments,
+            outputFeeds,
+            sourceActivity,
+            completed: snapshot.completed,
+        };
+        this._lastCircuitRenderState = {
+            reached,
+            flowSegments,
+            completed: snapshot.completed,
+            outputFeeds,
+            sourceActivity,
+        };
 
         this._refreshAnimatedCircuitEffects();
 
@@ -796,8 +1029,9 @@ export default class CircuitRouting extends MinigameBase {
         });
         this._lastCircuitRenderState = null;
         this._sourceFlowGfx = null;
-        this._sourceDot = null;
-        this._sourcePulse = null;
+        this._sourceViews = {};
+        this._inspectionFaultGfx = null;
+        this._inspectionFault = null;
         if (this._escKey && this._escHandler) {
             this._escKey.off('down', this._escHandler);
         }

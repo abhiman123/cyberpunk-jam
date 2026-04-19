@@ -32,7 +32,7 @@ function getCellCenter(left, top, cellSize, row, col) {
 }
 
 function getPieceLabel(type) {
-    if (type === GEAR_CODES.MOVABLE_WALL) return 'BLK';
+    if (type === GEAR_CODES.MOVABLE_WALL) return 'CLP';
     if (type === GEAR_CODES.RUSTED) return 'RST';
     if (type === GEAR_CODES.HORIZONTAL) return 'EW';
     if (type === GEAR_CODES.VERTICAL) return 'NS';
@@ -69,6 +69,7 @@ export default class GearGridPuzzle extends MinigameBase {
         this._lastEvaluation = null;
         this._puzzle = null;
         this._board = [];
+        this._inspectionFaultGfx = null;
     }
 
     _defaultEvidence() {
@@ -82,6 +83,14 @@ export default class GearGridPuzzle extends MinigameBase {
             poweredPieces: [],
             pieces: [],
             sinkPowered: false,
+            reviewed: false,
+            scrapRequired: false,
+            scrapKind: null,
+            scrapStatus: null,
+            scrapReason: null,
+            inspectionFault: null,
+            allowRustedGears: false,
+            useDeadlockClamp: false,
         };
     }
 
@@ -106,6 +115,15 @@ export default class GearGridPuzzle extends MinigameBase {
         }
 
         this._puzzle = gearPuzzle;
+        this.evidence = {
+            ...this._defaultEvidence(),
+            ...(gearPuzzle.progress || {}),
+            flags: Array.isArray(gearPuzzle.progress?.flags) ? [...gearPuzzle.progress.flags] : [],
+            symptoms: Array.isArray(gearPuzzle.progress?.symptoms) ? [...gearPuzzle.progress.symptoms] : [],
+        };
+        if (this.evidence.scrapRequired && !this.evidence.reviewed) {
+            this.emitEvidence({ reviewed: true });
+        }
         this._board = cloneGearBoard(gearPuzzle.board);
         const pieces = cloneGearPieces(gearPuzzle.progress?.pieces || gearPuzzle.pieces || []);
 
@@ -135,6 +153,7 @@ export default class GearGridPuzzle extends MinigameBase {
         const sidePanel = this.scene.add.rectangle(314, 0, 276, 520, 0x081117, 0.88)
             .setStrokeStyle(1, 0x395968, 0.72);
         const headerRule = this.scene.add.rectangle(0, -244, 1006, 2, 0x315161, 0.7);
+        this._inspectionFaultGfx = this.scene.add.graphics();
 
         this._titleText = this.scene.add.text(-474, -274, gearPuzzle.previewTitle || 'GEAR TRAIN', {
             fontFamily: 'Courier New',
@@ -192,6 +211,7 @@ export default class GearGridPuzzle extends MinigameBase {
             boardFrame,
             sidePanel,
             headerRule,
+            this._inspectionFaultGfx,
             this._titleText,
             this._subtitleText,
             this._statusText,
@@ -216,6 +236,7 @@ export default class GearGridPuzzle extends MinigameBase {
         this._buildBoard();
         this._buildPieces(pieces);
         this._buildLegend();
+        this._drawInspectionFault();
 
         this._escKey = this.scene.input.keyboard.addKey('ESC');
         this._escHandler = () => { if (this.active) this._finalizeAndClose(); };
@@ -256,6 +277,7 @@ export default class GearGridPuzzle extends MinigameBase {
         this._staticViews = [];
         this._lastEvaluation = null;
         this._panel = null;
+        this._inspectionFaultGfx = null;
         this._legendContainer = null;
         this._puzzle = null;
         this._board = [];
@@ -336,10 +358,18 @@ export default class GearGridPuzzle extends MinigameBase {
         const movableCount = this._pieceViews.filter((pieceView) => pieceView.piece.movable !== false).length;
         const fixedCount = this._pieceViews.length - movableCount;
         const hasRustedGear = pieces.some((piece) => piece.type === GEAR_CODES.RUSTED);
+        const rustNote = hasRustedGear
+            ? (this._puzzle?.allowRustedGears
+                ? ' Rusted gears are valid on this day. They still look ugly, but they are legal.'
+                : ' Rusted gears lock the train on contact.')
+            : '';
+        const clampNote = this._puzzle?.useDeadlockClamp
+            ? ' Deadlock Clamp parts grey out any slot they occupy, turning it into dead space.'
+            : '';
         this._statusHintText?.setText(
             fixedCount > 0
-            ? `Drag the ${movableCount} loose part${movableCount === 1 ? '' : 's'} with cyan corner marks onto empty cells. ${fixedCount} train part${fixedCount === 1 ? ' stays' : 's stay'} fixed.${hasRustedGear ? ' Rusted gears lock the train on contact.' : ''}`
-            : `Drag the cyan-marked parts onto empty cells. Walls block power and cannot connect.${hasRustedGear ? ' Rusted gears lock the train on contact.' : ''}`
+            ? `Drag the ${movableCount} loose part${movableCount === 1 ? '' : 's'} with cyan corner marks onto empty cells. ${fixedCount} train part${fixedCount === 1 ? ' stays' : 's stay'} fixed.${rustNote}${clampNote}`
+            : `Drag the cyan-marked parts onto empty cells. Walls block power and cannot connect.${rustNote}${clampNote}`
         );
     }
 
@@ -371,12 +401,12 @@ export default class GearGridPuzzle extends MinigameBase {
                 color: '#dbeff4',
                 letterSpacing: 1,
             }).setOrigin(0, 0.5);
-            const label = this.scene.add.text(246, y + 9, getPieceLabel(pieceView.piece.type) || 'GEAR', {
+            const label = this.scene.add.text(246, y + 9, pieceView.piece.role === 'deadlock-clamp' ? 'CLAMP' : (getPieceLabel(pieceView.piece.type) || 'GEAR'), {
                 fontFamily: 'Courier New',
                 fontSize: '10px',
                 color: '#8db2bf',
             }).setOrigin(0, 0.5);
-            const hint = this.scene.add.text(246, y + 23, 'DRAGGABLE', {
+            const hint = this.scene.add.text(246, y + 23, pieceView.piece.role === 'deadlock-clamp' ? 'DEAD SPACE TOOL' : 'DRAGGABLE', {
                 fontFamily: 'Courier New',
                 fontSize: '9px',
                 color: '#a6eef3',
@@ -384,6 +414,42 @@ export default class GearGridPuzzle extends MinigameBase {
             }).setOrigin(0, 0.5);
             this._legendContainer.add([sample.container, title, label, hint]);
         });
+    }
+
+    _drawInspectionFault() {
+        if (!this._inspectionFaultGfx) return;
+
+        this._inspectionFaultGfx.clear();
+        const fault = this._puzzle?.inspectionFault;
+        if (!fault) return;
+
+        const { x, y } = getCellCenter(this._boardLeft, this._boardTop, this._cellSize, fault.row, fault.col);
+        if (fault.type === 'cracked-gear') {
+            this._inspectionFaultGfx.lineStyle(3, 0xffc27a, 0.92);
+            this._inspectionFaultGfx.beginPath();
+            this._inspectionFaultGfx.moveTo(x - 16, y - 18);
+            this._inspectionFaultGfx.lineTo(x - 4, y - 4);
+            this._inspectionFaultGfx.lineTo(x - 10, y + 6);
+            this._inspectionFaultGfx.lineTo(x + 4, y + 18);
+            this._inspectionFaultGfx.lineTo(x + 14, y + 4);
+            this._inspectionFaultGfx.lineTo(x + 20, y + 18);
+            this._inspectionFaultGfx.strokePath();
+        } else if (fault.type === 'contraband-gear') {
+            this._inspectionFaultGfx.lineStyle(2, 0xff7d77, 0.92);
+            this._inspectionFaultGfx.strokeCircle(x, y, 18);
+            this._inspectionFaultGfx.lineBetween(x - 12, y - 12, x + 12, y + 12);
+            this._inspectionFaultGfx.lineBetween(x + 12, y - 12, x - 12, y + 12);
+        } else if (fault.type === 'spark-instability') {
+            this._inspectionFaultGfx.lineStyle(2, 0xff6a62, 0.94);
+            this._inspectionFaultGfx.lineBetween(x - 20, y - 16, x - 30, y - 28);
+            this._inspectionFaultGfx.lineBetween(x - 4, y - 24, x + 4, y - 38);
+            this._inspectionFaultGfx.lineBetween(x + 14, y - 10, x + 26, y - 24);
+            this._inspectionFaultGfx.lineBetween(x - 18, y + 10, x - 28, y + 22);
+            this._inspectionFaultGfx.lineBetween(x + 18, y + 10, x + 30, y + 24);
+            this._inspectionFaultGfx.strokeCircle(x, y, 14);
+        }
+
+        this._panel?.bringToTop(this._inspectionFaultGfx);
     }
 
     _createGearVisual(type, movable) {
@@ -891,7 +957,9 @@ export default class GearGridPuzzle extends MinigameBase {
         }));
 
         const previousEvaluation = this._lastEvaluation;
-        const evaluation = evaluateGearPuzzleBoard(this._board, pieces);
+        const evaluation = evaluateGearPuzzleBoard(this._board, pieces, {
+            allowRustedGears: Boolean(this._puzzle?.allowRustedGears),
+        });
         this._lastEvaluation = evaluation;
 
         this._staticViews.forEach((view) => {
@@ -933,19 +1001,37 @@ export default class GearGridPuzzle extends MinigameBase {
         const fixedCount = pieces.length - movableCount;
         const pieceSummary = pieces.map((piece) => `${piece.movable === false ? 'FIX' : 'MOVE'} ${getPieceLabel(piece.type) || 'GEAR'} @ ${piece.row + 1},${piece.col + 1}`);
 
-        this._statusText
-            ?.setText(evaluation.completed ? 'OUTPUT LIVE' : (evaluation.jammed ? 'TRAIN JAMMED' : 'OUTPUT OFFLINE'))
-            .setColor(evaluation.completed ? '#caffb2' : (evaluation.jammed ? '#ff9c93' : '#ffd39c'));
-        this._summaryText?.setText([
-            `Active gears: ${activeGearCount}`,
-            `Loose parts: ${movableCount}`,
-            fixedCount > 0 ? `Fixed parts: ${fixedCount}` : 'Fixed parts: 0',
-            evaluation.completed
-                ? 'Final shaft is turning.'
-                : (evaluation.jammed ? evaluation.jamReason || 'The train is binding up.' : 'No valid path reaches the output.'),
-            '',
-            ...pieceSummary,
-        ].join('\n'));
+        if (this._puzzle?.inspectionFault) {
+            const statusColor = this._puzzle.inspectionFault.kind === 'hazard'
+                ? '#ff9c93'
+                : (this._puzzle.inspectionFault.kind === 'compliance' ? '#ffd39c' : '#ffc38d');
+            this._statusText
+                ?.setText(this._puzzle.inspectionFault.status || 'SCRAP REQUIRED')
+                .setColor(statusColor);
+            this._summaryText?.setText([
+                this._puzzle.inspectionFault.reason || 'Drivetrain fault requires immediate scrap.',
+                '',
+                `Active gears: ${activeGearCount}`,
+                `Loose parts: ${movableCount}`,
+                fixedCount > 0 ? `Fixed parts: ${fixedCount}` : 'Fixed parts: 0',
+                '',
+                ...pieceSummary,
+            ].join('\n'));
+        } else {
+            this._statusText
+                ?.setText(evaluation.completed ? 'OUTPUT LIVE' : (evaluation.jammed ? 'TRAIN JAMMED' : 'OUTPUT OFFLINE'))
+                .setColor(evaluation.completed ? '#caffb2' : (evaluation.jammed ? '#ff9c93' : '#ffd39c'));
+            this._summaryText?.setText([
+                `Active gears: ${activeGearCount}`,
+                `Loose parts: ${movableCount}`,
+                fixedCount > 0 ? `Fixed parts: ${fixedCount}` : 'Fixed parts: 0',
+                evaluation.completed
+                    ? 'Final shaft is turning.'
+                    : (evaluation.jammed ? evaluation.jamReason || 'The train is binding up.' : 'No valid path reaches the output.'),
+                '',
+                ...pieceSummary,
+            ].join('\n'));
+        }
 
         if (!persist) return;
 
@@ -953,7 +1039,15 @@ export default class GearGridPuzzle extends MinigameBase {
             this._playGearSound(SOUND_ASSETS.errorBuzz, SOUND_ASSETS.circuitLock, SOUND_VOLUMES.puzzleLock);
         }
 
-        const snapshot = buildGearProgressSnapshot({ board: this._board, pieces }, pieces);
+        const snapshot = buildGearProgressSnapshot({
+            ...this._puzzle,
+            board: this._board,
+            pieces,
+            progress: {
+                ...(this._puzzle.progress || {}),
+                reviewed: this.evidence.reviewed,
+            },
+        }, pieces);
         this._puzzle.progress = snapshot;
         this.emitEvidence(snapshot);
     }

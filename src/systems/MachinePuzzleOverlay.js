@@ -964,15 +964,25 @@ export default class MachinePuzzleOverlay {
         const isMatchedCharge = !this._powerEffectsSuspended && this._puzzleState.isChargeMatched(cellView.row, cellView.col);
         const hasEqualLink = this._puzzleState.isEqualLinkCell(cellView.row, cellView.col);
         const isMatchedEqualLink = !this._powerEffectsSuspended && this._puzzleState.isEqualMatched(cellView.row, cellView.col);
+        const hasNotEqualLink = this._puzzleState.isNotEqualLinkCell?.(cellView.row, cellView.col);
+        const isMatchedNotEqualLink = !this._powerEffectsSuspended && Boolean(this._puzzleState.isNotEqualMatched?.(cellView.row, cellView.col));
         const chargeGroup = this._puzzleState.getChargeGroupAt(cellView.row, cellView.col);
         const chargeGroupSummary = chargeGroup ? this._chargeGroupSummaryMap?.get(chargeGroup.key) : null;
         const isMatchedGroup = !this._powerEffectsSuspended && Boolean(chargeGroupSummary?.matched);
         const isPlaced = isPlacedCode(value);
+        const inspectionFault = this._puzzleState.inspectionFault
+            && this._puzzleState.inspectionFault.row === cellView.row
+            && this._puzzleState.inspectionFault.col === cellView.col
+            ? this._puzzleState.inspectionFault
+            : null;
 
         let fillColor = 0x2c241f;
         let strokeColor = 0x6a5643;
 
-        if (baseValue === CELL_WALL) {
+        if (inspectionFault) {
+            fillColor = inspectionFault.kind === 'hazard' ? 0x5d241f : 0x4f341f;
+            strokeColor = inspectionFault.kind === 'hazard' ? 0xff8e7f : 0xffd08a;
+        } else if (baseValue === CELL_WALL) {
             fillColor = 0x74614b;
             strokeColor = 0xc6af8c;
         } else if (chargeLevel > 0) {
@@ -992,6 +1002,13 @@ export default class MachinePuzzleOverlay {
                     ? 0x285e67
                     : 0x2d3f49;
             strokeColor = isMatchedEqualLink ? 0xffefad : 0xe6d987;
+        } else if (hasNotEqualLink) {
+            fillColor = isMatchedNotEqualLink
+                ? 0x794033
+                : isPlaced
+                    ? 0x683128
+                    : 0x3c2725;
+            strokeColor = isMatchedNotEqualLink ? 0xffc7b0 : 0xff9b86;
         } else if (isPlaced) {
             fillColor = 0x39af67;
             strokeColor = 0xe8f9b9;
@@ -1005,7 +1022,7 @@ export default class MachinePuzzleOverlay {
             cellView.matchTween = null;
         }
 
-        if (isMatchedCharge || isMatchedEqualLink || isMatchedGroup) {
+        if (isMatchedCharge || isMatchedEqualLink || isMatchedNotEqualLink || isMatchedGroup) {
             cellView.matchRect.setFillStyle(0xfff1a3, 0.18).setStrokeStyle(2, 0xfff7c7, 0.75).setAlpha(0.45);
             cellView.matchTween = this.scene.tweens.add({
                 targets: cellView.matchRect,
@@ -1020,7 +1037,11 @@ export default class MachinePuzzleOverlay {
         }
 
         const shouldShowDebug = FACTORY_DEBUG.enabled && FACTORY_DEBUG.showPuzzleGridValues;
-        if (chargeLevel > 0) {
+        if (inspectionFault) {
+            cellView.valueText.setVisible(true);
+            cellView.valueText.setText('!');
+            cellView.valueText.setColor(inspectionFault.kind === 'hazard' ? '#ffd0c9' : '#ffe2aa');
+        } else if (chargeLevel > 0) {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText(String(chargeLevel));
             cellView.valueText.setColor(isMatchedCharge ? '#fff6b8' : '#ffe784');
@@ -1031,6 +1052,10 @@ export default class MachinePuzzleOverlay {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText('=');
             cellView.valueText.setColor(isMatchedEqualLink ? '#fff6b8' : '#ffe784');
+        } else if (hasNotEqualLink) {
+            cellView.valueText.setVisible(true);
+            cellView.valueText.setText('!=');
+            cellView.valueText.setColor(isMatchedNotEqualLink ? '#ffd9c9' : '#ffab92');
         } else if (shouldShowDebug) {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText(String(value));
@@ -1132,6 +1157,30 @@ export default class MachinePuzzleOverlay {
             this._equalLinkGfx.moveTo(start.x, start.y);
             this._equalLinkGfx.lineTo(end.x, end.y);
             this._equalLinkGfx.strokePath();
+        });
+
+        this._puzzleState.getNotEqualLinkPairs?.().forEach((pair) => {
+            const isMatched = !this._powerEffectsSuspended && pair.matched;
+            const start = this._getCellCenter(pair.a.row, pair.a.col);
+            const end = this._getCellCenter(pair.b.row, pair.b.col);
+            const lineColor = isMatched ? 0xffc9b7 : 0xff8b76;
+            const glowColor = isMatched ? 0xffe6da : 0xffb19c;
+            const midX = (start.x + end.x) / 2;
+            const midY = (start.y + end.y) / 2;
+
+            this._equalLinkGfx.lineStyle(isMatched ? 4 : 2, glowColor, isMatched ? 0.65 : 0.24);
+            this._equalLinkGfx.beginPath();
+            this._equalLinkGfx.moveTo(start.x, start.y);
+            this._equalLinkGfx.lineTo(end.x, end.y);
+            this._equalLinkGfx.strokePath();
+
+            this._equalLinkGfx.lineStyle(isMatched ? 2 : 1, lineColor, isMatched ? 0.95 : 0.82);
+            this._equalLinkGfx.beginPath();
+            this._equalLinkGfx.moveTo(start.x, start.y);
+            this._equalLinkGfx.lineTo(end.x, end.y);
+            this._equalLinkGfx.strokePath();
+            this._equalLinkGfx.lineBetween(midX - 7, midY - 7, midX + 7, midY + 7);
+            this._equalLinkGfx.lineBetween(midX + 7, midY - 7, midX - 7, midY + 7);
         });
 
         this._panel?.bringToTop(this._equalLinkGfx);

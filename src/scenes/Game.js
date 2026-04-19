@@ -12,6 +12,7 @@ import {
     SHIFT_DURATION_MS_BY_PERIOD,
     SOUND_ASSETS,
     SOUND_VOLUMES,
+    getOpeningPhoneCallSequence,
     getShiftClockStepMs,
 } from '../constants/gameConstants.js';
 import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections, isGearType } from '../core/gearPuzzleLogic.js';
@@ -21,12 +22,16 @@ import { getMusicVolume } from '../state/gameSettings.js';
 import StateMachine from '../core/StateMachine.js';
 import CircuitRouting from '../systems/minigames/CircuitRouting.js';
 import GearGridPuzzle from '../systems/minigames/GearGridPuzzle.js';
+import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
 
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
 
 export default class GameScene extends Phaser.Scene {
-    constructor() { super('Game'); }
+    constructor() {
+        super('Game');
+        this._handleKonamiKey = this._handleKonamiKey.bind(this);
+    }
 
     create() {
         const { period, day } = GameState;
@@ -76,6 +81,7 @@ export default class GameScene extends Phaser.Scene {
         this._shiftAwaitingFinalRuling = false;
         this._otherPuzzleReturnPhoneState = null;
         this._gearPuzzleReturnPhoneState = null;
+        this._debugPuzzleReturnPhoneState = null;
         this._otherPuzzleReturnVoiceBroken = false;
         this._machineWorklightFlickerEvent = null;
         this._phoneBodyScrollOffset = 0;
@@ -117,6 +123,9 @@ export default class GameScene extends Phaser.Scene {
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
+        this._konamiSequence = ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'B', 'A'];
+        this._konamiProgress = 0;
+        this._konamiFinaleTriggered = false;
 
         // Konami code for skipping shifts
         this._konamiCodeSequence = [];
@@ -137,9 +146,13 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleOverlay.onClose = (evidence) => this._handleOtherPuzzleClosed(evidence);
         this._gearPuzzleOverlay = new GearGridPuzzle(this, { depth: 360 });
         this._gearPuzzleOverlay.onClose = (evidence) => this._handleGearPuzzleClosed(evidence);
+        this._debugPuzzleOverlay = new DebugConsolePuzzle(this, { depth: 360 });
+        this._debugPuzzleOverlay.onClose = (evidence) => this._handleDebugPuzzleClosed(evidence);
+        this.input.keyboard?.on('keydown', this._handleKonamiKey);
 
         const newRuleIds = allRules.filter((rule) => rule.period === period).map((rule) => rule.id);
         this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds, {
+            canToggle: () => this._canOpenRulebookOverlay(),
             onOpen: () => this._setGameplayPaused(true),
             onClose: () => this._setGameplayPaused(false),
         });
@@ -160,6 +173,7 @@ export default class GameScene extends Phaser.Scene {
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
             this.input.off('gameout', this._handleDeskItemPointerUp, this);
+            this.input.keyboard?.off('keydown', this._handleKonamiKey);
             this.input.keyboard.off('keydown', this._handleKonamiCodeKeydown, this);
             this._phoneBodyMaskSource?.destroy();
             this._miniMachineScreenMaskSource?.destroy();
@@ -167,6 +181,7 @@ export default class GameScene extends Phaser.Scene {
             this._machinePuzzleOverlay.destroy();
             this._otherPuzzleOverlay.destroy();
             this._gearPuzzleOverlay.destroy();
+            this._debugPuzzleOverlay.destroy();
             this._settingsOverlay.destroy();
             if (this._currentMusic) {
                 this._currentMusic.stop();
@@ -181,8 +196,7 @@ export default class GameScene extends Phaser.Scene {
 
         this.cameras.main.fadeIn(400, 0, 0, 0);
 
-        if (FIRST_SHIFT_INTRO.enabled && !GameState.hasSeenOpeningPhoneCall) {
-            GameState.hasSeenOpeningPhoneCall = true;
+        if (FIRST_SHIFT_INTRO.enabled) {
             this._startOpeningPhoneCall();
         } else {
             this.time.delayedCall(300, () => this._beginShift());
@@ -227,7 +241,7 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer.add([topBarShadow, topBar, topBarInner, topBarPocket, topStrip]);
 
         this._hudPeriodText = this.add.text(12, 14,
-            `PERIOD ${GameState.period}  |  DAY ${GameState.day}`, {
+            `DAY ${GameState.period}  |  SHIFT ${GameState.day}`, {
                 fontFamily: 'Courier New', fontSize: '11px', color: '#cccccc',
             }
         );
@@ -724,7 +738,7 @@ export default class GameScene extends Phaser.Scene {
             color: '#9ab894',
             wordWrap: { width: 360 },
         });
-        this._miniMachineHintText = this.add.text(22, panelHeight - 24, 'CLICK GRID OR FLOW PORT', {
+        this._miniMachineHintText = this.add.text(22, panelHeight - 24, 'CLICK GRID, FLOW, GEAR, OR CODE PORT', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#c8cf9f',
@@ -747,6 +761,8 @@ export default class GameScene extends Phaser.Scene {
         this._miniFlowLabelContainer = this.add.container(0, 0);
         this._miniGearGfx = this.add.graphics();
         this._miniGearLabelContainer = this.add.container(0, 0);
+        this._miniCodeGfx = this.add.graphics();
+        this._miniCodeLabelContainer = this.add.container(0, 0);
 
         const gridPortFrame = this.add.rectangle(92, 102, 96, 54, 0x091116, 0.2)
             .setStrokeStyle(2, 0x8bb8ff, 0.82);
@@ -765,6 +781,28 @@ export default class GameScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
         const flowPortLabel = this.add.text(256, 162, 'FLOW', {
             fontFamily: 'Courier New',
+            fontSize: '10px',
+            color: '#d7e7ff',
+            letterSpacing: 1,
+        });
+
+        const codePortFrame = this.add.rectangle(320, 78, 118, 42, 0x091116, 0.2)
+            .setStrokeStyle(2, 0x8bb8ff, 0.82);
+        const codePortHit = this.add.rectangle(320, 78, 118, 42, 0xffffff, 0.001)
+            .setInteractive({ useHandCursor: true });
+        const codePortLabel = this.add.text(262, 104, 'CODE', {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            color: '#d7e7ff',
+            letterSpacing: 1,
+        });
+
+        const codePortFrame = this.add.rectangle(320, 78, 118, 42, 0x091116, 0.2)
+            .setStrokeStyle(2, 0x8bb8ff, 0.82);
+        const codePortHit = this.add.rectangle(320, 78, 118, 42, 0xffffff, 0.001)
+            .setInteractive({ useHandCursor: true });
+        const codePortLabel = this.add.text(262, 104, 'CODE', {
+            fontFamily: 'monospace',
             fontSize: '10px',
             color: '#d7e7ff',
             letterSpacing: 1,
@@ -797,6 +835,14 @@ export default class GameScene extends Phaser.Scene {
             this._openOtherPuzzle();
         });
 
+        codePortHit.on('pointerover', () => this._setMiniMachinePanelHover('code', true));
+        codePortHit.on('pointerout', () => this._setMiniMachinePanelHover('code', false));
+        codePortHit.on('pointerdown', () => {
+            if (!this._currentMachineVariant || !this._miniMachinePanelVisible) return;
+            this._playMiniMachinePortSound('code');
+            this._openDebugPuzzle();
+        });
+
         gearPortHit.on('pointerover', () => this._setMiniMachinePanelHover('gear', true));
         gearPortHit.on('pointerout', () => this._setMiniMachinePanelHover('gear', false));
         gearPortHit.on('pointerdown', () => {
@@ -807,6 +853,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._miniGridPort = { frame: gridPortFrame, hit: gridPortHit, label: gridPortLabel };
         this._miniFlowPort = { frame: flowPortFrame, hit: flowPortHit, label: flowPortLabel };
+    this._miniCodePort = { frame: codePortFrame, hit: codePortHit, label: codePortLabel };
         this._miniGearPort = { frame: gearPortFrame, hit: gearPortHit, label: gearPortLabel };
 
         this._miniMachinePanel.add([
@@ -834,6 +881,11 @@ export default class GameScene extends Phaser.Scene {
             this._miniFlowLabelContainer,
             flowPortHit,
             flowPortLabel,
+            codePortFrame,
+            this._miniCodeGfx,
+            this._miniCodeLabelContainer,
+            codePortHit,
+            codePortLabel,
             gearPortFrame,
             this._miniGearGfx,
             this._miniGearLabelContainer,
@@ -856,10 +908,14 @@ export default class GameScene extends Phaser.Scene {
     _playMiniMachinePortSound(portKey) {
         const preferredAsset = portKey === 'flow'
             ? SOUND_ASSETS.fuseRotate
-            : (portKey === 'gear' ? SOUND_ASSETS.circuitLock : SOUND_ASSETS.inspectionReveal);
+            : (portKey === 'gear'
+                ? SOUND_ASSETS.circuitLock
+                : (portKey === 'code' ? SOUND_ASSETS.notificationAlert : SOUND_ASSETS.inspectionReveal));
         const fallbackAsset = portKey === 'gear'
             ? SOUND_ASSETS.inspectionReveal
-            : (portKey === 'flow' ? SOUND_ASSETS.inspectionReveal : SOUND_ASSETS.fuseRotate);
+            : (portKey === 'flow'
+                ? SOUND_ASSETS.inspectionReveal
+                : (portKey === 'code' ? SOUND_ASSETS.inspectionReveal : SOUND_ASSETS.fuseRotate));
         const soundAsset = this.cache.audio.has(preferredAsset.key)
             ? preferredAsset
             : (this.cache.audio.has(fallbackAsset.key) ? fallbackAsset : null);
@@ -869,7 +925,9 @@ export default class GameScene extends Phaser.Scene {
         this._playOneShot(soundAsset, {
             volume: portKey === 'flow'
                 ? SOUND_VOLUMES.puzzleRotate
-                : (portKey === 'gear' ? SOUND_VOLUMES.puzzleLock : SOUND_VOLUMES.reveal),
+                : (portKey === 'gear'
+                    ? SOUND_VOLUMES.puzzleLock
+                    : (portKey === 'code' ? SOUND_VOLUMES.notification : SOUND_VOLUMES.reveal)),
         });
     }
 
@@ -1441,7 +1499,7 @@ export default class GameScene extends Phaser.Scene {
         if (!machineVariant) {
             view.header = 'UNIT DOSSIER';
             view.body = [
-                `PERIOD ${GameState.period} // DAY ${GameState.day}`,
+                `DAY ${GameState.period} // SHIFT ${GameState.day}`,
                 '',
                 this._shiftRunning ? 'Conveyor line is active.' : 'Conveyor line is in standby.',
                 'No robot is currently latched to the inspection bay.',
@@ -1455,30 +1513,46 @@ export default class GameScene extends Phaser.Scene {
             const gateState = this._getPuzzleGateState(machineVariant);
             const flowState = this._getMachineFlowState(machineVariant);
             const gearState = this._getMachineGearState(machineVariant);
+            const debugState = this._getMachineDebugState(machineVariant);
             const brokenTargets = this._getBrokenRepairTargetDisplayNames(machineVariant, flowState);
             const repairedTargets = this._getRepairedRepairTargetDisplayNames(machineVariant, flowState);
             const gridState = gateState.evaluation.solved
                 ? 'GRID STABLE'
-                : (gateState.evaluation.impossible
-                    ? (gateState.mainInspected ? 'IMPOSSIBLE VERIFIED' : 'IMPOSSIBLE FLAGGED')
+                : (gateState.mainScrapRequired
+                    ? (gateState.mainInspected ? 'SCRAP VERIFIED' : 'SCRAP FLAGGED')
                     : 'GRID UNRESOLVED');
             const flowLine = machineVariant._uiOtherPuzzleRequired
-                ? (machineVariant._uiOtherPuzzleSolved || flowState?.completed
-                    ? 'FLOW ROUTED'
-                    : 'FLOW INCOMPLETE')
+                ? (flowState?.scrapRequired
+                    ? (flowState.scrapStatus || 'FLOW SCRAP')
+                    : (machineVariant._uiOtherPuzzleSolved || flowState?.completed
+                        ? 'FLOW ROUTED'
+                        : 'FLOW INCOMPLETE'))
                 : 'NO FLOW MODULE';
             const gearLine = machineVariant._uiGearPuzzleRequired
-                ? (gearState?.jammed
+                ? (gearState?.scrapRequired
+                    ? (gearState.scrapStatus || 'GEAR SCRAP')
+                    : (gearState?.jammed
                     ? 'GEAR JAMMED'
                     : (machineVariant._uiGearPuzzleSolved || gearState?.completed
                         ? 'GEAR SYNCHRONIZED'
-                        : (gearState?.sinkPowered ? 'OUTPUT SHAFT LIVE' : 'GEAR STALLED')))
+                        : (gearState?.sinkPowered ? 'OUTPUT SHAFT LIVE' : 'GEAR STALLED'))))
                 : 'NO GEAR MODULE';
+            const debugLine = machineVariant._uiDebugPuzzleRequired
+                ? (debugState?.scrapRequired
+                    ? (debugState.scrapStatus || 'CODE SCRAP')
+                    : (machineVariant._uiDebugPuzzleSolved || debugState?.completed
+                    ? (debugState?.fixed ? 'PATCH APPLIED' : 'CODE STABLE')
+                    : (debugState?.phase === 'repair'
+                        ? 'PATCH REQUIRED'
+                        : ((debugState?.corruptionCount || 0) > 0 ? 'CODE CORRUPT' : 'TEST READY'))))
+                : 'NO CODE MODULE';
             const commsLine = !machineVariant.hasCommunication
                 ? 'NO SIGNAL'
                 : (this._hasBrokenVoiceBox(machineVariant) ? 'VOICE BOX OFFLINE' : 'VOICE CHANNEL CLEAR');
             const directiveLine = gateState.ready
-                ? (gateState.evaluation.impossible ? 'SCRAP BONUS READY' : 'ACCEPT READY')
+                ? (gateState.scrapRequired
+                    ? (gateState.scrapBonusEligible ? 'SCRAP BONUS READY' : 'SCRAP READY')
+                    : 'ACCEPT READY')
                 : this._getAuxiliaryDirectiveText(machineVariant);
             const noteLines = this._phoneInfoNote
                 ? [
@@ -1497,6 +1571,7 @@ export default class GameScene extends Phaser.Scene {
                 `COMMS: ${commsLine}`,
                 `FLOW: ${flowLine}`,
                 `GEAR: ${gearLine}`,
+                `CODE: ${debugLine}`,
                 `LIVE: ${repairedTargets.length > 0 ? repairedTargets.join(', ') : 'NONE'}`,
                 `OFFLINE: ${brokenTargets.length > 0 ? brokenTargets.join(', ') : 'NONE'}`,
                 `DIRECTIVE: ${directiveLine}`,
@@ -1550,7 +1625,7 @@ export default class GameScene extends Phaser.Scene {
             ? 'NO ALERTS'
             : (this._phoneUnreadNotifications > 0
                 ? `${this._phoneUnreadNotifications} NEW // ${total} LOGGED`
-                : `${total} LOGGED // DAY ${GameState.day}`);
+                : `${total} LOGGED // DAY ${GameState.period}`);
         view.scrollOffset = 0;
         view.stickToBottom = false;
 
@@ -1584,7 +1659,7 @@ export default class GameScene extends Phaser.Scene {
             title: title || 'NOTICE',
             message: message || '',
             status: status || '',
-            stamp: `DAY ${GameState.day} // PERIOD ${GameState.period}`,
+            stamp: `DAY ${GameState.period} // SHIFT ${GameState.day}`,
         });
         if (unread) {
             this._phoneUnreadNotifications += 1;
@@ -1650,6 +1725,10 @@ export default class GameScene extends Phaser.Scene {
         this._commSequenceEvent = null;
     }
 
+    _getOpeningCallConfig() {
+        return getOpeningPhoneCallSequence(GameState.period, GameState.day);
+    }
+
     _getOpeningCallFallbackMs(line) {
         const textLength = String(line?.text || '').length;
         return Math.max(FIRST_SHIFT_INTRO.fallbackVoiceMs, Math.round(textLength * 32));
@@ -1703,6 +1782,7 @@ export default class GameScene extends Phaser.Scene {
 
     _awaitOpeningCallAnswer(sequenceId) {
         return new Promise((resolve) => {
+            const callConfig = this._getOpeningCallConfig();
             this._openingCallChoiceResolver = (choice) => {
                 if (sequenceId !== this._openingCallSequenceId) {
                     resolve(null);
@@ -1718,7 +1798,7 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(
                 FIRST_SHIFT_INTRO.incomingHeader,
                 this._getPhoneViewState('chat').body,
-                FIRST_SHIFT_INTRO.questionStatus,
+                callConfig.questionStatus,
                 'chat',
             );
         });
@@ -1726,13 +1806,14 @@ export default class GameScene extends Phaser.Scene {
 
     async _runOpeningPhoneCallScript() {
         const sequenceId = ++this._openingCallSequenceId;
+        const callConfig = this._getOpeningCallConfig();
         let append = false;
 
         this._phoneChoicePhase = 'voice';
         this._setPhoneButtonsActive(false);
         this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, '', 'VOICE CONNECTED', 'chat');
 
-        for (const line of FIRST_SHIFT_INTRO.script.intro) {
+        for (const line of callConfig.script.intro) {
             if (sequenceId !== this._openingCallSequenceId) return;
             await this._playOpeningCallLine(line, { append });
             append = true;
@@ -1745,8 +1826,8 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneButtonSelection(choice);
 
         const branchLines = choice === 'accept'
-            ? FIRST_SHIFT_INTRO.script.yes
-            : FIRST_SHIFT_INTRO.script.no;
+            ? callConfig.script.yes
+            : callConfig.script.no;
 
         for (const line of branchLines) {
             if (sequenceId !== this._openingCallSequenceId) return;
@@ -1835,33 +1916,60 @@ export default class GameScene extends Phaser.Scene {
         return machineVariant._uiGearPuzzleEvidence || machineVariant.gearPuzzle.progress || null;
     }
 
+    _getMachineDebugState(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant?.debugPuzzle) return null;
+        return machineVariant._uiDebugPuzzleEvidence || machineVariant.debugPuzzle.progress || null;
+    }
+
     _getAuxiliaryPuzzleState(machineVariant = this._currentMachineVariant) {
         const flowRequired = Boolean(machineVariant?.flowPuzzle);
         const gearRequired = Boolean(machineVariant?.gearPuzzle);
+        const debugRequired = Boolean(machineVariant?.debugPuzzle);
         const flowState = this._getMachineFlowState(machineVariant);
         const gearState = this._getMachineGearState(machineVariant);
+        const debugState = this._getMachineDebugState(machineVariant);
         const flowSolved = !flowRequired || Boolean(machineVariant?._uiOtherPuzzleSolved) || Boolean(flowState?.completed);
         const gearSolved = !gearRequired || Boolean(machineVariant?._uiGearPuzzleSolved) || Boolean(gearState?.completed);
+        const debugSolved = !debugRequired || Boolean(machineVariant?._uiDebugPuzzleSolved) || Boolean(debugState?.completed);
 
         if (machineVariant && flowSolved) machineVariant._uiOtherPuzzleSolved = true;
         if (machineVariant && gearSolved) machineVariant._uiGearPuzzleSolved = true;
+        if (machineVariant && debugSolved) machineVariant._uiDebugPuzzleSolved = true;
 
         const entries = [
             { key: 'flow', label: 'FLOW', required: flowRequired, solved: flowSolved, state: flowState },
             { key: 'gear', label: 'GEAR', required: gearRequired, solved: gearSolved, state: gearState },
-        ];
+            { key: 'code', label: 'CODE', required: debugRequired, solved: debugSolved, state: debugState },
+        ].map((entry) => {
+            const scrapRequired = Boolean(entry.state?.scrapRequired);
+            const reviewed = Boolean(entry.state?.reviewed || entry.state?.completed);
+
+            return {
+                ...entry,
+                scrapRequired,
+                reviewed,
+                scrapKind: entry.state?.scrapKind || null,
+                resolved: !entry.required || entry.solved || (scrapRequired && reviewed),
+            };
+        });
         const requiredEntries = entries.filter((entry) => entry.required);
         const solvedEntries = requiredEntries.filter((entry) => entry.solved);
-        const pendingEntries = requiredEntries.filter((entry) => !entry.solved);
+        const resolvedEntries = requiredEntries.filter((entry) => entry.resolved);
+        const pendingEntries = requiredEntries.filter((entry) => !entry.resolved);
+        const scrapEntries = requiredEntries.filter((entry) => entry.scrapRequired);
 
         return {
             entries,
             requiredEntries,
             solvedEntries,
+            resolvedEntries,
             pendingEntries,
+            scrapEntries,
             requiredCount: requiredEntries.length,
             solvedCount: solvedEntries.length,
+            resolvedCount: resolvedEntries.length,
             pendingCount: pendingEntries.length,
+            scrapCount: scrapEntries.length,
             allSolved: pendingEntries.length === 0,
         };
     }
@@ -2060,12 +2168,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _startOpeningPhoneCall() {
+        const callConfig = this._getOpeningCallConfig();
         this._openingCallSequenceId += 1;
         this._openingCallChoiceResolver = null;
         this._setCommStandbyState('Factory monitor online.', 'LISTENING');
         this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.silenceBeforePhoneMs, () => {
             this._phoneChoicePhase = 'incoming';
-            this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, FIRST_SHIFT_INTRO.incomingBody, 'PRESS ✓ OR X', 'chat');
+            this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, callConfig.incomingBody, 'PRESS ✓ OR X', 'chat');
             this._setPhoneButtonSelection(null);
             this._setPhoneButtonsActive(true);
             this._playOneShot(SOUND_ASSETS.phoneRing, { volume: SOUND_VOLUMES.phoneRing });
@@ -2145,12 +2254,13 @@ export default class GameScene extends Phaser.Scene {
 
     _awaitPhoneDismiss(keepCurrentBody = false) {
         if (this._phoneChoicePhase !== 'voice') return;
+        const callConfig = this._getOpeningCallConfig();
         this._phoneChoicePhase = 'post-voice';
         this._setPhoneButtonSelection(null);
         this._showPhonePanel(
             FIRST_SHIFT_INTRO.incomingHeader,
-            keepCurrentBody ? this._getPhoneViewState('chat').body : FIRST_SHIFT_INTRO.postVoiceBody,
-            FIRST_SHIFT_INTRO.continueStatus,
+            keepCurrentBody ? this._getPhoneViewState('chat').body : callConfig.postVoiceBody,
+            callConfig.continueStatus,
         );
         this._setPhoneButtonsActive(true);
     }
@@ -2185,14 +2295,21 @@ export default class GameScene extends Phaser.Scene {
         this._settingsOverlay?.open();
     }
 
+    _canOpenRulebookOverlay() {
+        return !this._settingsOverlay?.isVisible()
+            && !this._settingsOpen
+            && !this._overlayModalOpen
+            && !this._machinePuzzleOverlay?.isVisible();
+    }
+
     _toggleRulebookTablet() {
-        if (this._settingsOverlay?.isVisible()) {
-            this._settingsOverlay.close(true);
+        if (this._rulebook?.isVisible()) {
+            this._rulebook.hide();
+            return;
         }
 
-        this._machinePuzzleOverlay?.close(true);
-        this._hideAuxiliaryOverlays();
-        this._rulebook?.toggle();
+        if (!this._canOpenRulebookOverlay()) return;
+        this._rulebook?.show();
     }
 
     _setUnderlyingSceneInputsEnabled(enabled) {
@@ -2207,7 +2324,7 @@ export default class GameScene extends Phaser.Scene {
         Object.values(this._phoneButtons || {}).forEach((button) => setEnabled(button.bg));
         Object.values(this._phoneViewButtons || {}).forEach((button) => setEnabled(button.bg));
         Object.values(this._conveyorRulingButtons || {}).forEach((button) => setEnabled(button.bgRect));
-        [this._miniGridPort?.hit, this._miniFlowPort?.hit, this._miniGearPort?.hit].forEach((target) => setEnabled(target));
+        [this._miniGridPort?.hit, this._miniFlowPort?.hit, this._miniGearPort?.hit, this._miniCodePort?.hit].forEach((target) => setEnabled(target));
         (this._deskItems || []).forEach((item) => setEnabled(item.inputZone));
     }
 
@@ -2236,6 +2353,7 @@ export default class GameScene extends Phaser.Scene {
     _hideAuxiliaryOverlays() {
         this._otherPuzzleOverlay?.hide();
         this._gearPuzzleOverlay?.hide();
+        this._debugPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(false);
     }
 
@@ -2428,7 +2546,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._shapeLegendText.setText('0 open  1 wall  2-5 charge  = linked pair');
 
-        this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID OR FLOW');
+        this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID, FLOW, GEAR, OR CODE');
 
         const controlsCenterX = 840;
         const rulingDefs = [
@@ -2515,6 +2633,7 @@ export default class GameScene extends Phaser.Scene {
         this._shiftAwaitingFinalRuling = false;
         this._otherPuzzleReturnPhoneState = null;
         this._gearPuzzleReturnPhoneState = null;
+        this._debugPuzzleReturnPhoneState = null;
         if (this._monitorText) this._monitorText.setText(message);
         if (this._unitContainer) this._unitContainer.setVisible(false);
         this._setMachineWorklightVisible(false);
@@ -2539,6 +2658,7 @@ export default class GameScene extends Phaser.Scene {
         if (!this._currentMachineVariant) return;
         if (this._otherPuzzleOverlay?.active) return;
         if (this._gearPuzzleOverlay?.active) return;
+        if (this._debugPuzzleOverlay?.active) return;
 
         this._clearUnsafeAcceptConfirmation();
         this._currentMachineVariant._uiPuzzleOpened = true;
@@ -2554,7 +2674,8 @@ export default class GameScene extends Phaser.Scene {
             && Boolean(this._currentCase)
             && !this._machinePuzzleOverlay?.isVisible()
             && !this._otherPuzzleOverlay?.active
-            && !this._gearPuzzleOverlay?.active;
+                && !this._gearPuzzleOverlay?.active
+                && !this._debugPuzzleOverlay?.active;
     }
 
     _setConveyorRulingButtonsVisible(visible) {
@@ -2620,7 +2741,17 @@ export default class GameScene extends Phaser.Scene {
         let color = '#8fc1cf';
 
         const gateState = this._getPuzzleGateState();
-        const { evaluation, mainInspected, mainReady, otherRequired, otherSolved, auxiliaryState } = gateState;
+        const {
+            evaluation,
+            mainInspected,
+            mainReady,
+            otherRequired,
+            otherSolved,
+            auxiliaryState,
+            mainScrapRequired,
+            scrapRequired,
+            scrapBonusEligible,
+        } = gateState;
         const pendingLabels = auxiliaryState.pendingEntries.map((entry) => entry.label);
 
         if (!this._currentMachineVariant) {
@@ -2638,8 +2769,8 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (!mainReady) {
-            if (evaluation.impossible && !mainInspected) {
-                text = 'OPEN MAIN PUZZLE // CONFIRM THE IMPOSSIBLE GRID';
+            if (mainScrapRequired && !mainInspected) {
+                text = 'OPEN MAIN PUZZLE // CONFIRM THE SCRAP SIGNAL';
                 color = '#ffd685';
             } else {
                 text = otherRequired
@@ -2650,19 +2781,19 @@ export default class GameScene extends Phaser.Scene {
                 color = '#8fc1cf';
             }
         } else if (!otherSolved) {
-            text = evaluation.impossible
+            text = scrapRequired
                 ? (pendingLabels.length === 1
-                    ? `GRID IMPOSSIBLE // CLEAR ${pendingLabels[0]} PUZZLE TO SCRAP`
-                    : 'GRID IMPOSSIBLE // CLEAR AUX PUZZLES TO SCRAP')
+                    ? `SCRAP SIGNAL FOUND // CLEAR ${pendingLabels[0]} PUZZLE`
+                    : 'SCRAP SIGNAL FOUND // CLEAR AUX PUZZLES')
                 : (pendingLabels.length === 1
                     ? `MAIN PUZZLE CLEARED // FINISH ${pendingLabels[0]} PUZZLE`
                     : 'MAIN PUZZLE CLEARED // FINISH AUX PUZZLES');
             color = '#9bc2ff';
-        } else if (evaluation.impossible) {
-            text = otherRequired
-                ? 'ALL REQUIRED PUZZLES CLEARED // SCRAP BONUS READY'
-                : 'IMPOSSIBLE GRID CONFIRMED // SCRAP BONUS READY';
-            color = '#ffd685';
+        } else if (scrapRequired) {
+            text = scrapBonusEligible
+                ? 'ALL REQUIRED CHECKS CLEARED // SCRAP BONUS READY'
+                : 'ALL REQUIRED CHECKS CLEARED // SCRAP READY';
+            color = scrapBonusEligible ? '#ffd685' : '#ffb49b';
         } else {
             text = otherRequired
                 ? 'ALL REQUIRED PUZZLES CLEARED // ACCEPT FOR CLEAN PAY'
@@ -2740,15 +2871,24 @@ export default class GameScene extends Phaser.Scene {
         const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
         const otherRequired = auxiliaryState.requiredCount > 0;
         const otherSolved = auxiliaryState.allSolved;
-        const mainReady = evaluation.solved || (evaluation.impossible && mainInspected);
+        const mainScrapRequired = Boolean(evaluation.scrapRequired || evaluation.impossible);
+        const mainScrapKind = evaluation.impossible ? 'unsalvageable' : (evaluation.scrapKind || null);
+        const mainReady = evaluation.solved || (mainScrapRequired && mainInspected);
+        const scrapRequired = mainScrapRequired || auxiliaryState.scrapCount > 0;
+        const scrapBonusEligible = mainScrapKind === 'unsalvageable'
+            || auxiliaryState.scrapEntries.some((entry) => entry.scrapKind === 'unsalvageable');
 
         return {
             evaluation,
             mainInspected,
+            mainScrapRequired,
+            mainScrapKind,
             mainReady,
             otherRequired,
             otherSolved,
             auxiliaryState,
+            scrapRequired,
+            scrapBonusEligible,
             ready: mainReady && otherSolved,
         };
     }
@@ -2785,6 +2925,17 @@ export default class GameScene extends Phaser.Scene {
                 strokeColor: 0x75ffaf,
                 labelColor: '#d4ffea',
                 subtitleColor: '#aef3c6',
+            };
+        }
+
+        if (flowState?.scrapRequired) {
+            const hazard = flowState.scrapKind === 'hazard';
+            return {
+                subtitle: hazard ? 'HAZARD' : 'SCRAP',
+                fillColor: hazard ? 0x5b1815 : 0x4b3520,
+                strokeColor: hazard ? 0xff7d77 : 0xffc27a,
+                labelColor: hazard ? '#ffd6d2' : '#ffe5bb',
+                subtitleColor: hazard ? '#ffb4ae' : '#ffd685',
             };
         }
 
@@ -2852,6 +3003,17 @@ export default class GameScene extends Phaser.Scene {
             };
         }
 
+        if (gearState?.scrapRequired) {
+            const hazard = gearState.scrapKind === 'hazard';
+            return {
+                subtitle: hazard ? 'HAZARD' : 'SCRAP',
+                fillColor: hazard ? 0x5b1815 : 0x4b3520,
+                strokeColor: hazard ? 0xff7d77 : 0xffc27a,
+                labelColor: hazard ? '#ffd7d3' : '#ffe5bb',
+                subtitleColor: hazard ? '#ffb4ae' : '#ffd685',
+            };
+        }
+
         if (gearState?.sinkPowered) {
             return {
                 subtitle: 'LIVE PATH',
@@ -2874,6 +3036,81 @@ export default class GameScene extends Phaser.Scene {
 
         return {
             subtitle: 'REQUIRED',
+            fillColor: 0x28334a,
+            strokeColor: 0x8bb8ff,
+            labelColor: '#dbe7ff',
+            subtitleColor: '#9bc2ff',
+        };
+    }
+
+    _getDebugPuzzleButtonState(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant) {
+            return {
+                subtitle: 'AWAITING UNIT',
+                fillColor: 0x28334a,
+                strokeColor: 0x8bb8ff,
+                labelColor: '#dbe7ff',
+                subtitleColor: '#9bc2ff',
+            };
+        }
+
+        if (!machineVariant._uiDebugPuzzleRequired) {
+            return {
+                subtitle: 'NOT REQUIRED',
+                fillColor: 0x18352d,
+                strokeColor: 0x65c4af,
+                labelColor: '#d7fff3',
+                subtitleColor: '#9de7d5',
+            };
+        }
+
+        const debugState = this._getMachineDebugState(machineVariant);
+        const solved = Boolean(machineVariant._uiDebugPuzzleSolved) || Boolean(debugState?.completed);
+
+        if (solved) {
+            machineVariant._uiDebugPuzzleSolved = true;
+            return {
+                subtitle: debugState?.fixed ? 'PATCHED' : 'STABLE',
+                fillColor: 0x174b2a,
+                strokeColor: 0x75ffaf,
+                labelColor: '#d4ffea',
+                subtitleColor: '#aef3c6',
+            };
+        }
+
+        if (debugState?.scrapRequired) {
+            const hazard = debugState.scrapKind === 'hazard';
+            return {
+                subtitle: hazard ? 'HAZARD' : 'SCRAP',
+                fillColor: hazard ? 0x5b1815 : 0x4b3520,
+                strokeColor: hazard ? 0xff7d77 : 0xffc27a,
+                labelColor: hazard ? '#ffd7d3' : '#ffe5bb',
+                subtitleColor: hazard ? '#ffb4ae' : '#ffd685',
+            };
+        }
+
+        if (debugState?.phase === 'repair') {
+            return {
+                subtitle: 'PATCH',
+                fillColor: 0x4b3520,
+                strokeColor: 0xffcc77,
+                labelColor: '#ffe5bb',
+                subtitleColor: '#ffd685',
+            };
+        }
+
+        if ((debugState?.corruptionCount || 0) > 0) {
+            return {
+                subtitle: 'CORRUPT',
+                fillColor: 0x5b1815,
+                strokeColor: 0xff7d77,
+                labelColor: '#ffd6d2',
+                subtitleColor: '#ffb4ae',
+            };
+        }
+
+        return {
+            subtitle: 'TEST READY',
             fillColor: 0x28334a,
             strokeColor: 0x8bb8ff,
             labelColor: '#dbe7ff',
@@ -2912,6 +3149,7 @@ export default class GameScene extends Phaser.Scene {
         if (!this._currentMachineVariant) return;
         if (this._otherPuzzleOverlay?.active) return;
         if (this._gearPuzzleOverlay?.active) return;
+        if (this._debugPuzzleOverlay?.active) return;
 
         if (!this._currentMachineVariant._uiOtherPuzzleRequired) {
             this._showFeedback('NO OTHER PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
@@ -2927,6 +3165,7 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleReturnVoiceBroken = this._hasBrokenVoiceBox(this._currentMachineVariant);
         this._machinePuzzleOverlay?.close(true);
         this._gearPuzzleOverlay?.hide();
+        this._debugPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
         this._otherPuzzleOverlay.show({
@@ -3029,6 +3268,36 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        if (evidence?.scrapRequired) {
+            const gateState = this._getPuzzleGateState();
+            const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
+            this._showFeedback(
+                gateState.ready
+                    ? (gateState.scrapBonusEligible
+                        ? 'FLOW SCRAP CONFIRMED // FILE SCRAP'
+                        : 'FLOW DISQUALIFIED // FILE SCRAP')
+                    : gateState.mainReady
+                        ? (pendingLabels.length === 1
+                            ? `FLOW SIGNAL FOUND // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'FLOW SIGNAL FOUND // FINISH REMAINING PUZZLES')
+                        : 'FLOW SIGNAL FOUND // FINISH MAIN PUZZLE',
+                evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
+            );
+            this._setPhoneInfoNote(
+                evidence.scrapReason || 'Secondary routing diagnostic failed policy. Scrap the unit.',
+                evidence.scrapStatus || 'SCRAP REQUIRED'
+            );
+            if (returnPhoneState) {
+                this._restorePhonePanelState(returnPhoneState);
+                if ((voiceRestoredNow || voiceBrokeNow) && shouldRestoreChatView && this._currentMachineVariant?.hasCommunication) {
+                    this._refreshMachineConversationPanel(this._currentMachineVariant, voiceBrokeNow ? 'BROKEN VOICE BOX' : 'VOICE RESTORED', {
+                        activate: true,
+                    });
+                }
+            }
+            return;
+        }
+
         if (evidence?.forbiddenUsed) {
             glitchBurst(this, this._cmFilter, 320);
             this._showFeedback('OTHER PUZZLE FAILED // UNAUTHORIZED MODIFICATION', '#ff7f73');
@@ -3078,6 +3347,7 @@ export default class GameScene extends Phaser.Scene {
         if (!this._currentMachineVariant) return;
         if (this._gearPuzzleOverlay?.active) return;
         if (this._otherPuzzleOverlay?.active) return;
+        if (this._debugPuzzleOverlay?.active) return;
 
         if (!this._currentMachineVariant._uiGearPuzzleRequired) {
             this._showFeedback('NO GEAR PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
@@ -3092,6 +3362,7 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleReturnPhoneState = this._capturePhonePanelState();
         this._machinePuzzleOverlay?.close(true);
         this._otherPuzzleOverlay?.hide();
+        this._debugPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
         this._gearPuzzleOverlay.show({
@@ -3114,7 +3385,6 @@ export default class GameScene extends Phaser.Scene {
         }
         this._currentMachineVariant._uiGearPuzzleSolved = Boolean(evidence?.completed);
 
-        const header = this._getMachineLinkHeader(this._currentMachineVariant);
         const gateState = this._getPuzzleGateState();
         const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
 
@@ -3145,10 +3415,148 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        if (evidence?.scrapRequired) {
+            this._showFeedback(
+                gateState.ready
+                    ? (gateState.scrapBonusEligible
+                        ? 'GEAR SCRAP CONFIRMED // FILE SCRAP'
+                        : 'GEAR DISQUALIFIED // FILE SCRAP')
+                    : gateState.mainReady
+                        ? (pendingLabels.length === 1
+                            ? `GEAR SIGNAL FOUND // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'GEAR SIGNAL FOUND // FINISH REMAINING PUZZLES')
+                        : 'GEAR SIGNAL FOUND // FINISH MAIN PUZZLE',
+                evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
+            );
+            this._setPhoneInfoNote(
+                evidence.scrapReason || 'Drive train inspection failed. Scrap the unit.',
+                evidence.scrapStatus || 'SCRAP REQUIRED'
+            );
+            if (returnPhoneState) {
+                this._restorePhonePanelState(returnPhoneState);
+            }
+            return;
+        }
+
         this._showFeedback('GEAR PUZZLE INCOMPLETE // OUTPUT SHAFT STALLED', '#ffd685');
         this._setPhoneInfoNote(
             'Gear train still stalls before the output axle. Reposition the loose parts and try again.',
             'GEAR STALLED'
+        );
+        if (returnPhoneState) {
+            this._restorePhonePanelState(returnPhoneState);
+        }
+    }
+
+    _openDebugPuzzle() {
+        if (!this._currentMachineVariant) return;
+        if (this._debugPuzzleOverlay?.active) return;
+        if (this._otherPuzzleOverlay?.active) return;
+        if (this._gearPuzzleOverlay?.active) return;
+
+        if (!this._currentMachineVariant._uiDebugPuzzleRequired) {
+            this._showFeedback('NO CODE PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
+            this._setPhoneInfoNote(
+                'No software diagnostic is attached to this unit.',
+                'CODE PANEL IDLE'
+            );
+            return;
+        }
+
+        this._clearUnsafeAcceptConfirmation();
+        this._debugPuzzleReturnPhoneState = this._capturePhonePanelState();
+        this._machinePuzzleOverlay?.close(true);
+        this._otherPuzzleOverlay?.hide();
+        this._gearPuzzleOverlay?.hide();
+        this._setAuxiliaryOverlayModalOpen(true);
+        this._showMiniMachinePanel();
+        this._debugPuzzleOverlay.show({
+            machineName: this._currentMachineVariant.name,
+            debugPuzzle: this._currentMachineVariant.debugPuzzle,
+            evidence: this._getMachineDebugState(this._currentMachineVariant),
+        });
+        this._refreshFactoryActionButtons();
+    }
+
+    _handleDebugPuzzleClosed(evidence) {
+        this._setAuxiliaryOverlayModalOpen(false);
+        if (!this._currentMachineVariant) return;
+
+        this._clearUnsafeAcceptConfirmation();
+        const returnPhoneState = this._debugPuzzleReturnPhoneState;
+        this._debugPuzzleReturnPhoneState = null;
+        this._currentMachineVariant._uiDebugPuzzleEvidence = evidence || null;
+        if (this._currentMachineVariant.debugPuzzle && evidence) {
+            this._currentMachineVariant.debugPuzzle.progress = evidence;
+        }
+        this._currentMachineVariant._uiDebugPuzzleSolved = Boolean(evidence?.completed);
+
+        const gateState = this._getPuzzleGateState();
+        const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
+
+        this._updateConveyorDecisionHint();
+        this._refreshOtherPuzzleButton();
+        this._refreshFactoryActionButtons();
+        this._refreshPhoneInfoBoard(this._currentMachineVariant);
+
+        if (evidence?.completed) {
+            this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
+            this._showFeedback(
+                gateState.ready
+                    ? 'ALL PUZZLES CLEARED // FILE YOUR RULING'
+                    : gateState.mainReady
+                        ? (pendingLabels.length === 1
+                            ? `CODE CLEAR // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'CODE CLEAR // FINISH REMAINING PUZZLES')
+                        : 'CODE PUZZLE CLEARED // FINISH MAIN PUZZLE',
+                '#c7ff86'
+            );
+            this._setPhoneInfoNote(
+                evidence.fixed
+                    ? 'Software patch applied. Diagnostic output now matches the expected result.'
+                    : 'Software diagnostic passed cleanly. No patch was required.',
+                evidence.fixed ? 'PATCH APPLIED' : 'CODE CLEAR'
+            );
+            if (returnPhoneState) {
+                this._restorePhonePanelState(returnPhoneState);
+            }
+            return;
+        }
+
+        if (evidence?.scrapRequired) {
+            this._showFeedback(
+                gateState.ready
+                    ? (gateState.scrapBonusEligible
+                        ? 'SCRAP SIGNAL CONFIRMED // FILE SCRAP'
+                        : 'DISQUALIFYING SIGNAL CONFIRMED // FILE SCRAP')
+                    : gateState.mainReady
+                        ? (pendingLabels.length === 1
+                            ? `CODE SIGNAL FOUND // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'CODE SIGNAL FOUND // FINISH REMAINING PUZZLES')
+                        : 'CODE SIGNAL FOUND // FINISH MAIN PUZZLE',
+                evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
+            );
+            this._setPhoneInfoNote(
+                evidence.scrapReason || 'Software diagnostic is outside floor repair policy. Scrap the unit.',
+                evidence.scrapStatus || 'SCRAP REQUIRED'
+            );
+            if (returnPhoneState) {
+                this._restorePhonePanelState(returnPhoneState);
+            }
+            return;
+        }
+
+        this._showFeedback(
+            evidence?.phase === 'repair'
+                ? 'CODE DRIFT DETECTED // APPLY THE PATCH'
+                : 'CODE TEST INCOMPLETE // FINISH THE COMMAND',
+            evidence?.phase === 'repair' ? '#ffd685' : '#8fc1cf'
+        );
+        this._setPhoneInfoNote(
+            evidence?.phase === 'repair'
+                ? `Test output drifted. Expected ${evidence.expectedOutput}, received ${evidence.actualOutput}.`
+                : 'Software diagnostic is still incomplete. Keep typing until the command clears.',
+            evidence?.phase === 'repair' ? 'PATCH REQUIRED' : 'CODE TEST READY'
         );
         if (returnPhoneState) {
             this._restorePhonePanelState(returnPhoneState);
@@ -3216,18 +3624,20 @@ export default class GameScene extends Phaser.Scene {
         let notificationStatus = panelStatus;
 
         if (action === 'scrap') {
-            if (evaluation.impossible && gateState.ready) {
-                payDelta = PAYCHECK_DELTA * SCRAP_BONUS_MULTIPLIER;
-                feedbackText = 'IMPOSSIBLE UNIT SCRAPPED // BONUS AWARDED';
-                feedbackColor = '#ffd685';
-                panelStatus = 'SCRAP BONUS';
-            } else if (evaluation.impossible) {
+            if (gateState.scrapRequired && gateState.ready) {
+                payDelta = PAYCHECK_DELTA * (gateState.scrapBonusEligible ? SCRAP_BONUS_MULTIPLIER : 1);
+                feedbackText = gateState.scrapBonusEligible
+                    ? 'UNSALVAGEABLE UNIT SCRAPPED // BONUS AWARDED'
+                    : 'DISQUALIFIED UNIT SCRAPPED // VERDICT ACCEPTED';
+                feedbackColor = gateState.scrapBonusEligible ? '#ffd685' : '#ffcf91';
+                panelStatus = gateState.scrapBonusEligible ? 'SCRAP BONUS' : 'SCRAP FILED';
+            } else if (gateState.scrapRequired) {
                 payDelta = -PAYCHECK_DELTA;
                 wasPenalty = true;
-                feedbackText = 'IMPOSSIBLE GRID UNCONFIRMED // DEDUCTION APPLIED';
+                feedbackText = 'SCRAP SIGNAL UNCONFIRMED // DEDUCTION APPLIED';
                 feedbackColor = '#ff7f73';
                 panelStatus = 'SCRAP PENALTY';
-                notificationMessage = 'DOC NOTE: Required diagnostics were not cleared before scrapping. Payroll deduction applied.';
+                notificationMessage = 'DOC NOTE: Required diagnostics were not fully verified before scrapping. Payroll deduction applied.';
                 notificationStatus = 'DOC NOTICE';
             } else {
                 payDelta = -PAYCHECK_DELTA;
@@ -3238,7 +3648,7 @@ export default class GameScene extends Phaser.Scene {
                 notificationMessage = 'DOC NOTE: This unit was still repairable. Payroll deduction applied.';
                 notificationStatus = 'DOC NOTICE';
             }
-        } else if (gateState.ready && !evaluation.impossible) {
+        } else if (gateState.ready && !gateState.scrapRequired) {
             payDelta = PAYCHECK_DELTA;
             feedbackText = gateState.otherRequired
                 ? 'ALL REQUIRED PUZZLES CLEARED // UNIT ACCEPTED'
@@ -3248,10 +3658,14 @@ export default class GameScene extends Phaser.Scene {
         } else {
             payDelta = -PAYCHECK_DELTA;
             wasPenalty = true;
-            feedbackText = 'UNFIXED UNIT ACCEPTED // DEDUCTION APPLIED';
+            feedbackText = gateState.scrapRequired
+                ? 'DISQUALIFIED UNIT ACCEPTED // DEDUCTION APPLIED'
+                : 'UNFIXED UNIT ACCEPTED // DEDUCTION APPLIED';
             feedbackColor = '#ff7f73';
             panelStatus = 'ACCEPT PENALTY';
-            notificationMessage = 'DOC NOTE: Not all required puzzles were fixed. Payroll deduction applied.';
+            notificationMessage = gateState.scrapRequired
+                ? 'DOC NOTE: A disqualifying subsystem signal was ignored. Payroll deduction applied.'
+                : 'DOC NOTE: Not all required puzzles were fixed. Payroll deduction applied.';
             notificationStatus = 'DOC NOTICE';
         }
 
@@ -3277,7 +3691,9 @@ export default class GameScene extends Phaser.Scene {
                 );
             } else {
                 this._setPhoneInfoNote(
-                    'Impossible grid confirmed. Scrap bonus logged.',
+                    gateState.scrapBonusEligible
+                        ? 'Unsalvageable subsystem confirmed. Scrap bonus logged.'
+                        : 'Disqualifying subsystem signal confirmed. Scrap logged.',
                     panelStatus
                 );
             }
@@ -3306,12 +3722,99 @@ export default class GameScene extends Phaser.Scene {
         this._logLines.push(text);
     }
 
+    _normalizeKonamiKey(key) {
+        const normalized = String(key || '').toUpperCase();
+        if (normalized === 'ARROWUP') return 'UP';
+        if (normalized === 'ARROWDOWN') return 'DOWN';
+        if (normalized === 'ARROWLEFT') return 'LEFT';
+        if (normalized === 'ARROWRIGHT') return 'RIGHT';
+        if (/^[A-Z]$/.test(normalized)) return normalized;
+        return null;
+    }
+
+    _findFinalCaseDefinition() {
+        const allCases = this.cache.json.get('cases') || [];
+        const finalCase = allCases.find((item) => item?.isFinalCase);
+        return finalCase ? { ...finalCase } : null;
+    }
+
+    _handleKonamiKey(event) {
+        if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) return;
+        if (this._overlayModalOpen || this._rulebook?.isVisible() || this._settingsOverlay?.isVisible() || this._machinePuzzleOverlay?.isVisible()) return;
+        if (event?.repeat) return;
+
+        const key = this._normalizeKonamiKey(event?.key);
+        if (!key) return;
+
+        const expectedKey = this._konamiSequence[this._konamiProgress];
+        if (key === expectedKey) {
+            this._konamiProgress += 1;
+            if (this._konamiProgress >= this._konamiSequence.length) {
+                this._konamiProgress = 0;
+                this._armKonamiFinale();
+            }
+            return;
+        }
+
+        this._konamiProgress = key === this._konamiSequence[0] ? 1 : 0;
+    }
+
+    _armKonamiFinale() {
+        if (this._konamiFinaleTriggered) return;
+
+        const finalCase = this._findFinalCaseDefinition();
+        if (!finalCase) return;
+
+        this._konamiFinaleTriggered = true;
+        finalCase._konamiOverride = true;
+
+        this._nextCaseEvent?.remove(false);
+        this._nextCaseEvent = null;
+        this._advanceCaseEvent?.remove(false);
+        this._advanceCaseEvent = null;
+        this._clearUnsafeAcceptConfirmation();
+        this._clearPhoneTyping();
+        this._actionLocked = false;
+        this._pendingExitAction = null;
+        this._shiftAwaitingFinalRuling = false;
+        this._machinePuzzleOverlay?.close(true);
+        this._hideAuxiliaryOverlays();
+        this._hideMiniMachinePanel(true);
+        this._unitMoveTween?.stop();
+        this._unitMoveTween = null;
+        this._currentCase = null;
+        this._currentMachineVariant = null;
+        this._setScreen('conveyor');
+        this._unitContainer?.setVisible(false).setPosition(MACHINE_PRESENTATION.conveyorEntryX, 420).setAngle(0).setAlpha(1);
+        this._setMachineWorklightVisible(false);
+        this._machineDialogueText?.setText('');
+        this._clearMachineGridDisplays();
+        this._queue = [finalCase];
+        this._baseQueue = [finalCase];
+        this._queueIndex = 0;
+        this._setConveyorRulingButtonsVisible(false);
+        this._showFeedback('KONAMI OVERRIDE // FINAL UNIT ROUTING', '#ffd685');
+        this._pushPhoneNotification(
+            'OVERRIDE ACCEPTED',
+            'Konami sequence received. Routing the final unit to the line.',
+            'SECRET ROUTE',
+            {
+                activate: false,
+                unread: this._phoneViewMode !== 'notifications',
+                soundAsset: SOUND_ASSETS.notificationAlert,
+            }
+        );
+        this._loadNextCase();
+        this._setPhoneInfoNote('Hidden override active. This is now the final inspection unit.', 'SECRET ROUTE');
+    }
+
     _loadNextCase() {
         if (!this._shiftRunning) return;
 
         this._clearUnsafeAcceptConfirmation();
         this._phoneInfoNote = null;
-        this._currentCase = this._queue[this._queueIndex];
+        const queuedCase = this._queue[this._queueIndex];
+        this._currentCase = queuedCase ? { ...queuedCase } : null;
         if (!this._currentCase) {
             this._setFactoryIdleState('QUEUE EMPTY\n\nSTATUS: HOLD');
             return;
@@ -3335,16 +3838,25 @@ export default class GameScene extends Phaser.Scene {
         this._currentMachineVariant._uiGearPuzzleRequired = Boolean(this._currentMachineVariant.gearPuzzle);
         this._currentMachineVariant._uiGearPuzzleSolved = !this._currentMachineVariant._uiGearPuzzleRequired;
         this._currentMachineVariant._uiGearPuzzleEvidence = null;
+        this._currentMachineVariant._uiDebugPuzzleRequired = Boolean(this._currentMachineVariant.debugPuzzle);
+        this._currentMachineVariant._uiDebugPuzzleSolved = !this._currentMachineVariant._uiDebugPuzzleRequired;
+        this._currentMachineVariant._uiDebugPuzzleEvidence = null;
         this._hideMiniMachinePanel(true);
 
+        const monitorStatus = this._currentCase._konamiOverride || this._currentCase.isFinalCase
+            ? 'STATUS: FINAL'
+            : 'STATUS: ACTIVE';
         this._monitorText.setText(
-            `UNIT INCOMING\n\n${this._currentCase.id}\n${this._currentCase.name}\nSTATUS: ACTIVE`
+            `UNIT INCOMING\n\n${this._currentCase.id}\n${this._currentCase.name}\n${monitorStatus}`
         );
 
         this._machineDialogueText.setText('');
         this._handlePuzzleStateChanged(this._currentMachineVariant, this._currentMachineVariant.puzzleState);
         this._playMachineConversation(this._currentMachineVariant);
         this._refreshPhoneInfoBoard(this._currentMachineVariant);
+        if (this._currentCase._konamiOverride) {
+            this._setPhoneInfoNote('Konami override active. This unit will end the shift.', 'FINAL ROUTE');
+        }
         this._syncMiniMachinePanel();
 
         this._applyMachineSprite(this._conveyorUnitSprite, 1.0);
@@ -3381,7 +3893,8 @@ export default class GameScene extends Phaser.Scene {
     _advanceCase() {
         const justProcessed = this._currentCase;
         const shiftShouldEnd = this._shiftAwaitingFinalRuling;
-        const shouldShowStandby = !shiftShouldEnd && !(justProcessed?.isFinalCase && GameState.isLastDay());
+        const finalCaseTriggered = Boolean(justProcessed?.isFinalCase) && (GameState.isLastDay() || justProcessed?._konamiOverride);
+        const shouldShowStandby = !shiftShouldEnd && !finalCaseTriggered;
         this._advanceCaseEvent?.remove(false);
         this._advanceCaseEvent = null;
         this._actionLocked = false;
@@ -3440,7 +3953,7 @@ export default class GameScene extends Phaser.Scene {
             onComplete: () => {
                 clearUnitPresentation();
 
-                if (justProcessed?.isFinalCase && GameState.isLastDay()) {
+                if (finalCaseTriggered) {
                     this._shiftRunning = false;
                     this._endShift(true);
                     return;
@@ -3452,7 +3965,7 @@ export default class GameScene extends Phaser.Scene {
             },
         });
 
-        if (justProcessed?.isFinalCase && GameState.isLastDay()) {
+        if (finalCaseTriggered) {
             return;
         }
 
@@ -3509,7 +4022,7 @@ export default class GameScene extends Phaser.Scene {
         };
 
         this.time.delayedCall(220, () => {
-            if (fromFinalCase && GameState.isLastDay()) {
+            if (fromFinalCase && (GameState.isLastDay() || this._konamiFinaleTriggered)) {
                 this.scene.start('End');
                 return;
             }
@@ -3704,20 +4217,28 @@ export default class GameScene extends Phaser.Scene {
         this._miniFlowLabelContainer?.removeAll(true);
         this._miniGearGfx?.clear();
         this._miniGearLabelContainer?.removeAll(true);
+        this._miniCodeGfx?.clear();
+        this._miniCodeLabelContainer?.removeAll(true);
     }
 
     _getMiniMachinePanelStatusText(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.puzzleState?.getEvaluation) return 'CLICK A UNIT TO INSPECT';
 
         const gridEvaluation = machineVariant.puzzleState.getEvaluation();
-        const gridMatched = gridEvaluation.matchedChargeCells + gridEvaluation.matchedEqualityPairs + gridEvaluation.matchedChargeGroups;
-        const gridTotal = gridEvaluation.totalChargeCells + gridEvaluation.totalEqualityPairs + gridEvaluation.totalChargeGroups;
+        const gridMatched = gridEvaluation.matchedChargeCells
+            + gridEvaluation.matchedEqualityPairs
+            + (gridEvaluation.matchedInequalityPairs || 0)
+            + gridEvaluation.matchedChargeGroups;
+        const gridTotal = gridEvaluation.totalChargeCells
+            + gridEvaluation.totalEqualityPairs
+            + (gridEvaluation.totalInequalityPairs || 0)
+            + gridEvaluation.totalChargeGroups;
         const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
 
         const gridText = gridEvaluation.solved
             ? 'GRID CLEAR'
-            : gridEvaluation.impossible && machineVariant._uiPuzzleOpened
-                ? 'GRID MARKED'
+            : ((gridEvaluation.scrapRequired || gridEvaluation.impossible) && machineVariant._uiPuzzleOpened)
+                ? (gridEvaluation.scrapStatus || 'GRID MARKED')
                 : `GRID ${gridMatched}/${gridTotal}`;
         const auxiliaryText = auxiliaryState.requiredCount === 0
             ? 'AUX NONE'
@@ -3750,12 +4271,14 @@ export default class GameScene extends Phaser.Scene {
         this._miniFlowLabelContainer?.removeAll(true);
         this._miniGearGfx?.clear();
         this._miniGearLabelContainer?.removeAll(true);
+        this._miniCodeGfx?.clear();
+        this._miniCodeLabelContainer?.removeAll(true);
         this._currentMiniGearPreviewRect = null;
 
         if (!this._currentMachineVariant) {
             this._miniMachinePanelTitle?.setText('MACHINE PORTS');
             this._miniPuzzleStatusText?.setText('CLICK A UNIT TO INSPECT');
-            this._miniMachineHintText?.setText('CLICK GRID, FLOW, OR GEAR PORT');
+            this._miniMachineHintText?.setText('CLICK GRID, FLOW, GEAR, OR CODE PORT');
             this._miniMachineImage?.setTexture('unit_placeholder').setScale(1.28).setAngle(0).setPosition(190, 152);
             this._miniMachineShadow?.setPosition(188, 184).setAlpha(0.12);
             this._miniGearPreviewPhase = 0;
@@ -3799,10 +4322,12 @@ export default class GameScene extends Phaser.Scene {
             artAngle: 0,
             gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
             flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+            codePreview: { x: 86, y: 24, width: 74, height: 22, label: 'CODE' },
             gearPreview: { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' },
         };
         const resolvedGridPreview = clampRect(scaleRect(layout.gridPreview, { x: 42, y: 72, width: 58, height: 40, label: 'GRID' }));
         const resolvedFlowPreview = clampRect(scaleRect(layout.flowPreview, { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' }));
+        const resolvedCodePreview = clampRect(scaleRect(layout.codePreview, { x: 86, y: 24, width: 74, height: 22, label: 'CODE' }));
         const resolvedGearPreview = clampRect(scaleRect(layout.gearPreview, { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' }));
         const resolvedArtX = (layout.artX ?? 106) * scaleX;
         const resolvedArtY = (layout.artY ?? 132) * scaleY;
@@ -3810,7 +4335,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._miniMachinePanelTitle?.setText(`${this._currentMachineVariant.name.toUpperCase()} PORT MAP`);
         this._miniPuzzleStatusText?.setText(this._getMiniMachinePanelStatusText(this._currentMachineVariant));
-        this._miniMachineHintText?.setText('CLICK GRID, FLOW, OR GEAR PORT');
+        this._miniMachineHintText?.setText('CLICK GRID, FLOW, GEAR, OR CODE PORT');
         this._applyMachineSprite(this._miniMachineImage, resolvedArtScale);
         this._miniMachineImage
             .setPosition(resolvedArtX, resolvedArtY)
@@ -3822,6 +4347,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._layoutMiniMachinePort(this._miniGridPort, resolvedGridPreview);
         this._layoutMiniMachinePort(this._miniFlowPort, resolvedFlowPreview);
+    this._layoutMiniMachinePort(this._miniCodePort, resolvedCodePreview);
         this._layoutMiniMachinePort(this._miniGearPort, resolvedGearPreview);
         this._currentMiniGearPreviewRect = { ...resolvedGearPreview };
         this._miniGearPreviewTimer = 0;
@@ -3856,6 +4382,17 @@ export default class GameScene extends Phaser.Scene {
             height: resolvedFlowPreview.height,
         });
 
+        this._drawDebugPreviewLayer({
+            debugPuzzle: this._currentMachineVariant.debugPuzzle,
+            evidence: this._getMachineDebugState(this._currentMachineVariant),
+            graphics: this._miniCodeGfx,
+            labelContainer: this._miniCodeLabelContainer,
+            left: resolvedCodePreview.x,
+            top: resolvedCodePreview.y,
+            width: resolvedCodePreview.width,
+            height: resolvedCodePreview.height,
+        });
+
         this._drawGearPreviewLayer({
             gearPuzzle: this._currentMachineVariant.gearPuzzle,
             evidence: this._getMachineGearState(this._currentMachineVariant),
@@ -3872,16 +4409,18 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _updateMiniMachinePortStyles() {
-        if (!this._miniGridPort || !this._miniFlowPort || !this._miniGearPort) return;
+        if (!this._miniGridPort || !this._miniFlowPort || !this._miniGearPort || !this._miniCodePort) return;
 
         const hasMachine = Boolean(this._currentMachineVariant);
         const canInteract = this._screen === 'conveyor' && hasMachine && !this._settingsOpen && !this._actionLocked;
         const evaluation = this._currentMachineVariant?.puzzleState?.getEvaluation?.() || { solved: false, impossible: false };
         const flowState = this._getOtherPuzzleButtonState();
         const gearState = this._getGearPuzzleButtonState();
+        const debugState = this._getDebugPuzzleButtonState();
         const alpha = canInteract ? 1 : (hasMachine ? 0.74 : 0.36);
         const gridHovered = this._miniMachinePanelHoverPort === 'grid';
         const flowHovered = this._miniMachinePanelHoverPort === 'flow';
+        const codeHovered = this._miniMachinePanelHoverPort === 'code';
         const gearHovered = this._miniMachinePanelHoverPort === 'gear';
 
         let gridStroke = 0x8bb8ff;
@@ -3892,10 +4431,11 @@ export default class GameScene extends Phaser.Scene {
             gridStroke = 0x75ffaf;
             gridFill = 0x174b2a;
             gridLabelColor = '#d4ffea';
-        } else if (evaluation.impossible && this._currentMachineVariant?._uiPuzzleOpened) {
-            gridStroke = 0xffcc77;
-            gridFill = 0x4b3520;
-            gridLabelColor = '#ffe5bb';
+        } else if ((evaluation.scrapRequired || evaluation.impossible) && this._currentMachineVariant?._uiPuzzleOpened) {
+            const hazard = evaluation.scrapKind === 'hazard';
+            gridStroke = hazard ? 0xff7d77 : 0xffcc77;
+            gridFill = hazard ? 0x5b1815 : 0x4b3520;
+            gridLabelColor = hazard ? '#ffd6d2' : '#ffe5bb';
         }
 
         this._miniGridPort.frame
@@ -3914,6 +4454,14 @@ export default class GameScene extends Phaser.Scene {
             .setColor(flowState.labelColor)
             .setAlpha(alpha);
 
+        this._miniCodePort.frame
+            .setFillStyle(debugState.fillColor, codeHovered ? 0.32 : 0.18)
+            .setStrokeStyle(codeHovered ? 3 : 2, debugState.strokeColor, 0.92)
+            .setAlpha(alpha);
+        this._miniCodePort.label
+            .setColor(debugState.labelColor)
+            .setAlpha(alpha);
+
         this._miniGearPort.frame
             .setFillStyle(gearState.fillColor, gearHovered ? 0.32 : 0.18)
             .setStrokeStyle(gearHovered ? 3 : 2, gearState.strokeColor, 0.92)
@@ -3928,6 +4476,7 @@ export default class GameScene extends Phaser.Scene {
 
         const evaluation = puzzleState.getEvaluation();
         if (evaluation.solved) return 'GRID STABLE // ACCEPT SAFE';
+        if (evaluation.scrapRequired) return `${evaluation.scrapStatus || 'GRID SCRAP'} // FILE SCRAP`;
         if (evaluation.impossible) return 'IMPOSSIBLE GRID // SCRAP BONUS';
 
         const segments = [`CHG ${evaluation.matchedChargeCells}/${evaluation.totalChargeCells}`];
@@ -3936,6 +4485,9 @@ export default class GameScene extends Phaser.Scene {
         }
         if (evaluation.totalEqualityPairs > 0) {
             segments.push(`EQ ${evaluation.matchedEqualityPairs}/${evaluation.totalEqualityPairs}`);
+        }
+        if ((evaluation.totalInequalityPairs || 0) > 0) {
+            segments.push(`NE ${evaluation.matchedInequalityPairs}/${evaluation.totalInequalityPairs}`);
         }
 
         return segments.join('  ');
@@ -4120,6 +4672,36 @@ export default class GameScene extends Phaser.Scene {
             lineGraphics.strokePath();
         });
 
+        const notEqualPairs = puzzleState?.getNotEqualLinkPairs?.() || [];
+        notEqualPairs.forEach((pair) => {
+            const start = {
+                x: startX + (pair.a.col * cellSize) + (cellSize / 2),
+                y: startY + (pair.a.row * cellSize) + (cellSize / 2),
+            };
+            const end = {
+                x: startX + (pair.b.col * cellSize) + (cellSize / 2),
+                y: startY + (pair.b.row * cellSize) + (cellSize / 2),
+            };
+            const glowColor = pair.matched ? 0xffe6da : 0xffb19c;
+            const lineColor = pair.matched ? 0xffc9b7 : 0xff8b76;
+            const midX = (start.x + end.x) / 2;
+            const midY = (start.y + end.y) / 2;
+
+            lineGraphics.lineStyle(glowWidth, glowColor, pair.matched ? 0.44 : 0.18);
+            lineGraphics.beginPath();
+            lineGraphics.moveTo(start.x, start.y);
+            lineGraphics.lineTo(end.x, end.y);
+            lineGraphics.strokePath();
+
+            lineGraphics.lineStyle(lineWidth, lineColor, pair.matched ? 0.95 : 0.78);
+            lineGraphics.beginPath();
+            lineGraphics.moveTo(start.x, start.y);
+            lineGraphics.lineTo(end.x, end.y);
+            lineGraphics.strokePath();
+            lineGraphics.lineBetween(midX - Math.max(2, cellSize * 0.18), midY - Math.max(2, cellSize * 0.18), midX + Math.max(2, cellSize * 0.18), midY + Math.max(2, cellSize * 0.18));
+            lineGraphics.lineBetween(midX + Math.max(2, cellSize * 0.18), midY - Math.max(2, cellSize * 0.18), midX - Math.max(2, cellSize * 0.18), midY + Math.max(2, cellSize * 0.18));
+        });
+
         shapeGrid.forEach((row, rowIndex) => {
             row.forEach((cell, colIndex) => {
                 const x = startX + (colIndex * cellSize);
@@ -4129,17 +4711,28 @@ export default class GameScene extends Phaser.Scene {
                 const matchedCharge = puzzleState?.isChargeMatched?.(rowIndex, colIndex) ?? false;
                 const hasEqualLink = puzzleState?.isEqualLinkCell?.(rowIndex, colIndex) ?? false;
                 const matchedEqualLink = puzzleState?.isEqualMatched?.(rowIndex, colIndex) ?? false;
+                const hasNotEqualLink = puzzleState?.isNotEqualLinkCell?.(rowIndex, colIndex) ?? false;
+                const matchedNotEqualLink = puzzleState?.isNotEqualMatched?.(rowIndex, colIndex) ?? false;
                 const chargeGroup = puzzleState?.getChargeGroupAt?.(rowIndex, colIndex) || null;
                 const chargeGroupSummary = chargeGroup ? chargeGroupMap.get(chargeGroup.key) : null;
                 const matchedGroup = chargeGroupSummary?.matched ?? false;
                 const placedPipCount = puzzleState?.getPlacedPipCount?.(rowIndex, colIndex) ?? null;
                 const isPlaced = placedPipCount !== null;
+                const inspectionFault = puzzleState?.inspectionFault
+                    && puzzleState.inspectionFault.row === rowIndex
+                    && puzzleState.inspectionFault.col === colIndex
+                    ? puzzleState.inspectionFault
+                    : null;
 
                 let fillColor = 0x122029;
                 let fillAlpha = 0.35;
                 let strokeColor = 0x4d7182;
 
-                if (baseValue === 1) {
+                if (inspectionFault) {
+                    fillColor = inspectionFault.kind === 'hazard' ? 0x66231e : 0x5e4420;
+                    fillAlpha = 0.94;
+                    strokeColor = inspectionFault.kind === 'hazard' ? 0xff9d91 : 0xffd08a;
+                } else if (baseValue === 1) {
                     fillColor = 0x3c4a58;
                     fillAlpha = 0.9;
                     strokeColor = 0xb7c7d5;
@@ -4163,6 +4756,14 @@ export default class GameScene extends Phaser.Scene {
                             : 0x2d3f49;
                     fillAlpha = 0.92;
                     strokeColor = matchedEqualLink ? 0xffefad : 0xe6d987;
+                } else if (hasNotEqualLink) {
+                    fillColor = matchedNotEqualLink
+                        ? 0x7d4334
+                        : isPlaced
+                            ? 0x663128
+                            : 0x372322;
+                    fillAlpha = 0.92;
+                    strokeColor = matchedNotEqualLink ? 0xffccb8 : 0xff9b86;
                 } else if (isPlaced) {
                     fillColor = 0x48cd75;
                     fillAlpha = 0.92;
@@ -4176,7 +4777,10 @@ export default class GameScene extends Phaser.Scene {
 
                 let overlayText = '';
                 let overlayColor = '#e9f8c8';
-                if (chargeLevel > 0) {
+                if (inspectionFault) {
+                    overlayText = '!';
+                    overlayColor = inspectionFault.kind === 'hazard' ? '#ffd0c9' : '#ffe2aa';
+                } else if (chargeLevel > 0) {
                     overlayText = String(chargeLevel);
                     overlayColor = matchedCharge ? '#fff7b9' : '#ffe684';
                 } else if (chargeGroupSummary) {
@@ -4184,6 +4788,9 @@ export default class GameScene extends Phaser.Scene {
                 } else if (hasEqualLink) {
                     overlayText = '=';
                     overlayColor = matchedEqualLink ? '#fff7b9' : '#ffe684';
+                } else if (hasNotEqualLink) {
+                    overlayText = '!=';
+                    overlayColor = matchedNotEqualLink ? '#ffd9c9' : '#ffab92';
                 } else if (placedPipCount !== null) {
                     overlayText = String(placedPipCount);
                     overlayColor = '#d9ffe4';
@@ -4200,14 +4807,14 @@ export default class GameScene extends Phaser.Scene {
                     labelContainer?.add(label);
                 }
 
-                if (placedPipCount !== null && (chargeLevel > 0 || hasEqualLink)) {
+                if (placedPipCount !== null && (chargeLevel > 0 || hasEqualLink || hasNotEqualLink)) {
                     const badgeRadius = Math.max(5, Math.floor(cellSize * 0.22));
                     const badgeX = x + (cellSize - cellInset) - badgeRadius - 1;
                     const badgeY = y + (cellSize - cellInset) - badgeRadius - 1;
 
-                    graphics.fillStyle((matchedCharge || matchedEqualLink) ? 0x294823 : 0x183129, 0.96);
+                    graphics.fillStyle((matchedCharge || matchedEqualLink || matchedNotEqualLink) ? 0x294823 : 0x183129, 0.96);
                     graphics.fillCircle(badgeX, badgeY, badgeRadius);
-                    graphics.lineStyle(1, (matchedCharge || matchedEqualLink) ? 0xf8ffd3 : 0xbdf8d0, 0.92);
+                    graphics.lineStyle(1, (matchedCharge || matchedEqualLink || matchedNotEqualLink) ? 0xf8ffd3 : 0xbdf8d0, 0.92);
                     graphics.strokeCircle(badgeX, badgeY, badgeRadius);
 
                     const badgeLabel = this.add.text(badgeX, badgeY, String(placedPipCount), {
@@ -4251,7 +4858,9 @@ export default class GameScene extends Phaser.Scene {
 
         const board = gearPuzzle.board;
         const pieces = evidence?.pieces || gearPuzzle.progress?.pieces || gearPuzzle.pieces || [];
-        const evaluation = evaluateGearPuzzleBoard(board, pieces);
+        const evaluation = evaluateGearPuzzleBoard(board, pieces, {
+            allowRustedGears: Boolean(gearPuzzle?.allowRustedGears || evidence?.allowRustedGears),
+        });
         const rows = board.length;
         const cols = Math.max(...board.map((row) => row.length));
         const cellSize = Math.max(8, Math.min(14, Math.floor(Math.min(width / cols, height / rows))));
@@ -4410,13 +5019,22 @@ export default class GameScene extends Phaser.Scene {
             });
         });
 
-        const progressLabel = this.add.text(left + 2, top + height - 10, evaluation.completed ? 'GEAR CLEAR' : 'GEAR STALL', {
+        const progressLabel = this.add.text(
+            left + 2,
+            top + height - 10,
+            evidence?.scrapRequired
+                ? (evidence.scrapStatus || 'GEAR SCRAP')
+                : (evaluation.completed ? 'GEAR CLEAR' : 'GEAR STALL'),
+            {
             fontFamily: 'Courier New',
             fontSize: '7px',
-            color: evaluation.completed ? '#d8ffe6' : '#ffd6a8',
+            color: evidence?.scrapRequired
+                ? (evidence.scrapKind === 'hazard' ? '#ffc4bd' : '#ffd6a8')
+                : (evaluation.completed ? '#d8ffe6' : '#ffd6a8'),
             stroke: '#000000',
             strokeThickness: 2,
-        });
+            }
+        );
         labelContainer?.add(progressLabel);
     }
 
@@ -4447,9 +5065,21 @@ export default class GameScene extends Phaser.Scene {
 
         const flowState = evidence || flowPuzzle.progress || null;
 
-        const outputs = Object.entries(flowPuzzle.outputs || {}).map(([row, label]) => ({ row: Number(row), label }));
+        const sources = Array.isArray(flowPuzzle.sources) && flowPuzzle.sources.length > 0
+            ? flowPuzzle.sources
+            : [{ key: 'main', row: flowPuzzle.sourceRow ?? 2, powerClass: 'neutral', label: 'PWR' }];
+        const outputs = Array.isArray(flowPuzzle.outputSpecs) && flowPuzzle.outputSpecs.length > 0
+            ? flowPuzzle.outputSpecs.map((output) => ({ ...output }))
+            : Object.entries(flowPuzzle.outputs || {}).map(([row, label]) => ({
+                key: label,
+                row: Number(row),
+                label,
+                powerClass: 'neutral',
+                exactFeeds: 1,
+            }));
         const totalOutputs = outputs.length;
-        const connectedOutputs = new Set(flowState?.completed ? outputs.map((output) => output.label) : (flowState?.connected || []));
+        const connectedOutputs = new Set(flowState?.completed ? outputs.map((output) => output.key) : (flowState?.connected || []));
+        const outputFeeds = flowState?.outputFeeds || {};
         const forbiddenUsed = Boolean(flowState?.forbiddenUsed);
         const contentLeft = left + 8;
         const contentRight = left + width - 8;
@@ -4457,15 +5087,37 @@ export default class GameScene extends Phaser.Scene {
         const contentBottom = top + height - 14;
         const branchX = left + Math.max(24, Math.floor(width * 0.46));
         const sourceX = contentLeft + 4;
-        const sourceY = contentTop + (((flowPuzzle.sourceRow + 0.5) / 5) * (contentBottom - contentTop));
         const lineColor = forbiddenUsed ? 0xff9977 : 0x6ef7ff;
         const dimColor = 0x385764;
 
-        graphics.lineStyle(2, dimColor, 0.75);
-        graphics.beginPath();
-        graphics.moveTo(sourceX, sourceY);
-        graphics.lineTo(branchX, sourceY);
-        graphics.strokePath();
+        sources.forEach((source) => {
+            const palette = source.powerClass === 'green'
+                ? { tint: 0x73ffae, label: '#73ffae' }
+                : source.powerClass === 'orange'
+                    ? { tint: 0xffbe6d, label: '#ffbe6d' }
+                    : { tint: 0xffcc44, label: '#fff0b5' };
+            const sourceY = contentTop + (((source.row + 0.5) / 5) * (contentBottom - contentTop));
+
+            graphics.lineStyle(2, dimColor, 0.75);
+            graphics.beginPath();
+            graphics.moveTo(sourceX, sourceY);
+            graphics.lineTo(branchX, sourceY);
+            graphics.strokePath();
+
+            graphics.fillStyle(palette.tint, 1);
+            graphics.fillCircle(sourceX, sourceY, 4);
+            graphics.lineStyle(1, 0xf8f1d1, 0.8);
+            graphics.strokeCircle(sourceX, sourceY, 5);
+
+            const sourceLabel = this.add.text(sourceX + 8, sourceY, source.label || source.key, {
+                fontFamily: 'Courier New',
+                fontSize: '6px',
+                color: palette.label,
+                stroke: '#000000',
+                strokeThickness: 2,
+            }).setOrigin(0, 0.5);
+            labelContainer?.add(sourceLabel);
+        });
 
         if (outputs.length > 0) {
             const verticalTop = Math.min(...outputs.map((output) => contentTop + (((output.row + 0.5) / 5) * (contentBottom - contentTop))));
@@ -4477,16 +5129,19 @@ export default class GameScene extends Phaser.Scene {
             graphics.strokePath();
         }
 
-        graphics.fillStyle(0xffcc44, 1);
-        graphics.fillCircle(sourceX, sourceY, 4);
-        graphics.lineStyle(1, 0xfff0b5, 0.8);
-        graphics.strokeCircle(sourceX, sourceY, 5);
-
         outputs.forEach((output, index) => {
             const outputY = contentTop + (((output.row + 0.5) / 5) * (contentBottom - contentTop));
-            const isConnected = connectedOutputs.has(output.label);
+            const feeds = outputFeeds[output.key] || [];
+            const isConnected = connectedOutputs.has(output.key);
             const nodeX = contentRight - 2;
-            const branchColor = isConnected ? lineColor : dimColor;
+            const requiredColor = output.powerClass === 'green'
+                ? 0x73ffae
+                : output.powerClass === 'orange'
+                    ? 0xffbe6d
+                    : lineColor;
+            const branchColor = feeds.length > 0 && !isConnected
+                ? 0xff7d77
+                : (isConnected ? requiredColor : dimColor);
 
             graphics.lineStyle(isConnected ? 2 : 1, branchColor, isConnected ? 0.95 : 0.72);
             graphics.beginPath();
@@ -4494,15 +5149,15 @@ export default class GameScene extends Phaser.Scene {
             graphics.lineTo(nodeX, outputY);
             graphics.strokePath();
 
-            graphics.fillStyle(isConnected ? 0x62ffb0 : 0x294756, 1);
+            graphics.fillStyle(feeds.length > 0 ? branchColor : 0x294756, 1);
             graphics.fillCircle(nodeX, outputY, 4);
-            graphics.lineStyle(1, isConnected ? 0xe8fff1 : 0x6aa0b3, 0.85);
+            graphics.lineStyle(1, feeds.length > 0 ? 0xfff1e0 : 0x6aa0b3, 0.85);
             graphics.strokeCircle(nodeX, outputY, 5);
 
             const tag = this.add.text(nodeX - 10, outputY, String(index + 1), {
                 fontFamily: 'Courier New',
                 fontSize: '7px',
-                color: isConnected ? '#dfffee' : '#8db3bf',
+                color: feeds.length > 0 ? '#fff1e0' : '#8db3bf',
                 stroke: '#000000',
                 strokeThickness: 2,
             }).setOrigin(1, 0.5);
@@ -4518,19 +5173,105 @@ export default class GameScene extends Phaser.Scene {
             graphics.fillTriangle(hazardX, hazardY - 5, hazardX - 5, hazardY, hazardX, hazardY + 5);
         }
 
-        const progressText = flowState?.completed
-            ? 'FLOW CLEAR'
-            : forbiddenUsed
-                ? 'MODIFIED'
-                : `${connectedOutputs.size}/${totalOutputs} LIVE`;
+        const progressText = flowState?.scrapRequired
+            ? (flowState.scrapStatus || 'FLOW SCRAP')
+            : flowState?.completed
+                ? 'FLOW CLEAR'
+                : forbiddenUsed
+                    ? 'MODIFIED'
+                    : `${connectedOutputs.size}/${totalOutputs} LIVE`;
         const progressLabel = this.add.text(left + 2, top + height - 10, progressText, {
             fontFamily: 'Courier New',
             fontSize: '7px',
-            color: flowState?.completed ? '#d9ffe4' : forbiddenUsed ? '#ffd0c4' : '#a8d8f0',
+            color: flowState?.scrapRequired
+                ? (flowState.scrapKind === 'hazard' ? '#ffc4bd' : '#ffd6a8')
+                : flowState?.completed ? '#d9ffe4' : forbiddenUsed ? '#ffd0c4' : '#a8d8f0',
             stroke: '#000000',
             strokeThickness: 2,
         });
         labelContainer?.add(progressLabel);
+    }
+
+    _drawDebugPreviewLayer({
+        debugPuzzle,
+        evidence,
+        graphics,
+        labelContainer,
+        left,
+        top,
+        width,
+        height,
+    }) {
+        graphics.clear();
+        labelContainer?.removeAll(true);
+
+        if (!debugPuzzle) {
+            const emptyText = this.add.text(left + (width / 2), top + (height / 2), 'NO CODE', {
+                fontFamily: 'Courier New',
+                fontSize: '8px',
+                color: '#9bc2ff',
+                stroke: '#000000',
+                strokeThickness: 2,
+            }).setOrigin(0.5);
+            labelContainer?.add(emptyText);
+            return;
+        }
+
+        const debugState = evidence || debugPuzzle.progress || null;
+        const prompt = debugState?.phase === 'repair'
+            ? (debugState?.repairPrompt || debugPuzzle.repairPrompt || '')
+            : (debugState?.prompt || debugPuzzle.prompt || '');
+        const expectedOutput = debugState?.expectedOutput || debugPuzzle.expectedOutput || '';
+        const actualOutput = debugState?.actualOutput || expectedOutput;
+        const solved = Boolean(debugState?.completed);
+        const patchMode = debugState?.phase === 'repair' && !solved;
+        const corrupt = !solved && (debugState?.corruptionCount || 0) > 0;
+        const accentColor = solved
+            ? 0x75ffaf
+            : (patchMode ? 0xffcc77 : (corrupt ? 0xff7d77 : 0x8bb8ff));
+        const accentText = solved
+            ? (debugState?.fixed ? 'PATCHED' : 'STABLE')
+            : (patchMode ? 'PATCH' : (corrupt ? 'CORRUPT' : 'TEST'));
+
+        graphics.fillStyle(0x07131a, 0.98);
+        graphics.fillRoundedRect(left, top, width, height, 6);
+        graphics.lineStyle(1, accentColor, 0.88);
+        graphics.strokeRoundedRect(left, top, width, height, 6);
+        graphics.fillStyle(accentColor, solved ? 0.22 : 0.16);
+        graphics.fillRect(left + 4, top + 4, width - 8, Math.max(4, Math.floor(height * 0.18)));
+        graphics.lineStyle(1, accentColor, 0.18);
+        graphics.lineBetween(left + 8, top + (height * 0.58), left + width - 8, top + (height * 0.58));
+
+        const lineWidth = Math.max(10, Math.floor((width - 18) / 8));
+        const clippedPrompt = prompt.length > lineWidth ? `${prompt.slice(0, Math.max(0, lineWidth - 1))}…` : prompt;
+        const clippedActual = actualOutput.length > lineWidth ? `${actualOutput.slice(0, Math.max(0, lineWidth - 1))}…` : actualOutput;
+        const clippedExpected = expectedOutput.length > lineWidth ? `${expectedOutput.slice(0, Math.max(0, lineWidth - 1))}…` : expectedOutput;
+
+        const modeLabel = this.add.text(left + 8, top + 6, accentText, {
+            fontFamily: 'Courier New',
+            fontSize: '7px',
+            color: solved ? '#e2ffe9' : (patchMode ? '#fff0c8' : (corrupt ? '#ffd8d2' : '#deebff')),
+            stroke: '#000000',
+            strokeThickness: 2,
+        });
+        const promptLabel = this.add.text(left + 8, top + Math.max(14, height * 0.34), `> ${clippedPrompt}`, {
+            fontFamily: 'Courier New',
+            fontSize: '7px',
+            color: '#f2f7fb',
+            stroke: '#000000',
+            strokeThickness: 2,
+        });
+        const outputLabel = this.add.text(left + 8, top + Math.max(22, height * 0.68), clippedActual || clippedExpected || 'WAITING', {
+            fontFamily: 'Courier New',
+            fontSize: '7px',
+            color: solved ? '#d9ffe4' : (patchMode ? '#ffd7a8' : '#a8d8f0'),
+            stroke: '#000000',
+            strokeThickness: 2,
+        });
+
+        labelContainer?.add(modeLabel);
+        labelContainer?.add(promptLabel);
+        labelContainer?.add(outputLabel);
     }
 
     _getMachineResponseForAction(action) {

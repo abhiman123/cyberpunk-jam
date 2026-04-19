@@ -42,6 +42,7 @@ export default class RulebookOverlay {
         this.activeRuleIds = Array.isArray(activeRuleIds) ? [...activeRuleIds] : [];
         this.allRules = Array.isArray(allRules) ? allRules : [];
         this.newRuleIds = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
+        this._expandedRuleIds = new Set();
         this._callbacks = callbacks;
         this._visible = false;
         this._currentSection = 'rules';
@@ -58,8 +59,8 @@ export default class RulebookOverlay {
 
         this._build();
 
-        this._escKey = scene.input.keyboard.addKey('ESC');
-        this._bKey = scene.input.keyboard.addKey('B');
+        this._escKey = scene.input.keyboard.addKey('ESC', false);
+        this._bKey = scene.input.keyboard.addKey('B', false);
         this._escKey.on('down', this._handleEscape);
         this._bKey.on('down', this._handleToggle);
         this.scene.input.on('wheel', this._handleWheel);
@@ -70,7 +71,13 @@ export default class RulebookOverlay {
     // ── Public API ───────────────────────────────────────────────────────────
 
     toggle() {
-        this._visible ? this.hide() : this.show();
+        if (this._visible) {
+            this.hide();
+            return;
+        }
+
+        if (this._callbacks.canToggle && !this._callbacks.canToggle()) return;
+        this.show();
     }
 
     show() {
@@ -235,21 +242,36 @@ export default class RulebookOverlay {
         });
 
         // Summary panel in sidebar
-        const summaryPanel = this.scene.add.rectangle(RAIL_CENTER_X, 80, 132, 200, 0x101a20, 0.94)
+        const summaryPanelShadow = this.scene.add.rectangle(RAIL_CENTER_X + 2, 82, 136, 210, 0x000000, 0.24);
+        const summaryPanel = this.scene.add.rectangle(RAIL_CENTER_X, 80, 132, 206, 0x101a20, 0.96)
             .setStrokeStyle(1, 0x5c6973, 0.7);
-        this._sidebarShiftText = this.scene.add.text(-362, 0, '', {
+        const summaryHeaderBar = this.scene.add.rectangle(RAIL_CENTER_X, -8, 132, 26, 0x1c2a31, 1)
+            .setStrokeStyle(1, 0x62717b, 0.45);
+        const summaryAccent = this.scene.add.rectangle(RAIL_CENTER_X, 4, 108, 2, 0x8bd0c1, 0.5);
+        this._sidebarPanelLabel = this.scene.add.text(RAIL_CENTER_X, -8, 'LIVE PANEL', {
+            fontFamily: 'Courier New', fontSize: '11px', color: '#eef9ff', letterSpacing: 2,
+        }).setOrigin(0.5);
+        this._sidebarShiftText = this.scene.add.text(-362, 20, '', {
             fontFamily: 'Courier New', fontSize: '12px', color: '#f0f7fb', letterSpacing: 1,
         });
-        this._sidebarDateText = this.scene.add.text(-362, 30, '', {
+        this._sidebarDateText = this.scene.add.text(-362, 48, '', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#93adb9', wordWrap: { width: 110 }, lineSpacing: 2,
         });
-        this._sidebarRuleCountText = this.scene.add.text(-362, 72, '', {
-            fontFamily: 'Courier New', fontSize: '12px', color: '#dbe8ee',
+        const ruleChipBg = this.scene.add.rectangle(RAIL_CENTER_X, 98, 112, 22, 0x213842, 1)
+            .setStrokeStyle(1, 0x89c9d7, 0.5);
+        this._sidebarRuleCountText = this.scene.add.text(RAIL_CENTER_X, 98, '', {
+            fontFamily: 'Courier New', fontSize: '11px', color: '#dff5ff', letterSpacing: 1,
+        }).setOrigin(0.5);
+        const sectionLabel = this.scene.add.text(-362, 126, 'SECTION', {
+            fontFamily: 'Courier New', fontSize: '10px', color: '#82a2af', letterSpacing: 2,
         });
-        this._sidebarSectionText = this.scene.add.text(-362, 104, '', {
+        this._sidebarSectionText = this.scene.add.text(-362, 144, '', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#f4f0d2', letterSpacing: 1,
         });
-        this._sidebarHintText = this.scene.add.text(-362, 134, '', {
+        const hintLabel = this.scene.add.text(-362, 172, 'FOCUS', {
+            fontFamily: 'Courier New', fontSize: '10px', color: '#82a2af', letterSpacing: 2,
+        });
+        this._sidebarHintText = this.scene.add.text(-362, 190, '', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#8eb1bd', wordWrap: { width: 110 }, lineSpacing: 4,
         });
 
@@ -308,11 +330,18 @@ export default class RulebookOverlay {
             closeBg,
             closeLabel,
             ...Array.from(this._sectionButtons.values()).flatMap((b) => [b.bg, b.label]),
+            summaryPanelShadow,
             summaryPanel,
+            summaryHeaderBar,
+            summaryAccent,
+            this._sidebarPanelLabel,
             this._sidebarShiftText,
             this._sidebarDateText,
+            ruleChipBg,
             this._sidebarRuleCountText,
+            sectionLabel,
             this._sidebarSectionText,
+            hintLabel,
             this._sidebarHintText,
             this._scrollTrack,
             this._scrollThumb,
@@ -331,6 +360,7 @@ export default class RulebookOverlay {
     }
 
     _handleToggle() {
+        if (!this._visible && this._callbacks.canToggle && !this._callbacks.canToggle()) return;
         this.toggle();
     }
 
@@ -394,15 +424,16 @@ export default class RulebookOverlay {
                 ? 'BOOTH INFO'
                 : 'REFERENCE';
         const sectionHint = this._currentSection === 'rules'
-            ? 'Active shift laws and any newly added directives.'
+            ? 'Tap a directive to expand its subsystem checks.'
             : this._currentSection === 'booth'
                 ? 'Live booth context for this run.'
-                : 'Quick legends for every puzzle layer.';
+                : 'Quick legends for every puzzle layer, including CODE tasks.';
 
-        this._sidebarShiftText.setText(`DAY ${GameState.day}  //  P${GameState.period}`);
+        this._sidebarShiftText.setText(`DAY ${GameState.period}  //  SHIFT ${GameState.day}`);
         this._sidebarDateText.setText(GameState.formatCurrentShiftDate());
-        this._sidebarRuleCountText.setText(`ACTIVE RULES  ${this.activeRuleIds.length}`);
-        this._sidebarSectionText.setText(`OPEN: ${sectionTitle}`);
+        this._sidebarPanelLabel?.setText(this._currentSection === 'rules' ? 'LIVE PANEL' : this._currentSection === 'booth' ? 'STATUS FEED' : 'REFERENCE');
+        this._sidebarRuleCountText.setText(`${this.activeRuleIds.length} ACTIVE RULES`);
+        this._sidebarSectionText.setText(sectionTitle);
         this._sidebarHintText.setText(sectionHint);
     }
 
@@ -416,8 +447,18 @@ export default class RulebookOverlay {
         y = this._addSectionHeader('ACTIVE DIRECTIVES', 'Scroll for the full shift list.', y);
 
         const activeRules = this.allRules.filter((rule) => this.activeRuleIds.includes(rule.id));
+        const activeRuleIdSet = new Set(activeRules.map((rule) => rule.id));
+        this._expandedRuleIds = new Set([...this._expandedRuleIds].filter((ruleId) => activeRuleIdSet.has(ruleId)));
+        if (this._expandedRuleIds.size === 0 && activeRules.length > 0) {
+            const newestRuleId = activeRules.reduce((highestId, rule) => Math.max(highestId, Number(rule.id) || 0), 0);
+            if (newestRuleId > 0) {
+                this._expandedRuleIds.add(newestRuleId);
+            }
+        }
+
         activeRules.forEach((rule) => {
             const isNew = this.newRuleIds.has(rule.id);
+            const expanded = this._expandedRuleIds.has(rule.id);
             const tag = this.scene.add.text(16, y + 12, `RULE ${rule.id.toString().padStart(2, '0')}`, {
                 fontFamily: 'Courier New', fontSize: '13px',
                 color: isNew ? '#f5e7a7' : '#a8c8df', letterSpacing: 1,
@@ -426,14 +467,37 @@ export default class RulebookOverlay {
                 fontFamily: 'Courier New', fontSize: '15px', color: '#dde6ee',
                 wordWrap: { width: 536 }, lineSpacing: 5,
             });
-            const cardHeight = Math.max(86, body.height + 52);
+            const hint = this.scene.add.text(524, y + 14, expanded ? 'COLLAPSE' : 'EXPAND', {
+                fontFamily: 'Courier New', fontSize: '11px',
+                color: expanded ? '#e7f5ff' : '#8aa3b2', letterSpacing: 1,
+            }).setOrigin(1, 0);
+            const detailsText = expanded && Array.isArray(rule.details) && rule.details.length > 0
+                ? rule.details.map((detail) => `- ${detail}`).join('\n')
+                : '';
+            const details = this.scene.add.text(28, y + body.height + 48, detailsText, {
+                fontFamily: 'monospace', fontSize: '13px', color: '#aac0cb',
+                wordWrap: { width: 520 }, lineSpacing: 6,
+            }).setVisible(expanded && detailsText.length > 0);
+            const footer = this.scene.add.text(16, y + body.height + 56 + (details.visible ? details.height : 0), expanded ? 'Tap card to collapse.' : `${Array.isArray(rule.details) ? rule.details.length : 0} subsystem checks hidden.`, {
+                fontFamily: 'monospace', fontSize: '11px', color: '#7f93a0',
+            });
+            const cardHeight = Math.max(102, footer.y - y + footer.height + 14);
             const card = this.scene.add.rectangle(286, y + (cardHeight / 2), 572, cardHeight, 0x182228, 1)
                 .setOrigin(0.5, 0.5)
                 .setStrokeStyle(1, isNew ? 0xe6d89a : 0x4d5862, 0.72);
             const divider = this.scene.add.rectangle(286, y + 30, 540, 1, 0x33424b, 0.84)
                 .setOrigin(0.5, 0.5);
-            this._contentNodes.push(card, divider, tag, body);
-            this._contentContainer.add([card, divider, tag, body]);
+            const hitZone = this.scene.add.rectangle(286, y + (cardHeight / 2), 572, cardHeight, 0xffffff, 0.001)
+                .setOrigin(0.5, 0.5)
+                .setInteractive({ useHandCursor: true });
+            hitZone.on('pointerdown', () => {
+                if (expanded) this._expandedRuleIds.delete(rule.id);
+                else this._expandedRuleIds.add(rule.id);
+                this.refresh();
+            });
+
+            this._contentNodes.push(card, divider, tag, body, hint, details, footer, hitZone);
+            this._contentContainer.add([card, divider, tag, body, hint, details, footer, hitZone]);
             y += cardHeight + 14;
         });
 
@@ -488,7 +552,11 @@ export default class RulebookOverlay {
             y + 6, '#98b2bf',
         );
         y = this._addSectionParagraph(
-            'If the unit carries both FLOW and GEAR diagnostics, both need to be resolved before you earn clean pay or scrap bonus credit.',
+            'If the unit carries FLOW, GEAR, or CODE diagnostics, every required module needs to be resolved before you earn clean pay or scrap bonus credit.',
+            y + 6, '#98b2bf',
+        );
+        y = this._addSectionParagraph(
+            'Impossible assignment? Scrap the unit immediately. Day one only gives you that single directive for a reason.',
             y + 6, '#98b2bf',
         );
 
@@ -503,6 +571,7 @@ export default class RulebookOverlay {
         y = this._addDocCard('GROUP TARGETS', 'Outlined cell clusters add together as one total. Negative totals mean the cluster must stay below that number.', y, '#c8dbe5');
         y = this._addDocCard('FLOW', 'Power has to reach every listed subsystem. Amber hazard nodes block the route, so the path has to go around them.', y, '#c8dbe5');
         y = this._addDocCard('GEAR', 'Movable gears slide like puzzle parts. They do not rotate manually. The board clears once the output gear is powered and spinning.', y, '#c8dbe5');
+        y = this._addDocCard('CODE', 'Type the test command exactly. Wrong letters glow red, overflow glows dark red, and a failed test swaps to a repair command. Squash crawling bugs before they corrupt the line.', y, '#a8dfc7');
         y = this._addDocCard('COMMS', 'A broken VOICE target corrupts the machine link until that subsystem is restored.', y, '#a6c6d4');
 
         this._contentHeight = y + 20;

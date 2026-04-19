@@ -3,11 +3,11 @@ import { GameState } from '../GameState.js';
 import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 
 const PERIOD_BG    = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
-const PERIOD_LABEL = { 1: 'PERIOD ONE', 2: 'PERIOD TWO', 3: 'PERIOD THREE' };
+const PERIOD_LABEL = { 1: 'DAY ONE', 2: 'DAY TWO', 3: 'DAY THREE' };
 const PERIOD_SUB   = {
-    1: 'Reporting for duty.',
-    2: 'New directives have been issued.',
-    3: 'Final processing phase.',
+    1: 'Base repair directives active.',
+    2: 'Compliance directives active.',
+    3: 'Hazard directives active.',
 };
 
 export default class TransitionScene extends Phaser.Scene {

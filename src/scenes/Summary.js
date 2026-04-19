@@ -34,7 +34,7 @@ export default class SummaryScene extends Phaser.Scene {
             fontFamily: 'Courier New', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
         }).setOrigin(0.5);
 
-        this.add.text(cx, 102, `PERIOD ${GameState.period}  ·  DAY ${GameState.day} OF 2`, {
+        this.add.text(cx, 102, `DAY ${GameState.period}  ·  SHIFT ${GameState.day} OF 2`, {
             fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa', letterSpacing: 4,
         }).setOrigin(0.5);
 

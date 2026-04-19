@@ -7,7 +7,7 @@ export const GameState = {
     paycheckTotal: 0,
     casesProcessedThisShift: 0,
     hasSeenOpeningPhoneCall: false,
-    activeRules: [1, 2, 3],
+    activeRules: [1],
     rulebookSeenRules: new Set(),
 
     isLastDay() {
@@ -34,6 +34,10 @@ export const GameState = {
         return (Math.max(1, this.period) - 1) * 2 + (Math.max(1, this.day) - 1);
     },
 
+    getDirectiveDay() {
+        return Math.max(1, Math.min(3, this.period));
+    },
+
     getCurrentShiftDate() {
         const [year, month, day] = this.ensureCalendarAnchor().split('-').map(Number);
         const date = new Date(year, month - 1, day);
@@ -55,9 +59,12 @@ export const GameState = {
         } else {
             this.period++;
             this.day = 1;
-            if (this.period === 2) this.activeRules = [1, 2, 3, 4, 5];
-            if (this.period === 3) this.activeRules = [1, 2, 3, 4, 5, 6, 7];
         }
+
+        if (this.period <= 1) this.activeRules = [1];
+        else if (this.period === 2) this.activeRules = [1, 2];
+        else this.activeRules = [1, 2, 3];
+
         this.casesProcessedThisShift = 0;
     },
 
@@ -70,7 +77,7 @@ export const GameState = {
         this.paycheckTotal = 0;
         this.casesProcessedThisShift = 0;
         this.hasSeenOpeningPhoneCall = false;
-        this.activeRules = [1, 2, 3];
+        this.activeRules = [1];
         this.rulebookSeenRules = new Set();
     }
 };

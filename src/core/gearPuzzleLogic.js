@@ -127,8 +127,9 @@ export function buildGearOccupancy(board, pieces = []) {
     return { occupancy, sources, sinks };
 }
 
-export function evaluateGearPuzzleBoard(board, pieces = []) {
+export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
     const normalizedPieces = cloneGearPieces(pieces);
+    const allowRustedGears = Boolean(options.allowRustedGears);
     const { occupancy, sources, sinks } = buildGearOccupancy(board, normalizedPieces);
     const powered = new Set();
     const directions = new Map();
@@ -167,7 +168,7 @@ export function evaluateGearPuzzleBoard(board, pieces = []) {
             const nextConnections = getGearConnections(nextEntry.type);
             if (!nextConnections.includes(dir.opposite)) return;
 
-            if (isRustGearType(nextEntry.type)) {
+            if (isRustGearType(nextEntry.type) && !allowRustedGears) {
                 pushUniquePair(rustContacts, seenRustContacts, currentKey, nextKey, {
                     source: currentKey,
                     target: nextKey,
@@ -230,8 +231,15 @@ export function evaluateGearPuzzleBoard(board, pieces = []) {
 
 export function buildGearProgressSnapshot(puzzle, pieces = puzzle?.pieces || []) {
     const normalizedPieces = cloneGearPieces(pieces);
-    const result = evaluateGearPuzzleBoard(puzzle?.board || [], normalizedPieces);
+    const result = evaluateGearPuzzleBoard(puzzle?.board || [], normalizedPieces, {
+        allowRustedGears: Boolean(puzzle?.allowRustedGears),
+    });
+    const inspectionFault = puzzle?.inspectionFault ? { ...puzzle.inspectionFault } : null;
     const flags = [];
+
+    if (inspectionFault?.type) {
+        flags.push(inspectionFault.type);
+    }
 
     if (result.jammed) {
         flags.push(result.jamType || 'gear-jam');
@@ -250,9 +258,17 @@ export function buildGearProgressSnapshot(puzzle, pieces = puzzle?.pieces || [])
         jammed: result.jammed,
         jamReason: result.jamReason,
         jamType: result.jamType,
+        allowRustedGears: Boolean(puzzle?.allowRustedGears),
+        useDeadlockClamp: Boolean(puzzle?.useDeadlockClamp),
+        inspectionFault,
+        scrapRequired: Boolean(inspectionFault),
+        reviewed: Boolean(puzzle?.progress?.reviewed),
+        scrapKind: inspectionFault?.kind || null,
+        scrapStatus: inspectionFault?.status || null,
+        scrapReason: inspectionFault?.reason || null,
         flags,
         symptoms: result.completed
-            ? []
-            : [result.jamReason || 'Drive train stalled.'],
+            ? (inspectionFault ? [inspectionFault.reason] : [])
+            : [inspectionFault?.reason || result.jamReason || 'Drive train stalled.'],
     };
 }

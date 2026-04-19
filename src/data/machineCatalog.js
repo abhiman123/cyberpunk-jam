@@ -83,6 +83,21 @@ function cloneRepairTargets(repairTargets) {
     return repairTargets.map((target) => ({ ...target }));
 }
 
+function cloneFlowSources(sources) {
+    if (!Array.isArray(sources)) return [];
+    return sources.map((source) => ({ ...source }));
+}
+
+function cloneFlowOutputSpecs(outputSpecs) {
+    if (!Array.isArray(outputSpecs)) return [];
+    return outputSpecs.map((spec) => ({ ...spec }));
+}
+
+function cloneDebugOutputs(outputs) {
+    if (!Array.isArray(outputs)) return [];
+    return outputs.map((output) => String(output));
+}
+
 function humanizeFlowLabel(label) {
     return String(label || '')
         .toLowerCase()
@@ -102,6 +117,26 @@ function createRepairTarget(label, row) {
         brokenLabel: metadata.brokenLabel || `${humanizeFlowLabel(label)} offline.`,
         fixedLabel: metadata.fixedLabel || `${humanizeFlowLabel(label)} restored.`,
         affectsDialogue: Boolean(metadata.affectsDialogue),
+    };
+}
+
+function createFlowSource(key, row, powerClass = 'neutral', label = null) {
+    return {
+        key,
+        row,
+        powerClass,
+        label: label || key,
+    };
+}
+
+function createFlowOutputSpec(label, row, extra = {}) {
+    const baseTarget = createRepairTarget(label, row);
+    return {
+        ...baseTarget,
+        powerClass: extra.powerClass || 'neutral',
+        exactFeeds: extra.exactFeeds ?? 1,
+        sourceKey: extra.sourceKey || null,
+        ...extra,
     };
 }
 
@@ -605,9 +640,45 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
     };
 }
 
+function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS' }) {
+    const tiles = Array.from({ length: FLOW_TILE_ROWS }, () => (
+        Array.from({ length: FLOW_TILE_COLS }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
+    ));
+    const seededRandom = createSeededRandom(`${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}`);
+
+    outputSpecs.forEach((outputSpec, index) => {
+        const source = sources.find((candidate) => candidate.key === outputSpec.sourceKey) || sources[index % sources.length];
+        const branchCol = outputSpec.row === source.row
+            ? FLOW_TILE_COLS - 1
+            : Math.min(1 + (index % Math.max(1, FLOW_TILE_COLS - 2)), FLOW_TILE_COLS - 2);
+        carveFlowPath(tiles, source.row, outputSpec.row, FLOW_TILE_COLS, branchCol);
+    });
+
+    tiles.forEach((row) => row.forEach((cell) => {
+        finalizeFlowTile(cell);
+        delete cell._dirs;
+    }));
+
+    tiles.forEach((row) => row.forEach((cell) => {
+        if (cell.type === 'empty' || cell.type === 'cross') return;
+        if (cell.type === 'straight') {
+            cell.rotation = (cell.rotation + 1) % 4;
+            return;
+        }
+
+        cell.rotation = (cell.rotation + 1 + Math.floor(seededRandom() * 3)) % 4;
+    }));
+
+    return {
+        tiles: cloneFlowTiles(tiles),
+        forbidden: [],
+    };
+}
+
 function createFlowProgress(flowPuzzleOption) {
     const repairTargets = cloneRepairTargets(flowPuzzleOption?.repairTargets || []);
     const brokenTargets = repairTargets.map((target) => target.key);
+    const inspectionFault = flowPuzzleOption?.inspectionFault ? { ...flowPuzzleOption.inspectionFault } : null;
 
     return {
         tiles: cloneFlowTiles(flowPuzzleOption?.tiles),
@@ -618,8 +689,20 @@ function createFlowProgress(flowPuzzleOption) {
         repairStates: repairTargets.map((target) => ({ ...target, repaired: false })),
         forbiddenUsed: false,
         completed: false,
-        symptoms: repairTargets.map((target) => target.brokenLabel),
-        flags: [],
+        dayStage: Number(flowPuzzleOption?.dayStage || 1),
+        sources: cloneFlowSources(flowPuzzleOption?.sources),
+        outputSpecs: cloneFlowOutputSpecs(flowPuzzleOption?.outputSpecs),
+        inspectionFault,
+        reviewed: false,
+        scrapRequired: Boolean(inspectionFault),
+        scrapKind: inspectionFault?.kind || null,
+        scrapStatus: inspectionFault?.status || null,
+        scrapReason: inspectionFault?.reason || null,
+        outputFeeds: {},
+        symptoms: inspectionFault
+            ? [inspectionFault.reason]
+            : repairTargets.map((target) => target.brokenLabel),
+        flags: inspectionFault?.type ? [inspectionFault.type] : [],
     };
 }
 
@@ -636,6 +719,23 @@ function cloneFlowProgress(progress) {
         repairStates: cloneRepairTargets(progress.repairStates),
         symptoms: Array.isArray(progress.symptoms) ? [...progress.symptoms] : [],
         flags: Array.isArray(progress.flags) ? [...progress.flags] : [],
+        dayStage: Number(progress.dayStage || 1),
+        sources: cloneFlowSources(progress.sources),
+        outputSpecs: cloneFlowOutputSpecs(progress.outputSpecs),
+        inspectionFault: progress.inspectionFault ? { ...progress.inspectionFault } : null,
+        reviewed: Boolean(progress.reviewed),
+        scrapRequired: Boolean(progress.scrapRequired),
+        scrapKind: progress.scrapKind || null,
+        scrapStatus: progress.scrapStatus || null,
+        scrapReason: progress.scrapReason || null,
+        outputFeeds: progress.outputFeeds
+            ? Object.fromEntries(
+                Object.entries(progress.outputFeeds).map(([key, feeds]) => [
+                    key,
+                    Array.isArray(feeds) ? feeds.map((feed) => ({ ...feed })) : [],
+                ])
+            )
+            : {},
     };
 }
 
@@ -671,6 +771,102 @@ const createFlowPuzzleOption = ({
     };
 };
 
+function collectFlowInspectionCandidates(flowPuzzleOption) {
+    const sourceRows = new Set((flowPuzzleOption?.sources || []).map((source) => source.row));
+    const outputRows = new Set((flowPuzzleOption?.outputSpecs || Object.keys(flowPuzzleOption?.outputs || {}).map(Number)).map((spec) => Number(spec?.row ?? spec)));
+    const blocked = new Set((flowPuzzleOption?.forbidden || []).map(([x, y]) => `${x},${y}`));
+    const candidates = [];
+
+    (flowPuzzleOption?.tiles || []).forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+            if (!cell || cell.type === 'empty') return;
+            if (blocked.has(`${colIndex},${rowIndex}`)) return;
+            if (colIndex === 0 && sourceRows.has(rowIndex)) return;
+            if (colIndex === FLOW_TILE_COLS - 1 && outputRows.has(rowIndex)) return;
+            candidates.push({ x: colIndex, y: rowIndex });
+        });
+    });
+
+    return candidates;
+}
+
+function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.random) {
+    if (!flowPuzzleOption) return null;
+
+    const baseTargets = cloneRepairTargets(flowPuzzleOption.repairTargets)
+        .sort((left, right) => left.row - right.row);
+
+    if (stage <= 1) {
+        const stagedOption = {
+            ...flowPuzzleOption,
+            dayStage: 1,
+            sources: [createFlowSource('main', flowPuzzleOption.sourceRow ?? 2, 'neutral', 'PWR')],
+            outputSpecs: baseTargets.map((target) => createFlowOutputSpec(target.label, target.row, {
+                ...target,
+                powerClass: 'neutral',
+                exactFeeds: 1,
+                sourceKey: 'main',
+            })),
+            inspectionFault: null,
+        };
+
+        const candidates = collectFlowInspectionCandidates(stagedOption);
+        const severedCell = candidates.length > 0 && randomFn() < 0.3
+            ? pickRandomEntry(candidates, randomFn)
+            : null;
+
+        if (severedCell) {
+            stagedOption.inspectionFault = {
+                ...severedCell,
+                type: 'severed-line',
+                kind: 'unsalvageable',
+                status: 'SEVERED LINE',
+                reason: 'A severed power line cannot be rejoined on the floor. Scrap the unit.',
+            };
+        }
+
+        return stagedOption;
+    }
+
+    const firstOutputRow = baseTargets[0]?.row ?? (flowPuzzleOption.sourceRow ?? 1);
+    const lastOutputRow = baseTargets[baseTargets.length - 1]?.row ?? Math.min(FLOW_TILE_ROWS - 2, firstOutputRow + 2);
+    const alternateRow = firstOutputRow === lastOutputRow
+        ? Math.min(FLOW_TILE_ROWS - 2, Math.max(1, firstOutputRow + 2))
+        : lastOutputRow;
+    const sources = [
+        createFlowSource('green', firstOutputRow, 'green', 'GRN'),
+        createFlowSource('orange', alternateRow, 'orange', 'ORG'),
+    ];
+    const outputSpecs = baseTargets.map((target, index) => {
+        const powerClass = index % 2 === 0 ? 'green' : 'orange';
+        return createFlowOutputSpec(target.label, target.row, {
+            ...target,
+            powerClass,
+            exactFeeds: 1,
+            sourceKey: powerClass,
+        });
+    });
+    const layout = buildTypedFlowOptionLayout({
+        sources,
+        outputSpecs,
+        previewTitle: `${flowPuzzleOption.previewTitle || 'POWER BUS'}:${stage}`,
+    });
+
+    return {
+        ...flowPuzzleOption,
+        sourceRow: sources[0].row,
+        forbiddenCount: 0,
+        forbidden: layout.forbidden,
+        tiles: layout.tiles,
+        repairTargets: cloneRepairTargets(outputSpecs),
+        sources,
+        outputSpecs,
+        dayStage: stage,
+        stageResultKind: stage >= 3 ? 'hazard' : 'compliance',
+        inspectionFault: null,
+    };
+}
+
 const createMiniDisplay = ({
     artX,
     artY,
@@ -679,6 +875,7 @@ const createMiniDisplay = ({
     gridPreview,
     flowPreview,
     gearPreview = { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' },
+    codePreview = { x: 86, y: 24, width: 74, height: 22, label: 'CODE' },
 }) => ({
     artX,
     artY,
@@ -687,6 +884,7 @@ const createMiniDisplay = ({
     gridPreview: { ...gridPreview },
     flowPreview: { ...flowPreview },
     gearPreview: { ...gearPreview },
+    codePreview: { ...codePreview },
 });
 
 const createGearPiece = (type, row, col, extra = {}) => ({
@@ -708,6 +906,257 @@ const createGearPuzzleOption = ({
     previewTitle,
     description,
 });
+
+function collectGearInspectionCandidates(gearPuzzleOption) {
+    const candidates = [];
+    const occupancy = new Set((gearPuzzleOption?.pieces || []).map((piece) => `${piece.row}:${piece.col}`));
+
+    (gearPuzzleOption?.board || []).forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+            if (!isGearType(cell) && cell !== GEAR_CODES.RUSTED) return;
+            if (cell === GEAR_CODES.SOURCE || cell === GEAR_CODES.SINK) return;
+            if (occupancy.has(`${rowIndex}:${colIndex}`)) return;
+            candidates.push({ row: rowIndex, col: colIndex, source: 'board' });
+        });
+    });
+
+    (gearPuzzleOption?.pieces || []).forEach((piece) => {
+        if (!isGearType(piece.type) && piece.type !== GEAR_CODES.RUSTED) return;
+        if (piece.type === GEAR_CODES.SOURCE || piece.type === GEAR_CODES.SINK) return;
+        candidates.push({ row: piece.row, col: piece.col, source: 'piece', pieceId: piece.id || null });
+    });
+
+    return candidates;
+}
+
+function findFirstOpenGearCell(board, pieces) {
+    const occupied = new Set((pieces || []).map((piece) => `${piece.row}:${piece.col}`));
+
+    for (let rowIndex = 0; rowIndex < (board?.length || 0); rowIndex += 1) {
+        for (let colIndex = 0; colIndex < (board[rowIndex]?.length || 0); colIndex += 1) {
+            if (board[rowIndex][colIndex] !== GEAR_CODES.EMPTY) continue;
+            if (occupied.has(`${rowIndex}:${colIndex}`)) continue;
+            return { row: rowIndex, col: colIndex };
+        }
+    }
+
+    return null;
+}
+
+function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.random) {
+    if (!gearPuzzleOption) return null;
+
+    const stagedOption = {
+        ...gearPuzzleOption,
+        pieces: cloneGearPieces(gearPuzzleOption.pieces),
+        dayStage: stage,
+        allowRustedGears: stage >= 2,
+        useDeadlockClamp: stage >= 3,
+        inspectionFault: null,
+    };
+
+    if (stage >= 3 && !stagedOption.pieces.some((piece) => piece.role === 'deadlock-clamp')) {
+        const clampCell = findFirstOpenGearCell(stagedOption.board, stagedOption.pieces);
+        if (clampCell) {
+            stagedOption.pieces.push(createGearPiece(GEAR_CODES.MOVABLE_WALL, clampCell.row, clampCell.col, {
+                role: 'deadlock-clamp',
+                label: 'CLAMP',
+            }));
+        }
+    }
+
+    const candidates = collectGearInspectionCandidates(stagedOption);
+    const selectedCandidate = candidates.length > 0 ? pickRandomEntry(candidates, randomFn) : null;
+
+    if (stage === 1 && selectedCandidate && randomFn() < 0.28) {
+        stagedOption.inspectionFault = {
+            ...selectedCandidate,
+            type: 'cracked-gear',
+            kind: 'unsalvageable',
+            status: 'CRACKED GEAR',
+            reason: 'A cracked drivetrain gear is structurally unsalvageable. Scrap the unit.',
+        };
+    } else if (stage === 2 && selectedCandidate && randomFn() < 0.34) {
+        stagedOption.inspectionFault = {
+            ...selectedCandidate,
+            type: 'contraband-gear',
+            kind: 'compliance',
+            status: 'CONTRABAND MARK',
+            reason: 'A rejection-marked drivetrain component cannot remain on the line. Scrap the unit.',
+        };
+    } else if (stage >= 3 && selectedCandidate && randomFn() < 0.24) {
+        stagedOption.inspectionFault = {
+            ...selectedCandidate,
+            type: 'spark-instability',
+            kind: 'hazard',
+            status: 'SPARK INSTABILITY',
+            reason: 'Red spark instability indicates unsafe drivetrain discharge. Scrap the unit immediately.',
+        };
+    }
+
+    return stagedOption;
+}
+
+const createDebugPuzzleOption = ({
+    prompt,
+    repairPrompt,
+    expectedOutput,
+    actualOutputs,
+    previewTitle = 'DEBUG CONSOLE',
+    description = 'Run the diagnostic command. If the output drifts, patch the machine and stabilize the test.',
+}) => ({
+    prompt: String(prompt || ''),
+    repairPrompt: String(repairPrompt || ''),
+    expectedOutput: String(expectedOutput || ''),
+    actualOutputs: cloneDebugOutputs(actualOutputs),
+    previewTitle,
+    description,
+});
+
+function buildProtocolInvalidOutputs(expectedOutput = '') {
+    const text = String(expectedOutput || '').trim();
+    const variants = [
+        text.toLowerCase(),
+        text.replace(' // ', ' / '),
+        text.replace(/ OK /g, ' Ok '),
+        text.replace(/ PERCENT/g, ''),
+        'NULL RESPONSE',
+        'UNDEFINED',
+        'FAILURE: NO RETURN',
+        'OK',
+    ].filter(Boolean);
+
+    return Array.from(new Set(variants)).filter((variant) => variant !== text);
+}
+
+function corruptDebugPrompt(prompt = '', randomFn = Math.random) {
+    const characters = String(prompt || '').split('');
+    const candidateIndices = characters
+        .map((character, index) => ({ character, index }))
+        .filter(({ character }) => /[a-z0-9]/i.test(character))
+        .map(({ index }) => index);
+
+    if (candidateIndices.length === 0) return String(prompt || '');
+
+    const selectedIndex = candidateIndices[Math.floor(randomFn() * candidateIndices.length)] ?? candidateIndices[0];
+    characters[selectedIndex] = '█';
+    return characters.join('');
+}
+
+function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.random) {
+    if (!debugPuzzleOption) return null;
+
+    const stagedOption = {
+        ...debugPuzzleOption,
+        dayStage: stage,
+        bugsEnabled: stage >= 3,
+        resultType: 'stable',
+        protocolInvalidOutputs: stage >= 2 ? buildProtocolInvalidOutputs(debugPuzzleOption.expectedOutput) : [],
+        scrapKind: null,
+        scrapStatus: null,
+        scrapReason: null,
+    };
+
+    if (stage === 1 && randomFn() < 0.28) {
+        stagedOption.prompt = corruptDebugPrompt(debugPuzzleOption.prompt, randomFn);
+        stagedOption.resultType = 'corrupted-command';
+        stagedOption.scrapKind = 'unsalvageable';
+        stagedOption.scrapStatus = 'CORRUPTED COMMAND';
+        stagedOption.scrapReason = 'Command string contains unreadable corruption. Floor repair is impossible.';
+        return stagedOption;
+    }
+
+    if (stage === 2 && stagedOption.protocolInvalidOutputs.length > 0 && randomFn() < 0.36) {
+        stagedOption.resultType = 'protocol-invalid';
+        stagedOption.scrapKind = 'compliance';
+        stagedOption.scrapStatus = 'PROTOCOL INVALID';
+        stagedOption.scrapReason = 'Output format is compromised. Floor repair is forbidden.';
+        return stagedOption;
+    }
+
+    if (stage >= 3 && randomFn() < 0.24) {
+        stagedOption.resultType = 'spark-hazard';
+        stagedOption.scrapKind = 'hazard';
+        stagedOption.scrapStatus = 'SPARKED DEBUG BUG';
+        stagedOption.scrapReason = 'A sparked debugger bug indicates unstable software contamination. Scrap the unit immediately.';
+        return stagedOption;
+    }
+
+    if (Array.isArray(stagedOption.actualOutputs) && stagedOption.actualOutputs.length > 0) {
+        stagedOption.resultType = 'repairable-mismatch';
+    }
+
+    return stagedOption;
+}
+
+function createDebugProgress(debugPuzzleOption, randomFn = Math.random) {
+    const expectedOutput = String(debugPuzzleOption?.expectedOutput || '');
+    const repairableOutputs = cloneDebugOutputs(debugPuzzleOption?.actualOutputs || []);
+    const protocolInvalidOutputs = cloneDebugOutputs(debugPuzzleOption?.protocolInvalidOutputs || []);
+    const resultType = String(debugPuzzleOption?.resultType || 'stable');
+    let actualOutput = expectedOutput;
+    let repairRequired = false;
+    let scrapRequired = false;
+    let phase = 'test';
+    let lastStatus = 'TEST READY';
+    let flags = [];
+    let symptoms = ['Diagnostic harness is stable.'];
+
+    if (resultType === 'corrupted-command') {
+        actualOutput = '';
+        scrapRequired = true;
+        phase = 'scrap';
+        lastStatus = 'CORRUPTED COMMAND';
+        flags = ['corrupted-command'];
+        symptoms = ['Command string contains unreadable corruption.'];
+    } else if (resultType === 'spark-hazard') {
+        actualOutput = '';
+        scrapRequired = true;
+        phase = 'scrap';
+        lastStatus = 'SPARKED DEBUG BUG // SCRAP UNIT';
+        flags = ['spark-hazard'];
+        symptoms = ['Debugger space shows unstable sparked contamination.'];
+    } else if (resultType === 'protocol-invalid') {
+        actualOutput = pickRandomEntry(protocolInvalidOutputs, randomFn) || 'NULL RESPONSE';
+        symptoms = ['Run the test and inspect the returned protocol exactly.'];
+    } else {
+        const outputPool = [expectedOutput, ...repairableOutputs];
+        const randomIndex = Math.floor(randomFn() * outputPool.length);
+        actualOutput = outputPool[randomIndex] ?? expectedOutput;
+        repairRequired = actualOutput !== expectedOutput;
+        lastStatus = repairRequired ? 'PATCH REQUIRED' : 'TEST READY';
+        flags = repairRequired ? ['patch-required'] : [];
+        symptoms = repairRequired
+            ? [`Unexpected output: ${actualOutput}`]
+            : ['Diagnostic harness is stable.'];
+    }
+
+    return {
+        phase,
+        completed: false,
+        fixed: false,
+        repairRequired,
+        scrapRequired,
+        reviewed: scrapRequired,
+        dayStage: Number(debugPuzzleOption?.dayStage || 1),
+        resultType,
+        prompt: String(debugPuzzleOption?.prompt || ''),
+        repairPrompt: String(debugPuzzleOption?.repairPrompt || ''),
+        expectedOutput,
+        actualOutput,
+        bugsEnabled: Boolean(debugPuzzleOption?.bugsEnabled),
+        scrapKind: debugPuzzleOption?.scrapKind || null,
+        scrapStatus: debugPuzzleOption?.scrapStatus || null,
+        scrapReason: debugPuzzleOption?.scrapReason || null,
+        inputValue: '',
+        bugsSquashed: 0,
+        corruptionCount: 0,
+        outputMatched: !repairRequired,
+        lastStatus,
+        flags,
+        symptoms,
+    };
+}
 
 const DEFAULT_MACHINE_DAYS = Object.freeze([1]);
 const DEFAULT_MACHINE_PERIODS = Object.freeze([1, 2, 3]);
@@ -822,6 +1271,191 @@ const MACHINE_GEAR_CATALOG = Object.freeze({
     future_lounge_chair: SHARED_GEAR_OPTIONS,
 });
 
+const MACHINE_DEBUG_CATALOG = Object.freeze({
+    assembler_alpha: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test arm weld seq',
+            repairPrompt: 'patch weld.arc.sync',
+            expectedOutput: 'ARMATURE OK // 4 JOINTS LOCKED',
+            actualOutputs: [
+                'ARMATURE STALL // JOINT 3 DRIFT',
+                'ARMATURE OK // 3 JOINTS LOCKED',
+                'ARMATURE DESYNC // ARC BUS HIGH',
+                'ARMATURE OK // CALIBRATION SKIPPED',
+                'ARMATURE FAULT // ARC BUS NULL',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test hopper feed',
+            repairPrompt: 'patch feed.queue.reset',
+            expectedOutput: 'HOPPER FEED OK // 12 UNITS MIN',
+            actualOutputs: [
+                'HOPPER FEED LAG // 8 UNITS MIN',
+                'HOPPER FEED OK // 6 UNITS MIN',
+                'HOPPER FEED JAM // GATE CLOSED',
+                'HOPPER FEED OK // SENSOR OFFLINE',
+                'HOPPER FEED DRIFT // BELT SLIP',
+            ],
+        }),
+    ]),
+    audit_drone: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test optic audit',
+            repairPrompt: 'patch optic.cache.flush',
+            expectedOutput: 'OPTICS OK // LEDGER CLEAN',
+            actualOutputs: [
+                'OPTICS FAIL // LEDGER GHOSTED',
+                'OPTICS OK // FRAME 19 MISSING',
+                'OPTICS DRIFT // HASH SPOILED',
+                'OPTICS FAIL // ARCHIVE LOOP',
+                'OPTICS OK // TIMESTAMP NULL',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test voice checksum',
+            repairPrompt: 'patch voice.codec.reseed',
+            expectedOutput: 'VOICE HASH OK // PACKET CLEAN',
+            actualOutputs: [
+                'VOICE HASH BAD // PACKET LOSS',
+                'VOICE HASH OK // STATIC CARRY',
+                'VOICE HASH FAIL // CRC DRIFT',
+                'VOICE HASH BAD // ECHO STACK',
+                'VOICE HASH OK // CHANNEL NULL',
+            ],
+        }),
+    ]),
+    courier_shell: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test route memory',
+            repairPrompt: 'patch route.cache.reindex',
+            expectedOutput: 'ROUTE CACHE OK // 48 STOPS',
+            actualOutputs: [
+                'ROUTE CACHE FAIL // 31 STOPS',
+                'ROUTE CACHE OK // 12 STOPS',
+                'ROUTE CACHE DRIFT // LOOPED STOP',
+                'ROUTE CACHE BAD // INDEX NULL',
+                'ROUTE CACHE OK // STAMP MISSING',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test hatch cycle',
+            repairPrompt: 'patch hatch.latch.rebind',
+            expectedOutput: 'HATCH OK // LATCH SEALED',
+            actualOutputs: [
+                'HATCH FAIL // LATCH OPEN',
+                'HATCH OK // PRESSURE LOW',
+                'HATCH LOOP // CLOSE RETRY',
+                'HATCH FAIL // CLAMP MISREAD',
+                'HATCH OK // SENSOR BLIND',
+            ],
+        }),
+    ]),
+    sentry_frame: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test target sweep',
+            repairPrompt: 'patch target.core.align',
+            expectedOutput: 'TARGET GRID OK // TRACKING GREEN',
+            actualOutputs: [
+                'TARGET GRID FAIL // TRACKING RED',
+                'TARGET GRID OK // RANGE DRIFT',
+                'TARGET GRID BAD // CORE MISALIGNED',
+                'TARGET GRID LOOP // PING STUCK',
+                'TARGET GRID OK // PRIORITY NULL',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test armor servo',
+            repairPrompt: 'patch armor.servo.reset',
+            expectedOutput: 'ARMOR SERVO OK // SHIELD CLOSED',
+            actualOutputs: [
+                'ARMOR SERVO FAIL // SHIELD OPEN',
+                'ARMOR SERVO OK // MOTOR STALL',
+                'ARMOR SERVO BAD // TORQUE LOSS',
+                'ARMOR SERVO LOOP // SEAL RETRY',
+                'ARMOR SERVO OK // LIMIT NULL',
+            ],
+        }),
+    ]),
+    breakroom_brewer: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test brew heat',
+            repairPrompt: 'patch brew.coil.balance',
+            expectedOutput: 'HEAT LOOP OK // 94C STABLE',
+            actualOutputs: [
+                'HEAT LOOP FAIL // 61C HOLD',
+                'HEAT LOOP OK // THERMAL SPIKE',
+                'HEAT LOOP BAD // COIL OFFSET',
+                'HEAT LOOP FAIL // BOILER COLD',
+                'HEAT LOOP OK // SENSOR NULL',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test pour cycle',
+            repairPrompt: 'patch nozzle.flush.purge',
+            expectedOutput: 'POUR LOOP OK // NOZZLE CLEAR',
+            actualOutputs: [
+                'POUR LOOP FAIL // NOZZLE CLOG',
+                'POUR LOOP OK // DRIP DELAY',
+                'POUR LOOP BAD // VALVE STICK',
+                'POUR LOOP FAIL // PRESSURE LOW',
+                'POUR LOOP OK // FLOW SENSOR NULL',
+            ],
+        }),
+    ]),
+    mechanic_broom: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test sweep vector',
+            repairPrompt: 'patch sweep.path.reseed',
+            expectedOutput: 'SWEEP MAP OK // AISLE CLEAR',
+            actualOutputs: [
+                'SWEEP MAP FAIL // CORNER LOOP',
+                'SWEEP MAP OK // PATH STALE',
+                'SWEEP MAP BAD // GRID OFFSET',
+                'SWEEP MAP FAIL // RETURN LOST',
+                'SWEEP MAP OK // SENSOR NULL',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test vacuum intake',
+            repairPrompt: 'patch vac.turbine.prime',
+            expectedOutput: 'INTAKE OK // PRESSURE GREEN',
+            actualOutputs: [
+                'INTAKE FAIL // PRESSURE RED',
+                'INTAKE OK // FILTER BLOCKED',
+                'INTAKE BAD // TURBINE DRIFT',
+                'INTAKE FAIL // SEAL LOSS',
+                'INTAKE OK // RPM NULL',
+            ],
+        }),
+    ]),
+    future_lounge_chair: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'test recline motor',
+            repairPrompt: 'patch recline.limit.clear',
+            expectedOutput: 'RECLINE OK // 100 PERCENT',
+            actualOutputs: [
+                'RECLINE FAIL // 42 PERCENT',
+                'RECLINE OK // LIMIT SWITCH BAD',
+                'RECLINE BAD // MOTOR KNOCK',
+                'RECLINE FAIL // LOCK ENGAGED',
+                'RECLINE OK // FEEDBACK NULL',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test lumbar mesh',
+            repairPrompt: 'patch lumbar.mesh.rethread',
+            expectedOutput: 'LUMBAR OK // PRESSURE EVEN',
+            actualOutputs: [
+                'LUMBAR FAIL // PRESSURE LEFT',
+                'LUMBAR OK // TENSION LOW',
+                'LUMBAR BAD // MESH SNAG',
+                'LUMBAR FAIL // SUPPORT NULL',
+                'LUMBAR OK // CALIBRATION LOST',
+            ],
+        }),
+    ]),
+});
+
 const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     assembler_alpha: createMiniDisplay({
         artX: 104,
@@ -893,6 +1527,7 @@ const createMachineDefinition = ({
     possibleGrids,
     possibleCircuits = MACHINE_FLOW_CATALOG[id] || [],
     possibleGears = MACHINE_GEAR_CATALOG[id] || [],
+    possibleDebugs = MACHINE_DEBUG_CATALOG[id] || [],
     miniDisplay = MACHINE_MINI_DISPLAY_CATALOG[id] || null,
     availableDays = DEFAULT_MACHINE_DAYS,
     availablePeriods = DEFAULT_MACHINE_PERIODS,
@@ -906,6 +1541,7 @@ const createMachineDefinition = ({
     possibleGrids,
     possibleCircuits,
     possibleGears,
+    possibleDebugs,
     miniDisplay,
     availableDays,
     availablePeriods,
@@ -923,6 +1559,12 @@ const createDomino = (firstOptionAmount, secondOptionAmount, extra = {}) => ({
 });
 
 const linkCell = (row, col) => [row, col];
+
+const notLinkCell = (row, col) => ({
+    kind: 'not-equal-link',
+    row,
+    col,
+});
 
 const createChargeGroupAnchor = (target) => ({
     kind: 'charge-group-anchor',
@@ -1480,6 +2122,7 @@ function isLinkCell(value) {
 
 function cloneGridCell(cell) {
     if (isLinkCell(cell)) return [cell[0], cell[1]];
+    if (isNotEqualLinkCell(cell)) return { ...cell };
     if (isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) return { ...cell };
     return cell;
 }
@@ -1519,6 +2162,9 @@ function cloneFlowPuzzleOption(flowPuzzleOption) {
             ? flowPuzzleOption.forbidden.map(([x, y]) => [x, y])
             : undefined,
         repairTargets: cloneRepairTargets(flowPuzzleOption.repairTargets),
+        sources: cloneFlowSources(flowPuzzleOption.sources),
+        outputSpecs: cloneFlowOutputSpecs(flowPuzzleOption.outputSpecs),
+        inspectionFault: flowPuzzleOption.inspectionFault ? { ...flowPuzzleOption.inspectionFault } : null,
         progress: cloneFlowProgress(flowPuzzleOption.progress),
     };
 }
@@ -1551,6 +2197,26 @@ function cloneGearPuzzleOption(gearPuzzleOption) {
     };
 }
 
+function cloneDebugPuzzleOption(debugPuzzleOption) {
+    if (!debugPuzzleOption) return null;
+
+    return {
+        ...debugPuzzleOption,
+        actualOutputs: cloneDebugOutputs(debugPuzzleOption.actualOutputs),
+        progress: debugPuzzleOption.progress
+            ? {
+                ...debugPuzzleOption.progress,
+                flags: Array.isArray(debugPuzzleOption.progress.flags)
+                    ? [...debugPuzzleOption.progress.flags]
+                    : [],
+                symptoms: Array.isArray(debugPuzzleOption.progress.symptoms)
+                    ? [...debugPuzzleOption.progress.symptoms]
+                    : [],
+            }
+            : null,
+    };
+}
+
 function cloneMiniDisplay(miniDisplay) {
     if (!miniDisplay) return null;
 
@@ -1559,6 +2225,7 @@ function cloneMiniDisplay(miniDisplay) {
         gridPreview: miniDisplay.gridPreview ? { ...miniDisplay.gridPreview } : null,
         flowPreview: miniDisplay.flowPreview ? { ...miniDisplay.flowPreview } : null,
         gearPreview: miniDisplay.gearPreview ? { ...miniDisplay.gearPreview } : null,
+        codePreview: miniDisplay.codePreview ? { ...miniDisplay.codePreview } : null,
     };
 }
 
@@ -1590,6 +2257,11 @@ function transformGridCell(cell, rows, cols, transformKey) {
     if (isLinkCell(cell)) {
         const mapped = transformGridCoordinate(cell[0], cell[1], rows, cols, transformKey);
         return [mapped.row, mapped.col];
+    }
+
+    if (isNotEqualLinkCell(cell)) {
+        const mapped = transformGridCoordinate(cell.row, cell.col, rows, cols, transformKey);
+        return { ...cell, row: mapped.row, col: mapped.col };
     }
 
     if (isChargeGroupLinkCell(cell)) {
@@ -1919,17 +2591,22 @@ function injectChargeGroupsIntoGridOption(gridOption, randomFn) {
 
 function normalizeGridDefinition(shapeGrid) {
     const baseGrid = cloneShapeGrid(shapeGrid).map((row) => row.map((cell) => {
-        if (isLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) return CELL_EMPTY;
+        if (isLinkCell(cell) || isNotEqualLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) return CELL_EMPTY;
         return Number.isInteger(cell) ? cell : CELL_EMPTY;
     }));
 
     const equalLinks = new Map();
+    const notEqualLinks = new Map();
     const groupAnchors = new Map();
     const groupLinks = new Map();
     shapeGrid.forEach((row, rowIndex) => {
         row.forEach((cell, colIndex) => {
             if (isLinkCell(cell)) {
                 equalLinks.set(cellKey(rowIndex, colIndex), { row: cell[0], col: cell[1] });
+                return;
+            }
+            if (isNotEqualLinkCell(cell)) {
+                notEqualLinks.set(cellKey(rowIndex, colIndex), { row: cell.row, col: cell.col });
                 return;
             }
             if (isChargeGroupAnchorCell(cell)) {
@@ -1948,6 +2625,8 @@ function normalizeGridDefinition(shapeGrid) {
 
     const equalPairs = [];
     const seenPairs = new Set();
+    const notEqualPairs = [];
+    const seenNotEqualPairs = new Set();
 
     equalLinks.forEach((target, sourceKey) => {
         const source = parseCellKey(sourceKey);
@@ -1970,6 +2649,33 @@ function normalizeGridDefinition(shapeGrid) {
 
         seenPairs.add(canonicalKey);
         equalPairs.push({
+            key: canonicalKey,
+            a: { row: source.row, col: source.col },
+            b: { row: target.row, col: target.col },
+        });
+    });
+
+    notEqualLinks.forEach((target, sourceKey) => {
+        const source = parseCellKey(sourceKey);
+        const targetRow = target.row;
+        const targetCol = target.col;
+        const targetGridRow = shapeGrid[targetRow];
+
+        if (!targetGridRow || targetCol < 0 || targetCol >= targetGridRow.length) {
+            throw new Error(`Invalid not-equal link target at ${sourceKey}.`);
+        }
+
+        const targetKey = cellKey(targetRow, targetCol);
+        const backLink = notEqualLinks.get(targetKey);
+        if (!backLink || backLink.row !== source.row || backLink.col !== source.col) {
+            throw new Error(`Not-equal link at ${sourceKey} must be mirrored by ${targetKey}.`);
+        }
+
+        const canonicalKey = pairKeyForCells(source, target);
+        if (seenNotEqualPairs.has(canonicalKey)) return;
+
+        seenNotEqualPairs.add(canonicalKey);
+        notEqualPairs.push({
             key: canonicalKey,
             a: { row: source.row, col: source.col },
             b: { row: target.row, col: target.col },
@@ -2021,6 +2727,8 @@ function normalizeGridDefinition(shapeGrid) {
         baseGrid,
         equalLinks,
         equalPairs,
+        notEqualLinks,
+        notEqualPairs,
         chargeGroups,
         chargeGroupCells,
         chargeGroupLinks,
@@ -2040,6 +2748,12 @@ export class MachinePuzzleState {
             a: { ...pair.a },
             b: { ...pair.b },
         }));
+        this.notEqualLinks = normalizedGrid.notEqualLinks;
+        this.notEqualPairs = normalizedGrid.notEqualPairs.map((pair) => ({
+            key: pair.key,
+            a: { ...pair.a },
+            b: { ...pair.b },
+        }));
         this.chargeGroups = normalizedGrid.chargeGroups.map((group) => ({
             ...group,
             anchor: { ...group.anchor },
@@ -2048,6 +2762,10 @@ export class MachinePuzzleState {
         this.chargeGroupCells = new Map(normalizedGrid.chargeGroupCells);
         this.chargeGroupLinks = new Map(normalizedGrid.chargeGroupLinks);
         this.impossible = Boolean(clonedGridOption.impossible);
+        this.inspectionFault = clonedGridOption.inspectionFault ? { ...clonedGridOption.inspectionFault } : null;
+        this.scrapKind = clonedGridOption.scrapKind || this.inspectionFault?.kind || null;
+        this.scrapStatus = clonedGridOption.scrapStatus || this.inspectionFault?.status || null;
+        this.scrapReason = clonedGridOption.scrapReason || this.inspectionFault?.reason || null;
         this.dominoes = clonedGridOption.dominos.map((domino, index) => ({
             ...domino,
             id: domino.id || `domino_${index + 1}`,
@@ -2096,6 +2814,10 @@ export class MachinePuzzleState {
 
     isEqualLinkCell(row, col) {
         return this.equalLinks.has(cellKey(row, col));
+    }
+
+    isNotEqualLinkCell(row, col) {
+        return this.notEqualLinks.has(cellKey(row, col));
     }
 
     isChargeGroupCell(row, col) {
@@ -2148,12 +2870,26 @@ export class MachinePuzzleState {
         return target ? { ...target } : null;
     }
 
+    getNotEqualLink(row, col) {
+        const target = this.notEqualLinks.get(cellKey(row, col));
+        return target ? { ...target } : null;
+    }
+
     getEqualLinkPairs() {
         return this.equalPairs.map((pair) => ({
             key: pair.key,
             a: { ...pair.a },
             b: { ...pair.b },
             matched: this.isEqualMatched(pair.a.row, pair.a.col),
+        }));
+    }
+
+    getNotEqualLinkPairs() {
+        return this.notEqualPairs.map((pair) => ({
+            key: pair.key,
+            a: { ...pair.a },
+            b: { ...pair.b },
+            matched: this.isNotEqualMatched(pair.a.row, pair.a.col),
         }));
     }
 
@@ -2189,6 +2925,17 @@ export class MachinePuzzleState {
         return decodePipCount(currentValue) === decodePipCount(targetValue);
     }
 
+    isNotEqualMatched(row, col) {
+        const target = this.notEqualLinks.get(cellKey(row, col));
+        if (!target) return false;
+
+        const currentValue = this.getCurrentCellValue(row, col);
+        const targetValue = this.getCurrentCellValue(target.row, target.col);
+        if (!isPlacedCode(currentValue) || !isPlacedCode(targetValue)) return false;
+
+        return decodePipCount(currentValue) !== decodePipCount(targetValue);
+    }
+
     getEvaluation() {
         let totalChargeCells = 0;
         let matchedChargeCells = 0;
@@ -2207,22 +2954,33 @@ export class MachinePuzzleState {
         const matchedEqualityPairs = this.equalPairs.reduce((count, pair) => (
             count + (this.isEqualMatched(pair.a.row, pair.a.col) ? 1 : 0)
         ), 0);
+        const totalInequalityPairs = this.notEqualPairs.length;
+        const matchedInequalityPairs = this.notEqualPairs.reduce((count, pair) => (
+            count + (this.isNotEqualMatched(pair.a.row, pair.a.col) ? 1 : 0)
+        ), 0);
         const chargeGroupSummaries = this.getChargeGroupSummaries();
         const totalChargeGroups = chargeGroupSummaries.length;
         const matchedChargeGroups = chargeGroupSummaries.reduce((count, group) => count + (group.matched ? 1 : 0), 0);
-        const totalObjectives = totalChargeCells + totalEqualityPairs + totalChargeGroups;
+        const totalObjectives = totalChargeCells + totalEqualityPairs + totalInequalityPairs + totalChargeGroups;
 
         return {
             impossible: this.impossible,
+            scrapRequired: Boolean(this.inspectionFault),
+            scrapKind: this.scrapKind,
+            scrapStatus: this.scrapStatus,
+            scrapReason: this.scrapReason,
             totalChargeCells,
             matchedChargeCells,
             totalEqualityPairs,
             matchedEqualityPairs,
+            totalInequalityPairs,
+            matchedInequalityPairs,
             totalChargeGroups,
             matchedChargeGroups,
             solved: totalObjectives > 0
                 && matchedChargeCells === totalChargeCells
                 && matchedEqualityPairs === totalEqualityPairs
+                && matchedInequalityPairs === totalInequalityPairs
                 && matchedChargeGroups === totalChargeGroups,
         };
     }
@@ -2303,6 +3061,7 @@ export class MachinePuzzleState {
                 ...cell,
                 matchesCharge: this.isChargeMatched(cell.row, cell.col),
                 matchesEquality: this.isEqualMatched(cell.row, cell.col),
+                matchesInequality: this.isNotEqualMatched(cell.row, cell.col),
                 matchesGroup: Boolean(chargeGroupByCell.get(cellKey(cell.row, cell.col))?.matched),
             }));
         });
@@ -2419,12 +3178,100 @@ function isPlayableGridOption(gridOption) {
     return isSolvable;
 }
 
+function collectBoardConstraintCandidates(shapeGrid) {
+    const candidates = [];
+
+    shapeGrid.forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+            if (Number.isInteger(cell) && cell === CELL_WALL) return;
+            candidates.push({ row: rowIndex, col: colIndex });
+        });
+    });
+
+    return candidates;
+}
+
+function injectNotEqualConstraint(gridOption, randomFn = Math.random) {
+    if (!gridOption || gridOption.impossible) return gridOption;
+
+    const candidates = shuffleCells(collectBoardConstraintCandidates(gridOption.grid), randomFn);
+    for (let index = 0; index < candidates.length; index += 1) {
+        for (let innerIndex = index + 1; innerIndex < candidates.length; innerIndex += 1) {
+            const first = candidates[index];
+            const second = candidates[innerIndex];
+            const grid = cloneShapeGrid(gridOption.grid);
+            grid[first.row][first.col] = notLinkCell(second.row, second.col);
+            grid[second.row][second.col] = notLinkCell(first.row, first.col);
+
+            const candidateOption = {
+                ...gridOption,
+                grid,
+            };
+
+            if (isPlayableGridOption(candidateOption)) {
+                return candidateOption;
+            }
+        }
+    }
+
+    return gridOption;
+}
+
+function applyGridStageToOption(gridOption, stage = 1, randomFn = Math.random) {
+    if (!gridOption) return { grid: [], dominos: [] };
+
+    let stagedOption = cloneGridOption(gridOption);
+    stagedOption.dayStage = stage;
+
+    if (stage >= 3) {
+        stagedOption = injectNotEqualConstraint(stagedOption, randomFn);
+    }
+
+    const candidates = collectBoardConstraintCandidates(stagedOption.grid);
+    const shouldFlag = candidates.length > 0 && randomFn() < (stage === 1 ? 0.28 : stage === 2 ? 0.34 : 0.24);
+    if (shouldFlag) {
+        const target = pickRandomEntry(candidates, randomFn);
+        if (stage === 1) {
+            stagedOption.inspectionFault = {
+                ...target,
+                type: 'orphan-cell',
+                kind: 'unsalvageable',
+                status: 'ORPHAN CELL',
+                reason: 'An orphaned board cell indicates a severed chassis region. Scrap the unit.',
+            };
+        } else if (stage === 2) {
+            stagedOption.inspectionFault = {
+                ...target,
+                type: 'corrupted-marker',
+                kind: 'compliance',
+                status: 'CORRUPTED MARKER',
+                reason: 'A corrupted board marker fails subsystem compliance. Scrap the unit.',
+            };
+        } else {
+            stagedOption.inspectionFault = {
+                ...target,
+                type: 'unstable-region',
+                kind: 'hazard',
+                status: 'UNSTABLE REGION',
+                reason: 'A red-charged unstable board region is hazardous. Scrap the unit immediately.',
+            };
+        }
+
+        stagedOption.scrapKind = stagedOption.inspectionFault.kind;
+        stagedOption.scrapStatus = stagedOption.inspectionFault.status;
+        stagedOption.scrapReason = stagedOption.inspectionFault.reason;
+    }
+
+    return stagedOption;
+}
+
 export function createMachineVariant(options = {}) {
     const randomFn = typeof options === 'function'
         ? options
         : (options.randomFn || Math.random);
     const targetDay = typeof options === 'function' ? null : (options.day ?? null);
     const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
+    const forcedMachineId = typeof options === 'function' ? null : (options.forceMachineId ?? null);
 
     const eligibleMachines = MACHINE_CATALOG.filter((machine) => {
         const dayMatches = targetDay === null || !Array.isArray(machine.availableDays) || machine.availableDays.includes(targetDay);
@@ -2433,21 +3280,44 @@ export function createMachineVariant(options = {}) {
     });
 
     const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
-    const definition = pickRandomEntry(machinePool, randomFn) || machinePool[0] || MACHINE_CATALOG[0];
+    const forcedDefinition = forcedMachineId
+        ? machinePool.find((machine) => machine.id === forcedMachineId) || MACHINE_CATALOG.find((machine) => machine.id === forcedMachineId)
+        : null;
+    const definition = forcedDefinition || pickRandomEntry(machinePool, randomFn) || machinePool[0] || MACHINE_CATALOG[0];
     const weightedGridPool = buildWeightedGridPool(definition.possibleGrids);
     const gridPool = weightedGridPool.length > 0 ? weightedGridPool : (definition.possibleGrids || []);
     const selectedGridTemplate = pickRandomEntry(gridPool, randomFn) || gridPool[0] || { grid: [], dominos: [] };
-    const selectedGrid = injectChargeGroupsIntoGridOption(
-        transformGridOption(selectedGridTemplate, pickGridTransformKey(selectedGridTemplate, randomFn)),
+    const selectedGrid = applyGridStageToOption(
+        injectChargeGroupsIntoGridOption(
+            transformGridOption(selectedGridTemplate, pickGridTransformKey(selectedGridTemplate, randomFn)),
+            randomFn,
+        ),
+        targetPeriod ?? 1,
         randomFn,
     );
-    const selectedFlowPuzzle = cloneFlowPuzzleOption(pickRandomEntry(definition.possibleCircuits, randomFn));
-    const selectedGearPuzzle = cloneGearPuzzleOption(pickRandomEntry(definition.possibleGears, randomFn));
+    const selectedFlowPuzzle = applyFlowStageToOption(
+        cloneFlowPuzzleOption(pickRandomEntry(definition.possibleCircuits, randomFn)),
+        targetPeriod ?? 1,
+        randomFn,
+    );
+    const selectedGearPuzzle = applyGearStageToOption(
+        cloneGearPuzzleOption(pickRandomEntry(definition.possibleGears, randomFn)),
+        targetPeriod ?? 1,
+        randomFn,
+    );
+    const selectedDebugPuzzle = applyDebugStageToOption(
+        cloneDebugPuzzleOption(pickRandomEntry(definition.possibleDebugs, randomFn)),
+        targetPeriod ?? 1,
+        randomFn,
+    );
     if (selectedFlowPuzzle) {
         selectedFlowPuzzle.progress = createFlowProgress(selectedFlowPuzzle);
     }
     if (selectedGearPuzzle) {
         selectedGearPuzzle.progress = buildGearProgressSnapshot(selectedGearPuzzle, selectedGearPuzzle.pieces);
+    }
+    if (selectedDebugPuzzle) {
+        selectedDebugPuzzle.progress = createDebugProgress(selectedDebugPuzzle, randomFn);
     }
     const puzzleState = new MachinePuzzleState(selectedGrid);
     const hasCommunication = randomFn() <= (definition.communicationChance ?? 1);
@@ -2467,6 +3337,7 @@ export function createMachineVariant(options = {}) {
         selectedGrid,
         flowPuzzle: selectedFlowPuzzle,
         gearPuzzle: selectedGearPuzzle,
+        debugPuzzle: selectedDebugPuzzle,
         miniDisplay: cloneMiniDisplay(definition.miniDisplay),
         availableDays: Array.isArray(definition.availableDays) ? [...definition.availableDays] : [],
         availablePeriods: Array.isArray(definition.availablePeriods) ? [...definition.availablePeriods] : [],
@@ -2483,4 +3354,12 @@ export function resolveMachineTexture(scene, machineVariant) {
     const preferredKey = machineVariant?.spriteKey;
     if (preferredKey && scene.textures.exists(preferredKey)) return preferredKey;
     return machineVariant?.fallbackKey || MACHINE_FALLBACK_KEY;
+}
+
+function isNotEqualLinkCell(value) {
+    return Boolean(value)
+        && typeof value === 'object'
+        && value.kind === 'not-equal-link'
+        && Number.isInteger(value.row)
+        && Number.isInteger(value.col);
 }
