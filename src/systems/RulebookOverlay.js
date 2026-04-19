@@ -185,12 +185,12 @@ export default class RulebookOverlay {
             fontFamily: 'Courier New', fontSize: '18px', color: '#dfeaf1', letterSpacing: 2,
         });
         this._tabletStatus = this.scene.add.text(310, -248, 'RULES ONLINE', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#8cd5b8', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '11px', color: '#8cd5b8', letterSpacing: 2,
         }).setOrigin(1, 0);
 
         // Subtitle — constrained to avoid bleeding into sidebar or close button
         const subtitle = this.scene.add.text(-220, -224, 'Tap the desk tablet or press B. Scroll the pane to read older entries.', {
-            fontFamily: 'monospace', fontSize: '11px', color: '#7f8f9d',
+            fontFamily: 'Courier New', fontSize: '11px', color: '#7f8f9d',
             wordWrap: { width: 520 },
         });
 
@@ -241,7 +241,7 @@ export default class RulebookOverlay {
             fontFamily: 'Courier New', fontSize: '12px', color: '#f0f7fb', letterSpacing: 1,
         });
         this._sidebarDateText = this.scene.add.text(-362, 30, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#93adb9', wordWrap: { width: 110 }, lineSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#93adb9', wordWrap: { width: 110 }, lineSpacing: 2,
         });
         this._sidebarRuleCountText = this.scene.add.text(-362, 72, '', {
             fontFamily: 'Courier New', fontSize: '12px', color: '#dbe8ee',
@@ -250,7 +250,7 @@ export default class RulebookOverlay {
             fontFamily: 'Courier New', fontSize: '11px', color: '#f4f0d2', letterSpacing: 1,
         });
         this._sidebarHintText = this.scene.add.text(-362, 134, '', {
-            fontFamily: 'monospace', fontSize: '10px', color: '#8eb1bd', wordWrap: { width: 110 }, lineSpacing: 4,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#8eb1bd', wordWrap: { width: 110 }, lineSpacing: 4,
         });
 
         // ── Scrollable content area ──────────────────────────────────────────
@@ -423,7 +423,7 @@ export default class RulebookOverlay {
                 color: isNew ? '#f5e7a7' : '#a8c8df', letterSpacing: 1,
             });
             const body = this.scene.add.text(16, y + 34, rule.text, {
-                fontFamily: 'monospace', fontSize: '15px', color: '#dde6ee',
+                fontFamily: 'Courier New', fontSize: '15px', color: '#dde6ee',
                 wordWrap: { width: 536 }, lineSpacing: 5,
             });
             const cardHeight = Math.max(86, body.height + 52);
@@ -515,7 +515,7 @@ export default class RulebookOverlay {
             fontFamily: 'Courier New', fontSize: '24px', color: '#f2f7fb', letterSpacing: 2,
         });
         const subtitleText = this.scene.add.text(0, y + 34, subtitle, {
-            fontFamily: 'monospace', fontSize: '12px', color: '#89a0ad',
+            fontFamily: 'Courier New', fontSize: '12px', color: '#89a0ad',
         });
         const rule = this.scene.add.rectangle(286, y + 62, 572, 2, 0x42505a, 1).setOrigin(0.5, 0);
         this._contentNodes.push(titleText, subtitleText, rule);
@@ -525,7 +525,7 @@ export default class RulebookOverlay {
 
     _addSectionParagraph(text, y, color = '#dfe7ee') {
         const paragraph = this.scene.add.text(0, y, text, {
-            fontFamily: 'monospace', fontSize: '15px', color,
+            fontFamily: 'Courier New', fontSize: '15px', color,
             wordWrap: { width: 556 }, lineSpacing: 5,
         });
         this._contentNodes.push(paragraph);
@@ -538,7 +538,7 @@ export default class RulebookOverlay {
             fontFamily: 'Courier New', fontSize: '13px', color: accentColor, letterSpacing: 1,
         });
         const bodyText = this.scene.add.text(16, y + 34, body, {
-            fontFamily: 'monospace', fontSize: '15px', color: '#dfe7ee',
+            fontFamily: 'Courier New', fontSize: '15px', color: '#dfe7ee',
             wordWrap: { width: 536 }, lineSpacing: 5,
         });
         const cardHeight = Math.max(74, bodyText.height + 50);
