@@ -253,7 +253,7 @@ export default class GameScene extends Phaser.Scene {
         this._clockDialCenterX = 1088;
         this._clockDialCenterY = 646;
 
-        const clockBg = this.add.rectangle(1126, 648, 260, 86, 0x050505, 0.92)
+        const clockBg = this.add.rectangle(1150, 648, 210, 86, 0x050505, 0.92)
             .setStrokeStyle(1, 0x4e7c8f, 0.75);
         this._hudContainer.add(clockBg);
 
