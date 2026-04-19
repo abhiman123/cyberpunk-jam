@@ -638,13 +638,14 @@ export default class CircuitRouting extends MinigameBase {
 
     _getFlowLinkPosition(node) {
         const y = this.boardY + node.y * this.cellSize + this.cellSize / 2;
+        const endpointRadius = 10;
 
         if (node.x === -1) {
-            return { x: this.boardX - 40, y };
+            return { x: this.boardX - 40 + endpointRadius, y };
         }
 
         if (node.x === this.cols) {
-            return { x: this.boardX + this.cols * this.cellSize + 40, y };
+            return { x: this.boardX + this.cols * this.cellSize + 40 - endpointRadius, y };
         }
 
         return {

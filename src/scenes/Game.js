@@ -86,6 +86,8 @@ export default class GameScene extends Phaser.Scene {
         this._phoneUnreadNotifications = 0;
         this._phoneNotificationSerial = 0;
         this._phoneNotifications = [];
+        this._openingCallSequenceId = 0;
+        this._openingCallChoiceResolver = null;
         this._phoneViews = {
             info: {
                 header: 'UNIT DOSSIER',
@@ -146,6 +148,8 @@ export default class GameScene extends Phaser.Scene {
 
         this.events.on('shutdown', () => {
             this._clearPhoneTyping();
+            this._openingCallSequenceId += 1;
+            this._openingCallChoiceResolver = null;
             this._nextCaseEvent?.remove(false);
             this._advanceCaseEvent?.remove(false);
             this._machineWorklightFlickerEvent?.remove(false);
@@ -962,7 +966,8 @@ export default class GameScene extends Phaser.Scene {
         this._phoneBodyViewport = { x: 36, y: 58, width: 218, height: 78 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
-        this._phoneBodyText.setCrop(0, 0, this._phoneBodyViewport.width, this._phoneBodyViewport.height);
+        this._phoneBodyTopMask = this.add.rectangle(146, 29, 234, 58, 0x72d3dd, 0.92).setOrigin(0.5);
+        this._phoneBodyBottomMask = this.add.rectangle(146, 171, 234, 70, 0x72d3dd, 0.92).setOrigin(0.5);
         this._phoneBodyScrollZone = this.add.rectangle(
             this._phoneBodyViewport.x + (this._phoneBodyViewport.width / 2),
             this._phoneBodyViewport.y + (this._phoneBodyViewport.height / 2),
@@ -1049,6 +1054,8 @@ export default class GameScene extends Phaser.Scene {
             messageBoard,
             scanlines,
             this._phoneBodyText,
+            this._phoneBodyTopMask,
+            this._phoneBodyBottomMask,
             this._phoneBodyScrollZone,
             this._phoneScrollTrack,
             this._phoneScrollThumb,
@@ -1137,12 +1144,9 @@ export default class GameScene extends Phaser.Scene {
             this._phoneBodyScrollOffset = overflow;
         }
 
-        this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y);
-        this._phoneBodyText.setCrop(
-            0,
-            this._phoneBodyScrollOffset,
-            this._phoneBodyViewport.width,
-            this._phoneBodyViewport.height,
+        this._phoneBodyText.setPosition(
+            this._phoneBodyViewport.x,
+            this._phoneBodyViewport.y - this._phoneBodyScrollOffset,
         );
 
         if (!this._phoneScrollTrack || !this._phoneScrollThumb) return;
@@ -1637,6 +1641,114 @@ export default class GameScene extends Phaser.Scene {
         this._commSequenceEvent = null;
     }
 
+    _getOpeningCallFallbackMs(line) {
+        const textLength = String(line?.text || '').length;
+        return Math.max(FIRST_SHIFT_INTRO.fallbackVoiceMs, Math.round(textLength * 32));
+    }
+
+    _playOpeningCallLine(line, { append = true } = {}) {
+        return new Promise((resolve) => {
+            let typingDone = false;
+            let voiceDone = false;
+
+            const finishLine = () => {
+                if (!typingDone || !voiceDone) return;
+
+                this._commSequenceEvent?.remove(false);
+                this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.lineGapMs, () => {
+                    this._commSequenceEvent = null;
+                    resolve(true);
+                });
+            };
+
+            this._showPhonePanel(
+                FIRST_SHIFT_INTRO.incomingHeader,
+                this._getPhoneViewState('chat').body,
+                `SUBTITLES // ${String(line?.id || 'line').toUpperCase()}`,
+                'chat',
+            );
+            this._typePhoneMessage(`${append ? '\n\n' : ''}${line?.text || ''}`, {
+                append,
+                onComplete: () => {
+                    typingDone = true;
+                    finishLine();
+                },
+            });
+
+            const voice = this._playOneShot(line?.voiceAsset, { volume: SOUND_VOLUMES.voice });
+            if (voice) {
+                voice.once('complete', () => {
+                    voiceDone = true;
+                    finishLine();
+                });
+                return;
+            }
+
+            this._commSequenceEvent = this.time.delayedCall(this._getOpeningCallFallbackMs(line), () => {
+                this._commSequenceEvent = null;
+                voiceDone = true;
+                finishLine();
+            });
+        });
+    }
+
+    _awaitOpeningCallAnswer(sequenceId) {
+        return new Promise((resolve) => {
+            this._openingCallChoiceResolver = (choice) => {
+                if (sequenceId !== this._openingCallSequenceId) {
+                    resolve(null);
+                    return;
+                }
+
+                resolve(choice);
+            };
+
+            this._phoneChoicePhase = 'opening-call-question';
+            this._setPhoneButtonSelection(null);
+            this._setPhoneButtonsActive(true);
+            this._showPhonePanel(
+                FIRST_SHIFT_INTRO.incomingHeader,
+                this._getPhoneViewState('chat').body,
+                FIRST_SHIFT_INTRO.questionStatus,
+                'chat',
+            );
+        });
+    }
+
+    async _runOpeningPhoneCallScript() {
+        const sequenceId = ++this._openingCallSequenceId;
+        let append = false;
+
+        this._phoneChoicePhase = 'voice';
+        this._setPhoneButtonsActive(false);
+        this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, '', 'VOICE CONNECTED', 'chat');
+
+        for (const line of FIRST_SHIFT_INTRO.script.intro) {
+            if (sequenceId !== this._openingCallSequenceId) return;
+            await this._playOpeningCallLine(line, { append });
+            append = true;
+        }
+
+        const choice = await this._awaitOpeningCallAnswer(sequenceId);
+        if (sequenceId !== this._openingCallSequenceId || !choice) return;
+
+        this._setPhoneButtonsActive(false);
+        this._setPhoneButtonSelection(choice);
+
+        const branchLines = choice === 'accept'
+            ? FIRST_SHIFT_INTRO.script.yes
+            : FIRST_SHIFT_INTRO.script.no;
+
+        for (const line of branchLines) {
+            if (sequenceId !== this._openingCallSequenceId) return;
+            await this._playOpeningCallLine(line, { append: true });
+        }
+
+        if (sequenceId !== this._openingCallSequenceId) return;
+        this._phoneChoicePhase = 'voice';
+        this._awaitPhoneDismiss(true);
+    }
+
     _typePhoneMessage(text, { append = false, onComplete = null } = {}) {
         this._clearPhoneTyping();
 
@@ -1939,6 +2051,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _startOpeningPhoneCall() {
+        this._openingCallSequenceId += 1;
+        this._openingCallChoiceResolver = null;
         this._setCommStandbyState('Factory monitor online.', 'LISTENING');
         this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.silenceBeforePhoneMs, () => {
             this._phoneChoicePhase = 'incoming';
@@ -1955,25 +2069,22 @@ export default class GameScene extends Phaser.Scene {
         if (this._phoneChoicePhase === 'incoming') {
             if (choice === 'accept') {
                 this._setPhoneButtonSelection('accept');
-                this._showPhonePanel(
-                    FIRST_SHIFT_INTRO.incomingHeader,
-                    this._getPhoneViewState('chat').body,
-                    'VOICE CONNECTED',
-                    'chat',
-                );
-                this._phoneChoicePhase = 'voice';
                 this._setPhoneButtonsActive(false);
-
-                const voice = this._playOneShot(SOUND_ASSETS.phoneVoiceIntro, { volume: SOUND_VOLUMES.voice });
-                if (voice) {
-                    voice.once('complete', () => this._awaitPhoneDismiss());
-                } else {
-                    this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.fallbackVoiceMs, () => this._awaitPhoneDismiss());
-                }
+                this._runOpeningPhoneCallScript();
             } else {
                 this._setPhoneButtonSelection('reject');
                 this._dismissPhoneGate();
             }
+            return;
+        }
+
+        if (this._phoneChoicePhase === 'opening-call-question') {
+            this._setPhoneButtonSelection(choice);
+            this._setPhoneButtonsActive(false);
+            const resolver = this._openingCallChoiceResolver;
+            this._openingCallChoiceResolver = null;
+            this._phoneChoicePhase = 'opening-call-branch';
+            resolver?.(choice);
             return;
         }
 
@@ -2023,15 +2134,21 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    _awaitPhoneDismiss() {
+    _awaitPhoneDismiss(keepCurrentBody = false) {
         if (this._phoneChoicePhase !== 'voice') return;
         this._phoneChoicePhase = 'post-voice';
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, FIRST_SHIFT_INTRO.postVoiceBody, 'PRESS ✓ OR X');
+        this._showPhonePanel(
+            FIRST_SHIFT_INTRO.incomingHeader,
+            keepCurrentBody ? this._getPhoneViewState('chat').body : FIRST_SHIFT_INTRO.postVoiceBody,
+            FIRST_SHIFT_INTRO.continueStatus,
+        );
         this._setPhoneButtonsActive(true);
     }
 
     _dismissPhoneGate() {
+        this._openingCallSequenceId += 1;
+        this._openingCallChoiceResolver = null;
         this._setCommStandbyState('Call complete. Conveyor standing by.', 'CHANNEL IDLE');
         this._phoneChoicePhase = 'inactive';
         this._beginShift();

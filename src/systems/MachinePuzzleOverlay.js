@@ -208,7 +208,7 @@ export default class MachinePuzzleOverlay {
         this._currentPulseState = null;
         this._powerEffectsSuspended = false;
         this._currentPulseGfx.setAlpha(1).clear();
-        this._messageText.setAlpha(0).setText('');
+        this._messageText?.setAlpha(0);
         this._tableBounds = null;
 
         this._cellViews.forEach((cell) => {

@@ -31,6 +31,14 @@ export const SOUND_ASSETS = Object.freeze({
     titlePlay: createSoundAsset('ui', 'ui_title_play', 'ui_title_play.wav'),
     phoneRing: createSoundAsset('voice', 'phone_ring', 'phone_ring.wav'),
     phoneVoiceIntro: createSoundAsset('voice', 'phone_voice_intro', 'phone_voice_intro.wav'),
+    phoneIntroLine1: createSoundAsset('voice', 'phone_intro_line_1', 'phone_intro_line_1.wav'),
+    phoneIntroLine2: createSoundAsset('voice', 'phone_intro_line_2', 'phone_intro_line_2.wav'),
+    phoneIntroYesLine3: createSoundAsset('voice', 'phone_intro_yes_line_3', 'phone_intro_yes_line_3.wav'),
+    phoneIntroYesLine4: createSoundAsset('voice', 'phone_intro_yes_line_4', 'phone_intro_yes_line_4.wav'),
+    phoneIntroYesLine5: createSoundAsset('voice', 'phone_intro_yes_line_5', 'phone_intro_yes_line_5.wav'),
+    phoneIntroYesLine6: createSoundAsset('voice', 'phone_intro_yes_line_6', 'phone_intro_yes_line_6.wav'),
+    phoneIntroNoLine3: createSoundAsset('voice', 'phone_intro_no_line_3', 'phone_intro_no_line_3.wav'),
+    phoneIntroNoLine4: createSoundAsset('voice', 'phone_intro_no_line_4', 'phone_intro_no_line_4.wav'),
 });
 
 export const SOUND_MANIFEST = Object.freeze(Object.values(SOUND_ASSETS));
@@ -72,9 +80,60 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
     silenceBeforePhoneMs: 2200,
     caseArrivalDelayMs: 700,
     fallbackVoiceMs: 1400,
+    lineGapMs: 140,
     incomingHeader: 'Notification:',
     incomingBody: 'Phone Call Coming',
     postVoiceBody: 'Call complete. Tap either button to continue.',
+    questionStatus: 'DO YOU REMEMBER? // ✓ YES // X NO',
+    continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
+    script: Object.freeze({
+        intro: Object.freeze([
+            Object.freeze({
+                id: 'line1',
+                text: 'Heyyy, welcome back. Another day, another penny, am I right',
+                voiceAsset: SOUND_ASSETS.phoneIntroLine1,
+            }),
+            Object.freeze({
+                id: 'line2',
+                text: '...you remember the job right?',
+                voiceAsset: SOUND_ASSETS.phoneIntroLine2,
+            }),
+        ]),
+        yes: Object.freeze([
+            Object.freeze({
+                id: 'line3',
+                text: '"Alruight, see this" That\'s your rulebook. Company updates it whenever they feel like it.',
+                voiceAsset: SOUND_ASSETS.phoneIntroYesLine3,
+            }),
+            Object.freeze({
+                id: 'line4',
+                text: 'Machines roll in on the belt, some are fine, some arent. You\'ve got three options. If it follows the rules? Easy money. Accept it. Otherwise, if its fixable, like busted circuits or bad wiring, patch it up. If its a lost cause, scrap it.',
+                voiceAsset: SOUND_ASSETS.phoneIntroYesLine4,
+            }),
+            Object.freeze({
+                id: 'line5',
+                text: 'You get paid per correct call. Mess it up: quality control docks your pay. Oh, and if something feels impossible? It probably is. So dont overthink it.',
+                voiceAsset: SOUND_ASSETS.phoneIntroYesLine5,
+            }),
+            Object.freeze({
+                id: 'line6',
+                text: 'Good luck and your shift ends at 12.',
+                voiceAsset: SOUND_ASSETS.phoneIntroYesLine6,
+            }),
+        ]),
+        no: Object.freeze([
+            Object.freeze({
+                id: 'line3',
+                text: 'Alright sweet cuz I dont',
+                voiceAsset: SOUND_ASSETS.phoneIntroNoLine3,
+            }),
+            Object.freeze({
+                id: 'line4',
+                text: 'Good luck and your shift ends at 12.',
+                voiceAsset: SOUND_ASSETS.phoneIntroNoLine4,
+            }),
+        ]),
+    }),
 });
 
 export const MACHINE_PRESENTATION = Object.freeze({

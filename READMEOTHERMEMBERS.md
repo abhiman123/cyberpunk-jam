@@ -21,6 +21,15 @@ Sound setup:
   - `assets/sounds/ui/ui_title_play.wav`
   - `assets/sounds/voice/phone_ring.wav`
   - `assets/sounds/voice/phone_voice_intro.wav`
+- The opening phone call subtitles and per-line placeholder voice files now also look for:
+  - `assets/sounds/voice/phone_intro_line_1.wav`
+  - `assets/sounds/voice/phone_intro_line_2.wav`
+  - `assets/sounds/voice/phone_intro_yes_line_3.wav`
+  - `assets/sounds/voice/phone_intro_yes_line_4.wav`
+  - `assets/sounds/voice/phone_intro_yes_line_5.wav`
+  - `assets/sounds/voice/phone_intro_yes_line_6.wav`
+  - `assets/sounds/voice/phone_intro_no_line_3.wav`
+  - `assets/sounds/voice/phone_intro_no_line_4.wav`
 - Factory outcome feedback also now looks for:
   - `assets/sounds/sfx/sfx_notification_alert.wav`
   - `assets/sounds/sfx/sfx_puzzle_fixed.wav`
@@ -92,6 +101,18 @@ Intro phone call setup:
 - `FIRST_SHIFT_INTRO.silenceBeforePhoneMs` controls the silent wait before the phone ring.
 - `FIRST_SHIFT_INTRO.caseArrivalDelayMs` controls how long the factory waits before sending the first machine after the shift starts.
 - `FIRST_SHIFT_INTRO.fallbackVoiceMs` is only used if the voice sound is missing.
+- `FIRST_SHIFT_INTRO.lineGapMs` controls the pause between spoken subtitle lines.
+- The scripted opening call now lives in `FIRST_SHIFT_INTRO.script` inside `src/constants/gameConstants.js`.
+- `FIRST_SHIFT_INTRO.script.intro` holds the shared opening lines.
+- `FIRST_SHIFT_INTRO.script.yes` is the branch when the player answers `✓` to the line-2 question.
+- `FIRST_SHIFT_INTRO.script.no` is the branch when the player answers `X` to the line-2 question.
+- Each scripted line is now its own editable object with:
+  - `id`
+  - `text`
+  - `voiceAsset`
+- The current call subtitle IDs are `line1`, `line2`, `line3`, `line4`, `line5`, and `line6`.
+- The phone call now waits for both the typed subtitle line and the matching voice clip to finish before the next subtitle line appears.
+- Right now the new per-line voice files can all be replaced independently later, but they still load through `SOUND_ASSETS` like the rest of the optional audio.
 
 Scene flow:
 

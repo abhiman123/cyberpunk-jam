@@ -365,18 +365,21 @@ export default class RulebookOverlay {
 
         const activeRules = this.allRules.filter((rule) => this.activeRuleIds.includes(rule.id));
         activeRules.forEach((rule) => {
-            const card = this.scene.add.rectangle(286, y + 34, 572, 76, 0x182228, 1)
-                .setOrigin(0.5, 0)
-                .setStrokeStyle(1, this.newRuleIds.has(rule.id) ? 0xe6d89a : 0x4d5862, 0.72);
             const tag = this.scene.add.text(16, y + 12, `RULE ${rule.id.toString().padStart(2, '0')}`, {
                 fontFamily: 'Courier New', fontSize: '13px', color: this.newRuleIds.has(rule.id) ? '#f5e7a7' : '#a8c8df', letterSpacing: 1,
             });
             const body = this.scene.add.text(16, y + 34, rule.text, {
-                fontFamily: 'monospace', fontSize: '16px', color: '#dde6ee', wordWrap: { width: 540 }, lineSpacing: 6,
+                fontFamily: 'monospace', fontSize: '15px', color: '#dde6ee', wordWrap: { width: 536 }, lineSpacing: 5,
             });
+            const cardHeight = Math.max(86, body.height + 52);
+            const card = this.scene.add.rectangle(286, y + (cardHeight / 2), 572, cardHeight, 0x182228, 1)
+                .setOrigin(0.5, 0.5)
+                .setStrokeStyle(1, this.newRuleIds.has(rule.id) ? 0xe6d89a : 0x4d5862, 0.72);
+            const divider = this.scene.add.rectangle(286, y + 30, 540, 1, 0x33424b, 0.84).setOrigin(0.5, 0.5);
             this._contentNodes.push(card, tag, body);
-            this._contentContainer.add([card, tag, body]);
-            y += Math.max(92, body.height + 46);
+            this._contentNodes.push(divider);
+            this._contentContainer.add([card, divider, tag, body]);
+            y += cardHeight + 14;
         });
 
         if (activeRules.length === 0) {
@@ -427,12 +430,12 @@ export default class RulebookOverlay {
     _buildDocsSection() {
         let y = 0;
         y = this._addSectionHeader('REFERENCE NOTES', 'Quick reference for the current booth.', y);
-        y = this._addSectionParagraph('Approve the compliant. Scrap the defective. Repair the redeemable.', y, '#f4f0d2');
-        y = this._addSectionParagraph('Grid legend: walls stay blocked, numbered cells want a matching pip count, and = pairs must end on equal pip values.', y + 8, '#c8dbe5');
-        y = this._addSectionParagraph('Grouped grid targets: outlined cell clusters add together as one total. Negative totals mean the cluster must stay below that number.', y + 8, '#c8dbe5');
-        y = this._addSectionParagraph('Flow legend: power has to reach every listed subsystem. Amber hazard nodes block the route, so the path has to go around them.', y + 8, '#c8dbe5');
-        y = this._addSectionParagraph('Gear legend: movable gears slide like puzzle parts. They do not rotate manually. The board clears once the output gear is powered and spinning.', y + 8, '#c8dbe5');
-        y = this._addSectionParagraph('Comms note: a broken VOICE target corrupts the machine link until that subsystem is restored.', y + 8, '#a6c6d4');
+        y = this._addDocCard('ACCEPT / REPAIR / SCRAP', 'Approve the compliant. Scrap the defective. Repair the redeemable.', y, '#f4f0d2');
+        y = this._addDocCard('GRID', 'Walls stay blocked, numbered cells want a matching pip count, and = pairs must end on equal pip values.', y, '#c8dbe5');
+        y = this._addDocCard('GROUP TARGETS', 'Outlined cell clusters add together as one total. Negative totals mean the cluster must stay below that number.', y, '#c8dbe5');
+        y = this._addDocCard('FLOW', 'Power has to reach every listed subsystem. Amber hazard nodes block the route, so the path has to go around them.', y, '#c8dbe5');
+        y = this._addDocCard('GEAR', 'Movable gears slide like puzzle parts. They do not rotate manually. The board clears once the output gear is powered and spinning.', y, '#c8dbe5');
+        y = this._addDocCard('COMMS', 'A broken VOICE target corrupts the machine link until that subsystem is restored.', y, '#a6c6d4');
 
         this._contentHeight = y + 20;
     }
@@ -452,11 +455,29 @@ export default class RulebookOverlay {
 
     _addSectionParagraph(text, y, color = '#dfe7ee') {
         const paragraph = this.scene.add.text(0, y, text, {
-            fontFamily: 'monospace', fontSize: '16px', color, wordWrap: { width: 560 }, lineSpacing: 6,
+            fontFamily: 'monospace', fontSize: '15px', color, wordWrap: { width: 556 }, lineSpacing: 5,
         });
         this._contentNodes.push(paragraph);
         this._contentContainer.add(paragraph);
         return y + paragraph.height + 18;
+    }
+
+    _addDocCard(title, body, y, accentColor = '#dfe7ee') {
+        const titleText = this.scene.add.text(16, y + 12, title, {
+            fontFamily: 'Courier New', fontSize: '13px', color: accentColor, letterSpacing: 1,
+        });
+        const bodyText = this.scene.add.text(16, y + 34, body, {
+            fontFamily: 'monospace', fontSize: '15px', color: '#dfe7ee', wordWrap: { width: 536 }, lineSpacing: 5,
+        });
+        const cardHeight = Math.max(74, bodyText.height + 50);
+        const card = this.scene.add.rectangle(286, y + (cardHeight / 2), 572, cardHeight, 0x182228, 1)
+            .setOrigin(0.5, 0.5)
+            .setStrokeStyle(1, 0x4d5862, 0.72);
+        const divider = this.scene.add.rectangle(286, y + 30, 540, 1, 0x33424b, 0.84).setOrigin(0.5, 0.5);
+
+        this._contentNodes.push(card, divider, titleText, bodyText);
+        this._contentContainer.add([card, divider, titleText, bodyText]);
+        return y + cardHeight + 14;
     }
 
     _syncScroll() {
