@@ -118,6 +118,9 @@ export default class GameScene extends Phaser.Scene {
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
 
+        // Konami code for skipping shifts
+        this._konamiCodeSequence = [];
+
         this._caseSM = new StateMachine('intake');
 
         const fx = applyCyberpunkLook(this);
@@ -157,6 +160,7 @@ export default class GameScene extends Phaser.Scene {
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
             this.input.off('gameout', this._handleDeskItemPointerUp, this);
+            this.input.keyboard.off('keydown', this._handleKonamiCodeKeydown, this);
             this._phoneBodyMaskSource?.destroy();
             this._miniMachineScreenMaskSource?.destroy();
             this._rulebook?.destroy();
@@ -338,6 +342,7 @@ export default class GameScene extends Phaser.Scene {
         this.input.on('pointermove', this._handleDeskItemPointerMove, this);
         this.input.on('pointerup', this._handleDeskItemPointerUp, this);
         this.input.on('gameout', this._handleDeskItemPointerUp, this);
+        this.input.keyboard.on('keydown', this._handleKonamiCodeKeydown, this);
 
         this._deskContainer.add([
             deskShadow,
@@ -4536,5 +4541,47 @@ export default class GameScene extends Phaser.Scene {
 
     _fmtPay() {
         return `PAY $${Math.max(0, GameState.paycheckTotal).toFixed(2)}`;
+    }
+
+    _handleKonamiCodeKeydown(event) {
+        // Konami code: ↑ ↑ ↓ ↓ ← → ← →
+        const konamiKeys = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'];
+
+        const keyMap = {
+            'ArrowUp': 'ArrowUp',
+            'ArrowDown': 'ArrowDown',
+            'ArrowLeft': 'ArrowLeft',
+            'ArrowRight': 'ArrowRight',
+        };
+
+        const mappedKey = keyMap[event.key] || event.code;
+
+        // Reset if wrong key
+        if (mappedKey !== konamiKeys[this._konamiCodeSequence.length]) {
+            this._konamiCodeSequence = [];
+            // Check if this is the first key of the sequence
+            if (mappedKey === konamiKeys[0]) {
+                this._konamiCodeSequence.push(mappedKey);
+            }
+            return;
+        }
+
+        this._konamiCodeSequence.push(mappedKey);
+
+        // Check if full code entered
+        if (this._konamiCodeSequence.length === konamiKeys.length) {
+            this._konamiCodeSequence = [];
+            this._activateKonamiCode();
+        }
+    }
+
+    _activateKonamiCode() {
+        // Only skip if shift is currently running
+        if (!this._shiftRunning || this._shiftEnding) {
+            return;
+        }
+
+        // Skip to summary screen as if shift ended
+        this._endShift(true);
     }
 }

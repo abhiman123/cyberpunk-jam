@@ -22,7 +22,7 @@ const TOP_BAR_H = 52;
 const ACCENT_Y = -212;
 
 // Side rail
-const RAIL_CENTER_X = -308;
+const RAIL_CENTER_X = -324;
 const RAIL_W = 166;
 
 // Content viewport — the scrollable area right of the sidebar
@@ -177,7 +177,7 @@ export default class RulebookOverlay {
         const accentStrip = this.scene.add.rectangle(SCREEN_OFFSET_X, ACCENT_Y, SCREEN_W, 3, 0x89d3c8, 0.5);
 
         // Side rail
-        const sideRail = this.scene.add.rectangle(RAIL_CENTER_X, 0, RAIL_W, SCREEN_H, 0x172228, 1)
+        const sideRail = this.scene.add.rectangle(RAIL_CENTER_X, -1, RAIL_W, SCREEN_H + 2, 0x172228, 1)
             .setStrokeStyle(1, 0x52606b, 0.58);
 
         // ── Top-bar texts ────────────────────────────────────────────────────
