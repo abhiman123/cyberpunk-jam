@@ -74,6 +74,7 @@ export default class GameScene extends Phaser.Scene {
         this._purpleCircuitDeskItem = null;
         this._umbrellaDeskItemMap = new Map();
         this._umbrellaPartCheckType = null;
+        this._rosterClearBonusQueued = false;
 
         this._shiftDuration = SHIFT_DURATION_MS_BY_PERIOD[GameState.day] || SHIFT_DURATION_MS;
         this._elapsed = 0;
@@ -289,10 +290,13 @@ export default class GameScene extends Phaser.Scene {
 
         this._buildDeskSurface();
 
-        this._clockDialCenterX = 1088;
-        this._clockDialCenterY = 646;
+        const clockPanelCenterX = 1150;
+        const clockPanelCenterY = this._deskContainer.y + 86;
 
-        const clockBg = this.add.rectangle(1150, 648, 210, 86, 0x050505, 0.92)
+        this._clockDialCenterX = clockPanelCenterX - 62;
+        this._clockDialCenterY = clockPanelCenterY;
+
+        const clockBg = this.add.rectangle(clockPanelCenterX, clockPanelCenterY, 210, 86, 0x050505, 0.92)
             .setStrokeStyle(1, 0x4e7c8f, 0.75);
         this._hudContainer.add(clockBg);
 
@@ -303,17 +307,17 @@ export default class GameScene extends Phaser.Scene {
         this._clockIcon = this.add.graphics();
         this._hudContainer.add(this._clockIcon);
 
-        const clockLabel = this.add.text(1120, 622, 'SHIFT CLOCK', {
+        const clockLabel = this.add.text(clockPanelCenterX - 30, clockPanelCenterY - 26, 'SHIFT CLOCK', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#66aacc', letterSpacing: 3,
         });
         this._hudContainer.add(clockLabel);
 
-        this._clockText = this.add.text(1120, 652, '12:00 PM', {
+        this._clockText = this.add.text(clockPanelCenterX - 30, clockPanelCenterY + 4, '12:00 PM', {
             fontFamily: 'Courier New', fontSize: '24px', color: '#ccefff',
         }).setOrigin(0, 0.5);
         this._hudContainer.add(this._clockText);
 
-        this._clockPauseNotice = this.add.container(986, 700).setVisible(false).setAlpha(0);
+        this._clockPauseNotice = this.add.container(986, clockPanelCenterY + 52).setVisible(false).setAlpha(0);
         const pauseGlow = this.add.rectangle(0, 0, 274, 32, 0xffffff, 0.04)
             .setOrigin(0, 0)
             .setStrokeStyle(1, 0xeefbff, 0.14);
@@ -1040,6 +1044,73 @@ export default class GameScene extends Phaser.Scene {
             }
             this._setDeskItemVisible(item, count > 0);
         });
+    }
+
+    _animateUmbrellaDeskPartStash(partType, wasVisible = false) {
+        const item = this._umbrellaDeskItemMap.get(partType);
+        if (!item) return;
+
+        const targetX = item.container.x;
+        const targetY = item.container.y;
+        const targetAngle = item.container.angle;
+
+        this.tweens.killTweensOf(item.container);
+        if (wasVisible) {
+            this._deskContainer.bringToTop(item.container);
+            this._refreshDeskItemVisual(item, true);
+            this.tweens.add({
+                targets: item.container,
+                scaleX: 1.14,
+                scaleY: 1.14,
+                duration: 120,
+                yoyo: true,
+                ease: 'Cubic.Out',
+                onComplete: () => this._refreshDeskItemVisual(item, true),
+            });
+            item.focusGlow?.setAlpha(0.18);
+            this.tweens.add({
+                targets: item.focusGlow,
+                alpha: 0,
+                duration: 220,
+                ease: 'Quad.Out',
+            });
+            return;
+        }
+
+        const startWorldX = this._unitContainer?.visible ? this._unitContainer.x : 640;
+        const startWorldY = this._unitContainer?.visible ? (this._unitContainer.y + 28) : 312;
+        const startX = startWorldX - this._deskContainer.x;
+        const startY = startWorldY - this._deskContainer.y;
+
+        this._setDeskItemVisible(item, true);
+        this._deskContainer.bringToTop(item.container);
+        item.container
+            .setPosition(startX, startY)
+            .setAngle(targetAngle)
+            .setScale(0.68)
+            .setAlpha(0.18);
+        item.focusGlow?.setAlpha(0.24);
+        item.liftShadow?.setAlpha(0.3);
+
+        this.tweens.add({
+            targets: item.container,
+            x: targetX,
+            y: targetY,
+            alpha: 1,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 240,
+            ease: 'Cubic.Out',
+            onComplete: () => this._refreshDeskItemVisual(item, true),
+        });
+        if (item.focusGlow) {
+            this.tweens.add({
+                targets: item.focusGlow,
+                alpha: 0,
+                duration: 260,
+                ease: 'Quad.Out',
+            });
+        }
     }
 
     _canDeployUmbrellaDeskPart(item) {
@@ -2628,6 +2699,11 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (shouldRenderMachineBubble) {
+            if (!this._hasBrokenVoiceBox(bubbleMachineVariant)) {
+                this._playOneShot(this._getMachineDialogueSoundAsset(bubbleMachineVariant), {
+                    volume: SOUND_VOLUMES.voice * 0.58,
+                });
+            }
             this._beginMachineSpeechBubble();
         }
 
@@ -2695,6 +2771,11 @@ export default class GameScene extends Phaser.Scene {
             oscillator.disconnect();
             gainNode.disconnect();
         };
+    }
+
+    _getMachineDialogueSoundAsset(machineVariant = this._currentMachineVariant) {
+        const assetKey = machineVariant?.dialogueSoundAssetKey;
+        return SOUND_ASSETS[assetKey] || SOUND_ASSETS.phoneVoiceIntro;
     }
 
     _getMachineFlowState(machineVariant = this._currentMachineVariant) {
@@ -3168,6 +3249,8 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const quest = this._getUmbrellaQuest();
+        const deskItem = this._umbrellaDeskItemMap.get(partType);
+        const wasVisible = Boolean(deskItem?.container?.visible);
         const currentCount = Math.max(0, Number(quest?.collectedParts?.[partType] || 0));
         const requiredCount = Math.max(0, Number(quest?.requiredParts?.[partType] || 0));
 
@@ -3188,6 +3271,7 @@ export default class GameScene extends Phaser.Scene {
                 [partType]: currentCount + 1,
             },
         });
+        this._animateUmbrellaDeskPartStash(partType, wasVisible);
 
         this._playOneShot(SOUND_ASSETS.circuitLock, { volume: SOUND_VOLUMES.puzzleLock * 0.68 });
         this._showFeedback(`${String(partType).toUpperCase()} STOLEN // DESK STASH UPDATED`, '#9aff91');
@@ -4572,18 +4656,36 @@ export default class GameScene extends Phaser.Scene {
                     0,
                     Number(definition.guaranteedTimeframe?.endHour ?? definition.guaranteedTimeframe?.startHour ?? 0)
                 ),
+                triggerHour: 0,
+                queued: false,
                 fulfilled: false,
             }))
+            .map((entry) => {
+                const endHour = Math.max(entry.startHour, entry.endHour);
+                const windowDuration = Math.max(0, endHour - entry.startHour);
+                return {
+                    ...entry,
+                    endHour,
+                    triggerHour: windowDuration > 0
+                        ? entry.startHour + (Math.random() * windowDuration)
+                        : entry.startHour,
+                };
+            })
             .sort((left, right) => {
-                if (left.endHour !== right.endHour) return left.endHour - right.endHour;
+                if (left.triggerHour !== right.triggerHour) return left.triggerHour - right.triggerHour;
                 return left.startHour - right.startHour;
             });
         this._refillMachineShiftQueue();
     }
 
     _refillMachineShiftQueue() {
-        const machineIds = this._machineQueueDefinitions.map((definition) => definition.id);
-        this._machineQueue = Phaser.Utils.Array.Shuffle([...machineIds]);
+        const machineIds = this._machineQueueDefinitions
+            .filter((definition) => {
+                const guaranteeEntry = this._getMachineGuaranteeEntry(definition.id);
+                return !guaranteeEntry || !guaranteeEntry.fulfilled;
+            })
+            .map((definition) => definition.id);
+        this._machineQueue = [...machineIds];
     }
 
     _queueInjectedMachine(machineId, { front = true } = {}) {
@@ -4602,6 +4704,10 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._machineQueue = Array.isArray(this._machineQueue) ? this._machineQueue.filter((queuedId) => queuedId !== machineId) : [];
+        const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
+        if (guaranteeEntry) {
+            guaranteeEntry.queued = true;
+        }
         if (front) {
             this._machineQueue.unshift(machineId);
         } else {
@@ -4626,9 +4732,6 @@ export default class GameScene extends Phaser.Scene {
 
     _consumeQueuedMachineDefinition(machineId) {
         if (!machineId) return null;
-        if (!Array.isArray(this._machineQueue) || this._machineQueue.length === 0) {
-            this._refillMachineShiftQueue();
-        }
 
         const queueIndex = this._machineQueue.indexOf(machineId);
         if (queueIndex >= 0) {
@@ -4637,6 +4740,7 @@ export default class GameScene extends Phaser.Scene {
 
         const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
         if (guaranteeEntry) {
+            guaranteeEntry.queued = false;
             guaranteeEntry.fulfilled = true;
         }
 
@@ -4644,73 +4748,63 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _consumeNextSelectableMachineDefinition(currentHourOffset) {
-        if (!Array.isArray(this._machineQueue) || this._machineQueue.length === 0) {
-            this._refillMachineShiftQueue();
-        }
-        if (!this._machineQueue.length) return null;
+        if (!Array.isArray(this._machineQueue) || this._machineQueue.length === 0) return null;
 
         let queueIndex = this._machineQueue.findIndex((machineId) => {
             const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
-            return !guaranteeEntry || guaranteeEntry.fulfilled || currentHourOffset >= guaranteeEntry.startHour;
+            return !guaranteeEntry || guaranteeEntry.fulfilled || guaranteeEntry.queued;
         });
         if (queueIndex < 0) {
-            const currentlyEligibleMachineIds = this._machineQueueDefinitions
-                .map((definition) => definition.id)
-                .filter((machineId) => {
-                    const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
-                    return !guaranteeEntry || guaranteeEntry.fulfilled || currentHourOffset >= guaranteeEntry.startHour;
-                });
-
-            if (currentlyEligibleMachineIds.length > 0) {
-                this._machineQueue = Phaser.Utils.Array.Shuffle([...currentlyEligibleMachineIds]);
-                queueIndex = 0;
-            }
+            queueIndex = 0;
         }
 
         const machineId = queueIndex >= 0
             ? this._machineQueue.splice(queueIndex, 1)[0]
             : this._machineQueue.shift();
 
-        const guaranteeEntry = this._getMachineGuaranteeEntry(machineId);
-        if (guaranteeEntry) {
-            guaranteeEntry.fulfilled = true;
-        }
+        return this._consumeQueuedMachineDefinition(machineId);
+    }
 
-        return this._machineDefinitionById.get(machineId) || null;
+    _queueTriggeredGuaranteedMachines(currentHourOffset) {
+        const readyGuarantees = this._machineGuaranteeState
+            .filter((entry) => !entry.fulfilled && !entry.queued && currentHourOffset >= entry.triggerHour)
+            .sort((left, right) => right.triggerHour - left.triggerHour);
+
+        readyGuarantees.forEach((entry) => {
+            this._queueInjectedMachine(entry.id, { front: true });
+        });
     }
 
     _takeNextQueuedMachineDefinition() {
         if (!this._machineDefinitionById?.size) return null;
 
         const currentHourOffset = this._getCurrentShiftHourOffset();
-        const pendingGuarantees = this._machineGuaranteeState.filter((entry) => !entry.fulfilled);
-        const overdueGuarantee = pendingGuarantees.find((entry) => currentHourOffset >= entry.endHour);
-
-        if (overdueGuarantee) {
-            return this._consumeQueuedMachineDefinition(overdueGuarantee.id);
-        }
-
-        const activeGuarantees = pendingGuarantees.filter(
-            (entry) => currentHourOffset >= entry.startHour && currentHourOffset < entry.endHour
-        );
-        if (activeGuarantees.length > 0) {
-            const nextActiveGuarantee = [...activeGuarantees].sort((left, right) => {
-                if (left.endHour !== right.endHour) return left.endHour - right.endHour;
-                return left.startHour - right.startHour;
-            })[0];
-            const windowDuration = Math.max(0.25, nextActiveGuarantee.endHour - nextActiveGuarantee.startHour);
-            const windowProgress = Phaser.Math.Clamp(
-                (currentHourOffset - nextActiveGuarantee.startHour) / windowDuration,
-                0,
-                1
-            );
-            const shouldUseGuaranteedMachine = Math.random() < (0.28 + (windowProgress * 0.57));
-            if (shouldUseGuaranteedMachine) {
-                return this._consumeQueuedMachineDefinition(nextActiveGuarantee.id);
-            }
-        }
+        this._queueTriggeredGuaranteedMachines(currentHourOffset);
 
         return this._consumeNextSelectableMachineDefinition(currentHourOffset);
+    }
+
+    _queueRosterClearBonus() {
+        if (this._rosterClearBonusQueued) return;
+
+        this._rosterClearBonusQueued = true;
+        GameState.queueShiftSummaryAdjustment({
+            label: `DAY ${GameState.day} ROSTER CLEAR`,
+            amount: PAYCHECK_DELTA,
+        });
+    }
+
+    _triggerRosterClearShiftEnd() {
+        if (this._shiftEnding || !this._shiftRunning) return;
+
+        this._queueRosterClearBonus();
+        this._setPhoneInfoNote('All scheduled machines for this day are cleared. Clocking out early.', 'ROSTER CLEAR');
+        this._showFeedback('DAY ROSTER CLEARED // SHIFT OVER', '#ffd685');
+        this.time.delayedCall(380, () => {
+            if (this._shiftEnding) return;
+            this._shiftRunning = false;
+            this._endShift(false);
+        });
     }
 
     _drawClockIcon(totalMinutes) {
@@ -4778,8 +4872,8 @@ export default class GameScene extends Phaser.Scene {
 
         this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(16).setVisible(false);
         this._machineSpeechBubbleSlots = [
-            this._createMachineSpeechBubbleSlot(1038, 298, 214),
-            this._createMachineSpeechBubbleSlot(1110, 386, 256, true),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 320, 244),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 406, 286, true),
         ];
         this._machineSpeechBubbleSlots.forEach((slot) => this._machineSpeechBubbleLayer.add(slot.container));
 
@@ -6507,7 +6601,7 @@ export default class GameScene extends Phaser.Scene {
             align: 'left',
             wordWrap: { width: maxWidth - 28 },
             lineSpacing: 4,
-        }).setOrigin(0.5);
+        }).setOrigin(0, 1);
         container.add([shadow, bubble, tailShadow, tail, text]);
 
         return { container, shadow, bubble, tailShadow, tail, text, maxWidth, withTail };
@@ -6532,8 +6626,10 @@ export default class GameScene extends Phaser.Scene {
 
         const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 30, 110, slot.maxWidth);
         const bubbleHeight = Phaser.Math.Clamp(slot.text.height + 24, 48, 132);
-        const left = -bubbleWidth / 2;
-        const top = -bubbleHeight / 2;
+        const left = 0;
+        const top = -bubbleHeight;
+
+        slot.text.setPosition(14, -12);
 
         slot.shadow.clear();
         slot.shadow.fillStyle(0x000000, 0.18);
@@ -6549,9 +6645,9 @@ export default class GameScene extends Phaser.Scene {
         slot.tail.clear();
         if (slot.withTail) {
             const tailPoints = [
-                left + 26, top + bubbleHeight - 6,
-                left + 44, top + bubbleHeight + 18,
-                left + 58, top + bubbleHeight - 2,
+                left + 24, -10,
+                left + 40, 20,
+                left + 58, -2,
             ];
             slot.tailShadow.fillStyle(0x000000, 0.18);
             slot.tailShadow.fillPoints([
@@ -6576,13 +6672,22 @@ export default class GameScene extends Phaser.Scene {
         slot.container.setVisible(true);
     }
 
+    _canShowMachineSpeechBubbles() {
+        return Boolean(
+            this._currentCase
+            && this._currentMachineVariant?.hasCommunication
+            && this._unitContainer?.visible
+            && !this._unitMoveTween
+        );
+    }
+
     _refreshMachineSpeechBubbles() {
         if (!Array.isArray(this._machineSpeechBubbleSlots) || this._machineSpeechBubbleSlots.length === 0) return;
 
         const visibleEntries = this._machineSpeechBubbleHistory
             .filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
             .slice(-2);
-        const hasEntries = visibleEntries.length > 0 && Boolean(this._currentMachineVariant?.hasCommunication);
+        const hasEntries = visibleEntries.length > 0 && this._canShowMachineSpeechBubbles();
 
         this._machineSpeechBubbleLayer?.setVisible(hasEntries);
         this._machineSpeechBubbleSlots.forEach((slot, index) => {
@@ -6729,12 +6834,20 @@ export default class GameScene extends Phaser.Scene {
         this._phoneStickToBottom = true;
 
         const queuedMachineDefinition = this._takeNextQueuedMachineDefinition();
+        if (!queuedMachineDefinition) {
+            this._currentCase = null;
+            this._clearMachineSpeechBubbles();
+            this._setFactoryIdleState('DAY ROSTER CLEARED\n\nSTATUS: CLOCKING OUT');
+            this._triggerRosterClearShiftEnd();
+            return;
+        }
+
         this._currentMachineVariant = createMachineVariant({
             day: GameState.day,
             period: GameState.period,
             umbrellaQuest: this._getUmbrellaQuest(),
             specialItems: GameState.specialItems,
-            forceMachineId: queuedMachineDefinition?.id || null,
+            forceMachineId: queuedMachineDefinition.id,
         });
         this._currentMachineVariant._uiPuzzleOpened = false;
         this._currentMachineVariant._uiPuzzleSolved = false;
@@ -6782,7 +6895,6 @@ export default class GameScene extends Phaser.Scene {
 
         this._machineDialogueText.setText('');
         this._handlePuzzleStateChanged(this._currentMachineVariant, this._currentMachineVariant.puzzleState);
-        this._playMachineConversation(this._currentMachineVariant);
         this._refreshPhoneInfoBoard(this._currentMachineVariant);
         if (this._currentCase._konamiOverride) {
             this._setPhoneInfoNote('Konami override active. This unit will end the shift.', 'FINAL ROUTE');
@@ -6810,6 +6922,8 @@ export default class GameScene extends Phaser.Scene {
 
         const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorEntryX - MACHINE_PRESENTATION.conveyorTargetX);
         const tweenDurationMs = Math.max(200, Math.round((travelDistance / MACHINE_PRESENTATION.conveyorSpeedPxPerSecond) * 1000));
+        const arrivingMachineVariant = this._currentMachineVariant;
+        const arrivingCase = this._currentCase;
 
         this._unitMoveTween?.stop();
         this._unitMoveTween = null;
@@ -6821,6 +6935,9 @@ export default class GameScene extends Phaser.Scene {
             ease: 'Cubic.Out',
             onComplete: () => {
                 this._unitMoveTween = null;
+                if (this._currentMachineVariant !== arrivingMachineVariant || this._currentCase !== arrivingCase) return;
+                this._playMachineConversation(arrivingMachineVariant);
+                this._refreshMachineSpeechBubbles();
             },
         });
     }
@@ -6887,7 +7004,6 @@ export default class GameScene extends Phaser.Scene {
         const shouldShowStandby = !shiftShouldEnd && !finalCaseTriggered && !hasPendingKonamiFinale;
         this._advanceCaseEvent?.remove(false);
         this._advanceCaseEvent = null;
-        this._actionLocked = false;
         this._clearUnsafeAcceptConfirmation();
         this._clearPhoneTyping();
         this._machinePuzzleOverlay?.close(true);
@@ -6920,6 +7036,7 @@ export default class GameScene extends Phaser.Scene {
             if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
             this._currentMachineVariant = null;
             this._pendingExitAction = null;
+            this._actionLocked = false;
             this._hideMiniMachinePanel(true);
             this._refreshOtherPuzzleButton();
             this._refreshFactoryActionButtons();
@@ -8102,6 +8219,22 @@ export default class GameScene extends Phaser.Scene {
                 powerClass: 'neutral',
                 exactFeeds: 1,
             }));
+        const rowCount = Math.max(3, Number(flowPuzzle.rows || flowPuzzle.tiles?.length || 5));
+        const getPreviewY = (row) => contentTop + (((row + 0.5) / rowCount) * (contentBottom - contentTop));
+        const getPreviewColor = (powerClass, fallback = lineColor) => {
+            if (powerClass === 'green') return 0x73ffae;
+            if (powerClass === 'orange') return 0xffbe6d;
+            if (powerClass === 'mixed') return 0xff7167;
+            if (powerClass === 'red') return 0xff4f4f;
+            return fallback;
+        };
+        const derivePreviewPowerClass = (feeds = []) => {
+            const powerClasses = Array.from(new Set(feeds.map((feed) => feed.powerClass || 'neutral')));
+            if (powerClasses.length === 0) return null;
+            if (powerClasses.includes('red')) return 'red';
+            if (powerClasses.length > 1) return 'mixed';
+            return powerClasses[0];
+        };
         const totalOutputs = outputs.length;
         const connectedOutputs = new Set(flowState?.completed ? outputs.map((output) => output.key) : (flowState?.connected || []));
         const outputFeeds = flowState?.outputFeeds || {};
@@ -8120,8 +8253,10 @@ export default class GameScene extends Phaser.Scene {
                 ? { tint: 0x73ffae, label: '#73ffae' }
                 : source.powerClass === 'orange'
                     ? { tint: 0xffbe6d, label: '#ffbe6d' }
-                    : { tint: 0xffcc44, label: '#fff0b5' };
-            const sourceY = contentTop + (((source.row + 0.5) / 5) * (contentBottom - contentTop));
+                    : source.powerClass === 'red'
+                        ? { tint: 0xff4f4f, label: '#ff8d8d' }
+                        : { tint: 0xffcc44, label: '#fff0b5' };
+            const sourceY = getPreviewY(source.row);
 
             graphics.lineStyle(2, dimColor, 0.75);
             graphics.beginPath();
@@ -8145,8 +8280,8 @@ export default class GameScene extends Phaser.Scene {
         });
 
         if (outputs.length > 0) {
-            const verticalTop = Math.min(...outputs.map((output) => contentTop + (((output.row + 0.5) / 5) * (contentBottom - contentTop))));
-            const verticalBottom = Math.max(...outputs.map((output) => contentTop + (((output.row + 0.5) / 5) * (contentBottom - contentTop))));
+            const verticalTop = Math.min(...outputs.map((output) => getPreviewY(output.row)));
+            const verticalBottom = Math.max(...outputs.map((output) => getPreviewY(output.row)));
             graphics.lineStyle(2, dimColor, 0.72);
             graphics.beginPath();
             graphics.moveTo(branchX, verticalTop);
@@ -8155,17 +8290,14 @@ export default class GameScene extends Phaser.Scene {
         }
 
         outputs.forEach((output, index) => {
-            const outputY = contentTop + (((output.row + 0.5) / 5) * (contentBottom - contentTop));
+            const outputY = getPreviewY(output.row);
             const feeds = outputFeeds[output.key] || [];
             const isConnected = connectedOutputs.has(output.key);
             const nodeX = contentRight - 2;
-            const requiredColor = output.powerClass === 'green'
-                ? 0x73ffae
-                : output.powerClass === 'orange'
-                    ? 0xffbe6d
-                    : lineColor;
-            const branchColor = feeds.length > 0 && !isConnected
-                ? 0xff7d77
+            const actualPowerClass = derivePreviewPowerClass(feeds);
+            const requiredColor = getPreviewColor(output.powerClass, lineColor);
+            const branchColor = actualPowerClass
+                ? getPreviewColor(actualPowerClass, requiredColor)
                 : (isConnected ? requiredColor : dimColor);
 
             graphics.lineStyle(isConnected ? 2 : 1, branchColor, isConnected ? 0.95 : 0.72);

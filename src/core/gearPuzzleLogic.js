@@ -127,9 +127,27 @@ export function buildGearOccupancy(board, pieces = []) {
     return { occupancy, sources, sinks };
 }
 
+export function buildClampedGearCellSet(pieces = []) {
+    const clampedCells = new Set();
+
+    cloneGearPieces(pieces).forEach((piece) => {
+        if (piece.role !== 'deadlock-clamp') return;
+        clampedCells.add(gearCellKey(piece.row, piece.col));
+    });
+
+    return clampedCells;
+}
+
 export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
     const normalizedPieces = cloneGearPieces(pieces);
     const allowRustedGears = Boolean(options.allowRustedGears);
+    const disabledCells = new Set(
+        Array.isArray(options.disabledCells)
+            ? options.disabledCells.map((cell) => (typeof cell === 'string' ? cell : gearCellKey(cell.row, cell.col)))
+            : []
+    );
+    const clampedCells = buildClampedGearCellSet(normalizedPieces);
+    clampedCells.forEach((cellKey) => disabledCells.add(cellKey));
     const { occupancy, sources, sinks } = buildGearOccupancy(board, normalizedPieces);
     const powered = new Set();
     const directions = new Map();
@@ -141,6 +159,7 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
 
     sources.forEach((source) => {
         const key = gearCellKey(source.row, source.col);
+        if (disabledCells.has(key)) return;
         powered.add(key);
         directions.set(key, 1);
         queue.push(source);
@@ -150,7 +169,7 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
         const current = queue.shift();
         const currentKey = gearCellKey(current.row, current.col);
         const currentEntry = occupancy.get(currentKey);
-        if (!currentEntry) continue;
+        if (!currentEntry || disabledCells.has(currentKey)) continue;
 
         const currentConnections = getGearConnections(currentEntry.type);
         const currentDirection = directions.get(currentKey) ?? 1;
@@ -163,7 +182,7 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
 
             const nextKey = gearCellKey(nextRow, nextCol);
             const nextEntry = occupancy.get(nextKey);
-            if (!nextEntry || nextEntry.type === GEAR_CODES.MOVABLE_WALL || nextEntry.type === GEAR_CODES.WALL) return;
+            if (!nextEntry || disabledCells.has(nextKey) || nextEntry.type === GEAR_CODES.MOVABLE_WALL || nextEntry.type === GEAR_CODES.WALL) return;
 
             const nextConnections = getGearConnections(nextEntry.type);
             if (!nextConnections.includes(dir.opposite)) return;
@@ -208,7 +227,10 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
         : directionConflicts.length > 0
             ? 'direction-conflict'
             : null;
-    const sinkPowered = !jammed && sinks.some((sink) => powered.has(gearCellKey(sink.row, sink.col)));
+    const sinkPowered = !jammed && sinks.some((sink) => {
+        const sinkKey = gearCellKey(sink.row, sink.col);
+        return !disabledCells.has(sinkKey) && powered.has(sinkKey);
+    });
     const poweredPieces = normalizedPieces.filter((piece) => powered.has(gearCellKey(piece.row, piece.col))).map((piece) => piece.id);
     const jammedPieces = normalizedPieces.filter((piece) => jammedCells.has(gearCellKey(piece.row, piece.col))).map((piece) => piece.id);
 
@@ -216,6 +238,8 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
         occupancy,
         powered,
         directions,
+        disabledCells,
+        clampedCells,
         poweredPieces,
         jammed,
         jammedCells,
@@ -231,8 +255,12 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
 
 export function buildGearProgressSnapshot(puzzle, pieces = puzzle?.pieces || []) {
     const normalizedPieces = cloneGearPieces(pieces);
+    const disabledCells = puzzle?.inspectionFault?.blocksDrive
+        ? [gearCellKey(puzzle.inspectionFault.row, puzzle.inspectionFault.col)]
+        : [];
     const result = evaluateGearPuzzleBoard(puzzle?.board || [], normalizedPieces, {
         allowRustedGears: Boolean(puzzle?.allowRustedGears),
+        disabledCells,
     });
     const inspectionFault = puzzle?.inspectionFault ? { ...puzzle.inspectionFault } : null;
     const flags = [];
@@ -251,6 +279,7 @@ export function buildGearProgressSnapshot(puzzle, pieces = puzzle?.pieces || [])
         pieces: normalizedPieces,
         poweredCells: Array.from(result.powered).map((key) => parseGearCellKey(key)),
         poweredPieces: [...result.poweredPieces],
+        clampedCells: Array.from(result.clampedCells).map((key) => parseGearCellKey(key)),
         jammedCells: Array.from(result.jammedCells).map((key) => parseGearCellKey(key)),
         jammedPieces: [...result.jammedPieces],
         completed: result.completed,

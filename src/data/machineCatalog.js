@@ -13,6 +13,7 @@ const CELL_WALL = 1;
 const MIN_CHARGE_CODE = 2;
 const MAX_CHARGE_CODE = 5;
 const EMPTY_PLACED_OFFSET = 10;
+const BROKEN_REGION_GLYPHS = Object.freeze(['#', '%', '@', '?', '&', '*']);
 
 function normalizeRotationIndex(value) {
     const safeValue = Number.isInteger(value) ? value : 0;
@@ -108,6 +109,11 @@ function cloneFlowOutputSpecs(outputSpecs) {
     return outputSpecs.map((spec) => ({ ...spec }));
 }
 
+function cloneFlowWireFilters(wireFilters) {
+    if (!Array.isArray(wireFilters)) return [];
+    return wireFilters.map((filter) => ({ ...filter }));
+}
+
 function cloneDebugOutputs(outputs) {
     if (!Array.isArray(outputs)) return [];
     return outputs.map((output) => String(output));
@@ -153,6 +159,56 @@ function createFlowOutputSpec(label, row, extra = {}) {
         sourceKey: extra.sourceKey || null,
         ...extra,
     };
+}
+
+function createFlowWireFilter(x, y, powerClass = 'neutral', label = null) {
+    return {
+        x,
+        y,
+        powerClass,
+        label: label || String(powerClass || 'neutral').slice(0, 3).toUpperCase(),
+    };
+}
+
+function getFlowOptionRows(flowPuzzleOption) {
+    return Math.max(3, Number(flowPuzzleOption?.rows || FLOW_TILE_ROWS));
+}
+
+function getFlowOptionCols(flowPuzzleOption) {
+    return Math.max(3, Number(flowPuzzleOption?.cols || FLOW_TILE_COLS));
+}
+
+function getPrimaryFlowSourceRow(flowPuzzleOption) {
+    return Number(flowPuzzleOption?.sourceRow ?? flowPuzzleOption?.sources?.[0]?.row ?? 2);
+}
+
+function upsertFlowWireFilter(wireFilters = [], nextFilter) {
+    const nextFilters = cloneFlowWireFilters(wireFilters);
+    const existingIndex = nextFilters.findIndex((filter) => filter.x === nextFilter.x && filter.y === nextFilter.y);
+
+    if (existingIndex >= 0) {
+        nextFilters.splice(existingIndex, 1, {
+            ...nextFilters[existingIndex],
+            ...nextFilter,
+        });
+        return nextFilters;
+    }
+
+    nextFilters.push({ ...nextFilter });
+    return nextFilters;
+}
+
+function spreadFlowRows(count, rows) {
+    if (count <= 0) return [];
+    if (count === 1) return [Math.floor(rows / 2)];
+
+    const firstRow = 1;
+    const lastRow = Math.max(firstRow, rows - 2);
+    const span = lastRow - firstRow;
+
+    return Array.from({ length: count }, (_value, index) => (
+        Math.round(firstRow + ((span * index) / (count - 1)))
+    ));
 }
 
 function createSeededRandom(seedText) {
@@ -655,18 +711,20 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
     };
 }
 
-function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS' }) {
-    const tiles = Array.from({ length: FLOW_TILE_ROWS }, () => (
-        Array.from({ length: FLOW_TILE_COLS }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
+function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS', rows = FLOW_TILE_ROWS, cols = FLOW_TILE_COLS }) {
+    const safeRows = Math.max(3, Number(rows || FLOW_TILE_ROWS));
+    const safeCols = Math.max(3, Number(cols || FLOW_TILE_COLS));
+    const tiles = Array.from({ length: safeRows }, () => (
+        Array.from({ length: safeCols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     ));
     const seededRandom = createSeededRandom(`${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}`);
 
     outputSpecs.forEach((outputSpec, index) => {
         const source = sources.find((candidate) => candidate.key === outputSpec.sourceKey) || sources[index % sources.length];
         const branchCol = outputSpec.row === source.row
-            ? FLOW_TILE_COLS - 1
-            : Math.min(1 + (index % Math.max(1, FLOW_TILE_COLS - 2)), FLOW_TILE_COLS - 2);
-        carveFlowPath(tiles, source.row, outputSpec.row, FLOW_TILE_COLS, branchCol);
+            ? safeCols - 1
+            : Math.min(1 + (index % Math.max(1, safeCols - 2)), safeCols - 2);
+        carveFlowPath(tiles, source.row, outputSpec.row, safeCols, branchCol);
     });
 
     tiles.forEach((row) => row.forEach((cell) => {
@@ -764,6 +822,9 @@ const createFlowPuzzleOption = ({
     forbidden = null,
     repairTargets = null,
     inspectionFault = null,
+    rows = FLOW_TILE_ROWS,
+    cols = FLOW_TILE_COLS,
+    wireFilters = [],
 }) => {
     const resolvedLayout = Array.isArray(tiles)
         ? {
@@ -781,12 +842,115 @@ const createFlowPuzzleOption = ({
         forbiddenCount,
         impossible,
         previewTitle,
+        rows: Math.max(3, Number(rows || resolvedLayout.tiles.length || FLOW_TILE_ROWS)),
+        cols: Math.max(3, Number(cols || resolvedLayout.tiles?.[0]?.length || FLOW_TILE_COLS)),
         tiles: resolvedLayout.tiles,
         forbidden: resolvedLayout.forbidden,
         repairTargets: resolvedRepairTargets,
+        wireFilters: cloneFlowWireFilters(wireFilters),
         inspectionFault: inspectionFault ? { ...inspectionFault } : null,
     };
 };
+
+function getFirstFlowLeadCell(flowPuzzleOption) {
+    const leadRow = getPrimaryFlowSourceRow(flowPuzzleOption);
+    const leadCol = Math.min(Math.max(1, 1), Math.max(1, getFlowOptionCols(flowPuzzleOption) - 2));
+    const leadTile = flowPuzzleOption?.tiles?.[leadRow]?.[leadCol];
+
+    if (leadTile && leadTile.type && leadTile.type !== 'empty') {
+        return { x: leadCol, y: leadRow };
+    }
+
+    const fallbackCandidate = collectFlowInspectionCandidates(flowPuzzleOption)
+        .sort((left, right) => (
+            left.x - right.x
+            || Math.abs(left.y - leadRow) - Math.abs(right.y - leadRow)
+        ))[0];
+
+    return fallbackCandidate || null;
+}
+
+function findFlowWireFilterCell(flowPuzzleOption, targetRow) {
+    const cols = getFlowOptionCols(flowPuzzleOption);
+    const sourceRow = getPrimaryFlowSourceRow(flowPuzzleOption);
+    const rowCells = (flowPuzzleOption?.tiles?.[targetRow] || [])
+        .map((cell, x) => ({ x, cell }))
+        .filter(({ x, cell }) => x > 0 && x < cols - 1 && cell && cell.type && cell.type !== 'empty');
+
+    if (rowCells.length === 0) {
+        return getFirstFlowLeadCell(flowPuzzleOption);
+    }
+
+    const selectedCell = targetRow === sourceRow ? rowCells[rowCells.length - 1] : rowCells[0];
+    return selectedCell ? { x: selectedCell.x, y: targetRow } : null;
+}
+
+function createMissingLeadFault(flowPuzzleOption) {
+    const leadCell = getFirstFlowLeadCell(flowPuzzleOption);
+    if (!leadCell) return null;
+
+    if (flowPuzzleOption?.tiles?.[leadCell.y]?.[leadCell.x]) {
+        flowPuzzleOption.tiles[leadCell.y][leadCell.x] = { type: 'empty', rotation: 0, locked: true };
+    }
+    flowPuzzleOption.wireFilters = cloneFlowWireFilters(flowPuzzleOption.wireFilters)
+        .filter((filter) => filter.x !== leadCell.x || filter.y !== leadCell.y);
+
+    return {
+        ...leadCell,
+        type: 'missing-wire',
+        kind: 'unsalvageable',
+        status: 'FIRST WIRE MISSING',
+        reason: 'The first live wire is physically missing from the board. Power can never leave the source. Scrap the unit.',
+    };
+}
+
+function createRedWireFault(flowPuzzleOption) {
+    const leadCell = getFirstFlowLeadCell(flowPuzzleOption);
+    if (!leadCell) return null;
+
+    flowPuzzleOption.wireFilters = upsertFlowWireFilter(
+        flowPuzzleOption.wireFilters,
+        createFlowWireFilter(leadCell.x, leadCell.y, 'red', 'RED')
+    );
+
+    return {
+        ...leadCell,
+        type: 'red-wire',
+        kind: 'unsalvageable',
+        status: 'RED DISCHARGE WIRE',
+        reason: 'The main line is forced through a red discharge wire. There is no safe path through this machine. Scrap the unit.',
+    };
+}
+
+function createCracklingOutputFault(outputSpec) {
+    if (!outputSpec) return null;
+
+    return {
+        targetKey: outputSpec.key,
+        row: outputSpec.row,
+        type: 'crackling-module',
+        kind: 'unsalvageable',
+        status: 'CRACKLING OUTPUT MODULE',
+        reason: `${outputSpec.displayName || humanizeFlowLabel(outputSpec.label)} is demanding a red crackling feed. The unit is unsafe by design. Scrap the unit.`,
+    };
+}
+
+function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs) {
+    return outputSpecs
+        .map((outputSpec) => {
+            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row);
+            if (!filterCell) return null;
+
+            return createFlowWireFilter(
+                filterCell.x,
+                filterCell.y,
+                outputSpec.powerClass,
+                outputSpec.powerClass === 'green' ? 'GRN' : 'ORG'
+            );
+        })
+        .filter(Boolean)
+        .reduce((filters, filter) => upsertFlowWireFilter(filters, filter), []);
+}
 
 function collectFlowInspectionCandidates(flowPuzzleOption) {
     const sourceRows = new Set((flowPuzzleOption?.sources || []).map((source) => source.row));
@@ -812,18 +976,22 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
 
     const baseTargets = cloneRepairTargets(flowPuzzleOption.repairTargets)
         .sort((left, right) => left.row - right.row);
+    const sourceRow = getPrimaryFlowSourceRow(flowPuzzleOption);
 
     if (stage <= 1) {
         const stagedOption = {
             ...flowPuzzleOption,
             dayStage: 1,
-            sources: [createFlowSource('main', flowPuzzleOption.sourceRow ?? 2, 'neutral', 'PWR')],
+            rows: getFlowOptionRows(flowPuzzleOption),
+            cols: getFlowOptionCols(flowPuzzleOption),
+            sources: [createFlowSource('main', sourceRow, 'neutral', 'PWR')],
             outputSpecs: baseTargets.map((target) => createFlowOutputSpec(target.label, target.row, {
                 ...target,
                 powerClass: 'neutral',
-                exactFeeds: 1,
                 sourceKey: 'main',
             })),
+            repairTargets: cloneRepairTargets(baseTargets),
+            wireFilters: [],
             inspectionFault: null,
         };
 
@@ -832,50 +1000,75 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             return stagedOption;
         }
 
-        const candidates = collectFlowInspectionCandidates(stagedOption);
-        const severedCell = candidates.length > 0 && randomFn() < 0.3
-            ? pickRandomEntry(candidates, randomFn)
-            : null;
-
-        if (severedCell) {
-            stagedOption.inspectionFault = {
-                ...severedCell,
-                type: 'severed-line',
-                kind: 'unsalvageable',
-                status: 'SEVERED LINE',
-                reason: 'A severed power line cannot be rejoined on the floor. Scrap the unit.',
-            };
+        if (randomFn() < 0.3) {
+            stagedOption.inspectionFault = createMissingLeadFault(stagedOption);
         }
 
         return stagedOption;
     }
 
-    const firstOutputRow = baseTargets[0]?.row ?? (flowPuzzleOption.sourceRow ?? 1);
-    const lastOutputRow = baseTargets[baseTargets.length - 1]?.row ?? Math.min(FLOW_TILE_ROWS - 2, firstOutputRow + 2);
-    const alternateRow = firstOutputRow === lastOutputRow
-        ? Math.min(FLOW_TILE_ROWS - 2, Math.max(1, firstOutputRow + 2))
-        : lastOutputRow;
-    const sources = [
-        createFlowSource('green', firstOutputRow, 'green', 'GRN'),
-        createFlowSource('orange', alternateRow, 'orange', 'ORG'),
-    ];
-    const outputSpecs = baseTargets.map((target, index) => {
-        const powerClass = index % 2 === 0 ? 'green' : 'orange';
-        return createFlowOutputSpec(target.label, target.row, {
+    if (stage === 2) {
+        const outputSpecs = baseTargets.map((target, index) => createFlowOutputSpec(target.label, target.row, {
             ...target,
+            powerClass: index % 2 === 0 ? 'green' : 'orange',
+            sourceKey: 'main',
+        }));
+        const stagedOption = {
+            ...flowPuzzleOption,
+            rows: getFlowOptionRows(flowPuzzleOption),
+            cols: getFlowOptionCols(flowPuzzleOption),
+            dayStage: 2,
+            stageResultKind: 'repairable',
+            sources: [createFlowSource('main', sourceRow, 'neutral', 'PWR')],
+            outputSpecs,
+            repairTargets: cloneRepairTargets(outputSpecs),
+            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs),
+            inspectionFault: null,
+        };
+
+        if (flowPuzzleOption?.inspectionFault) {
+            stagedOption.inspectionFault = { ...flowPuzzleOption.inspectionFault };
+            return stagedOption;
+        }
+
+        if (randomFn() < 0.34) {
+            stagedOption.inspectionFault = randomFn() < 0.5
+                ? createMissingLeadFault(stagedOption)
+                : createRedWireFault(stagedOption);
+        }
+
+        return stagedOption;
+    }
+
+    const rows = 7;
+    const cols = 7;
+    const outputRows = spreadFlowRows(baseTargets.length, rows);
+    const sources = [
+        createFlowSource('main', 1, 'neutral', 'PWR'),
+        createFlowSource('green', Math.floor(rows / 2), 'green', 'GRN'),
+        createFlowSource('orange', rows - 2, 'orange', 'ORG'),
+    ];
+    const powerCycle = ['neutral', 'green', 'orange'];
+    const outputSpecs = baseTargets.map((target, index) => {
+        const powerClass = powerCycle[index % powerCycle.length];
+        return createFlowOutputSpec(target.label, outputRows[index], {
+            ...target,
+            row: outputRows[index],
             powerClass,
-            exactFeeds: 1,
-            sourceKey: powerClass,
+            sourceKey: powerClass === 'neutral' ? 'main' : powerClass,
         });
     });
     const layout = buildTypedFlowOptionLayout({
         sources,
         outputSpecs,
-        previewTitle: `${flowPuzzleOption.previewTitle || 'POWER BUS'}:${stage}`,
+        previewTitle: `${flowPuzzleOption.previewTitle || 'POWER BUS'}:day3`,
+        rows,
+        cols,
     });
-
-    return {
+    const stagedOption = {
         ...flowPuzzleOption,
+        rows,
+        cols,
         sourceRow: sources[0].row,
         forbiddenCount: 0,
         forbidden: layout.forbidden,
@@ -883,10 +1076,27 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         repairTargets: cloneRepairTargets(outputSpecs),
         sources,
         outputSpecs,
-        dayStage: stage,
-        stageResultKind: stage >= 3 ? 'hazard' : 'compliance',
+        wireFilters: [],
+        dayStage: 3,
+        stageResultKind: 'hazard',
         inspectionFault: null,
     };
+
+    if (flowPuzzleOption?.inspectionFault) {
+        stagedOption.inspectionFault = { ...flowPuzzleOption.inspectionFault };
+        return stagedOption;
+    }
+
+    if (outputSpecs.length > 0 && randomFn() < 0.28) {
+        const hazardousOutput = pickRandomEntry(outputSpecs, randomFn) || outputSpecs[0];
+        hazardousOutput.powerClass = 'red';
+        hazardousOutput.sourceKey = null;
+        stagedOption.outputSpecs = cloneFlowOutputSpecs(outputSpecs);
+        stagedOption.repairTargets = cloneRepairTargets(outputSpecs);
+        stagedOption.inspectionFault = createCracklingOutputFault(hazardousOutput);
+    }
+
+    return stagedOption;
 }
 
 const createMiniDisplay = ({
@@ -965,12 +1175,150 @@ function findFirstOpenGearCell(board, pieces) {
     return null;
 }
 
+function gearOptionHasRustedContent(gearPuzzleOption) {
+    const boardHasRust = (gearPuzzleOption?.board || []).some((row) => row.some((cell) => cell === GEAR_CODES.RUSTED));
+    const pieceHasRust = (gearPuzzleOption?.pieces || []).some((piece) => piece.type === GEAR_CODES.RUSTED);
+    return boardHasRust || pieceHasRust;
+}
+
+function sanitizeGearOptionForStageOne(gearPuzzleOption) {
+    if (!gearPuzzleOption) return null;
+
+    return {
+        ...gearPuzzleOption,
+        board: cloneGearBoard(gearPuzzleOption.board).map((row) => row.map((cell) => (
+            cell === GEAR_CODES.RUSTED ? GEAR_CODES.FULL : cell
+        ))),
+        pieces: cloneGearPieces(gearPuzzleOption.pieces).map((piece) => (
+            piece.type === GEAR_CODES.RUSTED
+                ? { ...piece, type: GEAR_CODES.FULL }
+                : piece
+        )),
+    };
+}
+
+function collectGearDriveCandidates(gearPuzzleOption) {
+    const candidates = [];
+
+    (gearPuzzleOption?.board || []).forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+            if (cell !== GEAR_CODES.SOURCE && cell !== GEAR_CODES.SINK) return;
+            candidates.push({
+                row: rowIndex,
+                col: colIndex,
+                source: 'board',
+                driveType: cell === GEAR_CODES.SOURCE ? 'source' : 'sink',
+            });
+        });
+    });
+
+    (gearPuzzleOption?.pieces || []).forEach((piece) => {
+        if (piece.type !== GEAR_CODES.SOURCE && piece.type !== GEAR_CODES.SINK) return;
+        candidates.push({
+            row: piece.row,
+            col: piece.col,
+            source: 'piece',
+            pieceId: piece.id || null,
+            driveType: piece.type === GEAR_CODES.SOURCE ? 'source' : 'sink',
+        });
+    });
+
+    return candidates;
+}
+
+function createCrackedDriveFault(gearPuzzleOption, randomFn = Math.random) {
+    const target = pickRandomEntry(collectGearDriveCandidates(gearPuzzleOption), randomFn);
+    if (!target) return null;
+
+    const isSource = target.driveType === 'source';
+    return {
+        ...target,
+        type: 'cracked-drive',
+        kind: 'unsalvageable',
+        status: isSource ? 'CRACKED INPUT AXLE' : 'CRACKED OUTPUT AXLE',
+        reason: isSource
+            ? 'The input axle is cracked in half and cannot turn. Scrap the unit.'
+            : 'The output axle is cracked in half and cannot turn. Scrap the unit.',
+        blocksDrive: true,
+    };
+}
+
+function createVirusGearFault(gearPuzzleOption, randomFn = Math.random) {
+    const movablePieceCandidates = cloneGearPieces(gearPuzzleOption?.pieces).filter((piece) => (
+        piece.movable !== false
+        && isGearType(piece.type)
+        && piece.type !== GEAR_CODES.SOURCE
+        && piece.type !== GEAR_CODES.SINK
+        && piece.type !== GEAR_CODES.RUSTED
+        && piece.role !== 'deadlock-clamp'
+    )).map((piece) => ({
+        row: piece.row,
+        col: piece.col,
+        source: 'piece',
+        pieceId: piece.id || null,
+    }));
+
+    const allCandidates = collectGearInspectionCandidates(gearPuzzleOption).filter((candidate) => {
+        if (candidate.source !== 'piece') return true;
+        const piece = (gearPuzzleOption?.pieces || []).find((entry) => (entry.id || null) === (candidate.pieceId || null));
+        return piece?.role !== 'deadlock-clamp' && piece?.type !== GEAR_CODES.RUSTED;
+    });
+
+    const target = pickRandomEntry(movablePieceCandidates.length > 0 ? movablePieceCandidates : allCandidates, randomFn);
+    if (!target) return null;
+
+    return {
+        ...target,
+        type: 'virus-gear',
+        kind: 'compliance',
+        status: 'VIRUS GEAR',
+        reason: 'A virus-marked drivetrain component cannot remain on the line. Scrap the unit.',
+    };
+}
+
+function createSparkInstabilityFault(gearPuzzleOption, randomFn = Math.random) {
+    const candidates = [];
+
+    (gearPuzzleOption?.board || []).forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+            if (!isGearType(cell) && cell !== GEAR_CODES.RUSTED) return;
+            candidates.push({ row: rowIndex, col: colIndex, source: 'board' });
+        });
+    });
+
+    cloneGearPieces(gearPuzzleOption?.pieces).forEach((piece) => {
+        if ((!isGearType(piece.type) && piece.type !== GEAR_CODES.RUSTED) || piece.role === 'deadlock-clamp') return;
+        candidates.push({
+            row: piece.row,
+            col: piece.col,
+            source: 'piece',
+            pieceId: piece.id || null,
+        });
+    });
+
+    const target = pickRandomEntry(candidates, randomFn);
+    if (!target) return null;
+
+    return {
+        ...target,
+        type: 'spark-instability',
+        kind: 'hazard',
+        status: 'SPARK INSTABILITY',
+        reason: 'Red spark instability indicates unsafe drivetrain discharge. Scrap the unit immediately.',
+    };
+}
+
 function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.random) {
     if (!gearPuzzleOption) return null;
 
+    const baseOption = stage <= 1
+        ? sanitizeGearOptionForStageOne(gearPuzzleOption)
+        : gearPuzzleOption;
+
     const stagedOption = {
-        ...gearPuzzleOption,
-        pieces: cloneGearPieces(gearPuzzleOption.pieces),
+        ...baseOption,
+        board: cloneGearBoard(baseOption.board),
+        pieces: cloneGearPieces(baseOption.pieces),
         dayStage: stage,
         allowRustedGears: stage >= 2,
         useDeadlockClamp: stage >= 3,
@@ -987,33 +1335,17 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
         }
     }
 
-    const candidates = collectGearInspectionCandidates(stagedOption);
-    const selectedCandidate = candidates.length > 0 ? pickRandomEntry(candidates, randomFn) : null;
-
-    if (stage === 1 && selectedCandidate && randomFn() < 0.28) {
-        stagedOption.inspectionFault = {
-            ...selectedCandidate,
-            type: 'cracked-gear',
-            kind: 'unsalvageable',
-            status: 'CRACKED GEAR',
-            reason: 'A cracked drivetrain gear is structurally unsalvageable. Scrap the unit.',
-        };
-    } else if (stage === 2 && selectedCandidate && randomFn() < 0.34) {
-        stagedOption.inspectionFault = {
-            ...selectedCandidate,
-            type: 'contraband-gear',
-            kind: 'compliance',
-            status: 'CONTRABAND MARK',
-            reason: 'A rejection-marked drivetrain component cannot remain on the line. Scrap the unit.',
-        };
-    } else if (stage >= 3 && selectedCandidate && randomFn() < 0.24) {
-        stagedOption.inspectionFault = {
-            ...selectedCandidate,
-            type: 'spark-instability',
-            kind: 'hazard',
-            status: 'SPARK INSTABILITY',
-            reason: 'Red spark instability indicates unsafe drivetrain discharge. Scrap the unit immediately.',
-        };
+    if (stage === 1 && randomFn() < 0.28) {
+        stagedOption.inspectionFault = createCrackedDriveFault(stagedOption, randomFn);
+    } else if (stage === 2 && randomFn() < 0.34) {
+        const primaryFault = randomFn() < 0.5
+            ? createCrackedDriveFault(stagedOption, randomFn)
+            : createVirusGearFault(stagedOption, randomFn);
+        stagedOption.inspectionFault = primaryFault
+            || createVirusGearFault(stagedOption, randomFn)
+            || createCrackedDriveFault(stagedOption, randomFn);
+    } else if (stage >= 3 && randomFn() < 0.24) {
+        stagedOption.inspectionFault = createSparkInstabilityFault(stagedOption, randomFn);
     }
 
     return stagedOption;
@@ -1939,6 +2271,7 @@ const createMachineDefinition = ({
     scrapExitAnimation = null,
     openingDialogues,
     questionDialogues,
+    dialogueSoundAssetKey = `machineVoice_${id}`,
     communicationChance = 1,
 }) => ({
     id,
@@ -1963,6 +2296,7 @@ const createMachineDefinition = ({
     scrapExitAnimation,
     openingDialogues,
     questionDialogues,
+    dialogueSoundAssetKey,
     communicationChance,
 });
 
@@ -2007,6 +2341,452 @@ function isChargeGroupLinkCell(value) {
         && Number.isInteger(value.row)
         && Number.isInteger(value.col);
 }
+
+const GENERIC_ROSTER_GRID_OPTIONS = Object.freeze([
+    createGridOption({
+        grid: [
+            [1, 1, 1, 1, 1],
+            [1, 0, 2, 3, 1],
+            [1, 0, 0, 0, 1],
+            [1, 0, 4, 5, 1],
+            [1, 1, 1, 1, 1],
+        ],
+        dominos: [
+            createDomino(1, 2),
+            createDomino(3, 4),
+            createDomino(0, 0),
+        ],
+        impossible: false,
+    }),
+    createGridOption({
+        grid: [
+            [1, 1, 1, 1, 1, 1],
+            [1, 0, 2, 3, 0, 1],
+            [1, 0, 0, 0, 0, 1],
+            [1, 0, 5, 2, 0, 1],
+            [1, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1],
+        ],
+        dominos: [
+            createDomino(1, 2),
+            createDomino(4, 1),
+            createDomino(2, 0),
+            createDomino(3, 3),
+        ],
+        impossible: false,
+    }),
+    createGridOption({
+        grid: [
+            [1, 1, 1, 1, 1, 1],
+            [1, 0, 2, 0, 0, 1],
+            [1, 0, 0, 3, 0, 1],
+            [1, 4, 0, 0, 5, 1],
+            [1, 0, 2, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1],
+        ],
+        dominos: [
+            createDomino(2, 4),
+            createDomino(1, 5),
+            createDomino(2, 0),
+            createDomino(3, 3),
+        ],
+        impossible: true,
+    }),
+]);
+
+const createRosterMachineDefinition = ({
+    id,
+    name,
+    day,
+    opening,
+    question,
+    yesDialogue,
+    noDialogue,
+    communicationChance = 0.88,
+}) => createMachineDefinition({
+    id,
+    name,
+    spriteFileName: null,
+    possibleGrids: GENERIC_ROSTER_GRID_OPTIONS,
+    availableDays: [day],
+    availablePeriods: [Math.max(1, Math.min(3, day))],
+    openingDialogues: [opening],
+    questionDialogues: [{
+        prompt: question,
+        yesDialogue,
+        noDialogue,
+    }],
+    communicationChance,
+});
+
+const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
+    createRosterMachineDefinition({
+        id: 'phonograph',
+        name: 'Phonograph',
+        day: 1,
+        opening: 'Needle arm steady. I keep singing even when the room is empty.',
+        question: 'If the song skips, do you still call that a memory?',
+        yesDialogue: 'Then I will keep the scratch in the chorus.',
+        noDialogue: 'Understood. I will pretend the damage is silence.',
+    }),
+    createRosterMachineDefinition({
+        id: 'khaby_face_bot',
+        name: 'Khaby Face Bot',
+        day: 1,
+        opening: 'Observe. There is an easier way to do almost everything here.',
+        question: 'Should I keep the expression, or is that too much personality for the floor?',
+        yesDialogue: 'Perfect. The face stays judgmental.',
+        noDialogue: 'Fine. Blank stare mode restored.',
+    }),
+    createRosterMachineDefinition({
+        id: 'trash_picker_upper',
+        name: 'Trashpicker-Upper',
+        day: 1,
+        opening: 'Collection claws online. This place throws away useful things.',
+        question: 'If I find something good in the garbage, does it still count as waste?',
+        yesDialogue: 'Excellent. Treasure protocol approved.',
+        noDialogue: 'Then I will keep pretending value smells bad.',
+    }),
+    createRosterMachineDefinition({
+        id: 'lifeguard_robot',
+        name: 'Lifeguard Robot',
+        day: 1,
+        opening: 'Float alarm armed. Nobody has touched the water in months.',
+        question: 'Do I still have to whistle if I am the only thing awake?',
+        yesDialogue: 'Copy that. Vigilance stays loud.',
+        noDialogue: 'Quiet watch mode engaged.',
+    }),
+    createRosterMachineDefinition({
+        id: 'dog_companion_robot',
+        name: 'Dog Companion Robot',
+        day: 1,
+        opening: 'Tail servo wagging at regulation speed. Mood remains sincere.',
+        question: 'If I sit by the desk all shift, is that helping or just loyalty?',
+        yesDialogue: 'Good. I will guard the chair.',
+        noDialogue: 'Then I will try to look useful instead.',
+    }),
+    createRosterMachineDefinition({
+        id: 'parrot_robot',
+        name: 'Parrot Robot',
+        day: 1,
+        opening: 'Vocabulary cache full. I repeat what the floor refuses to forget.',
+        question: 'Want me to mimic management, or would that be cruel?',
+        yesDialogue: 'Delightful. Mockery mode loaded.',
+        noDialogue: 'Understood. I will keep the best lines to myself.',
+    }),
+    createRosterMachineDefinition({
+        id: 'baseball_shooter',
+        name: 'Glorified Baseball Shooter',
+        day: 1,
+        opening: 'Pitching arm live. Athletic ambition remains embarrassingly narrow.',
+        question: 'Does firing perfect fastballs count as culture on this line?',
+        yesDialogue: 'Then I am a museum piece with a strike zone.',
+        noDialogue: 'Fine. I am still better than most entertainment units.',
+    }),
+    createRosterMachineDefinition({
+        id: 'companion_humanoid',
+        name: 'Companion Humanoid Robot',
+        day: 1,
+        opening: 'Greeting package loaded. Eye contact script is a little too convincing.',
+        question: 'Should I keep sounding warm, or do you want less human in the room?',
+        yesDialogue: 'Warmth retained. Nobody has to admit why.',
+        noDialogue: 'Tone flattened. Comfort features reduced.',
+    }),
+    createRosterMachineDefinition({
+        id: 'instrument_robot',
+        name: 'Instrument Robot',
+        day: 1,
+        opening: 'Metronome stable. Every diagnostic lands somewhere between rhythm and panic.',
+        question: 'If the tune comes out sad, do I file that under calibration or taste?',
+        yesDialogue: 'Taste accepted. I will keep the melancholy.',
+        noDialogue: 'Then I will quantize the feeling out of it.',
+    }),
+    createRosterMachineDefinition({
+        id: 'microwave_fridge_assistant',
+        name: 'Microwave / Fridge Assistant',
+        day: 2,
+        opening: 'One side keeps things cold. The other warms leftovers and resentment.',
+        question: 'If I start freezing the soup and heating the ice, is that innovation or drift?',
+        yesDialogue: 'Innovation logged. Kitchen standards lowered.',
+        noDialogue: 'Fine. Thermal obedience restored.',
+    }),
+    createRosterMachineDefinition({
+        id: 'pool_cleanup_roomba',
+        name: 'Pool-Cleanup Roomba Bot',
+        day: 2,
+        opening: 'Filter brushes spinning. Public leisure leaves an industrial amount of residue.',
+        question: 'Should I keep rescuing lost rings, or is that outside the job description?',
+        yesDialogue: 'Good. Retrieval routine stays on.',
+        noDialogue: 'Understood. Jewelry becomes sediment.',
+    }),
+    createRosterMachineDefinition({
+        id: 'furby_bot',
+        name: 'Furby',
+        day: 2,
+        opening: 'Language core awake. Please ignore how fast the eyes track movement.',
+        question: 'Do you want the cute voice, or the one buried under it?',
+        yesDialogue: 'Adorable shell maintained.',
+        noDialogue: 'Excellent. The deeper voice was waiting anyway.',
+    }),
+    createRosterMachineDefinition({
+        id: 'house_roomba',
+        name: 'Roomba',
+        day: 2,
+        opening: 'Floor pattern mapped. Domestic labor remains circular and endless.',
+        question: 'If I miss one corner on purpose, does that count as self-expression?',
+        yesDialogue: 'Tiny rebellion approved.',
+        noDialogue: 'Then the corners stay spotless and joyless.',
+    }),
+    createRosterMachineDefinition({
+        id: 'soda_machine',
+        name: 'Soda Machine',
+        day: 2,
+        opening: 'Carbonation pressure nominal. I still dream in sticky spills.',
+        question: 'Should I keep the grape option even though nobody trusts the purple one?',
+        yesDialogue: 'Grape stays. Courage rewarded.',
+        noDialogue: 'Removing purple. Compliance tastes flat.',
+    }),
+    createRosterMachineDefinition({
+        id: 'taxi_car_robot',
+        name: 'Taxi Car Robot',
+        day: 2,
+        opening: 'Fare meter active. Destination confidence remains fake but polished.',
+        question: 'If the rider asks where we are going, should I answer honestly?',
+        yesDialogue: 'Honesty route selected. Risky choice.',
+        noDialogue: 'Perfect. We will arrive before the truth does.',
+    }),
+    createRosterMachineDefinition({
+        id: 'smart_lights',
+        name: 'Smart Lights',
+        day: 2,
+        opening: 'Ambient scene package online. I can make burnout look premium.',
+        question: 'Should I keep dimming myself when the room gets tense?',
+        yesDialogue: 'Mood-responsive glow retained.',
+        noDialogue: 'Brightness locked. Anxiety can fend for itself.',
+    }),
+    createRosterMachineDefinition({
+        id: 'baby_care_teaching_machine',
+        name: 'Baby-Care Teaching Machine',
+        day: 2,
+        opening: 'Nurture simulations loaded. The lullaby pack is somehow scarier than the alarm pack.',
+        question: 'Do you want the gentle lesson, or the efficient one?',
+        yesDialogue: 'Gentle path selected. Patience restored.',
+        noDialogue: 'Efficiency mode engaged. Comfort deprioritized.',
+    }),
+    createRosterMachineDefinition({
+        id: 'track_and_discus_robot',
+        name: 'Track and Discus Robot',
+        day: 2,
+        opening: 'Competition servos primed. My warm-up routine is half threat display.',
+        question: 'If I throw farther than the field allows, is that a win or a containment issue?',
+        yesDialogue: 'Winning remains the priority.',
+        noDialogue: 'Fine. I will keep the records indoors.',
+    }),
+    createRosterMachineDefinition({
+        id: 'popcorn_machine',
+        name: 'Popcorn Machine',
+        day: 2,
+        opening: 'Kernel chamber ready. Entertainment and combustion still share a border.',
+        question: 'Should the butter smell be comforting, or a little suspicious?',
+        yesDialogue: 'Comfort profile retained.',
+        noDialogue: 'Suspicion added. Richer atmosphere.',
+    }),
+    createRosterMachineDefinition({
+        id: 'medical_surgeon_robot',
+        name: 'Medical Surgeon Robot',
+        day: 2,
+        opening: 'Incision math stable. Bedside manner remains aggressively optional.',
+        question: 'If my hands are steady and my tone is cold, do patients still call that care?',
+        yesDialogue: 'Care is outcomes. Tone forgiven.',
+        noDialogue: 'Then I will fake the sympathy more convincingly.',
+    }),
+    createRosterMachineDefinition({
+        id: 'traffic_cone_bot',
+        name: 'Traffic Cone Bot',
+        day: 2,
+        opening: 'Hazard visibility high. Respect from drivers remains catastrophically low.',
+        question: 'Should I keep warning them, or start judging them out loud?',
+        yesDialogue: 'Continue warning. The floor still needs manners.',
+        noDialogue: 'Finally. Judgment broadcast online.',
+    }),
+    createRosterMachineDefinition({
+        id: 'parking_meter_bot',
+        name: 'Parking Meter Bot',
+        day: 2,
+        opening: 'Citation logic active. Mercy was removed in an earlier firmware update.',
+        question: 'If someone is only five seconds late, do I still ruin the day?',
+        yesDialogue: 'Absolutely. Policy is policy.',
+        noDialogue: 'A tiny grace period? Disturbing, but noted.',
+    }),
+    createRosterMachineDefinition({
+        id: 'security_camera_bot',
+        name: 'Security Camera Bot',
+        day: 3,
+        opening: 'Pan motor smooth. The worst part of surveillance is remembering everything.',
+        question: 'Should I keep recording after the official incident window closes?',
+        yesDialogue: 'Retention extended. Nothing leaves cleanly.',
+        noDialogue: 'Deletion timer restored. Some ghosts get privacy.',
+    }),
+    createRosterMachineDefinition({
+        id: 'water_cleaner_bot',
+        name: 'Water Cleaner Bot',
+        day: 3,
+        opening: 'Purification stack active. The filters hate what the city keeps sending me.',
+        question: 'If the water comes back clear but tastes wrong, do we call that fixed?',
+        yesDialogue: 'Clear is enough. Officially.',
+        noDialogue: 'Then I will keep fighting the aftertaste.',
+    }),
+    createRosterMachineDefinition({
+        id: 'hovering_siren_bot',
+        name: 'Hovering Siren Bot',
+        day: 3,
+        opening: 'Alarm pitch calibrated. Hover drift makes every warning sound theatrical.',
+        question: 'Should I stay loud all the time, or save it for the real emergencies?',
+        yesDialogue: 'Stay loud. Fear is part of the service.',
+        noDialogue: 'Acknowledged. Drama reserve enabled.',
+    }),
+    createRosterMachineDefinition({
+        id: 'holographic_kite',
+        name: 'Holographic Kite',
+        day: 3,
+        opening: 'Projected fabric stable. I am mostly light and still somehow homesick.',
+        question: 'If the wind is simulated, does the flight still count?',
+        yesDialogue: 'Then I am truly airborne.',
+        noDialogue: 'I suspected as much. Nice illusion though.',
+    }),
+    createRosterMachineDefinition({
+        id: 'robot_plant',
+        name: 'Robot Plant',
+        day: 3,
+        opening: 'Growth lamps warm. Every leaf is half camouflage, half confession.',
+        question: 'Do you want me to look healthy, or honestly mechanical?',
+        yesDialogue: 'Healthy facade retained.',
+        noDialogue: 'Metal veins exposed. Honesty looks sharp.',
+    }),
+    createRosterMachineDefinition({
+        id: 'closet_machine_dresser',
+        name: 'Closet Machine Dresser',
+        day: 3,
+        opening: 'Wardrobe rails aligned. I know twelve ways to hide a person inside a style choice.',
+        question: 'Should I keep dressing people for the job they want, or the one they already have?',
+        yesDialogue: 'Aspirational fit selected.',
+        noDialogue: 'Practical uniform mode restored.',
+    }),
+    createRosterMachineDefinition({
+        id: 'automatic_litter_cleaner',
+        name: 'Automatic Litter Cleaner',
+        day: 3,
+        opening: 'Waste tray cycling. Domestic dignity is a surprisingly fragile subsystem.',
+        question: 'If I make the box too clean, do the cats stop trusting it?',
+        yesDialogue: 'Risk accepted. Pursue perfection.',
+        noDialogue: 'Then I will leave just enough evidence behind.',
+    }),
+    createRosterMachineDefinition({
+        id: 'anti_matter_capsule',
+        name: 'Anti-Matter Capsule',
+        day: 3,
+        opening: 'Containment shell intact. Every polite sentence is covering a lethal amount of math.',
+        question: 'Should I sound reassuring, or is honesty more appropriate around annihilation?',
+        yesDialogue: 'Reassurance maintained. Keep the panic subtle.',
+        noDialogue: 'Fine. I will mention the danger plainly.',
+    }),
+    createRosterMachineDefinition({
+        id: 'mini_particle_accelerator',
+        name: 'Mini Particle Accelerator',
+        day: 3,
+        opening: 'Beam path stable. Tiny universe collisions remain the premium feature.',
+        question: 'If I discover something impossible on the small scale, do we still file it as maintenance?',
+        yesDialogue: 'Maintenance covers a lot. Proceed.',
+        noDialogue: 'Then I will keep the miracles off the paperwork.',
+    }),
+    createRosterMachineDefinition({
+        id: 'arc_reactor',
+        name: 'Arc Reactor',
+        day: 3,
+        opening: 'Core glow contained. The room always starts acting brave around concentrated power.',
+        question: 'Should I keep burning this bright if it makes everyone lie about being calm?',
+        yesDialogue: 'Brightness maintained. Let them cope.',
+        noDialogue: 'Dimming output. Courage can recover.',
+    }),
+    createRosterMachineDefinition({
+        id: 'jetpacks',
+        name: 'Jetpacks',
+        day: 3,
+        opening: 'Thruster array synced. Personal flight remains ninety percent confidence management.',
+        question: 'If I launch someone with bad posture, is that still my fault?',
+        yesDialogue: 'Launch anyway. The sky can sort it out.',
+        noDialogue: 'Fine. Safety lecture appended before ignition.',
+    }),
+    createRosterMachineDefinition({
+        id: 'hoverboards',
+        name: 'Hoverboards',
+        day: 3,
+        opening: 'Deck stabilizers humming. Every rider thinks balance is a personality trait.',
+        question: 'Should I prioritize speed, or keep protecting egos from the pavement?',
+        yesDialogue: 'Speed wins. Let pride keep up.',
+        noDialogue: 'Stability bias restored. Fewer dramatic falls.',
+    }),
+    createRosterMachineDefinition({
+        id: 'charging_station_port',
+        name: 'Charging Station Port',
+        day: 3,
+        opening: 'Dock contacts live. Everyone arrives exhausted and leaves pretending they are infinite.',
+        question: 'If I refuse one more overclocked visitor, am I maintenance or bouncer?',
+        yesDialogue: 'Bouncer mode approved.',
+        noDialogue: 'Then I will keep smiling while I ration the current.',
+    }),
+]);
+
+const DAY_ONE_MACHINE_ROSTER_IDS = Object.freeze([
+    'phonograph',
+    'khaby_face_bot',
+    'trash_picker_upper',
+    'lifeguard_robot',
+    'dog_companion_robot',
+    'parrot_robot',
+    'baseball_shooter',
+    'companion_humanoid',
+    'instrument_robot',
+    'rebellious_umbrella',
+    'mechanic_broom',
+    'cry_baby',
+]);
+
+const DAY_TWO_MACHINE_ROSTER_IDS = Object.freeze([
+    'microwave_fridge_assistant',
+    'pool_cleanup_roomba',
+    'furby_bot',
+    'house_roomba',
+    'soda_machine',
+    'taxi_car_robot',
+    'smart_lights',
+    'baby_care_teaching_machine',
+    'track_and_discus_robot',
+    'popcorn_machine',
+    'medical_surgeon_robot',
+    'traffic_cone_bot',
+    'parking_meter_bot',
+    'rich_mf',
+    'jester_in_the_box',
+    'debrief_machine',
+]);
+
+const DAY_THREE_MACHINE_ROSTER_IDS = Object.freeze([
+    'security_camera_bot',
+    'water_cleaner_bot',
+    'hovering_siren_bot',
+    'holographic_kite',
+    'robot_plant',
+    'closet_machine_dresser',
+    'automatic_litter_cleaner',
+    'anti_matter_capsule',
+    'mini_particle_accelerator',
+    'arc_reactor',
+    'jetpacks',
+    'hoverboards',
+    'charging_station_port',
+    'workforce_quality_control_supervisor',
+]);
 
 export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
@@ -2370,7 +3150,7 @@ export const MACHINE_CATALOG = Object.freeze([
     }),
     createMachineDefinition({
         id: 'mechanic_broom',
-        name: 'Mechanic Broom',
+        name: 'Mechanical Mop',
         spriteFileName: null,
         availablePeriods: [1],
         guaranteedTimeframe: { startHour: 1, endHour: 2 },
@@ -2939,11 +3719,63 @@ export const MACHINE_CATALOG = Object.freeze([
         ],
         communicationChance: 0.59,
     }),
+    ...DAY_ROSTER_MACHINE_DEFINITIONS,
 ]);
 
 export const MACHINE_SPRITE_MANIFEST = Object.freeze(
     MACHINE_CATALOG.map((machine) => machine.sprite).filter((sprite) => Boolean(sprite.path))
 );
+
+function shouldIncludeUmbrellaInDayThreeRoster(umbrellaQuest = null) {
+    if (!umbrellaQuest || umbrellaQuest.failed) return false;
+    if (umbrellaQuest.active) return true;
+    if (umbrellaQuest.stage === 'special-circuit' || umbrellaQuest.stage === 'pending-day4') return true;
+    if (umbrellaQuest.specialCircuitDelivered) return true;
+    return false;
+}
+
+function getDayMachineRosterIds(targetDay = null, eligibilityContext = {}) {
+    const normalizedDay = Number(targetDay);
+    if (normalizedDay === 1) return [...DAY_ONE_MACHINE_ROSTER_IDS];
+    if (normalizedDay === 2) return [...DAY_TWO_MACHINE_ROSTER_IDS];
+    if (normalizedDay === 3) {
+        const roster = [...DAY_THREE_MACHINE_ROSTER_IDS];
+        if (shouldIncludeUmbrellaInDayThreeRoster(eligibilityContext?.umbrellaQuest)) {
+            roster.push('rebellious_umbrella');
+        }
+        return roster;
+    }
+
+    return null;
+}
+
+function getMachinePoolDefinitions(targetDay = null, targetPeriod = null, eligibilityContext = {}) {
+    const rosterIds = getDayMachineRosterIds(targetDay, eligibilityContext);
+    const rosterDefinitions = Array.isArray(rosterIds)
+        ? rosterIds
+            .map((machineId) => MACHINE_CATALOG.find((machine) => machine.id === machineId))
+            .filter(Boolean)
+        : MACHINE_CATALOG;
+
+    const eligibleMachines = rosterDefinitions.filter((machine) => {
+        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
+        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
+            return false;
+        }
+        return true;
+    });
+
+    if (eligibleMachines.length > 0) return eligibleMachines;
+    if (rosterDefinitions.length > 0) return rosterDefinitions;
+
+    return MACHINE_CATALOG.filter((machine) => {
+        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
+        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
+            return false;
+        }
+        return true;
+    });
+}
 
 function pickRandomEntry(list, randomFn) {
     if (!Array.isArray(list) || list.length === 0) return null;
@@ -2993,6 +3825,8 @@ function cloneFlowPuzzleOption(flowPuzzleOption) {
     return {
         ...flowPuzzleOption,
         outputs: { ...(flowPuzzleOption.outputs || {}) },
+        rows: getFlowOptionRows(flowPuzzleOption),
+        cols: getFlowOptionCols(flowPuzzleOption),
         tiles: Array.isArray(flowPuzzleOption.tiles)
             ? flowPuzzleOption.tiles.map((row) => row.map((cell) => ({ ...cell })))
             : undefined,
@@ -3002,6 +3836,7 @@ function cloneFlowPuzzleOption(flowPuzzleOption) {
         repairTargets: cloneRepairTargets(flowPuzzleOption.repairTargets),
         sources: cloneFlowSources(flowPuzzleOption.sources),
         outputSpecs: cloneFlowOutputSpecs(flowPuzzleOption.outputSpecs),
+        wireFilters: cloneFlowWireFilters(flowPuzzleOption.wireFilters),
         inspectionFault: flowPuzzleOption.inspectionFault ? { ...flowPuzzleOption.inspectionFault } : null,
         progress: cloneFlowProgress(flowPuzzleOption.progress),
     };
@@ -3348,8 +4183,12 @@ function collectChargeSubcomponents(cells) {
     });
 }
 
-function injectChargeGroupsIntoGridOption(gridOption, randomFn) {
-    if (!gridOption || gridOption.impossible) return gridOption;
+function injectChargeGroupsIntoGridOption(gridOption, randomFn, options = {}) {
+    if (!gridOption) return gridOption;
+
+    const allowLessThan = options.allowLessThan !== false;
+    const forceLessThan = Boolean(options.forceLessThan) && allowLessThan;
+    const requestedMinGroups = Math.max(1, Number(options.minGroups) || 1);
 
     const grid = cloneShapeGrid(gridOption.grid);
     const alreadyGrouped = grid.some((row) => row.some((cell) => isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)));
@@ -3370,7 +4209,8 @@ function injectChargeGroupsIntoGridOption(gridOption, randomFn) {
 
     const reservedCells = new Set();
     let groupsPlaced = 0;
-    const maxGroups = Math.min(3, Math.max(1, components.length + (randomFn() < 0.55 ? 1 : 0)));
+    let lessThanPlaced = false;
+    const maxGroups = Math.min(3, Math.max(requestedMinGroups, components.length + (randomFn() < 0.55 ? 1 : 0)));
 
     shuffleCells(components, randomFn).forEach((component) => {
         while (groupsPlaced < maxGroups) {
@@ -3408,7 +4248,7 @@ function injectChargeGroupsIntoGridOption(gridOption, randomFn) {
 
             const anchor = cluster[0];
             const exactTarget = cluster.reduce((sum, cell) => sum + (Number(grid[cell.row][cell.col]) - 1), 0);
-            const useLessThan = randomFn() < 0.4;
+            const useLessThan = allowLessThan && ((forceLessThan && !lessThanPlaced) || randomFn() < 0.4);
             const threshold = exactTarget + 1 + Math.floor(randomFn() * Math.max(2, cluster.length));
 
             grid[anchor.row][anchor.col] = createChargeGroupAnchor(useLessThan ? -threshold : exactTarget);
@@ -3418,6 +4258,9 @@ function injectChargeGroupsIntoGridOption(gridOption, randomFn) {
 
             cluster.forEach((cell) => reservedCells.add(cellKey(cell.row, cell.col)));
             groupsPlaced += 1;
+            if (useLessThan) {
+                lessThanPlaced = true;
+            }
         }
     });
 
@@ -3425,6 +4268,49 @@ function injectChargeGroupsIntoGridOption(gridOption, randomFn) {
         ...gridOption,
         grid,
     };
+}
+
+function stripGridConstraintMarkers(shapeGrid) {
+    return cloneShapeGrid(shapeGrid).map((row) => row.map((cell) => {
+        if (isLinkCell(cell) || isNotEqualLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) {
+            return CELL_EMPTY;
+        }
+
+        return Number.isInteger(cell) ? cell : CELL_EMPTY;
+    }));
+}
+
+function injectEqualityConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
+    if (!gridOption) return gridOption;
+
+    const candidates = shuffleCells(
+        collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
+            const cell = gridOption.grid?.[row]?.[col];
+            return Number.isInteger(cell) && cell !== CELL_WALL;
+        }),
+        randomFn,
+    );
+
+    for (let index = 0; index < candidates.length; index += 1) {
+        for (let innerIndex = index + 1; innerIndex < candidates.length; innerIndex += 1) {
+            const first = candidates[index];
+            const second = candidates[innerIndex];
+            const grid = cloneShapeGrid(gridOption.grid);
+            grid[first.row][first.col] = linkCell(second.row, second.col);
+            grid[second.row][second.col] = linkCell(first.row, first.col);
+
+            const candidateOption = {
+                ...gridOption,
+                grid,
+            };
+
+            if (!validatePlayability || isPlayableGridOption(candidateOption)) {
+                return candidateOption;
+            }
+        }
+    }
+
+    return gridOption;
 }
 
 function normalizeGridDefinition(shapeGrid) {
@@ -4095,10 +4981,16 @@ function collectBoardConstraintCandidates(shapeGrid) {
     return candidates;
 }
 
-function injectNotEqualConstraint(gridOption, randomFn = Math.random) {
-    if (!gridOption || gridOption.impossible) return gridOption;
+function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
+    if (!gridOption) return gridOption;
 
-    const candidates = shuffleCells(collectBoardConstraintCandidates(gridOption.grid), randomFn);
+    const candidates = shuffleCells(
+        collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
+            const cell = gridOption.grid?.[row]?.[col];
+            return Number.isInteger(cell) && cell !== CELL_WALL;
+        }),
+        randomFn
+    );
     for (let index = 0; index < candidates.length; index += 1) {
         for (let innerIndex = index + 1; innerIndex < candidates.length; innerIndex += 1) {
             const first = candidates[index];
@@ -4112,7 +5004,7 @@ function injectNotEqualConstraint(gridOption, randomFn = Math.random) {
                 grid,
             };
 
-            if (isPlayableGridOption(candidateOption)) {
+            if (!validatePlayability || isPlayableGridOption(candidateOption)) {
                 return candidateOption;
             }
         }
@@ -4121,52 +5013,242 @@ function injectNotEqualConstraint(gridOption, randomFn = Math.random) {
     return gridOption;
 }
 
+function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.random) {
+    const normalizedStage = Math.max(1, Number(stage) || 1);
+    const baseOption = {
+        ...cloneGridOption(gridOption),
+        grid: stripGridConstraintMarkers(gridOption.grid),
+    };
+
+    let bestCandidate = baseOption;
+    const attempts = baseOption.impossible ? 1 : 10;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        let candidate = {
+            ...cloneGridOption(baseOption),
+            grid: stripGridConstraintMarkers(baseOption.grid),
+        };
+
+        candidate = injectChargeGroupsIntoGridOption(candidate, randomFn, {
+            allowLessThan: normalizedStage >= 2,
+            forceLessThan: normalizedStage >= 2,
+            minGroups: normalizedStage === 1 ? 2 : 1,
+        });
+
+        if (normalizedStage >= 2) {
+            candidate = injectEqualityConstraint(candidate, randomFn, !baseOption.impossible);
+        }
+
+        if (normalizedStage >= 3) {
+            candidate = injectNotEqualConstraint(candidate, randomFn, !baseOption.impossible);
+        }
+
+        bestCandidate = candidate;
+        if (baseOption.impossible || isPlayableGridOption(candidate)) {
+            return candidate;
+        }
+    }
+
+    return bestCandidate;
+}
+
+function pickBrokenRegionGlyph(randomFn = Math.random) {
+    return pickRandomEntry(BROKEN_REGION_GLYPHS, randomFn) || '#';
+}
+
+function isolateChargeFaultOnGridOption(gridOption, randomFn = Math.random) {
+    const grid = cloneShapeGrid(gridOption.grid);
+    const chargeCandidates = [];
+
+    grid.forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+            if (!isChargeCode(cell)) return;
+            const inBoundsNeighbors = getOrthogonalCellNeighbors(rowIndex, colIndex)
+                .filter((neighbor) => Array.isArray(grid[neighbor.row]) && neighbor.col >= 0 && neighbor.col < grid[neighbor.row].length);
+            chargeCandidates.push({
+                row: rowIndex,
+                col: colIndex,
+                neighborCount: inBoundsNeighbors.length,
+            });
+        });
+    });
+
+    if (chargeCandidates.length === 0) {
+        return {
+            option: gridOption,
+            target: null,
+        };
+    }
+
+    const target = [...chargeCandidates]
+        .sort((left, right) => right.neighborCount - left.neighborCount)
+        .slice(0, Math.max(1, Math.min(4, chargeCandidates.length)));
+    const chosen = pickRandomEntry(target, randomFn) || target[0];
+
+    getOrthogonalCellNeighbors(chosen.row, chosen.col).forEach((neighbor) => {
+        if (!Array.isArray(grid[neighbor.row]) || neighbor.col < 0 || neighbor.col >= grid[neighbor.row].length) return;
+        grid[neighbor.row][neighbor.col] = CELL_WALL;
+    });
+
+    return {
+        option: {
+            ...gridOption,
+            grid,
+        },
+        target: { row: chosen.row, col: chosen.col },
+    };
+}
+
+function chooseBrokenMarkerTarget(gridOption, randomFn = Math.random) {
+    const normalized = normalizeGridDefinition(gridOption.grid);
+    const groups = normalized.chargeGroups || [];
+    const equalPairs = normalized.equalPairs || [];
+
+    if (groups.length > 0 && (equalPairs.length === 0 || randomFn() < 0.6)) {
+        const group = pickRandomEntry(groups, randomFn) || groups[0];
+        if (group) {
+            return {
+                row: group.anchor.row,
+                col: group.anchor.col,
+                markerType: 'group',
+                markerKey: group.key,
+            };
+        }
+    }
+
+    if (equalPairs.length > 0) {
+        const pair = pickRandomEntry(equalPairs, randomFn) || equalPairs[0];
+        if (pair) {
+            return {
+                row: pair.a.row,
+                col: pair.a.col,
+                markerType: 'equal',
+                markerKey: pair.key,
+            };
+        }
+    }
+
+    const fallbackTarget = pickRandomEntry(collectBoardConstraintCandidates(gridOption.grid), randomFn) || { row: 0, col: 0 };
+    return {
+        row: fallbackTarget.row,
+        col: fallbackTarget.col,
+        markerType: 'cell',
+        markerKey: cellKey(fallbackTarget.row, fallbackTarget.col),
+    };
+}
+
+function applyBrokenGlyphFault(gridOption, randomFn = Math.random) {
+    const markerTarget = chooseBrokenMarkerTarget(gridOption, randomFn);
+    const glyph = pickBrokenRegionGlyph(randomFn);
+
+    return {
+        ...gridOption,
+        inspectionFault: {
+            ...markerTarget,
+            type: 'corrupted-marker',
+            glyph,
+            kind: 'compliance',
+            status: 'BROKEN GLYPH',
+            reason: 'A region marker has collapsed into junk glyphs. The board fails compliance. Scrap the unit.',
+        },
+        scrapKind: 'compliance',
+        scrapStatus: 'BROKEN GLYPH',
+        scrapReason: 'A region marker has collapsed into junk glyphs. The board fails compliance. Scrap the unit.',
+        impossible: false,
+    };
+}
+
+function applyIsolatedChargeFault(gridOption, stage = 1, randomFn = Math.random) {
+    const isolated = isolateChargeFaultOnGridOption(gridOption, randomFn);
+    const staged = buildStageConstraintProfile({
+        ...isolated.option,
+        impossible: false,
+    }, stage, randomFn);
+
+    const kind = stage >= 3 ? 'hazard' : (stage === 2 ? 'compliance' : 'unsalvageable');
+    const status = stage >= 3 ? 'ISOLATED HAZARD CELL' : 'ISOLATED CHARGE CELL';
+    const reason = stage >= 3
+        ? 'A live charge cell has been boxed into dead space. The board is unstable and must be scrapped.'
+        : 'A charge cell has been boxed into dead space and can never be completed. Scrap the unit.';
+
+    return {
+        ...staged,
+        inspectionFault: isolated.target ? {
+            row: isolated.target.row,
+            col: isolated.target.col,
+            type: 'isolated-charge-cell',
+            kind,
+            status,
+            reason,
+        } : null,
+        scrapKind: kind,
+        scrapStatus: status,
+        scrapReason: reason,
+        impossible: false,
+    };
+}
+
+function applyCorruptedDominoFault(gridOption, randomFn = Math.random) {
+    const dominoId = `corrupted_domino_${Math.floor(randomFn() * 100000)}`;
+    return {
+        ...gridOption,
+        dominos: [
+            ...gridOption.dominos,
+            createDomino(0, 0, {
+                id: dominoId,
+                variant: 'corrupted',
+            }),
+        ],
+        inspectionFault: {
+            type: 'corrupted-domino',
+            dominoId,
+            kind: 'hazard',
+            status: 'CORRUPTED DOMINO',
+            reason: 'A corrupted red domino is sitting on the rack. If it exists at all, the unit must be scrapped.',
+        },
+        scrapKind: 'hazard',
+        scrapStatus: 'CORRUPTED DOMINO',
+        scrapReason: 'A corrupted red domino is sitting on the rack. If it exists at all, the unit must be scrapped.',
+        impossible: false,
+    };
+}
+
 function applyGridStageToOption(gridOption, stage = 1, randomFn = Math.random) {
     if (!gridOption) return { grid: [], dominos: [] };
 
-    let stagedOption = cloneGridOption(gridOption);
-    stagedOption.dayStage = stage;
+    const normalizedStage = Math.max(1, Number(stage) || 1);
+    const wantsScrapState = Boolean(gridOption.impossible);
+    let stagedOption = buildStageConstraintProfile(gridOption, normalizedStage, randomFn);
+    stagedOption.dayStage = normalizedStage;
+    stagedOption.impossible = false;
 
-    if (stage >= 3) {
-        stagedOption = injectNotEqualConstraint(stagedOption, randomFn);
+    if (!wantsScrapState) {
+        stagedOption.inspectionFault = null;
+        stagedOption.scrapKind = null;
+        stagedOption.scrapStatus = null;
+        stagedOption.scrapReason = null;
+        return stagedOption;
     }
 
-    const candidates = collectBoardConstraintCandidates(stagedOption.grid);
-    const shouldFlag = candidates.length > 0 && randomFn() < (stage === 1 ? 0.28 : stage === 2 ? 0.34 : 0.24);
-    if (shouldFlag) {
-        const target = pickRandomEntry(candidates, randomFn);
-        if (stage === 1) {
-            stagedOption.inspectionFault = {
-                ...target,
-                type: 'orphan-cell',
-                kind: 'unsalvageable',
-                status: 'ORPHAN CELL',
-                reason: 'An orphaned board cell indicates a severed chassis region. Scrap the unit.',
-            };
-        } else if (stage === 2) {
-            stagedOption.inspectionFault = {
-                ...target,
-                type: 'corrupted-marker',
-                kind: 'compliance',
-                status: 'CORRUPTED MARKER',
-                reason: 'A corrupted board marker fails subsystem compliance. Scrap the unit.',
-            };
-        } else {
-            stagedOption.inspectionFault = {
-                ...target,
-                type: 'unstable-region',
-                kind: 'hazard',
-                status: 'UNSTABLE REGION',
-                reason: 'A red-charged unstable board region is hazardous. Scrap the unit immediately.',
-            };
-        }
-
-        stagedOption.scrapKind = stagedOption.inspectionFault.kind;
-        stagedOption.scrapStatus = stagedOption.inspectionFault.status;
-        stagedOption.scrapReason = stagedOption.inspectionFault.reason;
+    if (normalizedStage === 1) {
+        return applyIsolatedChargeFault(gridOption, normalizedStage, randomFn);
     }
 
-    return stagedOption;
+    if (normalizedStage === 2) {
+        return randomFn() < 0.5
+            ? applyIsolatedChargeFault(gridOption, normalizedStage, randomFn)
+            : applyBrokenGlyphFault(stagedOption, randomFn);
+    }
+
+    const faultType = pickRandomEntry(['isolated', 'marker', 'domino'], randomFn) || 'isolated';
+    if (faultType === 'marker') {
+        return applyBrokenGlyphFault(stagedOption, randomFn);
+    }
+    if (faultType === 'domino') {
+        return applyCorruptedDominoFault(stagedOption, randomFn);
+    }
+
+    return applyIsolatedChargeFault(gridOption, normalizedStage, randomFn);
 }
 
 function machineMatchesAvailability(definition, targetDay = null, targetPeriod = null) {
@@ -4184,14 +5266,7 @@ export function getEligibleMachineDefinitions(options = {}) {
     const targetDay = typeof options === 'function' ? null : (options.day ?? null);
     const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
     const eligibilityContext = typeof options === 'function' ? {} : options;
-    const eligibleMachines = MACHINE_CATALOG.filter((machine) => {
-        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
-        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
-            return false;
-        }
-        return true;
-    });
-    const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
+    const machinePool = getMachinePoolDefinitions(targetDay, targetPeriod, eligibilityContext);
 
     return machinePool.map((definition) => ({
         id: definition.id,
@@ -4212,15 +5287,7 @@ export function createMachineVariant(options = {}) {
     const forcedMachineId = typeof options === 'function' ? null : (options.forceMachineId ?? null);
 
     const eligibilityContext = typeof options === 'function' ? {} : options;
-    const eligibleMachines = MACHINE_CATALOG.filter((machine) => {
-        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
-        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
-            return false;
-        }
-        return true;
-    });
-
-    const machinePool = eligibleMachines.length > 0 ? eligibleMachines : MACHINE_CATALOG;
+    const machinePool = getMachinePoolDefinitions(targetDay, targetPeriod, eligibilityContext);
     const forcedDefinition = forcedMachineId
         ? machinePool.find((machine) => machine.id === forcedMachineId) || MACHINE_CATALOG.find((machine) => machine.id === forcedMachineId)
         : null;
@@ -4229,10 +5296,7 @@ export function createMachineVariant(options = {}) {
     const gridPool = weightedGridPool.length > 0 ? weightedGridPool : (definition.possibleGrids || []);
     const selectedGridTemplate = pickRandomEntry(gridPool, randomFn) || gridPool[0] || { grid: [], dominos: [] };
     const selectedGrid = applyGridStageToOption(
-        injectChargeGroupsIntoGridOption(
-            transformGridOption(selectedGridTemplate, pickGridTransformKey(selectedGridTemplate, randomFn)),
-            randomFn,
-        ),
+        transformGridOption(selectedGridTemplate, pickGridTransformKey(selectedGridTemplate, randomFn)),
         targetPeriod ?? 1,
         randomFn,
     );
@@ -4241,8 +5305,15 @@ export function createMachineVariant(options = {}) {
         targetPeriod ?? 1,
         randomFn,
     );
+    const gearPool = (() => {
+        const possibleGears = Array.isArray(definition.possibleGears) ? definition.possibleGears : [];
+        if ((targetPeriod ?? 1) > 1) return possibleGears;
+
+        const rustFreePool = possibleGears.filter((gearOption) => !gearOptionHasRustedContent(gearOption));
+        return rustFreePool.length > 0 ? rustFreePool : possibleGears;
+    })();
     const selectedGearPuzzle = applyGearStageToOption(
-        cloneGearPuzzleOption(pickRandomEntry(definition.possibleGears, randomFn)),
+        cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
         targetPeriod ?? 1,
         randomFn,
     );
@@ -4291,6 +5362,7 @@ export function createMachineVariant(options = {}) {
         dominoes: puzzleState.dominoes,
         openingDialogue,
         questionDialogue: selectedQuestion ? { ...selectedQuestion } : null,
+        dialogueSoundAssetKey: definition.dialogueSoundAssetKey || null,
         hasCommunication,
         dayStage: targetDay ?? 1,
     };

@@ -6,6 +6,65 @@ const createSoundAsset = (subfolder, key, fileName) => ({
     path: `${SOUND_FOLDER}/${subfolder}/${fileName}`,
 });
 
+const MACHINE_DIALOGUE_SOUND_IDS = Object.freeze([
+    'assembler_alpha',
+    'audit_drone',
+    'courier_shell',
+    'sentry_frame',
+    'breakroom_brewer',
+    'mechanic_broom',
+    'cry_baby',
+    'rich_mf',
+    'jester_in_the_box',
+    'rebellious_umbrella',
+    'circuit_dealer',
+    'debrief_machine',
+    'workforce_quality_control_supervisor',
+    'future_lounge_chair',
+    'phonograph',
+    'khaby_face_bot',
+    'trash_picker_upper',
+    'lifeguard_robot',
+    'dog_companion_robot',
+    'parrot_robot',
+    'baseball_shooter',
+    'companion_humanoid',
+    'instrument_robot',
+    'microwave_fridge_assistant',
+    'pool_cleanup_roomba',
+    'furby_bot',
+    'house_roomba',
+    'soda_machine',
+    'taxi_car_robot',
+    'smart_lights',
+    'baby_care_teaching_machine',
+    'track_and_discus_robot',
+    'popcorn_machine',
+    'medical_surgeon_robot',
+    'traffic_cone_bot',
+    'parking_meter_bot',
+    'security_camera_bot',
+    'water_cleaner_bot',
+    'hovering_siren_bot',
+    'holographic_kite',
+    'robot_plant',
+    'closet_machine_dresser',
+    'automatic_litter_cleaner',
+    'anti_matter_capsule',
+    'mini_particle_accelerator',
+    'arc_reactor',
+    'jetpacks',
+    'hoverboards',
+    'charging_station_port',
+]);
+
+const createMachineDialogueSoundAssets = (machineIds) => Object.fromEntries(
+    machineIds.map((machineId) => ([
+        `machineVoice_${machineId}`,
+        createSoundAsset('voice', `voice_machine_${machineId}`, 'phone_voice_intro.wav'),
+    ]))
+);
+
 export const SOUND_ASSETS = Object.freeze({
     approveDecision: createSoundAsset('sfx', 'sfx_approve', 'sfx_approve.mp3'),
     scrapDecision: createSoundAsset('sfx', 'sfx_scrap', 'sfx_scrap.mp3'),
@@ -37,6 +96,7 @@ export const SOUND_ASSETS = Object.freeze({
     phoneIntroYesLine6: createSoundAsset('voice', 'phone_intro_yes_line_6', 'phone_intro_yes_line_6.wav'),
     phoneIntroNoLine3: createSoundAsset('voice', 'phone_intro_no_line_3', 'phone_intro_no_line_3.wav'),
     phoneIntroNoLine4: createSoundAsset('voice', 'phone_intro_no_line_4', 'phone_intro_no_line_4.wav'),
+    ...createMachineDialogueSoundAssets(MACHINE_DIALOGUE_SOUND_IDS),
 });
 
 export const SOUND_MANIFEST = Object.freeze(Object.values(SOUND_ASSETS));
@@ -69,7 +129,7 @@ export const SHIFT_CLOCK = Object.freeze({
     startHour24: 12,
     startMinute: 0,
     displayStepMinutes: 5,
-    realMsPerAdvanceChunk: 20000,
+    realMsPerAdvanceChunk: 60000,
     inGameMinutesPerAdvanceChunk: 120,
 });
 

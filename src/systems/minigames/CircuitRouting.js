@@ -22,10 +22,29 @@ const FLOW_POWER_PALETTES = Object.freeze({
     green: { tint: 0x73ffae, label: '#73ffae', idle: '#77b494', dot: 0x73ffae },
     orange: { tint: 0xffbe6d, label: '#ffbe6d', idle: '#c79a66', dot: 0xffbe6d },
     mixed: { tint: 0xff7167, label: '#ffb0a8', idle: '#cc847c', dot: 0xff7167 },
+    red: { tint: 0xff4f4f, label: '#ff8d8d', idle: '#b76464', dot: 0xff4f4f },
 });
 
 function getFlowPowerPalette(powerClass = 'neutral') {
     return FLOW_POWER_PALETTES[powerClass] || FLOW_POWER_PALETTES.neutral;
+}
+
+function getFlowCellKey(x, y) {
+    return `${x},${y}`;
+}
+
+function getFlowSegmentKey(from, to) {
+    const start = `${from.x},${from.y}`;
+    const end = `${to.x},${to.y}`;
+    return start < end ? `${start}|${end}` : `${end}|${start}`;
+}
+
+function deriveFlowDisplayPowerClass(powerClasses = []) {
+    const uniqueClasses = Array.from(new Set((powerClasses || []).filter(Boolean)));
+    if (uniqueClasses.length === 0) return null;
+    if (uniqueClasses.includes('red')) return 'red';
+    if (uniqueClasses.length > 1) return 'mixed';
+    return uniqueClasses[0];
 }
 
 function recordFlowFeed(targetMap, key, source) {
@@ -33,7 +52,10 @@ function recordFlowFeed(targetMap, key, source) {
         targetMap[key] = [];
     }
 
-    if (targetMap[key].some((entry) => entry.key === source.key)) {
+    if (targetMap[key].some((entry) => (
+        entry.key === source.key
+        && (entry.powerClass || 'neutral') === (source.powerClass || 'neutral')
+    ))) {
         return;
     }
 
@@ -43,6 +65,22 @@ function recordFlowFeed(targetMap, key, source) {
         label: source.label || source.key,
         row: source.row,
     });
+}
+
+function recordFlowSegment(targetMap, from, to, powerClass = 'neutral') {
+    const segmentKey = getFlowSegmentKey(from, to);
+    const existing = targetMap.get(segmentKey);
+
+    if (!existing) {
+        targetMap.set(segmentKey, {
+            from: { ...from },
+            to: { ...to },
+            powerClasses: new Set([powerClass || 'neutral']),
+        });
+        return;
+    }
+
+    existing.powerClasses.add(powerClass || 'neutral');
 }
 
 function cloneCircuitTiles(tiles) {
@@ -175,6 +213,8 @@ export default class CircuitRouting extends MinigameBase {
         this._sourceViews = {};
         this._sources = [];
         this._outputSpecs = [];
+        this._wireFilters = [];
+        this._wireFilterMap = new Map();
         this._inspectionFaultGfx = null;
         this._inspectionFault = null;
         this._closeButton = null;
@@ -214,6 +254,11 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         this._circuit = circuit;
+        this.rows = Math.max(3, Number(circuit.rows || circuit.tiles?.length || 5));
+        this.cols = Math.max(3, Number(circuit.cols || circuit.tiles?.[0]?.length || 5));
+        this.cellSize = Math.max(46, Math.min(64, Math.floor(Math.min(420 / this.cols, 350 / this.rows))));
+        this.boardX = 534 - ((this.cols * this.cellSize) / 2);
+        this.boardY = 360 - ((this.rows * this.cellSize) / 2);
         this._specialAction = caseData?.specialAction || null;
         this.evidence = {
             ...this._defaultEvidence(),
@@ -237,6 +282,10 @@ export default class CircuitRouting extends MinigameBase {
                 exactFeeds: 1,
                 sourceKey: 'main',
             }));
+        this._wireFilters = Array.isArray(circuit.wireFilters)
+            ? circuit.wireFilters.map((filter) => ({ ...filter }))
+            : [];
+        this._wireFilterMap = new Map(this._wireFilters.map((filter) => [getFlowCellKey(filter.x, filter.y), filter]));
         this._outputs = Object.fromEntries(this._outputSpecs.map((outputSpec) => [outputSpec.row, outputSpec.label]));
         this._sourceRow = this._sources[0]?.row ?? circuit.sourceRow ?? 2;
         this._inspectionFault = circuit.progress?.inspectionFault || circuit.inspectionFault || null;
@@ -319,33 +368,22 @@ export default class CircuitRouting extends MinigameBase {
 
         const stage = Number(circuit.dayStage || this.evidence.dayStage || 1);
         const subtitle = this.scene.add.text(640, 108, stage <= 1
-            ? 'Click tiles to rotate. Route power to every output. Severed lines mean immediate scrap.'
+            ? 'Click tiles to rotate. Day 1 is plain wiring only. If the first lead is missing, the unit is scrap.'
             : (stage === 2
-                ? 'Click tiles to rotate. Match GRN and ORG feeds to the labeled outputs. Each port needs exactly one legal feed.'
-                : 'Click tiles to rotate. Match the labeled feeds and avoid overload. Red ports indicate unsafe discharge.'), {
+                ? 'Click tiles to rotate. Green and orange wire filters recolor the current after that tile. Red discharge wires are immediate scrap.'
+                : 'Click tiles to rotate. Day 3 uses a larger grid with multiple power ports. Any red module is crackling and must be scrapped.'), {
             fontFamily: 'Courier New', fontSize: '10px', color: '#66aaaa',
             align: 'center', wordWrap: { width: 1000 },
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(subtitle);
 
-        // Source indicators
-        // Source indicator
-        const srcY = this.boardY + this._sourceRow * this.cellSize + this.cellSize / 2;
-        const srcX = this.boardX - 40;
-        const srcDot = this.scene.add.circle(srcX, srcY, 10, 0xffcc00, 1).setDepth(depth + 2);
-        const srcPulse = this.scene.add.circle(srcX, srcY, 18, 0xffcc00, 0.3).setDepth(depth + 1);
-        const srcLbl = this.scene.add.text(srcX - 10, srcY, 'PWR', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#ffcc44',
-        }).setOrigin(1, 0.5).setDepth(depth + 2);
-        this._sourceDot = srcDot;
-        this._sourcePulse = srcPulse;
         this._sourceFlowGfx = this.scene.add.graphics().setDepth(depth + 1);
         this._sourceViews = {};
         this.container.add(this._sourceFlowGfx);
         this._sources.forEach((source) => {
             const palette = getFlowPowerPalette(source.powerClass);
             const srcY = this.boardY + source.row * this.cellSize + this.cellSize / 2;
-            const srcX = this.boardX - 40;
+            const srcX = this.boardX - 28;
             const srcDot = this.scene.add.circle(srcX, srcY, 10, palette.dot, 1).setDepth(depth + 2);
             const srcPulse = this.scene.add.circle(srcX, srcY, 18, palette.dot, 0.22).setDepth(depth + 1);
             const srcLbl = this.scene.add.text(srcX - 10, srcY, source.label || source.key, {
@@ -359,7 +397,7 @@ export default class CircuitRouting extends MinigameBase {
         this._outputDots = {};
         this._outputSpecs.forEach((outputSpec) => {
             const y = outputSpec.row;
-            const ox = this.boardX + this.cols * this.cellSize + 40;
+            const ox = this.boardX + this.cols * this.cellSize + 26;
             const oy = this.boardY + y * this.cellSize + this.cellSize / 2;
             const requiredPalette = getFlowPowerPalette(outputSpec.powerClass);
             const glow = this.scene.add.circle(ox, oy, 19, 0xaaffee, 0).setDepth(depth + 1);
@@ -370,7 +408,9 @@ export default class CircuitRouting extends MinigameBase {
             const lbl = this.scene.add.text(ox + 16, oy - 7, outputSpec.label, {
                 fontFamily: 'Courier New', fontSize: '11px', color: requiredPalette.idle,
             }).setOrigin(0, 0.5).setDepth(depth + 2);
-            const req = this.scene.add.text(ox + 16, oy + 8, `${String(outputSpec.powerClass || 'neutral').toUpperCase()} x${outputSpec.exactFeeds ?? 1}`, {
+            const req = this.scene.add.text(ox + 16, oy + 8, outputSpec.powerClass === 'red'
+                ? 'RED // SCRAP'
+                : String(outputSpec.powerClass || 'neutral').toUpperCase(), {
                 fontFamily: 'monospace', fontSize: '8px', color: requiredPalette.label,
             }).setOrigin(0, 0.5).setDepth(depth + 2);
             this.container.add([glow, ring, dot, lbl, req]);
@@ -462,9 +502,11 @@ export default class CircuitRouting extends MinigameBase {
         const title = this.scene.add.text(-90, -(panelHeight / 2) + 16, 'REPAIR TARGETS', {
             fontFamily: 'Courier New', fontSize: '12px', color: '#8ffcff', letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, this._outputSpecs.some((target) => target.powerClass && target.powerClass !== 'neutral')
-            ? 'Match each output label to its feed color and keep the count exact.'
-            : 'Route power to restore each subsystem.', {
+        const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, this._outputSpecs.some((target) => target.powerClass === 'red')
+            ? 'Red module ports are crackling hazards. They cannot be repaired safely.'
+            : (this._outputSpecs.some((target) => target.powerClass && target.powerClass !== 'neutral')
+                ? 'Match each output to the color feed it is asking for.'
+                : 'Route power to restore each subsystem.'), {
             fontFamily: 'Courier New', fontSize: '9px', color: '#6da4ad', wordWrap: { width: 178 },
         }).setOrigin(0, 0.5);
 
@@ -478,9 +520,11 @@ export default class CircuitRouting extends MinigameBase {
             const nameText = this.scene.add.text(-72, y - 8, target.displayName || target.label, {
                 fontFamily: 'Courier New', fontSize: '11px', color: '#b8dbe1',
             }).setOrigin(0, 0.5);
-            const statusText = this.scene.add.text(-72, y + 9, target.powerClass && target.powerClass !== 'neutral'
-                ? `${String(target.powerClass).toUpperCase()} x${target.exactFeeds ?? 1}`
-                : 'BROKEN', {
+            const statusText = this.scene.add.text(-72, y + 9, target.powerClass === 'red'
+                ? 'RED // SCRAP'
+                : (target.powerClass && target.powerClass !== 'neutral'
+                    ? String(target.powerClass).toUpperCase()
+                    : 'BROKEN'), {
                 fontFamily: 'Courier New', fontSize: '9px', color: target.powerClass && target.powerClass !== 'neutral' ? requirementPalette.label : '#ffb695',
             }).setOrigin(0, 0.5);
 
@@ -491,14 +535,56 @@ export default class CircuitRouting extends MinigameBase {
         this.container.add(panel);
     }
 
+    _getWireFilter(x, y) {
+        return this._wireFilterMap.get(getFlowCellKey(x, y)) || null;
+    }
+
+    _getEffectivePowerClass(x, y, incomingPowerClass = 'neutral') {
+        return this._getWireFilter(x, y)?.powerClass || incomingPowerClass || 'neutral';
+    }
+
     _drawInspectionFault() {
         if (!this._inspectionFaultGfx) return;
 
         this._inspectionFaultGfx.clear();
         if (!this._inspectionFault) return;
 
-        const x = this.boardX + this._inspectionFault.x * this.cellSize + this.cellSize / 2;
-        const y = this.boardY + this._inspectionFault.y * this.cellSize + this.cellSize / 2;
+        const outputView = this._inspectionFault.targetKey ? this._outputDots?.[this._inspectionFault.targetKey] : null;
+        const x = outputView
+            ? outputView.dot.x
+            : this.boardX + this._inspectionFault.x * this.cellSize + this.cellSize / 2;
+        const y = outputView
+            ? outputView.dot.y
+            : this.boardY + this._inspectionFault.y * this.cellSize + this.cellSize / 2;
+
+        if (this._inspectionFault.type === 'missing-wire') {
+            this._inspectionFaultGfx.lineStyle(3, 0xffc392, 0.96);
+            this._inspectionFaultGfx.strokeCircle(x, y, 18);
+            this._inspectionFaultGfx.lineBetween(x - 18, y - 8, x - 4, y - 2);
+            this._inspectionFaultGfx.lineBetween(x + 4, y + 2, x + 18, y + 8);
+            this._inspectionFaultGfx.lineBetween(x - 4, y - 2, x + 2, y - 10);
+            this._inspectionFaultGfx.lineBetween(x + 2, y - 10, x + 4, y + 2);
+            return;
+        }
+
+        if (this._inspectionFault.type === 'red-wire') {
+            this._inspectionFaultGfx.lineStyle(3, 0xff5f57, 0.98);
+            this._inspectionFaultGfx.strokeCircle(x, y, 19);
+            this._inspectionFaultGfx.lineBetween(x - 16, y - 16, x + 16, y + 16);
+            this._inspectionFaultGfx.lineBetween(x + 16, y - 16, x - 16, y + 16);
+            return;
+        }
+
+        if (this._inspectionFault.type === 'crackling-module') {
+            this._inspectionFaultGfx.lineStyle(2, 0xff5f57, 0.98);
+            this._inspectionFaultGfx.strokeCircle(x, y, 21);
+            this._inspectionFaultGfx.lineBetween(x - 24, y - 6, x - 10, y - 18);
+            this._inspectionFaultGfx.lineBetween(x - 6, y - 22, x + 2, y - 34);
+            this._inspectionFaultGfx.lineBetween(x + 10, y - 10, x + 26, y - 24);
+            this._inspectionFaultGfx.lineBetween(x - 22, y + 10, x - 8, y + 24);
+            this._inspectionFaultGfx.lineBetween(x + 10, y + 8, x + 24, y + 24);
+            return;
+        }
 
         this._inspectionFaultGfx.lineStyle(3, 0xff8b7a, 0.94);
         this._inspectionFaultGfx.beginPath();
@@ -532,7 +618,11 @@ export default class CircuitRouting extends MinigameBase {
         const tileContainer = this.scene.add.container(cx, cy).setDepth(depth);
         const energy = this.scene.add.graphics();
         const pipe = this.scene.add.graphics();
-        tileContainer.add([energy, pipe]);
+        const modifierGfx = this.scene.add.graphics();
+        const modifierText = this.scene.add.text(0, -(this.cellSize / 2) + 12, '', {
+            fontFamily: 'monospace', fontSize: '8px', color: '#d9f0f4',
+        }).setOrigin(0.5).setVisible(false);
+        tileContainer.add([energy, pipe, modifierGfx, modifierText]);
         tileContainer.angle = tile.rotation * 90;
         this.container.add(tileContainer);
 
@@ -548,6 +638,8 @@ export default class CircuitRouting extends MinigameBase {
             bg,
             energy,
             pipe,
+            modifierGfx,
+            modifierText,
             mark,
             isForbidden,
             rotationTween: null,
@@ -624,34 +716,36 @@ export default class CircuitRouting extends MinigameBase {
 
     _buildProgressSnapshot(result = this._lastResult) {
         const outputFeeds = result?.outputFeeds || {};
-        const stage = Number(this._circuit?.dayStage || this.evidence.dayStage || 1);
         const forbiddenUsed = (result?.forbiddenHit ?? []).length > 0;
         const repairStates = this._repairTargets.map((target) => {
             const feeds = Array.isArray(outputFeeds[target.key])
                 ? outputFeeds[target.key].map((feed) => ({ ...feed }))
                 : [];
-            const feedClasses = Array.from(new Set(feeds.map((feed) => feed.powerClass || 'neutral')));
-            const exactFeeds = Math.max(1, Number(target.exactFeeds || 1));
+            const feedClasses = feeds.map((feed) => feed.powerClass || 'neutral');
             const expectedClass = target.powerClass || 'neutral';
+            const actualPowerClass = deriveFlowDisplayPowerClass(feedClasses);
+            const hazardousTarget = expectedClass === 'red';
+            const hazardousFeed = actualPowerClass === 'red';
             const classMismatch = feeds.length > 0
-                && expectedClass !== 'neutral'
-                && feedClasses.some((powerClass) => powerClass !== expectedClass);
-            const overload = feeds.length > exactFeeds;
-            const underpower = feeds.length > 0 && feeds.length < exactFeeds;
-            const repaired = feeds.length === exactFeeds
-                && (!classMismatch);
+                && !hazardousTarget
+                && !hazardousFeed
+                && actualPowerClass !== expectedClass;
+            const repaired = feeds.length > 0
+                && !hazardousTarget
+                && !hazardousFeed
+                && actualPowerClass === expectedClass;
             let issueCode = null;
             let issueMessage = null;
 
-            if (classMismatch) {
-                issueCode = stage >= 3 ? 'unsafe-class' : 'class-mismatch';
+            if (hazardousTarget) {
+                issueCode = 'crackling-module';
+                issueMessage = `${target.displayName || target.label} is a red crackling module and cannot be repaired.`;
+            } else if (hazardousFeed) {
+                issueCode = 'red-feed';
+                issueMessage = `${target.displayName || target.label} is being flooded by unsafe red power.`;
+            } else if (classMismatch) {
+                issueCode = 'class-mismatch';
                 issueMessage = `${target.displayName || target.label} received the wrong power class.`;
-            } else if (overload) {
-                issueCode = 'overload';
-                issueMessage = `${target.displayName || target.label} is taking too many live feeds.`;
-            } else if (underpower) {
-                issueCode = 'underpower';
-                issueMessage = `${target.displayName || target.label} is underpowered for the requested load.`;
             }
 
             return {
@@ -659,7 +753,8 @@ export default class CircuitRouting extends MinigameBase {
                 repaired,
                 feeds,
                 feedCount: feeds.length,
-                feedClasses,
+                feedClasses: Array.from(new Set(feedClasses)),
+                actualPowerClass,
                 issueCode,
                 issueMessage,
             };
@@ -667,13 +762,12 @@ export default class CircuitRouting extends MinigameBase {
         const connected = repairStates.filter((target) => target.feedCount > 0).map((target) => target.key);
         const repairedTargets = repairStates.filter((target) => target.repaired).map((target) => target.key);
         const brokenTargets = repairStates.filter((target) => !target.repaired).map((target) => target.key);
-        const signalIssues = repairStates.filter((target) => target.feedCount > 0 && target.issueCode);
-        const scrapRequired = Boolean(this._inspectionFault) || signalIssues.length > 0;
-        const scrapKind = this._inspectionFault?.kind || (signalIssues.length > 0 ? (stage >= 3 ? 'hazard' : 'compliance') : null);
-        const scrapStatus = this._inspectionFault?.status || (signalIssues.length > 0
-            ? (stage >= 3 ? 'UNSAFE LOAD' : 'FEED MISMATCH')
-            : null);
-        const scrapReason = this._inspectionFault?.reason || signalIssues[0]?.issueMessage || null;
+        const signalIssues = repairStates.filter((target) => target.issueCode);
+        const redHazard = repairStates.find((target) => target.issueCode === 'red-feed' || target.issueCode === 'crackling-module') || null;
+        const scrapRequired = Boolean(this._inspectionFault) || Boolean(redHazard);
+        const scrapKind = this._inspectionFault?.kind || (redHazard ? 'hazard' : null);
+        const scrapStatus = this._inspectionFault?.status || (redHazard ? 'CRACKLING ENERGY' : null);
+        const scrapReason = this._inspectionFault?.reason || redHazard?.issueMessage || null;
         const flags = repairStates
             .filter((target) => target.issueCode)
             .map((target) => target.issueCode.toUpperCase());
@@ -703,7 +797,7 @@ export default class CircuitRouting extends MinigameBase {
             outputFeeds: Object.fromEntries(Object.entries(outputFeeds).map(([key, feeds]) => [key, feeds.map((feed) => ({ ...feed }))])),
             symptoms: scrapRequired
                 ? [scrapReason].filter(Boolean)
-                : repairStates.filter((target) => !target.repaired).map((target) => target.brokenLabel),
+                : repairStates.filter((target) => !target.repaired).map((target) => target.issueMessage || target.brokenLabel),
             flags,
         };
     }
@@ -723,7 +817,11 @@ export default class CircuitRouting extends MinigameBase {
             const state = stateMap.get(target.key) || target;
             const repaired = Boolean(state.repaired);
             const invalidSignal = Boolean(state.feedCount > 0 && state.issueCode);
-            dot.setFillStyle(repaired ? 0x62ffb0 : (invalidSignal ? 0xff7d77 : 0x2f4a57), 1);
+            const actualPalette = getFlowPowerPalette(state.actualPowerClass || target.powerClass || 'neutral');
+            const idleStatusColor = target.powerClass && target.powerClass !== 'neutral'
+                ? actualPalette.label
+                : '#ffb695';
+            dot.setFillStyle(repaired ? actualPalette.tint : (invalidSignal ? actualPalette.tint : 0x2f4a57), 1);
             dot.setStrokeStyle(1, repaired ? 0xe8fff1 : (invalidSignal ? 0xffd4cf : 0x7aa8b7), 0.88);
             nameText.setColor(repaired ? '#ddffed' : (invalidSignal ? '#ffd7d1' : '#b8dbe1'));
             statusText
@@ -732,22 +830,46 @@ export default class CircuitRouting extends MinigameBase {
                         ? 'REPAIRED'
                         : (invalidSignal
                             ? String(state.issueCode || 'MISMATCH').replace(/-/g, ' ').toUpperCase()
-                            : (forbiddenUsed ? 'BROKEN // MOD' : 'BROKEN'))
+                            : (forbiddenUsed
+                                ? 'BROKEN // MOD'
+                                : (target.powerClass === 'red'
+                                    ? 'RED // SCRAP'
+                                    : (target.powerClass && target.powerClass !== 'neutral'
+                                        ? String(target.powerClass).toUpperCase()
+                                        : 'BROKEN'))))
                 )
-                .setColor(repaired ? '#7dffb6' : (invalidSignal ? '#ffb4ae' : (forbiddenUsed ? '#ffd0c4' : '#ffb695')));
+                .setColor(repaired ? '#7dffb6' : (invalidSignal ? '#ffb4ae' : (forbiddenUsed ? '#ffd0c4' : idleStatusColor)));
         });
     }
 
-    _drawTile(x, y, reached) {
+    _drawTile(x, y, powerClass = null) {
         const gfx = this._tileGfx[y][x];
         const tile = this._tiles[y][x];
         const conns = TILE_BASE[tile.type] || TILE_BASE.empty;
-        const { pipe, container, isForbidden } = gfx;
+        const { pipe, container, isForbidden, modifierGfx, modifierText } = gfx;
+        const reached = Boolean(powerClass);
+        const palette = getFlowPowerPalette(powerClass || 'neutral');
+        const wireFilter = this._getWireFilter(x, y);
 
         pipe.clear();
+        modifierGfx?.clear();
+        modifierText?.setVisible(false).setText('');
         if (!gfx.rotationTween) {
             container.angle = tile.rotation * 90;
         }
+
+        if (wireFilter && modifierGfx && modifierText) {
+            const filterPalette = getFlowPowerPalette(wireFilter.powerClass);
+            modifierGfx.fillStyle(filterPalette.tint, 0.18);
+            modifierGfx.lineStyle(1, filterPalette.tint, 0.92);
+            modifierGfx.fillRoundedRect(-16, -(this.cellSize / 2) + 4, 32, 12, 5);
+            modifierGfx.strokeRoundedRect(-16, -(this.cellSize / 2) + 4, 32, 12, 5);
+            modifierText
+                .setText(wireFilter.label || String(wireFilter.powerClass || '').slice(0, 3).toUpperCase())
+                .setColor(filterPalette.label)
+                .setVisible(true);
+        }
+
         if (isForbidden) {
             pipe.fillStyle(0xffb347, 0.18);
             pipe.fillRoundedRect(-(this.cellSize / 2) + 8, -(this.cellSize / 2) + 8, this.cellSize - 16, this.cellSize - 16, 12);
@@ -759,7 +881,7 @@ export default class CircuitRouting extends MinigameBase {
         if (tile.type === 'empty') return;
 
         const color = isForbidden && reached ? 0xffaa00
-                    : reached ? 0x00ffcc
+                    : reached ? palette.tint
                     : 0x336677;
         const width = reached ? 8 : 5;
         pipe.lineStyle(width, color, 1);
@@ -774,14 +896,16 @@ export default class CircuitRouting extends MinigameBase {
         pipe.fillCircle(0, 0, width * 0.7);
     }
 
-    _drawTileEnergy(x, y, reached, energyActive) {
+    _drawTileEnergy(x, y, powerClass = null) {
         const gfx = this._tileGfx[y][x];
         const tile = this._tiles[y][x];
         const conns = TILE_BASE[tile.type] || TILE_BASE.empty;
         const energy = gfx.energy;
+        const reached = Boolean(powerClass);
+        const palette = getFlowPowerPalette(powerClass || 'neutral');
 
         energy.clear();
-        if (!energyActive || !reached || tile.type === 'empty') return;
+        if (!reached || tile.type === 'empty') return;
 
         const half = this.cellSize / 2 - 6;
         const dashLength = 10;
@@ -795,8 +919,8 @@ export default class CircuitRouting extends MinigameBase {
         const dashHead = 3 + (phase * (half + dashLength - 2));
         const dashTail = Math.max(0, dashHead - dashLength);
 
-        energy.lineStyle(4, 0xb6fff7, 0.12);
-        energy.fillStyle(0xe7fffb, 0.12);
+        energy.lineStyle(4, palette.tint, 0.16);
+        energy.fillStyle(palette.tint, 0.2);
         directionVectors.forEach((vector, index) => {
             if (!conns[index]) return;
 
@@ -806,7 +930,7 @@ export default class CircuitRouting extends MinigameBase {
             energy.fillCircle(vector.x * head, vector.y * head, 2.8);
         });
 
-        energy.fillStyle(0xd9fff2, 0.16);
+        energy.fillStyle(palette.tint, 0.24);
         energy.fillCircle(0, 0, 4.2);
     }
 
@@ -814,9 +938,11 @@ export default class CircuitRouting extends MinigameBase {
         const reached = new Set();
         const reachedOutputs = [];
         const forbiddenHit = [];
-        const flowSegments = [];
+        const flowSegments = new Map();
         const outputFeeds = {};
         const sourceActivity = {};
+        const tileFeeds = new Map();
+        const visitedStates = new Set();
 
         this._sources.forEach((source) => {
             const startX = 0;
@@ -831,13 +957,21 @@ export default class CircuitRouting extends MinigameBase {
             }
 
             sourceActivity[source.key] = true;
-            const queue = [[startX, startY]];
-            const visited = new Set([`${startX},${startY}`]);
-            reached.add(`${startX},${startY}`);
-            flowSegments.push({ from: { x: -1, y: startY }, to: { x: startX, y: startY }, sourceKey: source.key });
+            const queue = [{ x: startX, y: startY, powerClass: this._getEffectivePowerClass(startX, startY, source.powerClass || 'neutral') }];
+            recordFlowSegment(flowSegments, { x: -1, y: startY }, { x: startX, y: startY }, queue[0].powerClass);
 
             while (queue.length) {
-                const [x, y] = queue.shift();
+                const { x, y, powerClass } = queue.shift();
+                const stateKey = `${x},${y}:${source.key}:${powerClass}`;
+                if (visitedStates.has(stateKey)) continue;
+                visitedStates.add(stateKey);
+
+                const cellKey = getFlowCellKey(x, y);
+                reached.add(cellKey);
+                const existingTileFeeds = tileFeeds.get(cellKey) || new Set();
+                existingTileFeeds.add(powerClass || 'neutral');
+                tileFeeds.set(cellKey, existingTileFeeds);
+
                 const tile = this._tiles[y][x];
                 const conns = rotatedConnections(tile.type, tile.rotation);
 
@@ -849,11 +983,14 @@ export default class CircuitRouting extends MinigameBase {
                     if (nx === this.cols) {
                         const outputSpec = this._outputSpecs.find((candidate) => candidate.row === y);
                         if (outputSpec && d.idx === 1) {
-                            recordFlowFeed(outputFeeds, outputSpec.key, source);
+                            recordFlowFeed(outputFeeds, outputSpec.key, {
+                                ...source,
+                                powerClass,
+                            });
                             if (!reachedOutputs.includes(outputSpec.key)) {
                                 reachedOutputs.push(outputSpec.key);
                             }
-                            flowSegments.push({ from: { x, y }, to: { x: this.cols, y }, sourceKey: source.key });
+                            recordFlowSegment(flowSegments, { x, y }, { x: this.cols, y }, powerClass);
                         }
                         continue;
                     }
@@ -863,17 +1000,32 @@ export default class CircuitRouting extends MinigameBase {
                     const neighbor = this._tiles[ny][nx];
                     const nconns = rotatedConnections(neighbor.type, neighbor.rotation);
                     if (!nconns[d.opp]) continue;
-                    const key = `${nx},${ny}`;
-                    if (visited.has(key)) continue;
-                    visited.add(key);
-                    reached.add(key);
-                    flowSegments.push({ from: { x, y }, to: { x: nx, y: ny }, sourceKey: source.key });
-                    queue.push([nx, ny]);
+                    const nextPowerClass = this._getEffectivePowerClass(nx, ny, powerClass);
+                    recordFlowSegment(flowSegments, { x, y }, { x: nx, y: ny }, nextPowerClass);
+                    queue.push({ x: nx, y: ny, powerClass: nextPowerClass });
                 }
             }
         });
 
-        return { reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity };
+        const tilePowerClasses = new Map(Array.from(tileFeeds.entries()).map(([cellKey, classes]) => [
+            cellKey,
+            deriveFlowDisplayPowerClass(Array.from(classes)),
+        ]));
+        const normalizedSegments = Array.from(flowSegments.values()).map((segment) => ({
+            from: segment.from,
+            to: segment.to,
+            powerClass: deriveFlowDisplayPowerClass(Array.from(segment.powerClasses)),
+        }));
+
+        return {
+            reached,
+            reachedOutputs,
+            forbiddenHit,
+            flowSegments: normalizedSegments,
+            outputFeeds,
+            sourceActivity,
+            tilePowerClasses,
+        };
     }
 
     _getFlowLinkPosition(node) {
@@ -881,11 +1033,11 @@ export default class CircuitRouting extends MinigameBase {
         const endpointRadius = 10;
 
         if (node.x === -1) {
-            return { x: this.boardX - 40 + endpointRadius, y };
+            return { x: this.boardX - 28 + endpointRadius, y };
         }
 
         if (node.x === this.cols) {
-            return { x: this.boardX + this.cols * this.cellSize + 40 - endpointRadius, y };
+            return { x: this.boardX + this.cols * this.cellSize + 26 - endpointRadius, y };
         }
 
         return {
@@ -906,6 +1058,7 @@ export default class CircuitRouting extends MinigameBase {
             return {
                 from,
                 to,
+                powerClass: segment.powerClass || 'neutral',
                 length: Math.hypot(to.x - from.x, to.y - from.y),
             };
         }).filter((segment) => segment.length > 0);
@@ -927,37 +1080,38 @@ export default class CircuitRouting extends MinigameBase {
         const progress = activeSegment.length <= 0 ? 0 : remaining / activeSegment.length;
         const x = activeSegment.from.x + ((activeSegment.to.x - activeSegment.from.x) * progress);
         const y = activeSegment.from.y + ((activeSegment.to.y - activeSegment.from.y) * progress);
+        const palette = getFlowPowerPalette(activeSegment.powerClass || 'neutral');
 
-        this._sourceFlowGfx.fillStyle(0xc7fff9, 0.1);
+        this._sourceFlowGfx.fillStyle(palette.tint, 0.12);
         this._sourceFlowGfx.fillCircle(x, y, 9);
-        this._sourceFlowGfx.fillStyle(0xf6fff8, 0.52);
+        this._sourceFlowGfx.fillStyle(palette.tint, 0.52);
         this._sourceFlowGfx.fillCircle(x, y, 4.2);
     }
 
     _refreshAnimatedCircuitEffects() {
         const renderState = this._lastCircuitRenderState;
-        const reached = renderState?.reached || new Set();
-        const energyActive = reached.size > 0;
+        const tilePowerClasses = renderState?.tilePowerClasses || new Map();
         const reachedOutputs = renderState?.outputFeeds || {};
 
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
-                this._drawTileEnergy(x, y, reached.has(`${x},${y}`), energyActive);
+                this._drawTileEnergy(x, y, tilePowerClasses.get(getFlowCellKey(x, y)) || null);
             }
         }
 
         Object.values(this._outputDots).forEach((view) => {
             const feeds = reachedOutputs[view.outputSpec.key] || [];
-            const mixedFeed = new Set(feeds.map((feed) => feed.powerClass || 'neutral')).size > 1;
-            const palette = feeds.length > 0
-                ? getFlowPowerPalette(mixedFeed ? 'mixed' : (feeds[0]?.powerClass || 'neutral'))
-                : getFlowPowerPalette(view.outputSpec.powerClass || 'neutral');
+            const actualPowerClass = deriveFlowDisplayPowerClass(feeds.map((feed) => feed.powerClass || 'neutral'));
+            const requiredClass = view.outputSpec.powerClass || 'neutral';
+            const displayClass = actualPowerClass || requiredClass;
+            const palette = getFlowPowerPalette(displayClass || 'neutral');
             const pulse = 0.18 + (Math.sin((this._energyPhase * Math.PI * 2) + (Number(view.outputSpec.row) * 0.65)) * 0.08);
             const active = feeds.length > 0;
+            const hazardous = requiredClass === 'red' || actualPowerClass === 'red';
 
-            view.glow?.setFillStyle(palette.tint, 1).setAlpha(active ? pulse : 0);
-            view.ring?.setStrokeStyle(2, palette.tint, active ? 0.42 + pulse : 0);
-            view.dot?.setFillStyle(active ? palette.tint : 0x225533, 1).setScale(active ? 1.02 + (pulse * 0.08) : 1);
+            view.glow?.setFillStyle(palette.tint, 1).setAlpha(active ? pulse : (hazardous ? 0.18 : 0));
+            view.ring?.setStrokeStyle(2, palette.tint, active ? 0.42 + pulse : (hazardous ? 0.52 : 0));
+            view.dot?.setFillStyle((active || hazardous) ? palette.tint : 0x225533, 1).setScale(active ? 1.02 + (pulse * 0.08) : 1);
             view.lbl?.setColor(active ? palette.label : palette.idle);
             view.req?.setColor(palette.label);
         });
@@ -969,7 +1123,7 @@ export default class CircuitRouting extends MinigameBase {
             view.dot?.setFillStyle(palette.dot, 1);
         });
 
-        if (energyActive) {
+        if ((renderState?.flowSegments || []).length > 0) {
             this._drawSourceFlowBlock(renderState.flowSegments);
         } else {
             this._sourceFlowGfx?.clear();
@@ -995,12 +1149,12 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     _updateAll() {
-        const { reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity } = this._computeReached();
-        const snapshot = this._buildProgressSnapshot({ reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity });
+        const { reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity, tilePowerClasses } = this._computeReached();
+        const snapshot = this._buildProgressSnapshot({ reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity, tilePowerClasses });
 
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
-                this._drawTile(x, y, reached.has(`${x},${y}`));
+                this._drawTile(x, y, tilePowerClasses.get(getFlowCellKey(x, y)) || null);
             }
         }
 
@@ -1013,14 +1167,15 @@ export default class CircuitRouting extends MinigameBase {
             flowSegments,
             outputFeeds,
             sourceActivity,
+            tilePowerClasses,
             completed: snapshot.completed,
         };
         this._lastCircuitRenderState = {
-            reached,
             flowSegments,
             completed: snapshot.completed,
             outputFeeds,
             sourceActivity,
+            tilePowerClasses,
         };
 
         this._refreshAnimatedCircuitEffects();
@@ -1069,6 +1224,8 @@ export default class CircuitRouting extends MinigameBase {
         this._lastCircuitRenderState = null;
         this._sourceFlowGfx = null;
         this._sourceViews = {};
+        this._wireFilters = [];
+        this._wireFilterMap = new Map();
         this._inspectionFaultGfx = null;
         this._inspectionFault = null;
         this._specialAction = null;

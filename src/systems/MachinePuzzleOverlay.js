@@ -341,7 +341,14 @@ export default class MachinePuzzleOverlay {
     _buildDominoRack() {
         const dominos = this._puzzleState.dominoes || [];
         const count = dominos.length;
-        const tableWidth = Math.max(MACHINE_PUZZLE.overlayTableMinWidth, Math.min(860, (count * 100) + 90));
+        const specialRackBias = dominos.reduce((total, domino) => (
+            total + ((domino.variant === 'clown' || domino.variant === 'purple' || domino.variant === 'corrupted') ? 72 : 0)
+        ), 0);
+        const rackShrinkBias = this._puzzleState.inspectionFault?.status === 'CIRCUIT STOLEN' ? 120 : 0;
+        const tableMinWidth = this._puzzleState.inspectionFault?.status === 'CIRCUIT STOLEN'
+            ? 400
+            : MACHINE_PUZZLE.overlayTableMinWidth;
+        const tableWidth = Math.max(tableMinWidth, Math.min(900, (count * 100) + 90 + specialRackBias - rackShrinkBias));
         const tableHeight = 182;
         const tableTop = this._gridTop + this._gridHeight + MACHINE_PUZZLE.overlayTableGap;
         const tableLeft = -(tableWidth / 2);
@@ -461,16 +468,31 @@ export default class MachinePuzzleOverlay {
         const emphasisActive = globalGlow || dominoView.isFloating || dominoView.isHovered;
         const isClownDomino = dominoView.dominoState.variant === 'clown';
         const isPurpleDomino = dominoView.dominoState.variant === 'purple';
-        const hoverFillColor = isClownDomino ? 0xff9f9a : (isPurpleDomino ? 0xd49cff : 0xd8ff95);
-        const hoverStrokeColor = isClownDomino ? 0xffe0dc : (isPurpleDomino ? 0xf2dcff : 0xf2ffd0);
-        const baseFillColor = isClownDomino ? 0xb42222 : (isPurpleDomino ? 0x7d37d6 : 0x2ca55e);
+        const isCorruptedDomino = dominoView.dominoState.variant === 'corrupted';
+        const hoverFillColor = isClownDomino || isCorruptedDomino
+            ? 0xff9f9a
+            : (isPurpleDomino ? 0xd49cff : 0xd8ff95);
+        const hoverStrokeColor = isClownDomino || isCorruptedDomino
+            ? 0xffe0dc
+            : (isPurpleDomino ? 0xf2dcff : 0xf2ffd0);
+        const baseFillColor = isClownDomino
+            ? 0xb42222
+            : (isCorruptedDomino ? 0x8a1515 : (isPurpleDomino ? 0x7d37d6 : 0x2ca55e));
         const baseStrokeColor = emphasisActive
-            ? (isClownDomino ? 0xffece8 : (isPurpleDomino ? 0xf4e7ff : 0xf5ffd3))
-            : (isClownDomino ? 0xffc1b8 : (isPurpleDomino ? 0xe0c8ff : 0xd7ffde));
-        const glossColor = isClownDomino ? 0xffd1c9 : (isPurpleDomino ? 0xf6ebff : 0xffffff);
-        const dividerColor = isClownDomino ? 0x6f1111 : (isPurpleDomino ? 0x54258f : 0x1d5f33);
-        const pipGlowColor = isClownDomino ? 0xffd7d2 : (isPurpleDomino ? 0xe8c8ff : 0xfff2a3);
-        const pipColor = isClownDomino ? 0xfff0eb : (isPurpleDomino ? 0xf2dcff : 0xf4d850);
+            ? ((isClownDomino || isCorruptedDomino) ? 0xffece8 : (isPurpleDomino ? 0xf4e7ff : 0xf5ffd3))
+            : ((isClownDomino || isCorruptedDomino) ? 0xffc1b8 : (isPurpleDomino ? 0xe0c8ff : 0xd7ffde));
+        const glossColor = isClownDomino || isCorruptedDomino
+            ? 0xffd1c9
+            : (isPurpleDomino ? 0xf6ebff : 0xffffff);
+        const dividerColor = isClownDomino || isCorruptedDomino
+            ? 0x6f1111
+            : (isPurpleDomino ? 0x54258f : 0x1d5f33);
+        const pipGlowColor = isClownDomino || isCorruptedDomino
+            ? 0xffd7d2
+            : (isPurpleDomino ? 0xe8c8ff : 0xfff2a3);
+        const pipColor = isClownDomino || isCorruptedDomino
+            ? 0xfff0eb
+            : (isPurpleDomino ? 0xf2dcff : 0xf4d850);
 
         dominoView.graphics.clear();
         dominoView.hoverGlow.setFillStyle(hoverFillColor, globalGlow ? 0.18 : dominoView.isFloating ? 0.16 : dominoView.isHovered ? 0.12 : 0);
@@ -505,6 +527,21 @@ export default class MachinePuzzleOverlay {
             dominoView.graphics.lineTo(7, 8);
             dominoView.graphics.strokePath();
             dominoView.centerLabel.setVisible(true).setText('HA');
+        } else if (isCorruptedDomino) {
+            dominoView.graphics.lineStyle(3, 0xffd2cd, 0.9);
+            dominoView.graphics.beginPath();
+            dominoView.graphics.moveTo(-18, -16);
+            dominoView.graphics.lineTo(-6, -4);
+            dominoView.graphics.lineTo(-14, 6);
+            dominoView.graphics.lineTo(-2, 18);
+            dominoView.graphics.strokePath();
+            dominoView.graphics.beginPath();
+            dominoView.graphics.moveTo(16, -18);
+            dominoView.graphics.lineTo(4, -2);
+            dominoView.graphics.lineTo(14, 8);
+            dominoView.graphics.lineTo(2, 18);
+            dominoView.graphics.strokePath();
+            dominoView.centerLabel.setVisible(true).setText('ERR');
         } else if (isPurpleDomino) {
             dominoView.centerLabel.setVisible(true).setText('PWR');
         } else {
@@ -1042,6 +1079,8 @@ export default class MachinePuzzleOverlay {
         const isMatchedGroup = !this._powerEffectsSuspended && Boolean(chargeGroupSummary?.matched);
         const isPlaced = isPlacedCode(value);
         const inspectionFault = this._puzzleState.inspectionFault
+            && Number.isInteger(this._puzzleState.inspectionFault.row)
+            && Number.isInteger(this._puzzleState.inspectionFault.col)
             && this._puzzleState.inspectionFault.row === cellView.row
             && this._puzzleState.inspectionFault.col === cellView.col
             ? this._puzzleState.inspectionFault
@@ -1116,7 +1155,7 @@ export default class MachinePuzzleOverlay {
         const shouldShowDebug = FACTORY_DEBUG.enabled && FACTORY_DEBUG.showPuzzleGridValues;
         if (inspectionFault) {
             cellView.valueText.setVisible(true);
-            cellView.valueText.setText('!');
+            cellView.valueText.setText(inspectionFault.type === 'corrupted-marker' ? String(inspectionFault.glyph || '?') : '!');
             cellView.valueText.setColor(inspectionFault.kind === 'hazard' ? '#ffd0c9' : '#ffe2aa');
         } else if (chargeLevel > 0) {
             cellView.valueText.setVisible(true);
@@ -1152,6 +1191,11 @@ export default class MachinePuzzleOverlay {
             const glowColor = group.matched ? 0xf2ffd1 : 0xb8d5e1;
             const lineColor = group.matched ? 0xe4ffad : 0x9ec4d5;
             const cellSize = MACHINE_PUZZLE.overlayCellSize;
+            const corruptedMarker = this._puzzleState.inspectionFault?.type === 'corrupted-marker'
+                && this._puzzleState.inspectionFault?.markerType === 'group'
+                && this._puzzleState.inspectionFault?.markerKey === group.key
+                ? this._puzzleState.inspectionFault
+                : null;
             const groupCenter = group.cells.reduce((center, cell) => {
                 center.x += this._gridLeft + (cell.col * cellSize) + (cellSize / 2);
                 center.y += this._gridTop + (cell.row * cellSize) + (cellSize / 2);
@@ -1202,10 +1246,10 @@ export default class MachinePuzzleOverlay {
                 }
             });
 
-            const label = this.scene.add.text(groupCenter.x, groupCenter.y, group.displayTarget, {
+            const label = this.scene.add.text(groupCenter.x, groupCenter.y, corruptedMarker ? String(corruptedMarker.glyph || '#') : group.displayTarget, {
                 fontFamily: 'Courier New',
                 fontSize: '19px',
-                color: group.matched ? '#f3ffd5' : '#d9eef7',
+                color: corruptedMarker ? '#ffd7ab' : (group.matched ? '#f3ffd5' : '#d9eef7'),
                 stroke: '#000000',
                 strokeThickness: 3,
             }).setOrigin(0.5);

@@ -988,7 +988,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._hiddenInput.value = '';
             this._playPuzzleFixed();
             this._stopBugSpawner();
-            this._destroyAllBugs();
+            this._autoSquashAllBugs();
         } else if (this.evidence.resultType === 'protocol-invalid') {
             this.emitEvidence({
                 completed: false,
@@ -1047,7 +1047,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         }
         this._playPuzzleFixed();
         this._stopBugSpawner();
-        this._destroyAllBugs();
+        this._autoSquashAllBugs();
         this._syncCommandVisuals();
     }
 
@@ -1295,6 +1295,22 @@ export default class DebugConsolePuzzle extends MinigameBase {
         while (this._bugViews.length > 0) {
             this._destroyBug(this._bugViews[0]);
         }
+    }
+
+    _autoSquashAllBugs() {
+        if (!this._bugViews.length) return;
+
+        const bugViews = [...this._bugViews];
+        bugViews.forEach((bugView, index) => {
+            this.scene.time.delayedCall(index * 55, () => {
+                if (!bugView || !this._bugViews.includes(bugView)) return;
+                if (bugView.hazard) {
+                    this._destroyBug(bugView);
+                    return;
+                }
+                this._squashBug(bugView);
+            });
+        });
     }
 
     _corruptInputAt(index) {

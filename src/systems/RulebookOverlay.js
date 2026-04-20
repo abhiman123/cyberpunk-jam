@@ -43,6 +43,7 @@ export default class RulebookOverlay {
         this.allRules = Array.isArray(allRules) ? allRules : [];
         this.newRuleIds = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
         this._expandedRuleIds = new Set();
+        this._autoExpandedRules = false;
         this._callbacks = callbacks;
         this._visible = false;
         this._currentSection = 'rules';
@@ -52,10 +53,13 @@ export default class RulebookOverlay {
         this._contentNodes = [];
         this._sectionButtons = new Map();
         this._contentHover = false;
+        this._scrollDragActive = false;
 
         this._handleWheel = this._handleWheel.bind(this);
         this._handleEscape = this._handleEscape.bind(this);
         this._handleToggle = this._handleToggle.bind(this);
+        this._handlePointerMove = this._handlePointerMove.bind(this);
+        this._handlePointerUp = this._handlePointerUp.bind(this);
 
         this._build();
 
@@ -64,6 +68,8 @@ export default class RulebookOverlay {
         this._escKey?.on('down', this._handleEscape);
         this._bKey?.on('down', this._handleToggle);
         this.scene.input.on('wheel', this._handleWheel);
+        this.scene.input.on('pointermove', this._handlePointerMove);
+        this.scene.input.on('pointerup', this._handlePointerUp);
 
         this.hide(true);
     }
@@ -156,6 +162,7 @@ export default class RulebookOverlay {
         if (newRuleIds !== null) {
             this.newRuleIds = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
         }
+        this._autoExpandedRules = false;
         this.refresh();
     }
 
@@ -316,10 +323,15 @@ export default class RulebookOverlay {
         // ── Scroll track & thumb ─────────────────────────────────────────────
         this._scrollTrack = this.scene.add.rectangle(
             SCROLL_TRACK_X, SCROLL_TRACK_TOP, 8, SCROLL_TRACK_H, 0x2b353d, 1,
-        ).setOrigin(0.5, 0).setStrokeStyle(1, 0x59646d, 0.45);
+        ).setOrigin(0.5, 0).setStrokeStyle(1, 0x59646d, 0.45).setInteractive({ useHandCursor: true });
         this._scrollThumb = this.scene.add.rectangle(
             SCROLL_TRACK_X, SCROLL_TRACK_TOP, 8, 72, 0xa2d4ff, 0.9,
-        ).setOrigin(0.5, 0).setStrokeStyle(1, 0xe5fbff, 0.46);
+        ).setOrigin(0.5, 0).setStrokeStyle(1, 0xe5fbff, 0.46).setInteractive({ useHandCursor: true });
+        this._scrollTrack.on('pointerdown', (pointer) => this._setScrollFromPointer(pointer));
+        this._scrollThumb.on('pointerdown', (pointer) => {
+            this._scrollDragActive = true;
+            this._setScrollFromPointer(pointer);
+        });
 
         // ── Assemble tablet ──────────────────────────────────────────────────
         this._tablet.add([
@@ -373,12 +385,22 @@ export default class RulebookOverlay {
     }
 
     _handleWheel(_pointer, _gameObjects, _deltaX, deltaY) {
-        if (!this._visible || !this._contentHover || this._scrollMax <= 0) return;
+        if (!this._visible || this._scrollMax <= 0) return;
+        if (!this._isPointerInsideContent(_pointer) && !this._contentHover) return;
 
         this._scrollOffset = Phaser.Math.Clamp(
             this._scrollOffset + (deltaY * 0.45), 0, this._scrollMax,
         );
         this._syncScroll();
+    }
+
+    _handlePointerMove(pointer) {
+        if (!this._visible || !this._scrollDragActive) return;
+        this._setScrollFromPointer(pointer);
+    }
+
+    _handlePointerUp() {
+        this._scrollDragActive = false;
     }
 
     // ── Section switching ────────────────────────────────────────────────────
@@ -452,16 +474,15 @@ export default class RulebookOverlay {
 
     _buildRulesSection() {
         let y = 0;
-        y = this._addSectionHeader('ACTIVE DIRECTIVES', 'Scroll for the full shift list.', y);
+        y = this._addSectionHeader('ACTIVE DIRECTIVES', 'Amber cards are new. Tap any card for the exact subsystem checks.', y);
+        y = this._addSectionParagraph('Judge from the expanded checks, not the short title line.', y + 6, '#f1deb5');
 
         const activeRules = this.allRules.filter((rule) => this.activeRuleIds.includes(rule.id));
         const activeRuleIdSet = new Set(activeRules.map((rule) => rule.id));
         this._expandedRuleIds = new Set([...this._expandedRuleIds].filter((ruleId) => activeRuleIdSet.has(ruleId)));
-        if (this._expandedRuleIds.size === 0 && activeRules.length > 0) {
-            const newestRuleId = activeRules.reduce((highestId, rule) => Math.max(highestId, Number(rule.id) || 0), 0);
-            if (newestRuleId > 0) {
-                this._expandedRuleIds.add(newestRuleId);
-            }
+        if (!this._autoExpandedRules && this._expandedRuleIds.size === 0 && activeRules.length > 0) {
+            activeRules.forEach((rule) => this._expandedRuleIds.add(rule.id));
+            this._autoExpandedRules = true;
         }
 
         activeRules.forEach((rule) => {
@@ -475,9 +496,9 @@ export default class RulebookOverlay {
                 fontFamily: 'Courier New', fontSize: '15px', color: '#dde6ee',
                 wordWrap: { width: 536 }, lineSpacing: 5,
             });
-            const hint = this.scene.add.text(524, y + 14, expanded ? 'COLLAPSE' : 'EXPAND', {
+            const hint = this.scene.add.text(524, y + 14, expanded ? 'TAP TO COLLAPSE' : 'TAP FOR CHECKS', {
                 fontFamily: 'Courier New', fontSize: '11px',
-                color: expanded ? '#e7f5ff' : '#8aa3b2', letterSpacing: 1,
+                color: expanded ? '#f9f4ce' : '#8aa3b2', letterSpacing: 1,
             }).setOrigin(1, 0);
             const detailsText = expanded && Array.isArray(rule.details) && rule.details.length > 0
                 ? rule.details.map((detail) => `- ${detail}`).join('\n')
@@ -486,13 +507,13 @@ export default class RulebookOverlay {
                 fontFamily: 'monospace', fontSize: '13px', color: '#aac0cb',
                 wordWrap: { width: 520 }, lineSpacing: 6,
             }).setVisible(expanded && detailsText.length > 0);
-            const footer = this.scene.add.text(16, y + body.height + 56 + (details.visible ? details.height : 0), expanded ? 'Tap card to collapse.' : `${Array.isArray(rule.details) ? rule.details.length : 0} subsystem checks hidden.`, {
+            const footer = this.scene.add.text(16, y + body.height + 56 + (details.visible ? details.height : 0), expanded ? 'Expanded checks are live. Collapse when you are done.' : `${Array.isArray(rule.details) ? rule.details.length : 0} subsystem checks hidden. Tap to reveal them.`, {
                 fontFamily: 'monospace', fontSize: '11px', color: '#7f93a0',
             });
             const cardHeight = Math.max(102, footer.y - y + footer.height + 14);
             const card = this.scene.add.rectangle(286, y + (cardHeight / 2), 572, cardHeight, 0x182228, 1)
                 .setOrigin(0.5, 0.5)
-                .setStrokeStyle(1, isNew ? 0xe6d89a : 0x4d5862, 0.72);
+                .setStrokeStyle(expanded ? 2 : 1, isNew ? 0xe6d89a : (expanded ? 0x8dbdc8 : 0x4d5862), expanded ? 0.9 : 0.72);
             const divider = this.scene.add.rectangle(286, y + 30, 540, 1, 0x33424b, 0.84)
                 .setOrigin(0.5, 0.5);
             const hitZone = this.scene.add.rectangle(286, y + (cardHeight / 2), 572, cardHeight, 0xffffff, 0.001)
@@ -669,10 +690,43 @@ export default class RulebookOverlay {
         this._scrollThumb.y = SCROLL_TRACK_TOP + (trackRange * progress);
     }
 
+    _isPointerInsideContent(pointer) {
+        if (!pointer || !this._tablet) return this._contentHover;
+
+        const scaleX = this._tablet.scaleX || 1;
+        const scaleY = this._tablet.scaleY || 1;
+        const left = this._tablet.x + (VIEWPORT_X * scaleX);
+        const top = this._tablet.y + (VIEWPORT_Y * scaleY);
+        const width = VIEWPORT_W * scaleX;
+        const height = VIEWPORT_H * scaleY;
+        const worldX = Number.isFinite(pointer.worldX) ? pointer.worldX : pointer.x;
+        const worldY = Number.isFinite(pointer.worldY) ? pointer.worldY : pointer.y;
+
+        return worldX >= left
+            && worldX <= left + width
+            && worldY >= top
+            && worldY <= top + height;
+    }
+
+    _setScrollFromPointer(pointer) {
+        if (!pointer || this._scrollMax <= 0) return;
+
+        const scaleY = this._tablet?.scaleY || 1;
+        const trackTop = this._tablet.y + (SCROLL_TRACK_TOP * scaleY);
+        const trackHeight = SCROLL_TRACK_H * scaleY;
+        const worldY = Number.isFinite(pointer.worldY) ? pointer.worldY : pointer.y;
+        const progress = Phaser.Math.Clamp((worldY - trackTop) / Math.max(1, trackHeight), 0, 1);
+
+        this._scrollOffset = this._scrollMax * progress;
+        this._syncScroll();
+    }
+
     // ── Teardown ─────────────────────────────────────────────────────────────
 
     destroy() {
         this.scene.input.off('wheel', this._handleWheel);
+        this.scene.input.off('pointermove', this._handlePointerMove);
+        this.scene.input.off('pointerup', this._handlePointerUp);
         this._escKey?.off('down', this._handleEscape);
         this._bKey?.off('down', this._handleToggle);
         this._escKey?.destroy();
