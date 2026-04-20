@@ -376,10 +376,6 @@ export default class GameScene extends Phaser.Scene {
         this.input.on('pointerup', this._handleDeskItemPointerUp, this);
         this.input.on('gameout', this._handleDeskItemPointerUp, this);
 
-
-
-        this._updateDeskDateText();
-
         this._createDeskPhoto('manager_human', 'manager_human', {
             x: 100,
             y: 75,
@@ -412,44 +408,46 @@ export default class GameScene extends Phaser.Scene {
             width: 118,
             height: 76,
         });
+        // Y values are in deskContainer-local space (deskContainer.y = scale.height - 172 = 548).
+        // To appear at screen y≈624-626, subtract 548 → container-local y≈76-78.
         this._createJesterDeskTokenItem({
             x: 560,
-            y: 624,
+            y: 76,
             angle: -4,
             width: 54,
             height: 94,
         });
         this._createPurpleCircuitDeskItem({
             x: 624,
-            y: 624,
+            y: 76,
             angle: 4,
             width: 58,
             height: 94,
         });
         this._createUmbrellaDeskPartItem('gear', {
             x: 650,
-            y: 625,
+            y: 77,
             angle: -6,
             width: 64,
             height: 64,
         });
         this._createUmbrellaDeskPartItem('circuit', {
             x: 726,
-            y: 626,
+            y: 78,
             angle: 3,
             width: 58,
             height: 90,
         });
         this._createUmbrellaDeskPartItem('wire', {
             x: 804,
-            y: 626,
+            y: 78,
             angle: -2,
             width: 94,
             height: 54,
         });
         this._createUmbrellaDeskPartItem('data', {
             x: 900,
-            y: 625,
+            y: 77,
             angle: 5,
             width: 68,
             height: 52,
@@ -4596,7 +4594,7 @@ export default class GameScene extends Phaser.Scene {
         this.tweens.killTweensOf(this._clockPauseNotice);
 
         if (shouldShow) {
-            this._clockPauseNotice.setVisible(true);
+            this._clockPauseNotice.setVisible(true).setY(692);
             this.tweens.add({
                 targets: this._clockPauseNotice,
                 alpha: 1,
@@ -4940,7 +4938,11 @@ export default class GameScene extends Phaser.Scene {
         this._setMachineWorklightVisible(false);
 
         this._conveyorUnitSprite.setInteractive({ useHandCursor: true });
-        this._conveyorUnitSprite.on('pointerover', () => this._conveyorUnitSprite.setTint(0xaabbdd));
+        this._conveyorUnitSprite.on('pointerover', () => {
+            if (!this._currentMachineVariant || this._actionLocked || this._settingsOpen) return;
+            if (this._machinePuzzleOverlay?.isVisible() || this._otherPuzzleOverlay?.active || this._gearPuzzleOverlay?.active || this._debugPuzzleOverlay?.active) return;
+            this._conveyorUnitSprite.setTint(0xaabbdd);
+        });
         this._conveyorUnitSprite.on('pointerout', () => this._conveyorUnitSprite.clearTint());
         this._conveyorUnitSprite.on('pointerdown', () => {
             if (this._screen !== 'conveyor' || this._actionLocked || this._settingsOpen) return;
@@ -6579,6 +6581,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _showFeedback(msg, color) {
+        this.tweens.killTweensOf(this._feedbackText);
         this._feedbackText.setText(msg).setColor(color).setAlpha(1);
         this.tweens.add({
             targets: this._feedbackText,
