@@ -5082,12 +5082,115 @@ function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePl
     return gridOption;
 }
 
+function findDominoTiling(grid, chargeCells, openCells, targetCount, randomFn) {
+    const placed = [];
+    const used = new Set();
+    const isUsed = (r, c) => used.has(`${r},${c}`);
+    
+    function search(chargesRemaining) {
+        if (placed.length === targetCount) {
+            return chargesRemaining.length === 0;
+        }
+        
+        let targetCell;
+        if (chargesRemaining.length > 0) {
+            targetCell = chargesRemaining[0];
+        } else {
+            const available = openCells.filter(c => !isUsed(c.r, c.c));
+            if (available.length === 0) return false;
+            // sort to randomize
+            targetCell = available[Math.floor(randomFn() * available.length)];
+        }
+        
+        const r1 = targetCell.r;
+        const c1 = targetCell.c;
+        if (isUsed(r1, c1)) {
+           if (chargesRemaining.length > 0) {
+               return search(chargesRemaining.slice(1));
+           }
+           return false; 
+        }
+        
+        const neighbors = [
+            {r: r1-1, c: c1}, {r: r1+1, c: c1}, {r: r1, c: c1-1}, {r: r1, c: c1+1}
+        ].filter(n => 
+            n.r >= 0 && n.r < grid.length && 
+            n.c >= 0 && n.c < grid[n.r].length && 
+            grid[n.r][n.c] !== CELL_WALL &&
+            !isUsed(n.r, n.c)
+        );
+        
+        neighbors.sort(() => randomFn() - 0.5);
+        
+        for (const n of neighbors) {
+            placed.push([{r: r1, c: c1}, n]);
+            used.add(`${r1},${c1}`);
+            used.add(`${n.r},${n.c}`);
+            
+            const nextCharges = chargesRemaining.filter(c => !isUsed(c.r, c.c));
+            if (search(nextCharges)) return true;
+            
+            used.delete(`${r1},${c1}`);
+            used.delete(`${n.r},${n.c}`);
+            placed.pop();
+        }
+        
+        return false;
+    }
+    
+    if (search(chargeCells)) {
+        return placed;
+    }
+    return null;
+}
+
+function generateProceduralDominos(gridOption, randomFn) {
+    const grid = gridOption.grid;
+    const originalDominos = gridOption.dominos;
+    
+    if (gridOption.impossible) {
+        return originalDominos;
+    }
+    
+    const chargeCells = [];
+    const openCells = [];
+    grid.forEach((row, r) => row.forEach((cell, c) => {
+        if (cell === CELL_WALL) return;
+        if (isChargeCode(cell)) chargeCells.push({r, c, req: cell - 1});
+        openCells.push({r, c});
+    }));
+
+    const reservedDominos = originalDominos.filter(d => d.variant === 'clown' || d.variant === 'purple');
+    let targetCount = Math.max(Math.ceil(chargeCells.length / 2), Math.max(2, Math.floor(randomFn() * 3) + 2));
+    
+    let placed = null;
+    while(targetCount <= Math.floor(openCells.length / 2)) {
+        placed = findDominoTiling(grid, chargeCells, openCells, targetCount, randomFn);
+        if (placed) break;
+        targetCount++;
+    }
+    
+    if (!placed) return originalDominos;
+
+    const newDominos = placed.map(pair => {
+        const getPips = (cell) => {
+            const charge = chargeCells.find(c => c.r === cell.r && c.c === cell.c);
+            if (charge) return charge.req;
+            return Math.floor(randomFn() * 5);
+        };
+        return createDomino(getPips(pair[0]), getPips(pair[1]));
+    });
+
+    return [...newDominos, ...reservedDominos];
+}
+
 function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.random) {
     const normalizedStage = Math.max(1, Number(stage) || 1);
     const baseOption = {
         ...cloneGridOption(gridOption),
         grid: stripGridConstraintMarkers(gridOption.grid),
     };
+    baseOption.dominos = generateProceduralDominos(baseOption, randomFn);
 
     let bestCandidate = baseOption;
     const attempts = baseOption.impossible ? 1 : 10;

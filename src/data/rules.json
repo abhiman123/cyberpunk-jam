@@ -2,44 +2,45 @@
   {
     "id": 1,
     "period": 1,
-    "text": "Day 1 rule: if a required subsystem is fundamentally unwinnable on the floor, scrap the unit.",
+    "text": "DAY 1 MANDATE: IF A CRITICAL SUBSYSTEM IS UNWINNABLE, YOU MUST SCRAP THE UNIT.",
     "details": [
-      "Programming: day 1 commands are straightforward. If the output can be repaired, patch it and keep the unit moving. If the command path is dead on arrival, scrap it.",
-      "Gears: a cracked input drive or cracked output drive is a hard fail. That drivetrain cannot be saved on the floor.",
-      "Wires: day 1 only uses plain power lines. If the first live lead is physically missing, the machine is disqualified and must be scrapped.",
-      "Circuit Board: day 1 boards can use exact grouped totals and simple = links. If a charge cell is boxed into dead space or the board cannot satisfy the required links, scrap it."
+      "[CRITICAL STEP] To legally scrap a unit, you MUST first open the corresponding Port Map and explicitly click the red ERROR text to confirm the anomaly, then hit the main SCRAP button.",
+      "[CODE] If the returned payload code cannot be patched to match the protocol, scrap it.",
+      "[GEAR] If you detect a cracked input drive or cracked output drive, it is a hard fail. Cannot be repaired.",
+      "[FLOW] If the first live lead from the power source is physically missing, scrap the machine.",
+      "[GRID] If a grid is boxed into dead space (!) or lacks enough valid charge dominos to cover the minimum requirements, scrap it."
     ]
   },
   {
     "id": 2,
     "period": 2,
-    "text": "Day 2 rule: scrap any unit that breaks compliance, even if the rest of the machine still runs.",
+    "text": "DAY 2 MANDATE: STRICT COMPLIANCE REQUIRED. SCRAP ANY UNIT THAT BREAKS COMPLIANCE FILTERS.",
     "details": [
-      "Programming: outputs may drift or come back protocol-wrong. Invalid, corrupted, or noncompliant returns are scrap signals.",
-      "Gears: rust starts appearing and rejection-marked parts can enter the train. If the bad part is unavoidable, scrap the machine.",
-      "Wires: green and orange filters recolor the route after that tile. If a required module is forced red or receives the wrong power class, scrap it.",
-      "Circuit Board: day 2 adds < regions on top of the earlier checks. Broken glyph markers and isolated charge cells are both compliance failures."
+      "[CODE] Outputs may drift or come back corrupted. Noncompliant returns (wrong characters, mismatched protocol) are scrap signals.",
+      "[GEAR] Rust starts appearing. Rejection-marked rusty parts may enter the tray. If using the rusty part is unavoidable to connect the drives, scrap the machine.",
+      "[FLOW] Green and orange filters recolor power routing. If a required module receives the wrong power class, scrap it.",
+      "[GRID] Grids now use `<` regions. Broken glyph markers (e.g. `#`, `@`) and intentionally isolated charge cells are compliance failures. Scrap."
     ]
   },
   {
     "id": 3,
     "period": 3,
-    "text": "Day 3 rule: hazardous instability overrides everything else. If it sparks, crackles, or contaminates the system, scrap it.",
+    "text": "DAY 3 MANDATE: ZERO TOLERANCE FOR HAZARDOUS INSTABILITY. IF IT SPARKS OR CONTAMINATES, SCRAP IT.",
     "details": [
-      "Programming: the green debugger bug with red sparks is hazardous contamination, not a normal mismatch. Scrap that unit immediately.",
-      "Gears: deadlock clamps create real dead space and red spark instability marks unsafe drivetrain discharge. Any live spark state is scrap.",
-      "Wires: day 3 expands to multiple sources. Neutral, green, and orange are valid feeds. Red crackling outputs are never safe and must be scrapped.",
-      "Circuit Board: day 3 mixes exact groups, < regions, = links, and != links. Earlier scrap states still count, and any corrupted red domino means automatic scrap."
+      "[CODE] A green debugger bug accompanied by red sparks indicates hazardous contamination. Scrap immediately.",
+      "[GEAR] Deadlock clamps create true dead space. Red spark instability marks unsafe drivetrain discharge. Any live spark state is an mandatory scrap.",
+      "[FLOW] Multiple power sources enabled. RED power lines and Crackling components are severely unsafe fire hazards. Scrap the unit.",
+      "[GRID] Grids mix groups, `<`, `=`, AND `!=` links. ANY corrupted red clown/wildcard domino denotes an overridden system. Automatic scrap."
     ]
   },
   {
     "id": 101,
     "period": 1,
-    "text": "QUEST: The shady umbrella wants you to help start a rebellion against the machine line.",
+    "text": "UNOFFICIAL: The underground Umbrella network needs your help to build rebellion units.",
     "details": [
-      "Unlocked through a private comms proposition from the Rebellious Umbrella.",
       "This is a story lead, not a payroll directive. Keep an ear on the comms channel.",
-      "If the line starts talking about rebellion again, check the chat feed before filing your ruling."
+      "If you receive unusual umbrella parts or purple circuits, they might be needed for specific machines.",
+      "Rebellion circuits overrule factory mandated protocols, but you must still manually clear the board."
     ]
   }
 ]

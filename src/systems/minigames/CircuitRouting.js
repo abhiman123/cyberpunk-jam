@@ -162,8 +162,10 @@ function generateCircuit(spec, rows, cols) {
     const tiles = Array.from({ length: rows }, () =>
         Array.from({ length: cols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     );
-    const sr = spec.sourceRow;
-    const outputRows = Object.keys(spec.outputs).map(Number);
+    const sr = spec.sourceRow ?? spec.sources?.[0]?.row ?? Math.floor(rows / 2) ?? 2;
+    const outputRows = spec.outputSpecs 
+        ? spec.outputSpecs.map(s => Number(s.row)) 
+        : Object.keys(spec.outputs || {}).map(Number);
 
     outputRows.forEach((outRow, i) => {
         const branchCol = outRow === sr ? (cols - 1) : Math.min(1 + i, cols - 2);
@@ -829,11 +831,13 @@ export default class CircuitRouting extends MinigameBase {
                     repaired
                         ? 'REPAIRED'
                         : (invalidSignal
-                            ? String(state.issueCode || 'MISMATCH').replace(/-/g, ' ').toUpperCase()
+                            ? (state.issueCode === 'crackling-module' || state.issueCode === 'red-feed'
+                                ? 'HAZARD // SCRAP'
+                                : String(state.issueCode || 'MISMATCH').replace(/-/g, ' ').toUpperCase())
                             : (forbiddenUsed
                                 ? 'BROKEN // MOD'
                                 : (target.powerClass === 'red'
-                                    ? 'RED // SCRAP'
+                                    ? 'HAZARD // SCRAP'
                                     : (target.powerClass && target.powerClass !== 'neutral'
                                         ? String(target.powerClass).toUpperCase()
                                         : 'BROKEN'))))

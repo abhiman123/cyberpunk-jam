@@ -5713,6 +5713,13 @@ export default class GameScene extends Phaser.Scene {
         const scrapBonusEligible = mainScrapKind === 'unsalvageable'
             || auxiliaryState.scrapEntries.some((entry) => entry.scrapKind === 'unsalvageable');
 
+        let ready = mainReady && otherSolved;
+        if (scrapRequired) {
+            const confirmedMainScrap = mainScrapRequired && mainInspected;
+            const confirmedAuxScrap = auxiliaryState.scrapCount > 0 && auxiliaryState.scrapEntries.some(entry => entry.reviewed);
+            ready = confirmedMainScrap || confirmedAuxScrap;
+        }
+
         return {
             evaluation,
             repairState,
@@ -5725,7 +5732,7 @@ export default class GameScene extends Phaser.Scene {
             auxiliaryState,
             scrapRequired,
             scrapBonusEligible,
-            ready: mainReady && otherSolved,
+            ready,
         };
     }
 
@@ -6800,10 +6807,10 @@ export default class GameScene extends Phaser.Scene {
             } else if (gateState.scrapRequired) {
                 payDelta = -PAYCHECK_DELTA;
                 wasPenalty = true;
-                feedbackText = 'SCRAP SIGNAL UNCONFIRMED // DEDUCTION APPLIED';
+                feedbackText = 'UNCONFIRMED SCRAP // CLICK RED TEXT IN PORT RECORD TO CONFIRM';
                 feedbackColor = '#ff7f73';
                 panelStatus = 'SCRAP PENALTY';
-                notificationMessage = 'DOC NOTE: Required diagnostics were not fully verified before scrapping. Payroll deduction applied.';
+                notificationMessage = 'DOC NOTE: Hardware anomalies must be confirmed (click red text) before clicking SCRAP. Payroll deduction applied.';
                 notificationStatus = 'DOC NOTICE';
             } else {
                 payDelta = -PAYCHECK_DELTA;
