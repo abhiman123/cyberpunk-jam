@@ -5,6 +5,7 @@ export const GameState = {
     totalMistakes: 0,
     paycheckTotal: 0,
     casesProcessedThisShift: 0,
+    hasSeenOpeningPhoneCall: false,
     activeRules: [1],
     bonusRuleIds: [],
     rulebookSeenRules: new Set(),
@@ -274,6 +275,7 @@ export const GameState = {
         this.totalMistakes = 0;
         this.paycheckTotal = 0;
         this.casesProcessedThisShift = 0;
+        this.hasSeenOpeningPhoneCall = false;
         this.activeRules = [1];
         this.bonusRuleIds = [];
         this.rulebookSeenRules = new Set();

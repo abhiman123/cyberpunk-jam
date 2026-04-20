@@ -54,7 +54,7 @@ export default class TransitionScene extends Phaser.Scene {
                     return;
                 }
 
-                this.scene.start('Briefing');
+                this.scene.start('Game');
             });
         });
     }

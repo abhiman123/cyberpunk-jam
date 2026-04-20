@@ -65,7 +65,7 @@ export default class TitleScene extends Phaser.Scene {
                 this.sound.play(SOUND_ASSETS.titlePlay.key, { volume: SOUND_VOLUMES.ui });
             }
             this.cameras.main.fadeOut(400, 0, 0, 0);
-            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Briefing'));
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Game'));
         });
 
         // Show the button after 1.5s
