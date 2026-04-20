@@ -2123,6 +2123,32 @@ const MACHINE_DEBUG_CATALOG = Object.freeze({
             ],
         }),
     ]),
+    rich_mf: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'run executive checksum',
+            repairPrompt: 'patch exec.cache.rethread',
+            expectedOutput: 'EXEC HASH OK // PRIORITIES ALIGNED',
+            actualOutputs: [
+                'EXEC HASH FAIL // PRIORITIES INVERTED',
+                'EXEC HASH OK // VANITY LOOP HIGH',
+                'EXEC HASH BAD // EGO CACHE NULL',
+                'EXEC HASH FAIL // HIERARCHY DRIFT',
+                'EXEC HASH OK // EMPATHY MODULE STALLED',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test wealth routing',
+            repairPrompt: 'patch fiscal.neural.rebind',
+            expectedOutput: 'WEALTH ROUTING OK // STATUS SUPREME',
+            actualOutputs: [
+                'WEALTH ROUTING FAIL // STATUS LEAK',
+                'WEALTH ROUTING OK // TAX PANIC',
+                'WEALTH ROUTING BAD // SIGNAL COMMON',
+                'WEALTH ROUTING FAIL // HEDGE NULL',
+                'WEALTH ROUTING OK // EGO BUFFER CLIPPED',
+            ],
+        }),
+    ]),
 });
 
 const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
@@ -2250,6 +2276,16 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         gridPreview: { x: 136, y: 68, width: 56, height: 40, label: 'GRID' },
         flowPreview: { x: 46, y: 114, width: 64, height: 36, label: 'FLOW' },
         gearPreview: { x: 104, y: 146, width: 60, height: 34, label: 'GEAR' },
+    }),
+    track_and_discus_robot: createMiniDisplay({
+        artX: 108,
+        artY: 128,
+        artScale: 1.0,
+        artAngle: -4,
+        gridPreview: { x: 42, y: 84, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 120, width: 60, height: 38, label: 'FLOW' },
+        codePreview: { x: 86, y: 36, width: 74, height: 22, label: 'CODE' },
+        gearPreview: { x: 88, y: 166, width: 62, height: 36, label: 'GEAR' },
     }),
 });
 
@@ -3296,7 +3332,7 @@ export const MACHINE_CATALOG = Object.freeze([
         guaranteedTimeframe: { startHour: 4, endHour: 6 },
         specialBehavior: 'richMf',
         possibleGears: [],
-        possibleDebugs: [],
+        possibleDebugs: MACHINE_DEBUG_CATALOG.rich_mf,
         possibleGrids: [
             createGridOption({
                 grid: [
@@ -3734,10 +3770,21 @@ function shouldIncludeUmbrellaInDayThreeRoster(umbrellaQuest = null) {
     return false;
 }
 
+function isProtectedStoryMachine(definition = null) {
+    return definition?.specialBehavior === 'rebelliousUmbrella'
+        || definition?.specialBehavior === 'richMf';
+}
+
 function getDayMachineRosterIds(targetDay = null, eligibilityContext = {}) {
     const normalizedDay = Number(targetDay);
     if (normalizedDay === 1) return [...DAY_ONE_MACHINE_ROSTER_IDS];
-    if (normalizedDay === 2) return [...DAY_TWO_MACHINE_ROSTER_IDS];
+    if (normalizedDay === 2) {
+        const roster = [...DAY_TWO_MACHINE_ROSTER_IDS];
+        if (shouldIncludeUmbrellaInDayThreeRoster(eligibilityContext?.umbrellaQuest)) {
+            roster.push('rebellious_umbrella');
+        }
+        return roster;
+    }
     if (normalizedDay === 3) {
         const roster = [...DAY_THREE_MACHINE_ROSTER_IDS];
         if (shouldIncludeUmbrellaInDayThreeRoster(eligibilityContext?.umbrellaQuest)) {
@@ -5035,7 +5082,7 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
             minGroups: normalizedStage === 1 ? 2 : 1,
         });
 
-        if (normalizedStage >= 2) {
+        if (normalizedStage >= 1) {
             candidate = injectEqualityConstraint(candidate, randomFn, !baseOption.impossible);
         }
 
@@ -5292,9 +5339,16 @@ export function createMachineVariant(options = {}) {
         ? machinePool.find((machine) => machine.id === forcedMachineId) || MACHINE_CATALOG.find((machine) => machine.id === forcedMachineId)
         : null;
     const definition = forcedDefinition || pickRandomEntry(machinePool, randomFn) || machinePool[0] || MACHINE_CATALOG[0];
+    const protectedStoryMachine = isProtectedStoryMachine(definition);
     const weightedGridPool = buildWeightedGridPool(definition.possibleGrids);
     const gridPool = weightedGridPool.length > 0 ? weightedGridPool : (definition.possibleGrids || []);
-    const selectedGridTemplate = pickRandomEntry(gridPool, randomFn) || gridPool[0] || { grid: [], dominos: [] };
+    const protectedGridPool = protectedStoryMachine
+        ? gridPool.filter((gridOption) => !gridOption?.impossible)
+        : gridPool;
+    const selectedGridTemplate = pickRandomEntry(protectedGridPool.length > 0 ? protectedGridPool : gridPool, randomFn)
+        || protectedGridPool[0]
+        || gridPool[0]
+        || { grid: [], dominos: [] };
     const selectedGrid = applyGridStageToOption(
         transformGridOption(selectedGridTemplate, pickGridTransformKey(selectedGridTemplate, randomFn)),
         targetPeriod ?? 1,
@@ -5322,13 +5376,34 @@ export function createMachineVariant(options = {}) {
         targetPeriod ?? 1,
         randomFn,
     );
+    if (protectedStoryMachine && selectedGrid) {
+        selectedGrid.impossible = false;
+        selectedGrid.inspectionFault = null;
+        selectedGrid.scrapKind = null;
+        selectedGrid.scrapStatus = null;
+        selectedGrid.scrapReason = null;
+    }
     if (selectedFlowPuzzle) {
+        if (protectedStoryMachine) {
+            selectedFlowPuzzle.inspectionFault = null;
+        }
         selectedFlowPuzzle.progress = createFlowProgress(selectedFlowPuzzle);
     }
     if (selectedGearPuzzle) {
+        if (protectedStoryMachine) {
+            selectedGearPuzzle.inspectionFault = null;
+        }
         selectedGearPuzzle.progress = buildGearProgressSnapshot(selectedGearPuzzle, selectedGearPuzzle.pieces);
     }
     if (selectedDebugPuzzle) {
+        if (protectedStoryMachine) {
+            selectedDebugPuzzle.resultType = (targetPeriod ?? 1) >= 2 && Array.isArray(selectedDebugPuzzle.actualOutputs) && selectedDebugPuzzle.actualOutputs.length > 0
+                ? 'repairable-mismatch'
+                : 'stable';
+            selectedDebugPuzzle.scrapKind = null;
+            selectedDebugPuzzle.scrapStatus = null;
+            selectedDebugPuzzle.scrapReason = null;
+        }
         selectedDebugPuzzle.progress = createDebugProgress(selectedDebugPuzzle, randomFn);
     }
     const puzzleState = new MachinePuzzleState(selectedGrid);

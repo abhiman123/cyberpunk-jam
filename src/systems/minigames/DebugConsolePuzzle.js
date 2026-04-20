@@ -434,6 +434,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         this._hiddenInput = document.createElement('input');
         this._hiddenInput.type = 'text';
+        this._hiddenInput.id = 'debug-console-hidden-input';
+        this._hiddenInput.name = 'debug-console-hidden-input';
         this._hiddenInput.value = String(initialValue || '');
         this._hiddenInput.autocapitalize = 'none';
         this._hiddenInput.autocomplete = 'off';

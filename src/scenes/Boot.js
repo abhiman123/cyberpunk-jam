@@ -39,19 +39,36 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('family_photo_source', 'Untitled_Artwork2.png');
         this.load.image('manager_human_source', 'Untitled_Artwork4.png');
         this.load.image('manager_robot_source', 'Untitled_Artwork3.png');
+        this.load.image('bg_mainview_source', 'Background_1.png');
+        this.load.image('track_and_discus_robot_source', 'Tennis.png');
+        this.load.image('track_and_discus_robot_close_source', 'TennisClose.png');
 
         // Pixel art backgrounds
-        this.load.image('bg_mainview',    'mainview.jpeg');
         this.load.image('bg_inspectview', 'inspectview.jpeg');
     }
 
     create() {
+        this._createMainBackgroundFromSource();
+        this._createTrackAndDiscusRobotFromSource();
+        this._createTrackAndDiscusRobotCloseFromSource();
         this._createFutureLoungeChairFromSource();
         this._createFamilyPhotoFromSource();
         this._createManagerHumanFromSource();
         this._createManagerRobotFromSource();
         this._generatePlaceholders();
         this.scene.start('Title');
+    }
+
+    _createMainBackgroundFromSource() {
+        this._createNearestUpscaledTexture('bg_mainview_source', 'bg_mainview', 4);
+    }
+
+    _createTrackAndDiscusRobotFromSource() {
+        this._createNearestUpscaledTexture('track_and_discus_robot_source', 'machine_track_and_discus_robot', 20);
+    }
+
+    _createTrackAndDiscusRobotCloseFromSource() {
+        this._createNearestUpscaledTexture('track_and_discus_robot_close_source', 'machine_track_and_discus_robot_close', 20);
     }
 
     _createFutureLoungeChairFromSource() {

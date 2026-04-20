@@ -2,34 +2,34 @@
   {
     "id": 1,
     "period": 1,
-    "text": "Scrap any unit with an unsalvageable subsystem fault.",
+    "text": "Day 1 rule: if a required subsystem is fundamentally unwinnable on the floor, scrap the unit.",
     "details": [
-      "Programming: day 1 code is simple. If the program is repairable, the correct output will run cleanly.",
-      "Gears: day 1 scrap is obvious. A cracked start or end drive means the unit is unsalvageable.",
-      "Wires: day 1 uses regular wiring only. If the first required lead is physically missing, scrap the unit.",
-      "Circuit Board: day 1 uses exact sum / grouped regions only. If a charge cell is isolated behind walls, scrap the unit."
+      "Programming: day 1 commands are straightforward. If the output can be repaired, patch it and keep the unit moving. If the command path is dead on arrival, scrap it.",
+      "Gears: a cracked input drive or cracked output drive is a hard fail. That drivetrain cannot be saved on the floor.",
+      "Wires: day 1 only uses plain power lines. If the first live lead is physically missing, the machine is disqualified and must be scrapped.",
+      "Circuit Board: day 1 boards can use exact grouped totals and simple = links. If a charge cell is boxed into dead space or the board cannot satisfy the required links, scrap it."
     ]
   },
   {
     "id": 2,
     "period": 2,
-    "text": "Scrap any unit that fails subsystem compliance verification.",
+    "text": "Day 2 rule: scrap any unit that breaks compliance, even if the rest of the machine still runs.",
     "details": [
-      "Programming: day 2 code may drift. Scrap outputs that become invalid, protocol-broken, or visibly corrupted.",
-      "Gears: day 2 adds rust and moving rejection markers. If a rejected gear is unavoidable, scrap the unit.",
-      "Wires: day 2 adds green and orange power filters. If any required route is forced red or reaches a module with the wrong energy, scrap it.",
-      "Circuit Board: day 2 adds < regions and = links. Scrap boards with a broken glyph marker or an isolated charge cell."
+      "Programming: outputs may drift or come back protocol-wrong. Invalid, corrupted, or noncompliant returns are scrap signals.",
+      "Gears: rust starts appearing and rejection-marked parts can enter the train. If the bad part is unavoidable, scrap the machine.",
+      "Wires: green and orange filters recolor the route after that tile. If a required module is forced red or receives the wrong power class, scrap it.",
+      "Circuit Board: day 2 adds < regions on top of the earlier checks. Broken glyph markers and isolated charge cells are both compliance failures."
     ]
   },
   {
     "id": 3,
     "period": 3,
-    "text": "Scrap any unit showing hazardous instability, contamination, or unsafe discharge.",
+    "text": "Day 3 rule: hazardous instability overrides everything else. If it sparks, crackles, or contaminates the system, scrap it.",
     "details": [
-      "Programming: scrap units showing the green debugger bug with red sparks. That is hazardous corruption, not normal drift.",
-      "Gears: day 3 adds deadlock clamp dead space and red spark instability. If a sparking gear state exists, scrap the unit.",
-      "Wires: day 3 expands the board and adds multiple power sources. Neutral, orange, and green are valid; red crackling modules mean scrap.",
-      "Circuit Board: day 3 adds != links and mixed rule combinations. Scrap earlier fault states plus any unit carrying a corrupted red domino."
+      "Programming: the green debugger bug with red sparks is hazardous contamination, not a normal mismatch. Scrap that unit immediately.",
+      "Gears: deadlock clamps create real dead space and red spark instability marks unsafe drivetrain discharge. Any live spark state is scrap.",
+      "Wires: day 3 expands to multiple sources. Neutral, green, and orange are valid feeds. Red crackling outputs are never safe and must be scrapped.",
+      "Circuit Board: day 3 mixes exact groups, < regions, = links, and != links. Earlier scrap states still count, and any corrupted red domino means automatic scrap."
     ]
   },
   {
