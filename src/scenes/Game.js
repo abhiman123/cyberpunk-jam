@@ -522,7 +522,7 @@ export default class GameScene extends Phaser.Scene {
                 const label = this.add.text(0, -8, 'RULES', {
                     fontFamily: 'Courier New', fontSize: '17px', color: '#dffafe', letterSpacing: 2,
                 }).setOrigin(0.5);
-                const sublabel = this.add.text(0, 14, 'Tap to open tablet', {
+                const sublabel = this.add.text(0, 14, 'Click to open', {
                     fontFamily: 'Courier New', fontSize: '10px', color: '#79becc',
                 }).setOrigin(0.5);
                 const camera = this.add.circle(0, -(height / 2) + 8, 3, 0x32404d, 1)
@@ -7160,7 +7160,6 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._setPhoneInfoNote('Hidden override armed. Finish the current inspection and the final unit will route next.', 'SECRET ROUTE');
-        this._endShift(false);
     }
 
     _loadNextCase() {

@@ -184,7 +184,7 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
                 createIntroSequenceLine('line3', 'Alright, see this? The rulebook only cares about one thing today: can the subsystem even be saved.', SOUND_ASSETS.phoneIntroYesLine3),
                 createIntroSequenceLine('line4', 'If the gear is cracked, the wire route is severed, or the board has an orphan cell, you scrap it. Programming jobs should run clean on day one if they are repairable at all.', SOUND_ASSETS.phoneIntroYesLine4),
                 createIntroSequenceLine('line5', 'If it is broken but still repairable, you solve the puzzle and file the unit clean. Today is about learning the work, not chasing output drift.', SOUND_ASSETS.phoneIntroYesLine5),
-                createIntroSequenceLine('line6', 'Good luck and your shift ends at 12.', SOUND_ASSETS.phoneIntroYesLine6),
+                createIntroSequenceLine('line6', 'Good luck. Shift ends at noon.', SOUND_ASSETS.phoneIntroYesLine6),
             ],
         }),
         '2-1': createIntroSequence({

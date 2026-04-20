@@ -4,11 +4,11 @@
     "period": 1,
     "text": "DAY 1 MANDATE: IF A CRITICAL SUBSYSTEM IS UNWINNABLE, YOU MUST SCRAP THE UNIT.",
     "details": [
-      "[CRITICAL STEP] To legally scrap a unit, you MUST first open the corresponding Port Map and explicitly click the red ERROR text to confirm the anomaly, then hit the main SCRAP button.",
+      "[CRITICAL STEP] Open the Port Map, click the red ERROR text to confirm the fault, then hit SCRAP.",
       "[CODE] If the returned payload code cannot be patched to match the protocol, scrap it.",
-      "[GEAR] If you detect a cracked input drive or cracked output drive, it is a hard fail. Cannot be repaired.",
-      "[FLOW] If the first live lead from the power source is physically missing, scrap the machine.",
-      "[GRID] If a grid is boxed into dead space (!) or lacks enough valid charge dominos to cover the minimum requirements, scrap it."
+      "[GEAR] A cracked input or output drive is a hard fail — cannot be repaired.",
+      "[FLOW] If the first live lead from the power source is missing, scrap the machine.",
+      "[GRID] If cells are stuck in dead space (!) or there aren't enough charge dominoes for the minimum, scrap it."
     ]
   },
   {
@@ -17,7 +17,7 @@
     "text": "DAY 2 MANDATE: STRICT COMPLIANCE REQUIRED. SCRAP ANY UNIT THAT BREAKS COMPLIANCE FILTERS.",
     "details": [
       "[CODE] Outputs may drift or come back corrupted. Noncompliant returns (wrong characters, mismatched protocol) are scrap signals.",
-      "[GEAR] Rust starts appearing. Rejection-marked rusty parts may enter the tray. If using the rusty part is unavoidable to connect the drives, scrap the machine.",
+      "[GEAR] Rejection-marked rusty parts may appear. If one is required to connect the drives, scrap the machine.",
       "[FLOW] Green and orange filters recolor power routing. If a required module receives the wrong power class, scrap it.",
       "[GRID] Grids now use `<` regions. Broken glyph markers (e.g. `#`, `@`) and intentionally isolated charge cells are compliance failures. Scrap."
     ]
@@ -28,7 +28,7 @@
     "text": "DAY 3 MANDATE: ZERO TOLERANCE FOR HAZARDOUS INSTABILITY. IF IT SPARKS OR CONTAMINATES, SCRAP IT.",
     "details": [
       "[CODE] A green debugger bug accompanied by red sparks indicates hazardous contamination. Scrap immediately.",
-      "[GEAR] Deadlock clamps create true dead space. Red spark instability marks unsafe drivetrain discharge. Any live spark state is an mandatory scrap.",
+      "[GEAR] Deadlock clamps create true dead space. Red sparks mark unsafe discharge. Any live spark state is a mandatory scrap.",
       "[FLOW] Multiple power sources enabled. RED power lines and Crackling components are severely unsafe fire hazards. Scrap the unit.",
       "[GRID] Grids mix groups, `<`, `=`, AND `!=` links. ANY corrupted red clown/wildcard domino denotes an overridden system. Automatic scrap."
     ]
