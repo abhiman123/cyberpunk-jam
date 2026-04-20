@@ -337,7 +337,7 @@ export default class BootScene extends Phaser.Scene {
         g.fillStyle(0x16c7ff, 0.9); g.fillCircle(54, 28, 4); g.fillCircle(66, 28, 4);
         g.fillStyle(0xc33a4a); g.fillCircle(60, 34, 4);
         g.lineStyle(3, 0x111111, 0.92);
-        g.beginPath(); g.moveTo(52, 40); g.quadraticCurveTo(60, 48, 68, 40); g.strokePath();
+        g.beginPath(); g.moveTo(52, 40); g.lineTo(60, 46); g.lineTo(68, 40); g.strokePath();
         g.fillStyle(0xe9c15a); g.fillRect(86, 98, 12, 6);
         g.lineStyle(4, 0xe9c15a, 0.92);
         g.beginPath(); g.moveTo(96, 101); g.lineTo(104, 92); g.strokePath();
