@@ -7456,6 +7456,7 @@ export default class GameScene extends Phaser.Scene {
         this._unitMoveTween = null;
 
         const clearUnitPresentation = () => {
+            this._stopCurrentUnitJitter();
             this._unitContainer.setVisible(false);
             this._setMachineWorklightVisible(false);
             this._unitContainer.setAngle(0);
@@ -7588,8 +7589,8 @@ export default class GameScene extends Phaser.Scene {
             this._unitWorklightBulb,
         ].filter(Boolean);
 
-        lightParts.forEach((part) => part.setVisible(true));
-        this._machineBayLightContainer?.setVisible(true);
+        lightParts.forEach((part) => part.setVisible(isVisible));
+        this._machineBayLightContainer?.setVisible(isVisible);
         this._machineWorklightFlickerEvent?.remove(false);
         this._machineWorklightFlickerEvent = null;
         this.tweens.killTweensOf(lightParts);

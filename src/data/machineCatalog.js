@@ -4330,6 +4330,7 @@ function stripGridConstraintMarkers(shapeGrid) {
 function injectEqualityConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
     if (!gridOption) return gridOption;
 
+    const budget = { remaining: 8000, timedOut: false };
     const candidates = shuffleCells(
         collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
             const cell = gridOption.grid?.[row]?.[col];
@@ -4351,8 +4352,11 @@ function injectEqualityConstraint(gridOption, randomFn = Math.random, validatePl
                 grid,
             };
 
-            if (!validatePlayability || isPlayableGridOption(candidateOption)) {
+            if (!validatePlayability || isPlayableGridOption(candidateOption, budget)) {
                 return candidateOption;
+            }
+            if (budget.timedOut) {
+                return gridOption;
             }
         }
     }
@@ -4968,13 +4972,15 @@ function canPlaceCandidate(state, candidate) {
     ));
 }
 
-function searchPuzzleSolution(state, dominoIndex = 0) {
+function searchPuzzleSolution(state, dominoIndex = 0, budget = { remaining: 8000, timedOut: false }) {
+    if (budget.remaining <= 0) {
+        budget.timedOut = true;
+        return false;
+    }
+    budget.remaining -= 1;
+
     if (state.getEvaluation().solved) return true;
     if (dominoIndex >= state.dominoes.length) return false;
-
-    if (searchPuzzleSolution(state, dominoIndex + 1)) {
-        return true;
-    }
 
     const domino = state.dominoes[dominoIndex];
 
@@ -4982,11 +4988,12 @@ function searchPuzzleSolution(state, dominoIndex = 0) {
         for (let row = 0; row < state.grid.length; row += 1) {
             const rowLength = state.grid[row]?.length ?? 0;
             for (let col = 0; col < rowLength; col += 1) {
+                if (budget.timedOut) return false;
                 const candidate = createPlacementCandidate(rotationIndex, row, col);
                 if (!canPlaceCandidate(state, candidate)) continue;
 
                 state.placeDomino(domino.id, candidate);
-                if (searchPuzzleSolution(state, dominoIndex + 1)) {
+                if (searchPuzzleSolution(state, dominoIndex + 1, budget)) {
                     state.clearDominoPlacement(domino.id);
                     return true;
                 }
@@ -4996,11 +5003,18 @@ function searchPuzzleSolution(state, dominoIndex = 0) {
         }
     }
 
+    if (!budget.timedOut) {
+        if (searchPuzzleSolution(state, dominoIndex + 1, budget)) {
+            return true;
+        }
+    }
+
     return false;
 }
 
-function isPlayableGridOption(gridOption) {
+function isPlayableGridOption(gridOption, globalBudget = null) {
     if (!gridOption || gridOption.impossible) return false;
+    if (globalBudget && globalBudget.timedOut) return false;
     if (GRID_SOLVABILITY_CACHE.has(gridOption)) {
         return GRID_SOLVABILITY_CACHE.get(gridOption);
     }
@@ -5009,9 +5023,13 @@ function isPlayableGridOption(gridOption) {
         ...gridOption,
         impossible: false,
     });
-    const isSolvable = searchPuzzleSolution(state, 0);
+    
+    const budget = globalBudget || { remaining: 8000, timedOut: false };
+    const isSolvable = searchPuzzleSolution(state, 0, budget);
 
-    GRID_SOLVABILITY_CACHE.set(gridOption, isSolvable);
+    if (!budget.timedOut) {
+        GRID_SOLVABILITY_CACHE.set(gridOption, isSolvable);
+    }
     return isSolvable;
 }
 
@@ -5031,6 +5049,7 @@ function collectBoardConstraintCandidates(shapeGrid) {
 function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
     if (!gridOption) return gridOption;
 
+    const budget = { remaining: 8000, timedOut: false };
     const candidates = shuffleCells(
         collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
             const cell = gridOption.grid?.[row]?.[col];
@@ -5051,8 +5070,11 @@ function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePl
                 grid,
             };
 
-            if (!validatePlayability || isPlayableGridOption(candidateOption)) {
+            if (!validatePlayability || isPlayableGridOption(candidateOption, budget)) {
                 return candidateOption;
+            }
+            if (budget.timedOut) {
+                return gridOption;
             }
         }
     }
