@@ -26,7 +26,7 @@ export default class BriefingScene extends Phaser.Scene {
             entry.period === legacyCursor.period && entry.day === legacyCursor.day
         )) || { managerType: 'human', text: 'No directives. Complete your shift.' };
 
-        const newRules = allRules.filter((rule) => (
+        const newRules = (allRules || []).filter((rule) => (
             rule.period === directiveDay && !GameState.rulebookSeenRules.has(rule.id)
         ));
 

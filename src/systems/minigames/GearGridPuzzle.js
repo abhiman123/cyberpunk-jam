@@ -262,9 +262,9 @@ export default class GearGridPuzzle extends MinigameBase {
         this._buildLegend();
         this._drawInspectionFault();
 
-        this._escKey = this.scene.input.keyboard.addKey('ESC');
+        this._escKey = this.scene.input.keyboard?.addKey('ESC');
         this._escHandler = () => { if (this.active) this._finalizeAndClose(); };
-        this._escKey.on('down', this._escHandler);
+        this._escKey?.on('down', this._escHandler);
 
         this._syncState({ persist: true });
     }

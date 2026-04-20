@@ -44,9 +44,9 @@ export default class GameScene extends Phaser.Scene {
     create() {
         const legacyCursor = GameState.getLegacyContentCursor();
 
-        const allCases = this.cache.json.get('cases');
-        const allRules = this.cache.json.get('rules');
-        const schedule = this.cache.json.get('schedule');
+        const allCases = this.cache.json.get('cases') || [];
+        const allRules = this.cache.json.get('rules') || [];
+        const schedule = this.cache.json.get('schedule') || [];
         const schedEntry = schedule.find((entry) => entry.period === legacyCursor.period && entry.day === legacyCursor.day);
         const baseIds = schedEntry ? schedEntry.caseIds : [];
 
@@ -1050,9 +1050,11 @@ export default class GameScene extends Phaser.Scene {
 
     _handleUmbrellaDeskPartPointerMove(pointer, intent) {
         const item = intent.item;
-        const nextX = Phaser.Math.Clamp(pointer.x + intent.offsetX, 40, 1240);
-        const nextY = Phaser.Math.Clamp(pointer.y + intent.offsetY, 70, 690);
-        const liftLine = this._deskPhotoBounds?.y ?? 568;
+        const containerLocalX = pointer.x - this._deskContainer.x;
+        const containerLocalY = pointer.y - this._deskContainer.y;
+        const nextX = Phaser.Math.Clamp(containerLocalX + intent.offsetX, 40 - this._deskContainer.x, 1240 - this._deskContainer.x);
+        const nextY = Phaser.Math.Clamp(containerLocalY + intent.offsetY, 70 - this._deskContainer.y, 690 - this._deskContainer.y);
+        const liftLine = this._deskPhotoBounds?.y ?? 0;
         const liftProgress = Phaser.Math.Clamp((liftLine - nextY) / 220, 0, 1);
         const dragScale = Phaser.Math.Linear(0.94, 1.28, liftProgress);
 
@@ -1065,7 +1067,7 @@ export default class GameScene extends Phaser.Scene {
     _handleUmbrellaDeskPartPointerUp(pointer, intent) {
         const item = intent.item;
         const expectedTarget = UMBRELLA_PART_PORTS[item.partType] || null;
-        const dropTarget = this._getMiniPortDropTarget(pointer?.x ?? item.container.x, pointer?.y ?? item.container.y);
+        const dropTarget = this._getMiniPortDropTarget(pointer?.x ?? (item.container.x + this._deskContainer.x), pointer?.y ?? (item.container.y + this._deskContainer.y));
 
         item.dragging = false;
 
@@ -1085,9 +1087,11 @@ export default class GameScene extends Phaser.Scene {
 
     _handleJesterDeskTokenPointerMove(pointer, intent) {
         const item = intent.item;
-        const nextX = Phaser.Math.Clamp(pointer.x + intent.offsetX, 40, 1240);
-        const nextY = Phaser.Math.Clamp(pointer.y + intent.offsetY, 70, 690);
-        const liftLine = this._deskPhotoBounds?.y ?? 568;
+        const containerLocalX = pointer.x - this._deskContainer.x;
+        const containerLocalY = pointer.y - this._deskContainer.y;
+        const nextX = Phaser.Math.Clamp(containerLocalX + intent.offsetX, 40 - this._deskContainer.x, 1240 - this._deskContainer.x);
+        const nextY = Phaser.Math.Clamp(containerLocalY + intent.offsetY, 70 - this._deskContainer.y, 690 - this._deskContainer.y);
+        const liftLine = this._deskPhotoBounds?.y ?? 0;
         const liftProgress = Phaser.Math.Clamp((liftLine - nextY) / 220, 0, 1);
         const dragScale = Phaser.Math.Linear(0.84, 1.42, liftProgress);
 
@@ -1099,9 +1103,11 @@ export default class GameScene extends Phaser.Scene {
 
     _handlePurpleCircuitDeskTokenPointerMove(pointer, intent) {
         const item = intent.item;
-        const nextX = Phaser.Math.Clamp(pointer.x + intent.offsetX, 40, 1240);
-        const nextY = Phaser.Math.Clamp(pointer.y + intent.offsetY, 70, 690);
-        const liftLine = this._deskPhotoBounds?.y ?? 568;
+        const containerLocalX = pointer.x - this._deskContainer.x;
+        const containerLocalY = pointer.y - this._deskContainer.y;
+        const nextX = Phaser.Math.Clamp(containerLocalX + intent.offsetX, 40 - this._deskContainer.x, 1240 - this._deskContainer.x);
+        const nextY = Phaser.Math.Clamp(containerLocalY + intent.offsetY, 70 - this._deskContainer.y, 690 - this._deskContainer.y);
+        const liftLine = this._deskPhotoBounds?.y ?? 0;
         const liftProgress = Phaser.Math.Clamp((liftLine - nextY) / 220, 0, 1);
         const dragScale = Phaser.Math.Linear(0.84, 1.42, liftProgress);
 
@@ -1233,8 +1239,8 @@ export default class GameScene extends Phaser.Scene {
         const item = intent.item;
         item.dragging = false;
 
-        const worldX = pointer?.x ?? item.container.x;
-        const worldY = pointer?.y ?? item.container.y;
+        const worldX = pointer?.x ?? (item.container.x + this._deskContainer.x);
+        const worldY = pointer?.y ?? (item.container.y + this._deskContainer.y);
         const dropTarget = this._getMiniPortDropTarget(worldX, worldY);
 
         if (dropTarget === 'grid' && this._applyJesterTokenToCurrentMachine()) {
@@ -1254,8 +1260,8 @@ export default class GameScene extends Phaser.Scene {
         const item = intent.item;
         item.dragging = false;
 
-        const worldX = pointer?.x ?? item.container.x;
-        const worldY = pointer?.y ?? item.container.y;
+        const worldX = pointer?.x ?? (item.container.x + this._deskContainer.x);
+        const worldY = pointer?.y ?? (item.container.y + this._deskContainer.y);
         const dropTarget = this._getMiniPortDropTarget(worldX, worldY);
 
         if (dropTarget === 'grid' && this._applyPurpleCircuitToCurrentMachine()) {
@@ -1437,7 +1443,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._miniGridPort = { frame: gridPortFrame, hit: gridPortHit, label: gridPortLabel };
         this._miniFlowPort = { frame: flowPortFrame, hit: flowPortHit, label: flowPortLabel };
-    this._miniCodePort = { frame: codePortFrame, hit: codePortHit, label: codePortLabel };
+        this._miniCodePort = { frame: codePortFrame, hit: codePortHit, label: codePortLabel };
         this._miniGearPort = { frame: gearPortFrame, hit: gearPortHit, label: gearPortLabel };
 
         this._miniMachinePanel.add([
@@ -6666,6 +6672,9 @@ export default class GameScene extends Phaser.Scene {
     _armKonamiFinale() {
         if (this._konamiFinaleTriggered) return;
 
+        const finalCase = this._findFinalCaseDefinition();
+        if (!finalCase) return;
+
         this._konamiFinaleTriggered = true;
         finalCase._konamiOverride = true;
         this._pendingKonamiFinalCase = finalCase;
@@ -6988,7 +6997,7 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
-        const notifications = this.cache.json.get('notifications');
+        const notifications = this.cache.json.get('notifications') || [];
         const legacyCursor = GameState.getLegacyContentCursor();
         const notif = notifications.find((item) => item.period === legacyCursor.period && item.day === legacyCursor.day);
         const summaryAdjustments = GameState.consumeShiftSummaryAdjustments();

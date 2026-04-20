@@ -39,7 +39,7 @@ export default class TitleScene extends Phaser.Scene {
             .setAlpha(0)
             .setInteractive({ useHandCursor: true });
         const btnLabel = this.add.text(cx, 500, 'BEGIN SHIFT', {
-            fontFamily: 'Courier New', fontSize: '15px', color: '#dddd', letterSpacing: 3,
+            fontFamily: 'Courier New', fontSize: '15px', color: '#778899', letterSpacing: 3,
         }).setOrigin(0.5).setAlpha(0);
 
         btnBg.on('pointerover', () => {
@@ -65,7 +65,7 @@ export default class TitleScene extends Phaser.Scene {
                 this.sound.play(SOUND_ASSETS.titlePlay.key, { volume: SOUND_VOLUMES.ui });
             }
             this.cameras.main.fadeOut(400, 0, 0, 0);
-            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Game'));
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Briefing'));
         });
 
         // Show the button after 1.5s

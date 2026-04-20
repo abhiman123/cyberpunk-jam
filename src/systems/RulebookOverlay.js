@@ -59,10 +59,10 @@ export default class RulebookOverlay {
 
         this._build();
 
-        this._escKey = scene.input.keyboard.addKey('ESC', false);
-        this._bKey = scene.input.keyboard.addKey('B', false);
-        this._escKey.on('down', this._handleEscape);
-        this._bKey.on('down', this._handleToggle);
+        this._escKey = scene.input.keyboard?.addKey('ESC', false);
+        this._bKey = scene.input.keyboard?.addKey('B', false);
+        this._escKey?.on('down', this._handleEscape);
+        this._bKey?.on('down', this._handleToggle);
         this.scene.input.on('wheel', this._handleWheel);
 
         this.hide(true);
