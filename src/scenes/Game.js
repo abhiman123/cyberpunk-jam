@@ -377,26 +377,26 @@ export default class GameScene extends Phaser.Scene {
         this._updateDeskDateText();
 
         this._createDeskPhoto('manager_human', 'manager_human', {
-            x: 182,
-            y: 30,
+            x: 100,
+            y: 75,
             angle: -18,
-            portraitScale: 0.42,
+            portraitScale: 0.1,
             width: 66,
             height: 52,
         });
         this._createDeskPhoto('manager_robot', 'manager_robot', {
-            x: 216,
-            y: 0,
+            x: 190,
+            y: 85,
             angle: -6,
-            portraitScale: 0.42,
+            portraitScale: 0.1,
             width: 66,
             height: 52,
         });
         this._createDeskPhoto('family_photo', 'family_photo', {
-            x: 258,
-            y: 30,
+            x: 270,
+            y: 70,
             angle: 4,
-            portraitScale: 1,
+            portraitScale: 0.2,
             width: 62,
             height: 48,
             tint: 0xffffff,
