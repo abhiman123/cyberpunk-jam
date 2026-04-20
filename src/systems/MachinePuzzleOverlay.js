@@ -460,16 +460,17 @@ export default class MachinePuzzleOverlay {
         const { firstGlow, secondGlow, globalGlow } = this._getDominoGlowState(dominoView);
         const emphasisActive = globalGlow || dominoView.isFloating || dominoView.isHovered;
         const isClownDomino = dominoView.dominoState.variant === 'clown';
-        const hoverFillColor = isClownDomino ? 0xff9f9a : 0xd8ff95;
-        const hoverStrokeColor = isClownDomino ? 0xffe0dc : 0xf2ffd0;
-        const baseFillColor = isClownDomino ? 0xb42222 : 0x2ca55e;
+        const isPurpleDomino = dominoView.dominoState.variant === 'purple';
+        const hoverFillColor = isClownDomino ? 0xff9f9a : (isPurpleDomino ? 0xd49cff : 0xd8ff95);
+        const hoverStrokeColor = isClownDomino ? 0xffe0dc : (isPurpleDomino ? 0xf2dcff : 0xf2ffd0);
+        const baseFillColor = isClownDomino ? 0xb42222 : (isPurpleDomino ? 0x7d37d6 : 0x2ca55e);
         const baseStrokeColor = emphasisActive
-            ? (isClownDomino ? 0xffece8 : 0xf5ffd3)
-            : (isClownDomino ? 0xffc1b8 : 0xd7ffde);
-        const glossColor = isClownDomino ? 0xffd1c9 : 0xffffff;
-        const dividerColor = isClownDomino ? 0x6f1111 : 0x1d5f33;
-        const pipGlowColor = isClownDomino ? 0xffd7d2 : 0xfff2a3;
-        const pipColor = isClownDomino ? 0xfff0eb : 0xf4d850;
+            ? (isClownDomino ? 0xffece8 : (isPurpleDomino ? 0xf4e7ff : 0xf5ffd3))
+            : (isClownDomino ? 0xffc1b8 : (isPurpleDomino ? 0xe0c8ff : 0xd7ffde));
+        const glossColor = isClownDomino ? 0xffd1c9 : (isPurpleDomino ? 0xf6ebff : 0xffffff);
+        const dividerColor = isClownDomino ? 0x6f1111 : (isPurpleDomino ? 0x54258f : 0x1d5f33);
+        const pipGlowColor = isClownDomino ? 0xffd7d2 : (isPurpleDomino ? 0xe8c8ff : 0xfff2a3);
+        const pipColor = isClownDomino ? 0xfff0eb : (isPurpleDomino ? 0xf2dcff : 0xf4d850);
 
         dominoView.graphics.clear();
         dominoView.hoverGlow.setFillStyle(hoverFillColor, globalGlow ? 0.18 : dominoView.isFloating ? 0.16 : dominoView.isHovered ? 0.12 : 0);
@@ -504,6 +505,8 @@ export default class MachinePuzzleOverlay {
             dominoView.graphics.lineTo(7, 8);
             dominoView.graphics.strokePath();
             dominoView.centerLabel.setVisible(true).setText('HA');
+        } else if (isPurpleDomino) {
+            dominoView.centerLabel.setVisible(true).setText('PWR');
         } else {
             dominoView.centerLabel.setVisible(false).setText('');
         }

@@ -5,37 +5,51 @@ import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
 import { getMusicVolume } from '../state/gameSettings.js';
 
-const PERIOD_BG     = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
+const PERIOD_BG = { 1: 0x1a1510, 2: 0x101418, 3: 0x080d14 };
 const PERIOD_ACCENT = { 1: 0x886644, 2: 0x446688, 3: 0x2244aa };
 
 export default class BriefingScene extends Phaser.Scene {
-    constructor() { super('Briefing'); }
+    constructor() {
+        super('Briefing');
+    }
 
     create() {
-        const { period, day } = GameState;
+        const currentDay = GameState.day;
+        const directiveDay = GameState.getDirectiveDay();
+        const legacyCursor = GameState.getLegacyContentCursor();
         const allBriefings = this.cache.json.get('briefings');
-        const allRules     = this.cache.json.get('rules');
+        const allRules = this.cache.json.get('rules');
 
         applyCyberpunkLook(this);
 
-        const briefing = (allBriefings || []).find(b => b.period === period && b.day === day)
-            || { managerType: 'human', text: 'No directives. Complete your shift.' };
+        const briefing = (allBriefings || []).find((entry) => (
+            entry.period === legacyCursor.period && entry.day === legacyCursor.day
+        )) || { managerType: 'human', text: 'No directives. Complete your shift.' };
 
-        const newRules = allRules.filter(r => r.period === period && !GameState.rulebookSeenRules.has(r.id));
+        const newRules = allRules.filter((rule) => (
+            rule.period === directiveDay && !GameState.rulebookSeenRules.has(rule.id)
+        ));
 
-        const accent = PERIOD_ACCENT[period] || 0x333333;
-        const W = 1280, H = 720, cx = W / 2;
+        const accent = PERIOD_ACCENT[directiveDay] || 0x333333;
+        const W = 1280;
+        const H = 720;
+        const cx = W / 2;
 
-        this.add.rectangle(cx, H / 2, W, H, PERIOD_BG[period] || 0x101010);
-
+        this.add.rectangle(cx, H / 2, W, H, PERIOD_BG[directiveDay] || 0x101010);
         this.add.rectangle(cx, 0, W, 2, accent).setOrigin(0.5, 0);
 
-        this.add.text(cx, 42, `PERIOD ${period}  ·  DAY ${day} OF 2`, {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa', letterSpacing: 5,
+        this.add.text(cx, 42, `DAY ${currentDay} OF ${GameState.totalDays}`, {
+            fontFamily: 'Courier New',
+            fontSize: '10px',
+            color: '#aaaaaa',
+            letterSpacing: 5,
         }).setOrigin(0.5);
 
         this.add.text(cx, 68, 'MANAGER BRIEFING', {
-            fontFamily: 'Courier New', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
+            fontFamily: 'Courier New',
+            fontSize: '11px',
+            color: '#dddddd',
+            letterSpacing: 6,
         }).setOrigin(0.5);
 
         this._rule(96, accent, 0.12);
@@ -45,35 +59,48 @@ export default class BriefingScene extends Phaser.Scene {
 
         const managerLabel = briefing.managerType === 'robot' ? 'UNIT_MGR_492' : 'MANAGER';
         this.add.text(160, 460, managerLabel, {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#bbbbbb', letterSpacing: 3,
+            fontFamily: 'Courier New',
+            fontSize: '10px',
+            color: '#bbbbbb',
+            letterSpacing: 3,
         }).setOrigin(0.5);
 
-        const boxX = 320, boxY = 130, boxW = 860, boxH = 260;
-        this.add.rectangle(boxX + boxW / 2, boxY + boxH / 2, boxW, boxH, 0x0c0c0c)
+        const boxX = 320;
+        const boxY = 130;
+        const boxW = 860;
+        const boxH = 260;
+        this.add.rectangle(boxX + (boxW / 2), boxY + (boxH / 2), boxW, boxH, 0x0c0c0c)
             .setStrokeStyle(1, accent, 0.25);
 
         this._typewriterText = this.add.text(boxX + 28, boxY + 28, '', {
-            fontFamily: 'Courier New', fontSize: '15px', color: '#aaaaaa',
-            wordWrap: { width: boxW - 56 }, lineSpacing: 8,
+            fontFamily: 'Courier New',
+            fontSize: '15px',
+            color: '#aaaaaa',
+            wordWrap: { width: boxW - 56 },
+            lineSpacing: 8,
         });
 
         if (newRules.length > 0) {
             this._rule(420, accent, 0.1);
             this.add.text(320, 440, 'NEW DIRECTIVES', {
-                fontFamily: 'Courier New', fontSize: '10px', color: '#dddddd', letterSpacing: 5,
+                fontFamily: 'Courier New',
+                fontSize: '10px',
+                color: '#dddddd',
+                letterSpacing: 5,
             });
-            let ry = 466;
-            newRules.forEach(r => {
-                const t = this.add.text(320, ry, `[${r.id}]  ${r.text}`, {
-                    fontFamily: 'Courier New', fontSize: '13px', color: '#ccaa33',
+            let ruleY = 466;
+            newRules.forEach((rule) => {
+                const ruleText = this.add.text(320, ruleY, `[${rule.id}]  ${rule.text}`, {
+                    fontFamily: 'Courier New',
+                    fontSize: '13px',
+                    color: '#ccaa33',
                     wordWrap: { width: 860 },
                 });
-                ry += t.height + 10;
-                GameState.rulebookSeenRules.add(r.id);
+                ruleY += ruleText.height + 10;
+                GameState.rulebookSeenRules.add(rule.id);
             });
         }
 
-        // Music
         this._music = null;
         const musicVolume = getMusicVolume();
         if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
@@ -82,8 +109,7 @@ export default class BriefingScene extends Phaser.Scene {
             this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music * musicVolume, duration: 800 });
         }
 
-        // ACKNOWLEDGED button
-        let textDone    = false;
+        let textDone = false;
         let transitioning = false;
 
         const btnBg = this.add.rectangle(cx, 648, 200, 38, 0x0c0c0c)
@@ -92,7 +118,10 @@ export default class BriefingScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true });
 
         const btnLabel = this.add.text(cx, 648, 'ACKNOWLEDGED', {
-            fontFamily: 'Courier New', fontSize: '12px', color: '#666666', letterSpacing: 4,
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#666666',
+            letterSpacing: 4,
         }).setOrigin(0.5);
 
         const markTextDone = () => {
@@ -106,8 +135,13 @@ export default class BriefingScene extends Phaser.Scene {
             transitioning = true;
             if (this._music) {
                 this.tweens.add({
-                    targets: this._music, volume: 0, duration: 400,
-                    onComplete: () => { this._music.stop(); this.scene.start('Game'); },
+                    targets: this._music,
+                    volume: 0,
+                    duration: 400,
+                    onComplete: () => {
+                        this._music.stop();
+                        this.scene.start('Game');
+                    },
                 });
             } else {
                 this.cameras.main.fade(300, 0, 0, 0);
@@ -115,8 +149,18 @@ export default class BriefingScene extends Phaser.Scene {
             }
         };
 
-        btnBg.on('pointerover', () => { if (textDone) { btnBg.setStrokeStyle(1, accent); btnLabel.setColor('#ffffff'); } });
-        btnBg.on('pointerout',  () => { if (textDone) { btnBg.setStrokeStyle(1, 0x888888); btnLabel.setColor('#dddddd'); } });
+        btnBg.on('pointerover', () => {
+            if (textDone) {
+                btnBg.setStrokeStyle(1, accent);
+                btnLabel.setColor('#ffffff');
+            }
+        });
+        btnBg.on('pointerout', () => {
+            if (textDone) {
+                btnBg.setStrokeStyle(1, 0x888888);
+                btnLabel.setColor('#dddddd');
+            }
+        });
         btnBg.on('pointerdown', () => {
             if (transitioning) return;
             if (!textDone) {
@@ -131,10 +175,11 @@ export default class BriefingScene extends Phaser.Scene {
         const fullText = briefing.text;
         const typeEvent = Animations.typewriter(this, this._typewriterText, fullText, 38, markTextDone);
 
-        // Scanlines
         const scan = this.add.graphics();
         scan.fillStyle(0x000000, 0.3);
-        for (let y = 0; y < H; y += 4) scan.fillRect(0, y, W, 2);
+        for (let y = 0; y < H; y += 4) {
+            scan.fillRect(0, y, W, 2);
+        }
 
         this.cameras.main.fadeIn(400, 0, 0, 0);
     }

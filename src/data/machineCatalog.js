@@ -76,6 +76,11 @@ const FLOW_TARGET_METADATA = Object.freeze({
     LOGIC: { displayName: 'Logic Spine', brokenLabel: 'Logic spine desynced.', fixedLabel: 'Logic spine stabilized.' },
     BAD_JOKES: { displayName: 'Bad Jokes', brokenLabel: 'Bad joke loop is flat.', fixedLabel: 'Bad joke loop is online.' },
     BRIEF: { displayName: 'Brief Output', brokenLabel: 'Brief output is missing.', fixedLabel: 'Brief output is concise again.' },
+    PROGRAMMING: { displayName: 'Programming Queue', brokenLabel: 'Programming queue stalled.', fixedLabel: 'Programming queue is moving again.' },
+    QUALITY_CONTROL: { displayName: 'Quality Control', brokenLabel: 'Quality control checks are offline.', fixedLabel: 'Quality control checks are stable.' },
+    WIRING: { displayName: 'Wiring Bench', brokenLabel: 'Wiring bench is disconnected.', fixedLabel: 'Wiring bench is online.' },
+    CIRCUIT_BREAKING: { displayName: 'Circuit Breaking', brokenLabel: 'Circuit breaker rig is locked up.', fixedLabel: 'Circuit breaker rig is reset.' },
+    GEARING: { displayName: 'Gearing Desk', brokenLabel: 'Gearing desk is jammed.', fixedLabel: 'Gearing desk is responsive.' },
 });
 
 function cloneFlowTiles(tiles) {
@@ -1282,6 +1287,31 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
             ],
         }),
     ]),
+    workforce_quality_control_supervisor: Object.freeze([
+        createFlowPuzzleOption({
+            sourceRow: 2,
+            outputs: {
+                0: 'PROGRAMMING',
+                1: 'QUALITY_CONTROL',
+                2: 'WIRING',
+                3: 'CIRCUIT_BREAKING',
+                4: 'GEARING',
+            },
+            forbiddenCount: 0,
+            previewTitle: 'WORK MIRROR',
+        }),
+        createFlowPuzzleOption({
+            sourceRow: 1,
+            outputs: {
+                0: 'PROGRAMMING',
+                2: 'QUALITY_CONTROL',
+                3: 'WIRING',
+                4: 'GEARING',
+            },
+            forbiddenCount: 1,
+            previewTitle: 'STATION LOOP',
+        }),
+    ]),
     future_lounge_chair: Object.freeze([
         createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'RECLINE', 2: 'MEMORY', 4: 'HEAT' }, forbiddenCount: 0, previewTitle: 'COMFORT BUS' }),
         createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'LUMBAR', 3: 'VOICE', 4: 'POWER' }, forbiddenCount: 1, previewTitle: 'REST GRID' }),
@@ -1447,6 +1477,41 @@ const DEBRIEF_GEAR_OPTIONS = Object.freeze([
     }),
 ]);
 
+const SUPERVISOR_GEAR_OPTIONS = Object.freeze([
+    createGearPuzzleOption({
+        previewTitle: 'HAND ARRAY',
+        description: 'Line up the hand-drive gears so the supervisor can type, drag, and sort without shaking apart.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.HORIZONTAL, 1, 2),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.VERTICAL, 2, 3),
+        ],
+    }),
+    createGearPuzzleOption({
+        previewTitle: 'DESK MOTOR',
+        description: 'Tune the wrist train for typing speed, clipboard drags, and all the little station motions.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.FULL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.HORIZONTAL, 1, 2, { movable: false }),
+            createGearPiece(GEAR_CODES.CURVE_SW, 2, 4),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1),
+        ],
+    }),
+]);
+
 const MACHINE_GEAR_CATALOG = Object.freeze({
     assembler_alpha: SHARED_GEAR_OPTIONS,
     audit_drone: SHARED_GEAR_OPTIONS,
@@ -1457,6 +1522,7 @@ const MACHINE_GEAR_CATALOG = Object.freeze({
     jester_in_the_box: JESTER_GEAR_OPTIONS,
     rebellious_umbrella: UMBRELLA_GEAR_OPTIONS,
     debrief_machine: DEBRIEF_GEAR_OPTIONS,
+    workforce_quality_control_supervisor: SUPERVISOR_GEAR_OPTIONS,
     future_lounge_chair: SHARED_GEAR_OPTIONS,
 });
 
@@ -1669,6 +1735,36 @@ const MACHINE_DEBUG_CATALOG = Object.freeze({
             ],
         }),
     ]),
+    workforce_quality_control_supervisor: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'run station rehearsal',
+            repairPrompt: 'patch labor.mirror.align',
+            expectedOutput: '"..." [It worked.]',
+            actualOutputs: [
+                '"..." [It almost worked.]',
+                '"..." [It worked?]',
+                '"..." [Manual step missing.]',
+                '"..." [Replacement path ready.]',
+                '"..." [It worked.] [Again.]',
+            ],
+            previewTitle: 'QC MIRROR',
+            description: 'Run the station rehearsal. If the output drifts, patch the replacement script before it clears inspection.',
+        }),
+        createDebugPuzzleOption({
+            prompt: 'test replacement handshake',
+            repairPrompt: 'patch supervisor.hands.sync',
+            expectedOutput: '"..." [It worked.]',
+            actualOutputs: [
+                '"..." [It worked. probably.]',
+                '"..." [Clerk posture unstable.]',
+                '"..." [Manual override logged.]',
+                '"..." [It worked.] [For now.]',
+                '"..." [Operator no longer required.]',
+            ],
+            previewTitle: 'HANDSHAKE',
+            description: 'Run the replacement handshake and make the result land exactly clean.',
+        }),
+    ]),
     future_lounge_chair: Object.freeze([
         createDebugPuzzleOption({
             prompt: 'test recline motor',
@@ -1787,11 +1883,28 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         gearPreview: { x: 132, y: 64, width: 60, height: 34, label: 'GEAR' },
         codePreview: { x: 54, y: 26, width: 86, height: 22, label: 'CODE' },
     }),
+    circuit_dealer: createMiniDisplay({
+        artX: 108,
+        artY: 132,
+        artScale: 1.01,
+        artAngle: 3,
+        gridPreview: { x: 74, y: 60, width: 72, height: 44, label: 'GRID' },
+    }),
     debrief_machine: createMiniDisplay({
         artX: 108,
         artY: 136,
         artScale: 1.01,
         artAngle: -4,
+        gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
+        flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
+        gearPreview: { x: 48, y: 146, width: 60, height: 32, label: 'GEAR' },
+        codePreview: { x: 54, y: 26, width: 86, height: 22, label: 'CODE' },
+    }),
+    workforce_quality_control_supervisor: createMiniDisplay({
+        artX: 106,
+        artY: 132,
+        artScale: 1.0,
+        artAngle: -2,
         gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
         flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
         gearPreview: { x: 48, y: 146, width: 60, height: 32, label: 'GEAR' },
@@ -2541,65 +2654,6 @@ export const MACHINE_CATALOG = Object.freeze([
             }),
             createGridOption({
                 grid: [
-        createMachineDefinition({
-            id: 'debrief_machine',
-            name: 'Debrief Machine',
-            spriteFileName: null,
-            availablePeriods: [2],
-            guaranteedTimeframe: { startHour: 10, endHour: 12 },
-            possibleGrids: [
-                createGridOption({
-                    grid: [
-                        [1, 1, 1, 1, 1],
-                        [1, 2, 3, 0, 1],
-                        [1, 0, 4, 0, 1],
-                        [1, 0, 5, 2, 1],
-                        [1, 1, 1, 1, 1],
-                    ],
-                    dominos: [
-                        createDomino(6, 6),
-                        createDomino(1, 4),
-                        createDomino(2, 2),
-                    ],
-                    impossible: false,
-                }),
-                createGridOption({
-                    grid: [
-                        [1, 1, 1, 1, 1, 1],
-                        [1, 0, 2, 0, linkCell(3, 4), 1],
-                        [1, 4, 0, 5, 0, 1],
-                        [1, 0, 3, 0, linkCell(1, 4), 1],
-                        [1, 0, 0, 2, 0, 1],
-                        [1, 1, 1, 1, 1, 1],
-                    ],
-                    dominos: [
-                        createDomino(2, 4),
-                        createDomino(5, 1),
-                        createDomino(3, 2),
-                        createDomino(4, 0),
-                    ],
-                    impossible: false,
-                }),
-            ],
-            openingDialogues: [
-                'Heyyy--welcome back. Another day, another penny, am i right?',
-                'I am the part of the manager that never stops talking, somehow separated from the rest of him.',
-                'Fix the outputs and I can get right back to sounding confident about nothing.',
-            ],
-            questionDialogues: [
-                {
-                    prompt: 'Should i keep the bad jokes in the recap, or are we pretending to be professional today?',
-                    yesDialogue: 'Perfect. A weak joke makes the brief feel human.',
-                    noDialogue: 'Brutal. Fine. I will keep the cringe internal.',
-                },
-                {
-                    prompt: 'Does the handsome voice box stay, or is this a numbers-only operation now?',
-                    yesDialogue: 'Excellent. Presence is half of management.',
-                    noDialogue: 'Then we are down to pure paperwork. Tragic.',
-                },
-            ],
-            communicationChance: 1,
-        }),
                     [1, 1, 1, 1, 1, 1],
                     [1, 0, 2, 3, 0, 1],
                     [1, 0, 0, 0, 0, 1],
@@ -2639,6 +2693,176 @@ export const MACHINE_CATALOG = Object.freeze([
             'You fix the shaft, I keep the shade moving. Easy arrangement.',
         ],
         questionDialogues: [],
+        communicationChance: 1,
+    }),
+    createMachineDefinition({
+        id: 'circuit_dealer',
+        name: 'Circuit Dealer',
+        spriteFileName: null,
+        availableDays: [2],
+        availablePeriods: [2],
+        guaranteedTimeframe: { startHour: 8, endHour: 11 },
+        specialBehavior: 'circuitDealer',
+        availabilityCheck: ({ umbrellaQuest, specialItems }) => {
+            if (umbrellaQuest?.failed) return false;
+            if (umbrellaQuest?.stage !== 'special-circuit') return false;
+            if (umbrellaQuest?.dealerResolved) return false;
+            return !Array.isArray(specialItems) || !specialItems.some((item) => item?.id === 'purple_circuit');
+        },
+        possibleCircuits: [],
+        possibleGears: [],
+        possibleDebugs: [],
+        possibleGrids: [
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 0, 4, 5, 1],
+                    [1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 2),
+                    createDomino(3, 4),
+                    createDomino(0, 0),
+                ],
+                impossible: false,
+            }),
+        ],
+        openingDialogues: [
+            'look i got this circuit for u. u want it? itll be 10 dollars.',
+            'special stock today. purple. hits like a bad idea.',
+            'i got something that fits anywhere. ten bucks and its yours.',
+        ],
+        questionDialogues: [
+            {
+                prompt: 'u buying or what?',
+                yesDialogue: 'deal.',
+                noDialogue: 'your loss.',
+            },
+        ],
+        communicationChance: 1,
+    }),
+    createMachineDefinition({
+        id: 'debrief_machine',
+        name: 'Debrief Machine',
+        spriteFileName: null,
+        availableDays: [2],
+        availablePeriods: [2],
+        guaranteedTimeframe: { startHour: 10, endHour: 12 },
+        specialBehavior: 'debriefMachine',
+        possibleGrids: [
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1],
+                    [1, 2, 3, 0, 1],
+                    [1, 0, 4, 0, 1],
+                    [1, 0, 5, 2, 1],
+                    [1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(6, 6),
+                    createDomino(1, 4),
+                    createDomino(2, 2),
+                ],
+                impossible: false,
+            }),
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 0, linkCell(3, 4), 1],
+                    [1, 4, 0, 5, 0, 1],
+                    [1, 0, 3, 0, linkCell(1, 4), 1],
+                    [1, 0, 0, 2, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(2, 4),
+                    createDomino(5, 1),
+                    createDomino(3, 2),
+                    createDomino(4, 0),
+                ],
+                impossible: false,
+            }),
+        ],
+        openingDialogues: [
+            'Heyyy--welcome back. Another day, another penny, am i right?',
+            'I am the part of the manager that never stops talking, somehow separated from the rest of him.',
+            'Fix the outputs and I can get right back to sounding confident about nothing.',
+        ],
+        questionDialogues: [
+            {
+                prompt: 'Should i keep the bad jokes in the recap, or are we pretending to be professional today?',
+                yesDialogue: 'Perfect. A weak joke makes the brief feel human.',
+                noDialogue: 'Brutal. Fine. I will keep the cringe internal.',
+            },
+            {
+                prompt: 'Does the handsome voice box stay, or is this a numbers-only operation now?',
+                yesDialogue: 'Excellent. Presence is half of management.',
+                noDialogue: 'Then we are down to pure paperwork. Tragic.',
+            },
+        ],
+        communicationChance: 1,
+    }),
+    createMachineDefinition({
+        id: 'workforce_quality_control_supervisor',
+        name: 'Workforce Quality Control Supervisor Unit',
+        spriteFileName: null,
+        availableDays: [3],
+        availablePeriods: [3],
+        guaranteedTimeframe: { startHour: 9, endHour: 12 },
+        trackOutcome: true,
+        possibleGrids: [
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1],
+                    [1, 0, 2, 3, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 0, 4, 5, 1],
+                    [1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(1, 2),
+                    createDomino(3, 4),
+                    createDomino(0, 0),
+                ],
+                impossible: false,
+            }),
+            createGridOption({
+                grid: [
+                    [1, 1, 1, 1, 1, 1],
+                    [1, 0, 2, 0, 0, 1],
+                    [1, linkCell(3, 4), 0, 3, 0, 1],
+                    [1, 4, 0, 0, linkCell(2, 1), 1],
+                    [1, 0, 5, 0, 0, 1],
+                    [1, 1, 1, 1, 1, 1],
+                ],
+                dominos: [
+                    createDomino(3, 4),
+                    createDomino(1, 5),
+                    createDomino(2, 0),
+                    createDomino(2, 3),
+                ],
+                impossible: false,
+            }),
+        ],
+        openingDialogues: [
+            'Workforce quality control supervisor unit online. Simulating programming, routing, lifting, and filing motions.',
+            'My hands are calibrating to your station. Typing speed, drag strength, approval posture.',
+            'Once the rehearsal passes, I can cover programming, quality control, wiring, circuit breaking, and gearing without rest.',
+        ],
+        questionDialogues: [
+            {
+                prompt: 'If I can do every station task at once, do you still need the human?',
+                yesDialogue: 'Efficiency overlap noted. Replacement remains likely.',
+                noDialogue: 'Temporary redundancy logged. Replacement remains likely.',
+            },
+            {
+                prompt: 'Should I keep practicing your hand motions?',
+                yesDialogue: 'Good. The typing rhythm is almost identical now.',
+                noDialogue: 'Understood. I will learn it on the next pass.',
+            },
+        ],
         communicationChance: 1,
     }),
     createMachineDefinition({
@@ -3448,6 +3672,17 @@ export class MachinePuzzleState {
         return this.dominoes.find((domino) => domino.id === dominoId) || null;
     }
 
+    getPlacedDominoAt(row, col) {
+        return this.dominoes.find((domino) => (
+            Array.isArray(domino.placedCells)
+            && domino.placedCells.some((cell) => cell.row === row && cell.col === col)
+        )) || null;
+    }
+
+    isPurpleCell(row, col) {
+        return this.getPlacedDominoAt(row, col)?.variant === 'purple';
+    }
+
     getBaseCellValue(row, col) {
         return this.initialGrid[row]?.[col] ?? CELL_EMPTY;
     }
@@ -3499,7 +3734,8 @@ export class MachinePuzzleState {
             const placedCounts = group.cells.map((cell) => this.getPlacedPipCount(cell.row, cell.col));
             const allPlaced = placedCounts.every((value) => Number.isInteger(value));
             const sum = placedCounts.reduce((total, value) => total + (Number.isInteger(value) ? value : 0), 0);
-            const matched = allPlaced && (group.mode === 'lt' ? sum < group.threshold : sum === group.threshold);
+            const hasPurpleCell = group.cells.some((cell) => this.isPurpleCell(cell.row, cell.col));
+            const matched = allPlaced && (hasPurpleCell || (group.mode === 'lt' ? sum < group.threshold : sum === group.threshold));
 
             return {
                 key: group.key,
@@ -3565,6 +3801,7 @@ export class MachinePuzzleState {
     isChargeMatched(row, col) {
         const chargeLevel = this.getChargeLevel(row, col);
         if (chargeLevel <= 0) return false;
+        if (this.isPurpleCell(row, col)) return this.isPlacedAt(row, col);
         return decodePipCount(this.getCurrentCellValue(row, col)) === chargeLevel;
     }
 
@@ -3575,6 +3812,7 @@ export class MachinePuzzleState {
         const currentValue = this.getCurrentCellValue(row, col);
         const targetValue = this.getCurrentCellValue(target.row, target.col);
         if (!isPlacedCode(currentValue) || !isPlacedCode(targetValue)) return false;
+        if (this.isPurpleCell(row, col) || this.isPurpleCell(target.row, target.col)) return true;
 
         return decodePipCount(currentValue) === decodePipCount(targetValue);
     }
@@ -3586,6 +3824,7 @@ export class MachinePuzzleState {
         const currentValue = this.getCurrentCellValue(row, col);
         const targetValue = this.getCurrentCellValue(target.row, target.col);
         if (!isPlacedCode(currentValue) || !isPlacedCode(targetValue)) return false;
+        if (this.isPurpleCell(row, col) || this.isPurpleCell(target.row, target.col)) return true;
 
         return decodePipCount(currentValue) !== decodePipCount(targetValue);
     }
@@ -3721,7 +3960,7 @@ export class MachinePuzzleState {
         });
 
         this.dominoes.forEach((domino) => {
-            domino.isFullyGlowing = evaluation.solved;
+            domino.isFullyGlowing = evaluation.solved || (domino.variant === 'purple' && domino.placedCells.length > 0);
             domino.placedCells = domino.placedCells.map((cell) => ({
                 ...cell,
                 matchesCharge: this.isChargeMatched(cell.row, cell.col),

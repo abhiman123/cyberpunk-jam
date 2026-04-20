@@ -56,6 +56,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._puzzle = null;
         this._machineName = 'UNKNOWN UNIT';
         this._specialCommand = null;
+        this._specialCommandMode = false;
+        this._specialCommandButtonBg = null;
+        this._specialCommandButtonText = null;
         this._charWidth = 14;
         this._commandTextStartX = -420;
         this._commandTextY = -100;
@@ -206,6 +209,25 @@ export default class DebugConsolePuzzle extends MinigameBase {
             color: '#9affbd',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
+        this._specialCommandButtonBg = this.scene.add.rectangle(-146, -52, 176, 30, 0x24323e, 0.96)
+            .setStrokeStyle(1, 0x7ca2b3, 0.82)
+            .setInteractive({ useHandCursor: true });
+        this._specialCommandButtonText = this.scene.add.text(-146, -52, 'STEAL DATA', {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#d6f6ff',
+            letterSpacing: 1,
+        }).setOrigin(0.5);
+        this._specialCommandButtonBg.on('pointerover', () => {
+            this._specialCommandButtonBg?.setFillStyle(0x2f4554, 0.98);
+        });
+        this._specialCommandButtonBg.on('pointerout', () => {
+            this._specialCommandButtonBg?.setFillStyle(0x24323e, 0.96);
+        });
+        this._specialCommandButtonBg.on('pointerdown', (_pointer, _localX, _localY, event) => {
+            event?.stopPropagation?.();
+            this._toggleSpecialCommandMode();
+        });
 
         this._commandZone = this.scene.add.rectangle(-180, -96, this._commandZoneWidth, this._commandZoneHeight, 0x0d1d26, 0.98)
             .setStrokeStyle(2, 0x8cd0df, 0.72)
@@ -314,6 +336,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
             commandLabel,
             this._modeText,
             this._statusText,
+            this._specialCommandButtonBg,
+            this._specialCommandButtonText,
             this._commandZone,
             this._caret,
             actualLabel,
@@ -393,6 +417,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._closeButtonText = null;
         this._statusText = null;
         this._modeText = null;
+        this._specialCommandButtonBg = null;
+        this._specialCommandButtonText = null;
         this._instructionText = null;
         this._expectedOutputText = null;
         this._actualOutputText = null;
@@ -400,6 +426,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._messageText = null;
         this._caret = null;
         this._commandZone = null;
+        this._specialCommandMode = false;
     }
 
     _attachHiddenInput(initialValue) {
@@ -663,7 +690,35 @@ export default class DebugConsolePuzzle extends MinigameBase {
         return clampIndex(caretIndex, 0, Math.max(0, command.length - 1));
     }
 
+    _canUseSpecialCommand() {
+        return Boolean(
+            this._specialCommand?.command
+            && !this.evidence.completed
+            && this.evidence.phase !== 'repair'
+            && this.evidence.phase !== 'scrap'
+        );
+    }
+
+    _toggleSpecialCommandMode(forceValue = null) {
+        if (!this._specialCommand?.command) return;
+
+        const nextMode = typeof forceValue === 'boolean' ? forceValue : !this._specialCommandMode;
+        this._specialCommandMode = this._canUseSpecialCommand() ? nextMode : false;
+
+        if (this._hiddenInput) {
+            this._hiddenInput.value = '';
+            this._setSelectionRange(0, 0);
+        }
+        this.emitEvidence({ inputValue: '' });
+        this._syncOutputPanels();
+        this._syncCommandVisuals();
+        this._focusHiddenInput();
+    }
+
     _getActiveCommand() {
+        if (this._specialCommandMode && this._canUseSpecialCommand()) {
+            return String(this._specialCommand?.command || '');
+        }
         if (this.evidence.phase === 'repair') return String(this.evidence.repairPrompt || '');
         return String(this.evidence.prompt || '');
     }
@@ -750,7 +805,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._panel.bringToTop(this._caret);
 
         this._modeText?.setText(
-            this.evidence.phase === 'repair'
+            this._specialCommandMode && this._canUseSpecialCommand()
+                ? 'STEAL MODE'
+                : this.evidence.phase === 'repair'
                 ? 'REPAIR MODE'
                 : (this.evidence.phase === 'scrap'
                     ? 'SCRAP SIGNAL'
@@ -762,11 +819,30 @@ export default class DebugConsolePuzzle extends MinigameBase {
     _syncOutputPanels() {
         if (!this._statusText) return;
 
+        if (!this._canUseSpecialCommand()) {
+            this._specialCommandMode = false;
+        }
+
         const hasTypedInput = this._hasStartedTyping();
         const showActualOutput = this.evidence.completed || this.evidence.phase === 'repair' || this.evidence.phase === 'scrap' || hasTypedInput;
+        const outputMismatch = Boolean(
+            showActualOutput
+            && this.evidence.actualOutput
+            && this.evidence.actualOutput !== this.evidence.expectedOutput
+            && !this.evidence.completed
+            && this.evidence.phase !== 'scrap'
+        );
 
         this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
         this._actualOutputText?.setText(showActualOutput ? (this.evidence.actualOutput || '') : '');
+        this._expectedOutputText?.setColor('#b7ffca');
+        this._actualOutputText?.setColor(
+            this.evidence.completed
+                ? '#d9ffe4'
+                : (this.evidence.phase === 'scrap'
+                    ? '#ffb39b'
+                    : (outputMismatch ? '#ff7b7b' : '#ffd6b0'))
+        );
 
         let statusColor = '#ffd98e';
         let detailText = 'Type the highlighted command exactly. Correct letters stay cool, wrong letters go red, and overflow letters go dark red. Bugs try to ruin letters you already locked in.';
@@ -800,10 +876,17 @@ export default class DebugConsolePuzzle extends MinigameBase {
             message = ['Actual output drifted away from the expected result.', `Unexpected output: ${this.evidence.actualOutput}`].join('\n');
         } else {
             statusColor = '#8bcde0';
-            detailText = ['Prompt:', this.evidence.prompt, '', 'Expected output:', this.evidence.expectedOutput].join('\n');
-            message = hasTypedInput
-                ? 'Keep typing. The command runs the moment the full line matches.'
-                : 'The live output stays blank until you begin typing.';
+            detailText = this._specialCommandMode && this._canUseSpecialCommand()
+                ? ['Special command armed.', 'Type the theft command exactly.', '', 'Command:', this._specialCommand.command].join('\n')
+                : ['Prompt:', this.evidence.prompt, '', 'Expected output:', this.evidence.expectedOutput].join('\n');
+            message = this._specialCommandMode && this._canUseSpecialCommand()
+                ? 'Type steal data exactly to yank the file instead of running the normal test.'
+                : (hasTypedInput
+                    ? 'Keep typing. The command runs the moment the full line matches.'
+                    : 'The live output stays blank until you begin typing.');
+            if (!this._specialCommandMode && this._canUseSpecialCommand()) {
+                message += '\nPress STEAL DATA if you want to swap the command line.';
+            }
         }
 
         this._statusText.setText(this.evidence.lastStatus || 'TEST READY').setColor(statusColor);
@@ -811,6 +894,24 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._messageText?.setText(message);
         this._bugCounterText?.setText(`BUGS SQUASHED ${this.evidence.bugsSquashed || 0}  //  CORRUPTIONS ${this.evidence.corruptionCount || 0}`);
         this._closeButtonText?.setText((this.evidence.completed || this.evidence.phase === 'scrap') ? 'RETURN TO BOOTH [ESC]' : 'CLOSE PANEL [ESC]');
+        this._specialCommandButtonBg?.setVisible(Boolean(this._specialCommand?.command));
+        this._specialCommandButtonText?.setVisible(Boolean(this._specialCommand?.command));
+        if (this._specialCommandButtonBg && this._specialCommandButtonText) {
+            const buttonEnabled = this._canUseSpecialCommand();
+            if (buttonEnabled) {
+                this._specialCommandButtonBg.setInteractive({ useHandCursor: true });
+            } else if (this._specialCommandButtonBg.input) {
+                this._specialCommandButtonBg.disableInteractive();
+            }
+            this._specialCommandButtonBg
+                .setVisible(buttonEnabled)
+                .setFillStyle(this._specialCommandMode ? 0x3f2b50 : 0x24323e, this._specialCommandMode ? 0.98 : 0.96)
+                .setStrokeStyle(1, this._specialCommandMode ? 0xd49cff : 0x7ca2b3, buttonEnabled ? 0.9 : 0);
+            this._specialCommandButtonText
+                .setVisible(buttonEnabled)
+                .setText(this._specialCommandMode ? 'RUN TEST' : 'STEAL DATA')
+                .setColor(this._specialCommandMode ? '#f1d5ff' : '#d6f6ff');
+        }
     }
 
     _trySpecialCommand(inputValue) {

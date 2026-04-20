@@ -7,8 +7,6 @@ const createSoundAsset = (subfolder, key, fileName) => ({
 });
 
 export const SOUND_ASSETS = Object.freeze({
-    // Keep sound files in assets/sounds/<category>. If you swap a sound, change
-    // the filename or category here instead of editing scene code.
     approveDecision: createSoundAsset('sfx', 'sfx_approve', 'sfx_approve.mp3'),
     scrapDecision: createSoundAsset('sfx', 'sfx_scrap', 'sfx_scrap.mp3'),
     repairDecision: createSoundAsset('sfx', 'sfx_repair', 'sfx_repair.mp3'),
@@ -71,9 +69,6 @@ export const SHIFT_CLOCK = Object.freeze({
     startHour24: 12,
     startMinute: 0,
     displayStepMinutes: 5,
-
-    // For the current test setup, 20 seconds of real time equals 2 hours in game.
-    // Change this value to 60000 later if you want 1 real minute to equal 2 hours.
     realMsPerAdvanceChunk: 20000,
     inGameMinutesPerAdvanceChunk: 120,
 });
@@ -84,7 +79,15 @@ const createIntroSequenceLine = (id, text, voiceAsset = null) => Object.freeze({
     voiceAsset,
 });
 
-const createIntroSequence = ({ incomingBody, questionStatus, continueStatus, postVoiceBody, intro, yes, no }) => Object.freeze({
+const createIntroSequence = ({
+    incomingBody,
+    questionStatus,
+    continueStatus,
+    postVoiceBody,
+    intro,
+    yes,
+    no,
+}) => Object.freeze({
     incomingBody,
     questionStatus,
     continueStatus,
@@ -106,15 +109,15 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
     sequences: Object.freeze({
         '1-1': createIntroSequence({
             incomingBody: 'Phone Call Coming',
-            questionStatus: 'KNOW DAY 1 RULE? // ✓ YES // X NO',
-            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
+            questionStatus: 'KNOW DAY 1 RULE? // YES OR NO',
+            continueStatus: 'CALL COMPLETE // PRESS EITHER BUTTON',
             postVoiceBody: 'Day 1 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Heyyy, welcome back. Another day, another penny, am I right', SOUND_ASSETS.phoneIntroLine1),
                 createIntroSequenceLine('line2', '...you remember the job right? First day is simple. If a subsystem is obviously unsalvageable, you scrap it.', SOUND_ASSETS.phoneIntroLine2),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Alright sweety, cuz I don\'t.', SOUND_ASSETS.phoneIntroNoLine3),
+                createIntroSequenceLine('line3', 'Alright sweety, cuz I do not.', SOUND_ASSETS.phoneIntroNoLine3),
                 createIntroSequenceLine('line4', 'Day one is just repair versus obvious scrap. Do not invent extra paperwork for yourself.', SOUND_ASSETS.phoneIntroNoLine4),
             ],
             no: [
@@ -124,30 +127,11 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
                 createIntroSequenceLine('line6', 'Good luck and your shift ends at 12.', SOUND_ASSETS.phoneIntroYesLine6),
             ],
         }),
-        '1-2': createIntroSequence({
-            incomingBody: 'Shift Call Waiting',
-            questionStatus: 'HEARD TODAY\'S RULE? // ✓ YES // X NO',
-            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
-            postVoiceBody: 'Day 1 shift two loaded. Tap either button to continue.',
-            intro: [
-                createIntroSequenceLine('line1', 'Hey. Same floor, same belt, same ugly little miracle of labor.'),
-                createIntroSequenceLine('line2', 'You heard the rule, right? Today still only cares about visible unsalvageable faults.'),
-            ],
-            yes: [
-                createIntroSequenceLine('line3', 'Good. Then stop second-guessing every corpse that rolls in.'),
-                createIntroSequenceLine('line4', 'Fix what can be fixed. Scrap what is obviously dead. That is the whole sermon.'),
-            ],
-            no: [
-                createIntroSequenceLine('line3', 'Then here it is again. Day one means solve the puzzle unless the subsystem is visibly beyond repair.'),
-                createIntroSequenceLine('line4', 'Programming gets corrupted commands. Gears get cracked parts. Wires get severed routes. Boards get orphan cells. Any one of those means scrap it.'),
-                createIntroSequenceLine('line5', 'If the failure is not that obvious, you work the panel and bring it back online.'),
-            ],
-        }),
         '2-1': createIntroSequence({
             incomingBody: 'Compliance Call Coming',
-            questionStatus: 'KNOW DAY 2 RULE? // ✓ YES // X NO',
-            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
-            postVoiceBody: 'Day 2 directives loaded. Tap either button to continue.',
+            questionStatus: 'KNOW DAY 2 RULE? // YES OR NO',
+            continueStatus: 'CALL COMPLETE // PRESS EITHER BUTTON',
+            postVoiceBody: 'Day 2 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Morning, honey. Company pushed a fresh directive while you were asleep.'),
                 createIntroSequenceLine('line2', 'You know the new rule, right? Today the puzzle can work and still fail compliance.'),
@@ -162,35 +146,17 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
                 createIntroSequenceLine('line5', 'It can look almost right and still be scrap. That is the point.'),
             ],
         }),
-        '2-2': createIntroSequence({
-            incomingBody: 'Compliance Call Waiting',
-            questionStatus: 'STILL ON THE RULE? // ✓ YES // X NO',
-            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
-            postVoiceBody: 'Day 2 shift two loaded. Tap either button to continue.',
-            intro: [
-                createIntroSequenceLine('line1', 'Hey. Compliance day again. Lucky you.'),
-                createIntroSequenceLine('line2', 'You heard it, right? Solve it, then inspect it. If the signal is wrong, the unit is wrong.'),
-            ],
-            yes: [
-                createIntroSequenceLine('line3', 'That\'s it. No medals for repairing something the rulebook already condemned.'),
-                createIntroSequenceLine('line4', 'Technical success is not clearance anymore. Only compliant success counts.'),
-            ],
-            no: [
-                createIntroSequenceLine('line3', 'Here\'s the short version. Day two asks whether the subsystem is trustworthy, not whether it can move.'),
-                createIntroSequenceLine('line4', 'Wrong output format, rejection stamps, bad power class, corrupted region markers. Any of that means scrap, even if the puzzle still looks solvable.'),
-            ],
-        }),
         '3-1': createIntroSequence({
             incomingBody: 'Hazard Call Coming',
-            questionStatus: 'KNOW DAY 3 RULE? // ✓ YES // X NO',
-            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
-            postVoiceBody: 'Day 3 directives loaded. Tap either button to continue.',
+            questionStatus: 'KNOW DAY 3 RULE? // YES OR NO',
+            continueStatus: 'CALL COMPLETE // PRESS EITHER BUTTON',
+            postVoiceBody: 'Day 3 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Hey, sweetheart. Final day now. The floor got meaner.'),
                 createIntroSequenceLine('line2', 'You know the new rule, right? If the subsystem shows hazardous instability, contamination, or unsafe discharge, you scrap it.'),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Good. If it sparks red, crawls wrong, or starts shaking like it wants a witness, don\'t be brave.'),
+                createIntroSequenceLine('line3', 'Good. If it sparks red, crawls wrong, or starts shaking like it wants a witness, do not be brave.'),
                 createIntroSequenceLine('line4', 'You are here to classify danger, not survive it.'),
             ],
             no: [
@@ -199,27 +165,10 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
                 createIntroSequenceLine('line5', 'Today the rulebook stops sounding human for a reason.'),
             ],
         }),
-        '3-2': createIntroSequence({
-            incomingBody: 'Final Shift Call Waiting',
-            questionStatus: 'STILL KNOW THE RULE? // ✓ YES // X NO',
-            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
-            postVoiceBody: 'Final shift loaded. Tap either button to continue.',
-            intro: [
-                createIntroSequenceLine('line1', 'Last round. Don\'t let the noise make you sentimental.'),
-                createIntroSequenceLine('line2', 'You heard the rule, right? Visible instability means immediate scrap.'),
-            ],
-            yes: [
-                createIntroSequenceLine('line3', 'Cool. Then trust the danger signal before you trust the machine.'),
-                createIntroSequenceLine('line4', 'If it looks unsafe, the conversation is already over.'),
-            ],
-            no: [
-                createIntroSequenceLine('line3', 'Last reminder. Red sparks, unstable load, crawling contamination, charged regions. Those are not challenges. Those are verdicts.'),
-                createIntroSequenceLine('line4', 'File the scrap and keep the line moving.'),
-            ],
         '4-1': createIntroSequence({
             incomingBody: 'Overtime Call Coming',
-            questionStatus: 'KNOW TODAY\'S RULE? // ✓ YES // X NO',
-            continueStatus: 'CALL COMPLETE // ✓ OR X TO CONTINUE',
+            questionStatus: 'KNOW TODAY\'S RULE? // YES OR NO',
+            continueStatus: 'CALL COMPLETE // PRESS EITHER BUTTON',
             postVoiceBody: 'Day 4 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Look at you. Still here.'),
@@ -233,11 +182,9 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
                 createIntroSequenceLine('line4', 'Unsafe software, unsafe load, unsafe motion, unsafe board. Scrap it and keep moving.'),
             ],
         }),
-        }),
     }),
 });
 
-export function getOpeningPhoneCallSequence(period = 1, day = 1) {
 export function getOpeningPhoneCallSequence(day = 1) {
     const sequenceKeyByDay = {
         1: '1-1',

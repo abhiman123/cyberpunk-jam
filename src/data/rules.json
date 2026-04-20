@@ -15,7 +15,7 @@
     "period": 2,
     "text": "Scrap any unit that fails subsystem compliance verification.",
     "details": [
-      "Programming: scrap units that return invalid or protocol-compromised outputs.",
+      "Programming: on day 2, the output may drift away from the expected result. Scrap units that return invalid or protocol-compromised outputs.",
       "Gears: scrap units containing rejected or contraband-marked gears.",
       "Wires: scrap units that route the wrong power type to a required module.",
       "Circuit Board: scrap boards with corrupted or invalid region markers."

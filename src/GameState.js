@@ -15,6 +15,7 @@ export const GameState = {
     specialItems: [],
     jesterDeal: null,
     umbrellaQuest: null,
+    debriefReport: null,
 
     get period() {
         return this.getDirectiveDay();
@@ -206,6 +207,29 @@ export const GameState = {
         return Boolean(this.getSpecialItem(itemId));
     },
 
+    getDayFourEndingVariant() {
+        const quest = this.umbrellaQuest;
+        if (!quest || quest.failed) {
+            return 'replacement';
+        }
+
+        if (quest.stage === 'pending-day4' && quest.specialCircuitDelivered) {
+            if (quest.deliveredPurpleCircuit && quest.deliveredClownCircuit) {
+                return 'umbrella_mixed';
+            }
+
+            if (quest.deliveredPurpleCircuit) {
+                return 'umbrella_purple';
+            }
+
+            if (quest.deliveredClownCircuit) {
+                return 'umbrella_red';
+            }
+        }
+
+        return 'replacement';
+    },
+
     updateSpecialItem(itemId, updates = {}) {
         const existing = this.getSpecialItem(itemId);
         if (!existing) return null;
@@ -261,5 +285,6 @@ export const GameState = {
         this.specialItems = [];
         this.jesterDeal = null;
         this.umbrellaQuest = null;
+        this.debriefReport = null;
     }
 };

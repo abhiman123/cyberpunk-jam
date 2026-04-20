@@ -7,7 +7,7 @@ const DAY_SUB   = {
     1: 'Base repair directives active.',
     2: 'Compliance directives active.',
     3: 'Hazard directives active.',
-    4: 'Hazard directives remain active.',
+    4: 'Replacement protocol active.',
 };
 
 export default class TransitionScene extends Phaser.Scene {
@@ -48,7 +48,14 @@ export default class TransitionScene extends Phaser.Scene {
         // Auto-advance after 2.2s
         this.time.delayedCall(2200, () => {
             this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => this.scene.start('Game'));
+            this.time.delayedCall(400, () => {
+                if (day >= GameState.totalDays) {
+                    this.scene.start('End', { endingVariant: GameState.getDayFourEndingVariant() });
+                    return;
+                }
+
+                this.scene.start('Game');
+            });
         });
     }
 }

@@ -75,7 +75,7 @@ export default class GameScene extends Phaser.Scene {
         this._umbrellaDeskItemMap = new Map();
         this._umbrellaPartCheckType = null;
 
-        this._shiftDuration = SHIFT_DURATION_MS;
+        this._shiftDuration = SHIFT_DURATION_MS_BY_PERIOD[GameState.day] || SHIFT_DURATION_MS;
         this._elapsed = 0;
         this._shiftRunning = false;
         this._musicPhase = 1;
@@ -218,7 +218,11 @@ export default class GameScene extends Phaser.Scene {
         this.cameras.main.fadeIn(400, 0, 0, 0);
 
         if (FIRST_SHIFT_INTRO.enabled) {
-            this._startOpeningPhoneCall();
+            if (this._shouldUseAutomatedTextBrief()) {
+                this._startAutomatedTextBrief();
+            } else {
+                this._startOpeningPhoneCall();
+            }
         } else {
             this.time.delayedCall(300, () => this._beginShift());
         }
@@ -1588,6 +1592,8 @@ export default class GameScene extends Phaser.Scene {
         const messageBoard = this.add.rectangle(146, 98, 228, 84, 0xf3ffff, 0.22)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x17363d, 0.28);
+        this._phoneMessageBoardShadow = messageBoardShadow;
+        this._phoneMessageBoard = messageBoard;
 
         const scanlines = this.add.graphics();
         scanlines.fillStyle(0xffffff, 0.07);
@@ -2141,6 +2147,13 @@ export default class GameScene extends Phaser.Scene {
                     this._phoneInfoNote.message,
                 ]
                 : [];
+            const protectedAssetLines = this._isDebriefMachine(machineVariant)
+                ? [
+                    '',
+                    'NOTE // ASSET LOCK',
+                    'THIS IS TOO EXPENSIVE TO BE SCRAPPED.',
+                ]
+                : [];
 
             view.header = `${machineVariant.name.toUpperCase()} DOSSIER`;
             view.body = [
@@ -2156,6 +2169,7 @@ export default class GameScene extends Phaser.Scene {
                 `OFFLINE: ${brokenTargets.length > 0 ? brokenTargets.join(', ') : 'NONE'}`,
                 `DIRECTIVE: ${directiveLine}`,
                 ...noteLines,
+                ...protectedAssetLines,
             ].join('\n');
             view.status = gateState.ready ? 'READY TO FILE' : 'UNIT STATUS';
         }
@@ -2304,6 +2318,168 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent = null;
         this._commSequenceEvent?.remove(false);
         this._commSequenceEvent = null;
+    }
+
+    _shouldUseAutomatedTextBrief() {
+        return GameState.day === 3;
+    }
+
+    _buildFallbackDebriefReport() {
+        return {
+            stable: false,
+            text: this._corruptAutomatedBriefText([
+                'AUTOMATED BRIEF // DAY 3',
+                'archive_status:: degraded',
+                'shift_02_cases:: unknown',
+                'shift_02_violations:: unknown',
+                'logged_repairs:: archive incomplete',
+                'directive_update:: hazardous instability must be scrapped immediately',
+                'voice_channel:: unavailable',
+            ].join('\n')),
+        };
+    }
+
+    _buildAutomatedBriefText({
+        casesProcessed = 0,
+        mistakes = 0,
+        acceptedNames = [],
+        scrappedNames = [],
+        overrideCount = 0,
+        stable = true,
+    } = {}) {
+        const acceptedLine = acceptedNames.length > 0
+            ? acceptedNames.join(' / ')
+            : 'none logged';
+        const scrappedLine = scrappedNames.length > 0
+            ? scrappedNames.join(' / ')
+            : 'none logged';
+
+        const lines = [
+            'AUTOMATED BRIEF // DAY 3',
+            `archive_status:: ${stable ? 'stable' : 'degraded'}`,
+            `shift_02_cases:: ${Math.max(0, Number(casesProcessed || 0))}`,
+            `shift_02_violations:: ${Math.max(0, Number(mistakes || 0))}`,
+            `logged_repairs:: ${acceptedLine}`,
+            `logged_scraps:: ${scrappedLine}`,
+            `override_flags:: ${Math.max(0, Number(overrideCount || 0))}`,
+            'directive_update:: hazardous instability must be scrapped immediately',
+            'voice_channel:: unavailable',
+        ];
+
+        const text = lines.join('\n');
+        return stable ? text : this._corruptAutomatedBriefText(text);
+    }
+
+    _corruptAutomatedBriefText(text = '') {
+        return String(text || '')
+            .split('\n')
+            .map((line, lineIndex) => {
+                let corrupted = this._garbleMachineText(line);
+                if (lineIndex > 0 && lineIndex % 2 === 0) {
+                    corrupted = corrupted
+                        .replace(/::/g, ':/:')
+                        .replace(/ /g, lineIndex % 4 === 0 ? '  ' : ' ');
+                }
+                if (lineIndex === 1) {
+                    corrupted = corrupted.replace(/stable/i, 'degraded');
+                }
+                return corrupted;
+            })
+            .join('\n');
+    }
+
+    _buildDebriefMachineReport(gateState) {
+        const shiftOutcomes = GameState.trackedMachineOutcomes.filter(
+            (entry) => entry.day === 2 && entry.machineId !== 'debrief_machine',
+        );
+        const acceptedNames = shiftOutcomes
+            .filter((entry) => entry.accepted)
+            .map((entry) => entry.machineName)
+            .filter(Boolean)
+            .slice(0, 4);
+        const scrappedNames = shiftOutcomes
+            .filter((entry) => entry.scrapped)
+            .map((entry) => entry.machineName)
+            .filter(Boolean)
+            .slice(0, 4);
+        const overrideCount = shiftOutcomes.filter(
+            (entry) => entry.accepted && (!entry.ready || entry.scrapRequired),
+        ).length;
+        const stable = Boolean(gateState?.ready) && !gateState?.scrapRequired;
+
+        return {
+            day: 2,
+            stable,
+            text: this._buildAutomatedBriefText({
+                casesProcessed: GameState.casesProcessedThisShift,
+                mistakes: this._shiftMistakes,
+                acceptedNames,
+                scrappedNames,
+                overrideCount,
+                stable,
+            }),
+        };
+    }
+
+    _getDebriefReport() {
+        return GameState.debriefReport || this._buildFallbackDebriefReport();
+    }
+
+    _startAutomatedTextBrief() {
+        const report = this._getDebriefReport();
+        this._openingCallSequenceId += 1;
+        this._openingCallChoiceResolver = null;
+        this._setCommStandbyState('Incoming brief queued.', 'TEXT ROUTING');
+        this._commSequenceEvent = this.time.delayedCall(900, () => {
+            this._phoneChoicePhase = 'incoming-brief';
+            this._showPhonePanel(
+                'Incoming Brief:',
+                report.text,
+                report.stable ? 'TEXT BRIEF // PRESS EITHER BUTTON' : 'DEGRADED BRIEF // PRESS EITHER BUTTON',
+                'chat',
+            );
+            this._setPhoneButtonSelection(null);
+            this._setPhoneButtonsActive(true);
+        });
+    }
+
+    _pulsePhoneInfoBoard(color = 0xff6f67) {
+        if (!this._phoneMessageBoard || !this._phoneMessageBoardShadow) return;
+
+        this.tweens.killTweensOf([this._phoneMessageBoard, this._phoneMessageBoardShadow]);
+        this._phoneMessageBoard
+            .setFillStyle(color, 0.34)
+            .setStrokeStyle(2, color, 0.92);
+        this._phoneMessageBoardShadow
+            .setFillStyle(color, 0.18)
+            .setStrokeStyle(1, color, 0.34);
+
+        this.tweens.add({
+            targets: this._phoneMessageBoard,
+            alpha: 0.9,
+            duration: 110,
+            yoyo: true,
+            repeat: 1,
+            onComplete: () => {
+                this._phoneMessageBoard
+                    .setAlpha(1)
+                    .setFillStyle(0xf3ffff, 0.22)
+                    .setStrokeStyle(1, 0x17363d, 0.28);
+            },
+        });
+        this.tweens.add({
+            targets: this._phoneMessageBoardShadow,
+            alpha: 0.95,
+            duration: 110,
+            yoyo: true,
+            repeat: 1,
+            onComplete: () => {
+                this._phoneMessageBoardShadow
+                    .setAlpha(1)
+                    .setFillStyle(0x000000, 0.12)
+                    .setStrokeStyle(1, 0x163136, 0.16);
+            },
+        });
     }
 
     _getOpeningCallConfig() {
@@ -2785,6 +2961,10 @@ export default class GameScene extends Phaser.Scene {
         return this._isMachineBehavior(machineVariant, 'circuitDealer');
     }
 
+    _isDebriefMachine(machineVariant = this._currentMachineVariant) {
+        return this._isMachineBehavior(machineVariant, 'debriefMachine');
+    }
+
     _getUmbrellaInsertedSpecialCircuits(machineVariant = this._currentMachineVariant) {
         const dominoes = machineVariant?.puzzleState?.dominoes || [];
         const hasPlacedVariant = (variant) => dominoes.some((domino) => domino.variant === variant && (domino.placedCells?.length || 0) > 0);
@@ -3140,7 +3320,7 @@ export default class GameScene extends Phaser.Scene {
 
         return {
             command: 'steal data',
-            hint: 'ALT COMMAND: STEAL DATA',
+            hint: 'BUTTON: STEAL DATA',
             onTrigger: ({ evidence }) => this._triggerUmbrellaDataSteal(machineVariant, evidence),
         };
     }
@@ -3462,7 +3642,7 @@ export default class GameScene extends Phaser.Scene {
             return { autoApprove: true };
         }
 
-        if (this._isRebelliousUmbrella(machineVariant) && GameState.period >= 2) {
+        if (this._isRebelliousUmbrella(machineVariant) && GameState.day >= 2) {
             const quest = this._getUmbrellaQuest();
             if (!quest) return { autoApprove: false };
 
@@ -3569,7 +3749,7 @@ export default class GameScene extends Phaser.Scene {
 
     _maybeShowJesterFailureTaunt() {
         const deal = GameState.jesterDeal;
-        if (!deal?.failed || deal?.tauntShown || GameState.period < 3) return;
+        if (!deal?.failed || deal?.tauntShown || GameState.day < 3) return;
 
         this._pushPhoneNotification(
             'CLOWN CALLBACK',
@@ -3692,7 +3872,7 @@ export default class GameScene extends Phaser.Scene {
 
     _beginRebelliousUmbrellaProposal() {
         const machineVariant = this._currentMachineVariant;
-        if (!this._isRebelliousUmbrella(machineVariant) || GameState.period !== 1 || this._getUmbrellaQuest()) {
+        if (!this._isRebelliousUmbrella(machineVariant) || GameState.day !== 1 || this._getUmbrellaQuest()) {
             return false;
         }
 
@@ -4112,6 +4292,13 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        if (this._phoneChoicePhase === 'incoming-brief') {
+            this._setPhoneButtonSelection(choice);
+            this._setPhoneButtonsActive(false);
+            this._dismissPhoneGate();
+            return;
+        }
+
         if (this._phoneChoicePhase === 'opening-call-question') {
             this._setPhoneButtonSelection(choice);
             this._setPhoneButtonsActive(false);
@@ -4207,9 +4394,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _dismissPhoneGate() {
+        const wasTextBrief = this._phoneChoicePhase === 'incoming-brief';
         this._openingCallSequenceId += 1;
         this._openingCallChoiceResolver = null;
-        this._setCommStandbyState('Call complete. Conveyor standing by.', 'CHANNEL IDLE');
+        this._setCommStandbyState(
+            wasTextBrief ? 'Brief complete. Conveyor standing by.' : 'Call complete. Conveyor standing by.',
+            wasTextBrief ? 'BRIEF LOGGED' : 'CHANNEL IDLE',
+        );
         this._phoneChoicePhase = 'inactive';
         this._beginShift();
     }
@@ -4359,6 +4550,7 @@ export default class GameScene extends Phaser.Scene {
     _initializeMachineShiftQueue() {
         this._machineQueueDefinitions = getEligibleMachineDefinitions({
             day: GameState.day,
+            period: GameState.period,
             umbrellaQuest: this._getUmbrellaQuest(),
             specialItems: GameState.specialItems,
         });
@@ -4386,6 +4578,31 @@ export default class GameScene extends Phaser.Scene {
     _refillMachineShiftQueue() {
         const machineIds = this._machineQueueDefinitions.map((definition) => definition.id);
         this._machineQueue = Phaser.Utils.Array.Shuffle([...machineIds]);
+    }
+
+    _queueInjectedMachine(machineId, { front = true } = {}) {
+        if (!machineId) return false;
+
+        if (!this._machineDefinitionById.has(machineId)) {
+            this._machineDefinitionById.set(machineId, {
+                id: machineId,
+                guaranteedTimeframe: null,
+                trackOutcome: false,
+            });
+        }
+
+        if (!this._machineQueueDefinitions.some((definition) => definition.id === machineId)) {
+            this._machineQueueDefinitions.push(this._machineDefinitionById.get(machineId));
+        }
+
+        this._machineQueue = Array.isArray(this._machineQueue) ? this._machineQueue.filter((queuedId) => queuedId !== machineId) : [];
+        if (front) {
+            this._machineQueue.unshift(machineId);
+        } else {
+            this._machineQueue.push(machineId);
+        }
+
+        return true;
     }
 
     _getCurrentShiftHourOffset() {
@@ -4954,7 +5171,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _recordTrackedMachineOutcome(action, gateState) {
-        if (!this._currentMachineVariant?.trackOutcome) return;
+        if (!this._currentMachineVariant) return;
 
         const evaluation = gateState?.evaluation || this._currentMachineVariant.puzzleState?.getEvaluation?.() || {};
         const flowState = this._getMachineFlowState(this._currentMachineVariant);
@@ -5005,6 +5222,8 @@ export default class GameScene extends Phaser.Scene {
             ruling: action === 'scrap' ? 'scrapped' : 'accepted',
             scrapped: action === 'scrap',
             accepted: action === 'approve',
+            ready: Boolean(gateState?.ready),
+            scrapRequired: Boolean(gateState?.scrapRequired),
             completedPuzzleParts,
             resolvedPuzzleParts,
             puzzleResults,
@@ -5926,6 +6145,37 @@ export default class GameScene extends Phaser.Scene {
             return false;
         }
 
+        if (this._isDebriefMachine(machineVariant) && action === 'scrap') {
+            this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.58 });
+            this.cameras.main.shake(260, 0.012);
+            this._setPhoneView('info');
+            this._setPhoneInfoNote('THIS IS TOO EXPENSIVE TO BE SCRAPPED.', 'ASSET LOCK');
+            this._pulsePhoneInfoBoard();
+            this._showFeedback('SCRAP LOCKED // EXECUTIVE ASSET RESERVED', '#ff8e87');
+            this._appendMachineChatReaction(
+                machineVariant,
+                'woah there. cant do that. im too important. accounting would need three signatures and a public apology.',
+                'ASSET LOCK',
+            );
+            return true;
+        }
+
+        if (this._isCircuitDealer(machineVariant)) {
+            if (action === 'scrap') {
+                const quest = this._getUmbrellaQuest();
+                if (quest && !quest.dealerResolved) {
+                    this._setUmbrellaQuest({
+                        ...quest,
+                        dealerResolved: true,
+                        dealerOutcome: 'scrapped',
+                    });
+                }
+                machineVariant._rulingChatResponse = 'your loss.';
+                machineVariant._rulingChatStatus = 'DEAL LOST';
+            }
+            return false;
+        }
+
         if (this._isRebelliousUmbrella(machineVariant)) {
             const repairState = this._getUmbrellaRepairState(machineVariant);
 
@@ -6005,6 +6255,7 @@ export default class GameScene extends Phaser.Scene {
                             dealerOutcome: null,
                             stealingEnabled: false,
                         });
+                        this._queueInjectedMachine('circuit_dealer');
                     }
                     return false;
                 }
@@ -6179,6 +6430,10 @@ export default class GameScene extends Phaser.Scene {
                 ? 'DOC NOTE: A disqualifying subsystem signal was ignored. Payroll deduction applied.'
                 : 'DOC NOTE: Not all required puzzles were fixed. Payroll deduction applied.';
             notificationStatus = 'DOC NOTICE';
+        }
+
+        if (action === 'approve' && this._isDebriefMachine(this._currentMachineVariant)) {
+            GameState.debriefReport = this._buildDebriefMachineReport(gateState);
         }
 
         this._recordTrackedMachineOutcome(action, gateState);
@@ -6467,6 +6722,7 @@ export default class GameScene extends Phaser.Scene {
         const queuedMachineDefinition = this._takeNextQueuedMachineDefinition();
         this._currentMachineVariant = createMachineVariant({
             day: GameState.day,
+            period: GameState.period,
             umbrellaQuest: this._getUmbrellaQuest(),
             specialItems: GameState.specialItems,
             forceMachineId: queuedMachineDefinition?.id || null,
@@ -7315,8 +7571,12 @@ export default class GameScene extends Phaser.Scene {
                 Math.max(2, Math.floor(cellSize * 0.34)),
                 domino.variant === 'clown'
                     ? 0xffa8a0
-                    : domino.isFullyGlowing ? 0xf8ffd3 : 0x60cf86,
-                domino.isFullyGlowing ? 0.62 : 0.24,
+                    : (domino.variant === 'purple'
+                        ? (domino.isFullyGlowing ? 0xe7c2ff : 0xc874ff)
+                        : (domino.isFullyGlowing ? 0xf8ffd3 : 0x60cf86)),
+                domino.variant === 'purple'
+                    ? (domino.isFullyGlowing ? 0.72 : 0.34)
+                    : (domino.isFullyGlowing ? 0.62 : 0.24),
             );
             graphics.beginPath();
             graphics.moveTo(start.x, start.y);
@@ -7460,6 +7720,8 @@ export default class GameScene extends Phaser.Scene {
                 const matchedGroup = chargeGroupSummary?.matched ?? false;
                 const placedPipCount = puzzleState?.getPlacedPipCount?.(rowIndex, colIndex) ?? null;
                 const isPlaced = placedPipCount !== null;
+                const placedDomino = puzzleState?.getPlacedDominoAt?.(rowIndex, colIndex) || null;
+                const purplePlaced = placedDomino?.variant === 'purple';
                 const inspectionFault = puzzleState?.inspectionFault
                     && puzzleState.inspectionFault.row === rowIndex
                     && puzzleState.inspectionFault.col === colIndex
@@ -7507,9 +7769,15 @@ export default class GameScene extends Phaser.Scene {
                     fillAlpha = 0.92;
                     strokeColor = matchedNotEqualLink ? 0xffccb8 : 0xff9b86;
                 } else if (isPlaced) {
-                    fillColor = 0x48cd75;
+                    fillColor = purplePlaced ? 0x9a56ff : 0x48cd75;
                     fillAlpha = 0.92;
-                    strokeColor = 0xf1ffcc;
+                    strokeColor = purplePlaced ? 0xf2dcff : 0xf1ffcc;
+                }
+
+                if (purplePlaced && !inspectionFault) {
+                    fillColor = 0x9a56ff;
+                    fillAlpha = 0.94;
+                    strokeColor = 0xf2dcff;
                 }
 
                 if (clownCorrupted && baseValue !== 1 && !inspectionFault) {
@@ -7541,7 +7809,7 @@ export default class GameScene extends Phaser.Scene {
                     overlayColor = matchedNotEqualLink ? '#ffd9c9' : '#ffab92';
                 } else if (placedPipCount !== null) {
                     overlayText = String(placedPipCount);
-                    overlayColor = clownCorrupted ? '#ffe2dc' : '#d9ffe4';
+                    overlayColor = clownCorrupted ? '#ffe2dc' : (purplePlaced ? '#f2dcff' : '#d9ffe4');
                 }
 
                 if (overlayText) {
@@ -7974,9 +8242,10 @@ export default class GameScene extends Phaser.Scene {
         const solved = Boolean(debugState?.completed);
         const patchMode = debugState?.phase === 'repair' && !solved;
         const corrupt = !solved && (debugState?.corruptionCount || 0) > 0;
+        const hasMismatch = !solved && Boolean(actualOutput) && actualOutput !== expectedOutput;
         const accentColor = solved
             ? 0x75ffaf
-            : (patchMode ? 0xffcc77 : (corrupt ? 0xff7d77 : 0x8bb8ff));
+            : (patchMode ? 0xff8f84 : (corrupt ? 0xff7d77 : 0x8bb8ff));
         const accentText = solved
             ? (debugState?.fixed ? 'PATCHED' : 'STABLE')
             : (patchMode ? 'PATCH' : (corrupt ? 'CORRUPT' : 'TEST'));
@@ -8012,7 +8281,7 @@ export default class GameScene extends Phaser.Scene {
         const outputLabel = this.add.text(left + 8, top + Math.max(22, height * 0.68), clippedActual || clippedExpected || 'WAITING', {
             fontFamily: 'Courier New',
             fontSize: '7px',
-            color: solved ? '#d9ffe4' : (patchMode ? '#ffd7a8' : '#a8d8f0'),
+            color: solved ? '#d9ffe4' : (hasMismatch ? '#ff8b8b' : (patchMode ? '#ffd7a8' : '#a8d8f0')),
             stroke: '#000000',
             strokeThickness: 2,
         });

@@ -1,59 +1,198 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
-import Animations from '../fx/Animations.js';
 import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
 import { getMusicVolume } from '../state/gameSettings.js';
 
-const DIALOGUE_LINES = [
-    "You've been a reliable unit, #492240182.",
-    'But reliability has a shelf life.',
-    'You are no longer needed.',
-];
+const ENDING_DIALOGUE = Object.freeze({
+    replacement: [
+        'im ur manager.',
+        'unfortunately, we have a replacement for you.',
+        'after all, you are just a cog in the system.',
+        'employee 234982, you have been scrapped.',
+    ],
+    umbrella_purple: [
+        'listen kid. i appreciate the help.',
+        'you helped me achieve my dreams. reach the top of the world.',
+        'and thanks to u, i can do anything with this power.',
+        'that means i do not need you anymore.',
+        'the world runs on machines, and you just did the bidding of one.',
+        'you are useless. a pawn. nothing matters unless you have power.',
+        'thanks bud.',
+    ],
+    umbrella_red_manager: [
+        'im ur manager.',
+        'unfortunately, we have a replacement for you.',
+        'we will no longer need you.',
+    ],
+    umbrella_red_confused: [
+        'what is this?',
+        'what life form is this?',
+        'i have never seen something of the sort.',
+        'what is. this.',
+        'it is getting closer to the button.',
+    ],
+    umbrella_red: [
+        'th4nks bUd...',
+        'whY d035 my shad3 hUrt...',
+        'scrAp. scrAp. scrAp.',
+    ],
+    umbrella_mixed: [
+        'screw you. i trusted you. im cooked.',
+        'now i can barely function, but i still have the purple circuit of power.',
+        'so now you, my pawn, a simple cog in the system, are going down with me.',
+        'scrap. scrap. scrap.',
+    ],
+});
+
+const TITLE_TEXT = "you're just a machine.";
 
 export default class EndScene extends Phaser.Scene {
-    constructor() { super('End'); }
+    constructor() {
+        super('End');
+    }
+
+    init(data) {
+        this._endingVariant = data?.endingVariant || GameState.getDayFourEndingVariant();
+    }
 
     create() {
         this._music = null;
+        this._speakerTween = null;
 
         applyCyberpunkLook(this);
+        this.cameras.main.setBackgroundColor('#050709');
 
-        // Background
-        this.cameras.main.setBackgroundColor('#0f140e');
+        this._world = this.add.container(0, 0);
+        this._buildStage();
+        this._buildActors();
+        this._buildUi();
+        this._playCutsceneMusic();
 
-        // ── Stage 1: Scene setup ─────────────────────────────────────────────
+        const scan = this.add.graphics().setDepth(100);
+        scan.fillStyle(0x000000, 0.24);
+        for (let y = 0; y < 720; y += 4) {
+            scan.fillRect(0, y, 1280, 2);
+        }
 
-        // Family photo on desk
-        this._familyPhoto = this.add.image(1100, 580, 'family_photo')
-            .setScale(1.4).setDepth(2);
+        this.events.on('shutdown', () => {
+            this._speakerTween?.stop();
+            this._music?.stop();
+            this._music = null;
+        });
 
-        // Background lights (6 rects)
+        this.cameras.main.fadeIn(500, 0, 0, 0);
+        this.time.delayedCall(550, () => {
+            void this._runEndingSequence();
+        });
+    }
+
+    _buildStage() {
+        const background = this.add.rectangle(640, 360, 1280, 720, 0x080c10).setDepth(0);
+        const haze = this.add.rectangle(640, 220, 1280, 320, 0x112332, 0.32).setDepth(0);
+        const pitGlow = this.add.ellipse(640, 680, 420, 70, 0x040608, 0.92).setDepth(1);
+        const catwalk = this.add.rectangle(640, 468, 1280, 164, 0x101820, 1).setDepth(1);
+        const rail = this.add.rectangle(640, 396, 1280, 10, 0x274b62, 0.84).setDepth(2);
+
         this._lights = [];
-        for (let i = 0; i < 6; i++) {
-            const lx    = 110 + i * 180;
-            const light = this.add.rectangle(lx, 120, 60, 20, 0xffffcc, 0.25).setDepth(2);
+        for (let i = 0; i < 6; i += 1) {
+            const light = this.add.rectangle(124 + (i * 206), 96, 84, 20, 0xe8fff3, 0.2)
+                .setDepth(2)
+                .setStrokeStyle(1, 0xe8fff3, 0.24);
             this._lights.push(light);
         }
 
-        // Dialogue text (hidden until step 4)
-        this._dialogueText = this.add.text(640, 380, '', {
-            fontFamily: 'Courier New', fontSize: '22px', color: '#33ff00',
-            align: 'center', wordWrap: { width: 800 }, lineSpacing: 10,
-        }).setOrigin(0.5).setDepth(3).setAlpha(0);
+        this._conveyorTiles = [];
+        for (let i = 0; i < 33; i += 1) {
+            const tile = this.add.image(20 + (i * 40), 530, 'conveyor_tile')
+                .setDepth(2)
+                .setAlpha(0.86);
+            this._conveyorTiles.push(tile);
+        }
 
-        // Title card (hidden)
-        this._titleCard = this.add.text(640, 360, "You're just a machine.", {
-            fontFamily: 'Courier New', fontSize: '28px', color: '#33ff00', align: 'center',
-        }).setOrigin(0.5).setDepth(10).setAlpha(0);
+        this._scrapButtonGlow = this.add.rectangle(1038, 514, 168, 94, 0xff786f, 0.08)
+            .setDepth(3)
+            .setVisible(false);
+        this._scrapButton = this.add.rectangle(1038, 514, 146, 72, 0x4c1312, 0.94)
+            .setStrokeStyle(2, 0xff7c73, 0.84)
+            .setDepth(4)
+            .setVisible(false);
+        this._scrapButtonLabel = this.add.text(1038, 514, 'SCRAP', {
+            fontFamily: 'Courier New',
+            fontSize: '24px',
+            color: '#ffd7d2',
+            letterSpacing: 4,
+        }).setOrigin(0.5).setDepth(5).setVisible(false);
 
-        // Play again button (hidden, interactive from creation so handlers always fire)
-        this._playAgainBg = this.add.rectangle(640, 520, 220, 46, 0x0a0a0a)
-            .setStrokeStyle(1, 0x334455).setDepth(11).setAlpha(0)
+        this._fallHole = this.add.ellipse(640, 760, 220, 54, 0x000000, 0.96)
+            .setDepth(30)
+            .setScale(0.3)
+            .setAlpha(0);
+
+        this._world.add([
+            background,
+            haze,
+            pitGlow,
+            catwalk,
+            rail,
+            ...this._lights,
+            ...this._conveyorTiles,
+            this._scrapButtonGlow,
+            this._scrapButton,
+            this._scrapButtonLabel,
+        ]);
+    }
+
+    _buildActors() {
+        this._managerSprite = this.add.image(1440, 408, 'manager_robot')
+            .setScale(4.4)
+            .setDepth(10)
+            .setVisible(false);
+        this._umbrellaSprite = this.add.image(1440, 384, 'machine_rebellious_umbrella')
+            .setScale(2.3)
+            .setDepth(11)
+            .setVisible(false);
+        this._world.add([this._managerSprite, this._umbrellaSprite]);
+    }
+
+    _buildUi() {
+        const panelShadow = this.add.rectangle(640, 612, 926, 150, 0x000000, 0.34).setDepth(20);
+        const panel = this.add.rectangle(640, 604, 914, 138, 0x081017, 0.9)
+            .setStrokeStyle(2, 0x6bb6da, 0.5)
+            .setDepth(21);
+        const panelTag = this.add.text(198, 548, 'FINAL TRANSMISSION', {
+            fontFamily: 'Courier New',
+            fontSize: '13px',
+            color: '#8fd8f3',
+            letterSpacing: 3,
+        }).setDepth(22);
+
+        this._dialogueText = this.add.text(640, 606, '', {
+            fontFamily: 'Courier New',
+            fontSize: '24px',
+            color: '#b8efff',
+            align: 'center',
+            wordWrap: { width: 820 },
+            lineSpacing: 10,
+        }).setOrigin(0.5).setDepth(22);
+
+        this._titleCard = this.add.text(640, 338, TITLE_TEXT, {
+            fontFamily: 'Courier New',
+            fontSize: '30px',
+            color: '#cdefff',
+            align: 'center',
+        }).setOrigin(0.5).setDepth(40).setAlpha(0);
+
+        this._playAgainBg = this.add.rectangle(640, 504, 220, 46, 0x0a0a0a)
+            .setStrokeStyle(1, 0x334455)
+            .setDepth(41)
+            .setAlpha(0)
             .setInteractive({ useHandCursor: true });
-        this._playAgainText = this.add.text(640, 520, 'PLAY AGAIN', {
-            fontFamily: 'Courier New', fontSize: '16px', color: '#778899',
-        }).setOrigin(0.5).setDepth(12).setAlpha(0);
+        this._playAgainText = this.add.text(640, 504, 'PLAY AGAIN', {
+            fontFamily: 'Courier New',
+            fontSize: '16px',
+            color: '#778899',
+        }).setOrigin(0.5).setDepth(42).setAlpha(0);
 
         this._playAgainBg.on('pointerover', () => {
             this._playAgainBg.setStrokeStyle(1, 0x6688aa);
@@ -69,141 +208,340 @@ export default class EndScene extends Phaser.Scene {
             this.time.delayedCall(400, () => this.scene.start('Title'));
         });
 
-        // Scanlines
-        const scan = this.add.graphics();
-        scan.fillStyle(0x000000, 0.3);
-        for (let y = 0; y < 720; y += 4) scan.fillRect(0, y, 1280, 2);
-        scan.setDepth(100);
-
-        // ── Step 1-2: Fade in, 2s silence, then manager enters ───────────────
-        this.cameras.main.fadeIn(500, 0, 0, 0);
-        this.time.delayedCall(2000, () => this._step3());
     }
 
-    // Step 3 — Manager slides in from left, start music_manager
-    _step3() {
-        this._managerSprite = this.add.image(-60, 400, 'manager_robot')
-            .setScale(3).setDepth(3);
+    _playCutsceneMusic() {
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0 || !this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
+            return;
+        }
 
+        this._music = this.sound.add(SOUND_ASSETS.managerMusic.key, { loop: true, volume: 0 });
+        this._music.play();
         this.tweens.add({
-            targets: this._managerSprite,
-            x: 220,
-            duration: 900,
-            ease: 'Cubic.Out',
-            onComplete: () => {
-                const musicVolume = getMusicVolume();
-                if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
-                    this._music = this.sound.add(SOUND_ASSETS.managerMusic.key, { loop: true, volume: 0 });
-                    this._music.play();
-                    this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music * musicVolume, duration: 600 });
-                }
-                this._step4();
-            },
+            targets: this._music,
+            volume: SOUND_VOLUMES.music * musicVolume,
+            duration: 800,
         });
     }
 
-    // Step 4 — Three typewriter dialogue lines, 900ms apart
-    _step4() {
-        this._dialogueText.setAlpha(1);
-        let lineIndex    = 0;
-        const revealed   = [];
-
-        const revealLine = () => {
-            if (lineIndex >= DIALOGUE_LINES.length) {
-                // Step 5 — 1s pause then step 6
-                this.time.delayedCall(1000, () => this._step6());
-                return;
-            }
-            const line    = DIALOGUE_LINES[lineIndex++];
-            const linePos = revealed.length;
-            revealed.push('');
-            let charIdx   = 0;
-
-            this.time.addEvent({
-                delay: 40,
-                repeat: line.length - 1,
-                callback: () => {
-                    charIdx++;
-                    revealed[linePos] = line.substring(0, charIdx);
-                    this._dialogueText.setText(revealed.join('\n'));
-                    if (charIdx >= line.length) {
-                        this.time.delayedCall(900, revealLine);
-                    }
-                },
-            });
-        };
-
-        revealLine();
-    }
-
-    // Step 6 — Stop music, camera shake
-    _step6() {
-        if (this._music) {
-            this.tweens.add({
-                targets: this._music, volume: 0, duration: 400,
-                onComplete: () => { this._music?.stop(); this._music = null; },
-            });
+    async _runEndingSequence() {
+        switch (this._endingVariant) {
+        case 'umbrella_purple':
+            await this._runUmbrellaPurpleEnding();
+            await this._runFallSequence();
+            break;
+        case 'umbrella_red':
+            await this._runUmbrellaRedEnding();
+            await this._runFallSequence({ violent: true });
+            break;
+        case 'umbrella_mixed':
+            await this._runUmbrellaMixedEnding();
+            await this._runFallSequence({ violent: true });
+            break;
+        default:
+            await this._runReplacementEnding();
+            await this._runFallSequence();
+            break;
         }
-        this.cameras.main.shake(400, 0.04);
-        this.time.delayedCall(500, () => this._step7());
+
+        await this._showTitleCard();
     }
 
-    // Step 7 — Camera tilt via tween (NOT rotateTo — it doesn't exist in Phaser 4)
-    _step7() {
-        this.tweens.add({
-            targets: this.cameras.main,
-            rotation: 0.26,
-            duration: 1200,
+    async _runReplacementEnding() {
+        this._managerSprite.setTint(0x8ccfff);
+        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 950 });
+        await this._typeDialogueLines(ENDING_DIALOGUE.replacement, { color: '#aee7ff' });
+        await this._wait(700);
+    }
+
+    async _runUmbrellaPurpleEnding() {
+        await this._enterActor(this._umbrellaSprite, { x: 348, y: 384, duration: 980 });
+        this._styleUmbrella('purple');
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_purple, { color: '#ddb6ff' });
+        await this._wait(700);
+    }
+
+    async _runUmbrellaRedEnding() {
+        this._managerSprite.setTint(0x8ccfff);
+        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 900 });
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_manager, { color: '#aee7ff' });
+        this._showScrapButton();
+        const dropPromise = this._dropUmbrellaToButton('red');
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_confused, { color: '#aee7ff', append: true });
+        await dropPromise;
+        await this._scrapManagerActor();
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red, { color: '#ff9b92' });
+        await this._runExplosionLeadIn();
+    }
+
+    async _runUmbrellaMixedEnding() {
+        this._managerSprite.setTint(0x8ccfff);
+        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 900 });
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_manager, { color: '#aee7ff' });
+        this._showScrapButton();
+        const dropPromise = this._dropUmbrellaToButton('mixed');
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_confused, { color: '#aee7ff', append: true });
+        await dropPromise;
+        await this._scrapManagerActor();
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_mixed, { color: '#efbcff' });
+        await this._runExplosionLeadIn();
+    }
+
+    _showScrapButton() {
+        this._scrapButtonGlow.setVisible(true);
+        this._scrapButton.setVisible(true);
+        this._scrapButtonLabel.setVisible(true);
+    }
+
+    _styleUmbrella(mode = 'red') {
+        this._umbrellaSprite.clearTint();
+        this._speakerTween?.stop();
+        this._speakerTween = null;
+
+        if (mode === 'purple') {
+            this._umbrellaSprite.setTint(0xca88ff);
+            this._speakerTween = this.tweens.add({
+                targets: this._umbrellaSprite,
+                y: '+=8',
+                duration: 460,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.InOut',
+            });
+            return;
+        }
+
+        if (mode === 'mixed') {
+            this._umbrellaSprite.setTint(0xd28cff);
+            this._speakerTween = this.tweens.add({
+                targets: this._umbrellaSprite,
+                x: '+=7',
+                angle: 4,
+                duration: 48,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.InOut',
+            });
+            return;
+        }
+
+        this._umbrellaSprite.setTint(0xff8a81);
+        this._speakerTween = this.tweens.add({
+            targets: this._umbrellaSprite,
+            x: '+=5',
+            angle: 3,
+            duration: 44,
+            yoyo: true,
+            repeat: -1,
             ease: 'Sine.InOut',
         });
+    }
 
-        // Step 8 — Lights flicker off (200ms into tilt)
-        this.time.delayedCall(200, () => {
-            Animations.lightsOut(this, this._lights, { startDelay: 0, spacing: 150 });
-        });
+    _enterActor(actor, { x, y, duration = 900 } = {}) {
+        actor.setVisible(true);
+        actor.setAlpha(1);
+        actor.setPosition(1440, y ?? actor.y);
+        actor.setAngle(0);
 
-        // Step 9 — Family photo fades out (800ms into tilt)
-        this.time.delayedCall(800, () => {
-            this.tweens.add({ targets: this._familyPhoto, alpha: 0, duration: 400 });
-        });
-
-        // Step 10 — Fade to black (1400ms into tilt)
-        this.time.delayedCall(1400, () => {
-            this.cameras.main.fade(600, 0, 0, 0);
-            // Step 11 — 1.5s silence after blackout, then step 12
-            this.time.delayedCall(2100, () => this._step12());
+        return new Promise((resolve) => {
+            this.tweens.add({
+                targets: actor,
+                x,
+                y: y ?? actor.y,
+                duration,
+                ease: 'Cubic.Out',
+                onComplete: () => resolve(true),
+            });
         });
     }
 
-    // Step 12 — Reset rotation, fade back in, start music_fired, show title card
-    _step12() {
-        this.cameras.main.rotation = 0;
-        this.cameras.main.fadeIn(800, 0, 0, 0);
+    _dropUmbrellaToButton(mode = 'red') {
+        this._umbrellaSprite.clearTint();
+        if (mode === 'mixed') {
+            this._umbrellaSprite.setTint(0xd28cff);
+        } else {
+            this._umbrellaSprite.setTint(0xff8a81);
+        }
+        this._umbrellaSprite.setVisible(true);
+        this._umbrellaSprite.setAlpha(1);
+        this._umbrellaSprite.setPosition(1038, -160);
+
+        return new Promise((resolve) => {
+            this.tweens.add({
+                targets: this._umbrellaSprite,
+                x: 1038,
+                y: 404,
+                duration: 2400,
+                ease: 'Sine.In',
+                onComplete: () => {
+                    this._styleUmbrella(mode);
+                    this.tweens.add({
+                        targets: this._scrapButtonGlow,
+                        alpha: 0.42,
+                        duration: 120,
+                        yoyo: true,
+                        repeat: 2,
+                    });
+                    resolve(true);
+                },
+            });
+        });
+    }
+
+    _scrapManagerActor() {
+        this.cameras.main.shake(240, 0.014);
+        return new Promise((resolve) => {
+            this.tweens.add({
+                targets: this._managerSprite,
+                y: 820,
+                angle: -8,
+                alpha: 0.14,
+                duration: 640,
+                ease: 'Cubic.In',
+                onComplete: () => {
+                    this._managerSprite.setVisible(false);
+                    resolve(true);
+                },
+            });
+        });
+    }
+
+    async _runExplosionLeadIn() {
+        for (let index = 0; index < 5; index += 1) {
+            this.cameras.main.flash(90, 255, 80 + (index * 15), 70, false);
+            this.cameras.main.shake(150, 0.02 + (index * 0.002));
+            this.tweens.add({
+                targets: this._scrapButton,
+                scaleX: 1.06,
+                scaleY: 1.08,
+                duration: 90,
+                yoyo: true,
+            });
+            this.tweens.add({
+                targets: this._umbrellaSprite,
+                angle: this._umbrellaSprite.angle + 14,
+                duration: 90,
+                yoyo: true,
+            });
+            await this._wait(130);
+        }
+    }
+
+    _typeDialogueLines(lines, { color = '#b8efff', append = false } = {}) {
+        return new Promise((resolve) => {
+            const entries = Array.isArray(lines) ? lines : [String(lines || '')];
+            const revealed = append && this._dialogueText.text
+                ? this._dialogueText.text.split('\n')
+                : [];
+            this._dialogueText.setColor(color);
+            let lineIndex = 0;
+
+            const revealNextLine = () => {
+                if (lineIndex >= entries.length) {
+                    this.time.delayedCall(320, () => resolve(true));
+                    return;
+                }
+
+                const line = String(entries[lineIndex++] || '');
+                revealed.push('');
+                const slot = revealed.length - 1;
+                let charIndex = 0;
+
+                this.time.addEvent({
+                    delay: 28,
+                    repeat: Math.max(0, line.length - 1),
+                    callback: () => {
+                        charIndex += 1;
+                        revealed[slot] = line.slice(0, charIndex);
+                        this._dialogueText.setText(revealed.join('\n'));
+                        if (charIndex >= line.length) {
+                            this.time.delayedCall(420, revealNextLine);
+                        }
+                    },
+                });
+            };
+
+            if (!append) {
+                this._dialogueText.setText('');
+            }
+            revealNextLine();
+        });
+    }
+
+    async _runFallSequence({ violent = false } = {}) {
+        this._dialogueText.setAlpha(0);
+
+        if (this._music) {
+            this.tweens.add({
+                targets: this._music,
+                volume: 0,
+                duration: 500,
+                onComplete: () => {
+                    this._music?.stop();
+                    this._music = null;
+                },
+            });
+        }
+
+        this._fallHole.setAlpha(1);
+        if (violent) {
+            this.cameras.main.flash(220, 255, 95, 72, false);
+        }
+        this.cameras.main.shake(700, violent ? 0.03 : 0.018);
+
+        this.tweens.add({
+            targets: this._world,
+            y: -260,
+            duration: 1350,
+            ease: 'Cubic.In',
+        });
+        this.tweens.add({
+            targets: this._fallHole,
+            scaleX: violent ? 6.2 : 5.2,
+            scaleY: violent ? 4.8 : 4.1,
+            y: 700,
+            duration: 1350,
+            ease: 'Cubic.In',
+        });
+
+        await this._wait(920);
+        this.cameras.main.fade(700, 0, 0, 0);
+        await this._wait(820);
+    }
+
+    async _showTitleCard() {
+        this.cameras.main.fadeIn(700, 0, 0, 0);
 
         const musicVolume = getMusicVolume();
         if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.firedMusic.key)) {
             const endMusic = this.sound.add(SOUND_ASSETS.firedMusic.key, { loop: false, volume: 0 });
             endMusic.play();
-            this.tweens.add({ targets: endMusic, volume: 0.6 * musicVolume, duration: 1200 });
+            this.tweens.add({
+                targets: endMusic,
+                volume: 0.6 * musicVolume,
+                duration: 1000,
+            });
         }
 
-        // Hide dialogue-phase objects
-        this._dialogueText.setAlpha(0);
-        if (this._managerSprite) this._managerSprite.setAlpha(0);
+        this.tweens.add({
+            targets: this._titleCard,
+            alpha: 1,
+            duration: 1000,
+            delay: 160,
+        });
 
-        // Step 13 — Title card fades in
-        this.tweens.add({ targets: this._titleCard, alpha: 1, duration: 1000, delay: 200 });
-
-        // Step 14 — Play again button fades in after 4.5s
-        this.time.delayedCall(4500, () => this._step14());
-    }
-
-    // Step 14 — Play again button fades in
-    _step14() {
+        await this._wait(4200);
         this.tweens.add({
             targets: [this._playAgainBg, this._playAgainText],
             alpha: 1,
             duration: 600,
+        });
+    }
+
+    _wait(duration) {
+        return new Promise((resolve) => {
+            this.time.delayedCall(duration, () => resolve(true));
         });
     }
 }
