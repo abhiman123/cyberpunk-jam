@@ -188,7 +188,7 @@ export default class GearGridPuzzle extends MinigameBase {
             wordWrap: { width: 220 },
             lineSpacing: 3,
         }).setOrigin(0, 0);
-        this._summaryText = this.scene.add.text(198, -72, '', {
+        this._summaryText = this.scene.add.text(198, -112, '', {
             fontFamily: 'Courier New',
             fontSize: '11px',
             color: '#d6edf2',
@@ -251,6 +251,7 @@ export default class GearGridPuzzle extends MinigameBase {
         this.container.add([blocker, panel]);
         this._panel = panel;
 
+        const legendDivider = this.scene.add.rectangle(314, 16, 234, 1, 0x395968, 0.6);
         const legendTitle = this.scene.add.text(198, 36, 'MOVABLE PARTS', {
             fontFamily: 'Courier New',
             fontSize: '13px',
@@ -258,7 +259,7 @@ export default class GearGridPuzzle extends MinigameBase {
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
         this._legendContainer = this.scene.add.container(0, 0);
-        panel.add([legendTitle, this._legendContainer]);
+        panel.add([legendDivider, legendTitle, this._legendContainer]);
 
         this._buildBoard();
         this._buildPieces(pieces);
@@ -1186,8 +1187,6 @@ export default class GearGridPuzzle extends MinigameBase {
                 `Active gears: ${activeGearCount}`,
                 `Loose parts: ${movableCount}`,
                 fixedCount > 0 ? `Fixed parts: ${fixedCount}` : 'Fixed parts: 0',
-                '',
-                ...pieceSummary,
             ].join('\n'));
         } else {
             this._statusText
@@ -1200,8 +1199,6 @@ export default class GearGridPuzzle extends MinigameBase {
                 evaluation.completed
                     ? 'Final shaft is turning.'
                     : (evaluation.jammed ? evaluation.jamReason || 'The train is binding up.' : 'No valid path reaches the output.'),
-                '',
-                ...pieceSummary,
             ].join('\n'));
         }
 

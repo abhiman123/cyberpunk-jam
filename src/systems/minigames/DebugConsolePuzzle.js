@@ -181,14 +181,14 @@ export default class DebugConsolePuzzle extends MinigameBase {
             letterSpacing: 2,
             wordWrap: { width: 900 },
         }).setOrigin(0, 0.5);
-        const subtitle = this.scene.add.text(-520, -252, [
+        const subtitle = this.scene.add.text(-520, -234, [
             debugPuzzle.description || 'Type the command exactly. If the output drifts, patch it and stabilize the machine.',
             this._specialCommand?.hint || '',
         ].filter(Boolean).join('\n'), {
             fontFamily: 'monospace',
             fontSize: '12px',
             color: '#8eb1bd',
-            wordWrap: { width: 720 },
+            wordWrap: { width: 840 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
 
@@ -204,16 +204,16 @@ export default class DebugConsolePuzzle extends MinigameBase {
             color: '#ffe4ac',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._statusText = this.scene.add.text(-458, -52, '', {
+        this._statusText = this.scene.add.text(-458, -40, '', {
             fontFamily: 'Courier New',
             fontSize: '14px',
             color: '#9affbd',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._specialCommandButtonBg = this.scene.add.rectangle(-146, -52, 176, 30, 0x24323e, 0.96)
+        this._specialCommandButtonBg = this.scene.add.rectangle(-146, -40, 176, 30, 0x24323e, 0.96)
             .setStrokeStyle(1, 0x7ca2b3, 0.82)
             .setInteractive({ useHandCursor: true });
-        this._specialCommandButtonText = this.scene.add.text(-146, -52, 'STEAL DATA', {
+        this._specialCommandButtonText = this.scene.add.text(-146, -40, 'STEAL DATA', {
             fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#d6f6ff',
@@ -253,13 +253,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
             ease: 'Sine.InOut',
         });
 
-        const actualLabel = this.scene.add.text(108, -188, 'ACTUAL OUTPUT', {
+        const actualLabel = this.scene.add.text(115, -188, 'ACTUAL OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#cdeaf3',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._actualOutputText = this.scene.add.text(108, -164, '', {
+        this._actualOutputText = this.scene.add.text(115, -164, '', {
             fontFamily: 'monospace',
             fontSize: '16px',
             color: '#ffd6b0',
@@ -267,13 +267,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
             lineSpacing: 7,
         }).setOrigin(0, 0);
 
-        const expectedLabel = this.scene.add.text(108, -42, 'EXPECTED OUTPUT', {
+        const expectedLabel = this.scene.add.text(115, -28, 'EXPECTED OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#cdeaf3',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._expectedOutputText = this.scene.add.text(108, -18, '', {
+        this._expectedOutputText = this.scene.add.text(115, -8, '', {
             fontFamily: 'monospace',
             fontSize: '16px',
             color: '#b7ffca',
