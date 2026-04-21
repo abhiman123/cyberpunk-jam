@@ -5279,24 +5279,24 @@ export default class GameScene extends Phaser.Scene {
         this._machineBlueprintLabelContainer = this.add.container(0, 0).setVisible(false);
         this._conveyorContainer.add(this._machineBlueprintLabelContainer);
 
-        this._machineBayLightContainer = this.add.container(MACHINE_PRESENTATION.conveyorTargetX, 420).setDepth(14);
-        this._unitWorklightCone = this.add.graphics();
-        this._unitWorklightCone.fillStyle(0xffe4aa, 0.13);
-        this._unitWorklightCone.fillTriangle(-170, -146, 170, -146, 0, 62);
-        this._unitWorklightGlow = this.add.ellipse(0, -26, 248, 132, 0xffdc96, 0.14);
-        this._unitWorklightHalo = this.add.ellipse(0, -172, 84, 30, 0xffefc7, 0.16);
-        this._unitWorklightHousing = this.add.rectangle(0, -190, 126, 16, 0x2e3439, 1)
-            .setStrokeStyle(2, 0x707a82, 0.82);
-        this._unitWorklightBulb = this.add.rectangle(0, -178, 52, 14, 0xfff0c6, 0.96)
-            .setStrokeStyle(1, 0xfffed9, 0.64);
-        this._machineBayLightContainer.add([
-            this._unitWorklightCone,
-            this._unitWorklightGlow,
-            this._unitWorklightHalo,
-            this._unitWorklightHousing,
-            this._unitWorklightBulb,
-        ]);
-        this._conveyorContainer.add(this._machineBayLightContainer);
+        // this._machineBayLightContainer = this.add.container(MACHINE_PRESENTATION.conveyorTargetX, 420).setDepth(14);
+        // this._unitWorklightCone = this.add.graphics();
+        // this._unitWorklightCone.fillStyle(0xffe4aa, 0.13);
+        // this._unitWorklightCone.fillTriangle(-170, -146, 170, -146, 0, 62);
+        // this._unitWorklightGlow = this.add.ellipse(0, -26, 248, 132, 0xffdc96, 0.14);
+        // this._unitWorklightHalo = this.add.ellipse(0, -172, 84, 30, 0xffefc7, 0.16);
+        // this._unitWorklightHousing = this.add.rectangle(0, -190, 126, 16, 0x2e3439, 1)
+        //     .setStrokeStyle(2, 0x707a82, 0.82);
+        // this._unitWorklightBulb = this.add.rectangle(0, -178, 52, 14, 0xfff0c6, 0.96)
+        //     .setStrokeStyle(1, 0xfffed9, 0.64);
+        // this._machineBayLightContainer.add([
+        //     this._unitWorklightCone,
+        //     this._unitWorklightGlow,
+        //     this._unitWorklightHalo,
+        //     this._unitWorklightHousing,
+        //     this._unitWorklightBulb,
+        // ]);
+        // this._conveyorContainer.add(this._machineBayLightContainer);
 
         this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 420).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
