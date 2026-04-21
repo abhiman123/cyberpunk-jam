@@ -588,6 +588,21 @@ export default class CircuitRouting extends MinigameBase {
             return;
         }
 
+        if (this._inspectionFault.type === 'emotion-flood') {
+            // Teardrop: circle body with a pointed top, rendered in soft blue
+            this._inspectionFaultGfx.lineStyle(2, 0x5ec4e8, 0.92);
+            this._inspectionFaultGfx.strokeCircle(x, y + 4, 12);
+            // pointed tip of teardrop above the circle
+            this._inspectionFaultGfx.lineBetween(x - 6, y - 6, x, y - 16);
+            this._inspectionFaultGfx.lineBetween(x, y - 16, x + 6, y - 6);
+            // ripple arcs radiating outward (3 concentric partial arcs)
+            this._inspectionFaultGfx.lineStyle(1, 0x7eddf2, 0.6);
+            this._inspectionFaultGfx.strokeCircle(x, y + 4, 18);
+            this._inspectionFaultGfx.lineStyle(1, 0x7eddf2, 0.32);
+            this._inspectionFaultGfx.strokeCircle(x, y + 4, 24);
+            return;
+        }
+
         this._inspectionFaultGfx.lineStyle(3, 0xff8b7a, 0.94);
         this._inspectionFaultGfx.beginPath();
         this._inspectionFaultGfx.moveTo(x - 22, y - 12);
