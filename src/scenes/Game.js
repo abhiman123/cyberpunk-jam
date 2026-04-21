@@ -6861,7 +6861,7 @@ export default class GameScene extends Phaser.Scene {
         this._completePhoneTyping();
 
         const gateState = this._getPuzzleGateState();
-        if (action === 'approve' && !gateState.ready && !this._pendingUnsafeAcceptConfirmation) {
+        if (action === 'approve' && !gateState.ready && !gateState.mainScrapRequired && !this._pendingUnsafeAcceptConfirmation) {
             this._promptUnsafeAcceptConfirmation();
             return;
         }
