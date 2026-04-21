@@ -8002,7 +8002,7 @@ export default class GameScene extends Phaser.Scene {
         const resolvedGearPreview = clampRect(scaleRect(layout.gearPreview, { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' }));
         const resolvedArtX = (layout.artX ?? 106) * scaleX;
         const resolvedArtY = (layout.artY ?? 132) * scaleY;
-        const resolvedArtScale = (layout.artScale || 0.92) * 1.42;
+        const resolvedArtScale = (layout.artScale || 0.5) * 1.42;
 
         this._miniMachinePanelTitle?.setText(`${this._currentMachineVariant.name.toUpperCase()} PORT MAP`);
         this._miniPuzzleStatusText?.setText(this._getMiniMachinePanelStatusText(this._currentMachineVariant));
