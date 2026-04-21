@@ -253,13 +253,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
             ease: 'Sine.InOut',
         });
 
-        const actualLabel = this.scene.add.text(108, -188, 'ACTUAL OUTPUT', {
+        const actualLabel = this.scene.add.text(115, -188, 'ACTUAL OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#cdeaf3',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._actualOutputText = this.scene.add.text(108, -164, '', {
+        this._actualOutputText = this.scene.add.text(115, -164, '', {
             fontFamily: 'monospace',
             fontSize: '16px',
             color: '#ffd6b0',
@@ -267,13 +267,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
             lineSpacing: 7,
         }).setOrigin(0, 0);
 
-        const expectedLabel = this.scene.add.text(108, -42, 'EXPECTED OUTPUT', {
+        const expectedLabel = this.scene.add.text(115, -42, 'EXPECTED OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#cdeaf3',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._expectedOutputText = this.scene.add.text(108, -18, '', {
+        this._expectedOutputText = this.scene.add.text(115, -18, '', {
             fontFamily: 'monospace',
             fontSize: '16px',
             color: '#b7ffca',
