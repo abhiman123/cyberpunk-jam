@@ -174,7 +174,7 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleOverlay.onClose = (evidence) => this._handleGearPuzzleClosed(evidence);
         this._debugPuzzleOverlay = new DebugConsolePuzzle(this, { depth: 360 });
         this._debugPuzzleOverlay.onClose = (evidence) => this._handleDebugPuzzleClosed(evidence);
-        this.input.keyboard?.on('keydown', this._handleKonamiKey);
+        window.addEventListener('keydown', this._handleKonamiKey);
 
         const newRuleIds = GameState.day <= 3
             ? allRules.filter((rule) => rule.period === GameState.day).map((rule) => rule.id)
@@ -203,7 +203,7 @@ export default class GameScene extends Phaser.Scene {
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
             this.input.off('gameout', this._handleDeskItemPointerUp, this);
-            this.input.keyboard?.off('keydown', this._handleKonamiKey);
+            window.removeEventListener('keydown', this._handleKonamiKey);
             this._phoneBodyMaskSource?.destroy();
             this._miniMachineScreenMaskSource?.destroy();
             this._rulebook?.destroy();
@@ -1833,8 +1833,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _buildPhonePanel() {
-        const panelX = 808;
-        const panelY = 34;
+        const panelX = 870;
+        const panelY = 50;
         const frameWidth = 408;
         const frameHeight = 216;
         const screenX = 22;
@@ -1874,8 +1874,9 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'Arial', fontSize: '14px', color: '#101010',
             wordWrap: { width: 218 }, lineSpacing: 6,
         });
-        this._phoneStatusText = this.add.text(36, 146, 'CHANNEL IDLE', {
+        this._phoneStatusText = this.add.text(32, 146, 'CHANNEL IDLE', {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
+            wordWrap: { width: 172 },
         });
 
         this._phoneBodyViewport = { x: 36, y: 58, width: 218, height: 78 };
@@ -2815,7 +2816,7 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(
                 FIRST_SHIFT_INTRO.incomingHeader,
                 this._getPhoneViewState('chat').body,
-                `SUBTITLES // ${String(line?.id || 'line').toUpperCase()}`,
+                '',
                 'chat',
             );
             this._typePhoneMessage(`${append ? '\n\n' : ''}${line?.text || ''}`, {
@@ -7203,8 +7204,14 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _handleKonamiKey(event) {
-        if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) return;
-        if (this._overlayModalOpen || this._rulebook?.isVisible() || this._settingsOverlay?.isVisible() || this._machinePuzzleOverlay?.isVisible()) return;
+        if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
+            console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
+            return;
+        }
+        if (this._overlayModalOpen || this._rulebook?.isVisible() || this._settingsOverlay?.isVisible() || this._machinePuzzleOverlay?.isVisible()) {
+            console.log('[KONAMI] blocked by overlay: overlayModalOpen=%s rulebook=%s settings=%s machinePuzzle=%s', this._overlayModalOpen, this._rulebook?.isVisible(), this._settingsOverlay?.isVisible(), this._machinePuzzleOverlay?.isVisible());
+            return;
+        }
         if (event?.repeat) return;
 
         const key = this._normalizeKonamiKey(event?.key);
@@ -7213,6 +7220,7 @@ export default class GameScene extends Phaser.Scene {
         const expectedKey = this._konamiSequence[this._konamiProgress];
         if (key === expectedKey) {
             this._konamiProgress += 1;
+            console.log('[KONAMI] progress %d/%d (key=%s)', this._konamiProgress, this._konamiSequence.length, key);
             if (this._konamiProgress >= this._konamiSequence.length) {
                 this._konamiProgress = 0;
                 this._armKonamiFinale();
@@ -7220,6 +7228,7 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        console.log('[KONAMI] wrong key: got=%s expected=%s resetting to %d', key, expectedKey, key === this._konamiSequence[0] ? 1 : 0);
         this._konamiProgress = key === this._konamiSequence[0] ? 1 : 0;
     }
 
@@ -7584,6 +7593,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._playCurrentUnitExitAnimation(() => {
             clearUnitPresentation();
+            console.log('[KONAMI] exit anim done: finalCaseTriggered=%s shiftShouldEnd=%s hasPendingKonamiFinale=%s', finalCaseTriggered, shiftShouldEnd, hasPendingKonamiFinale);
 
             if (finalCaseTriggered) {
                 this._shiftRunning = false;
@@ -7678,6 +7688,7 @@ export default class GameScene extends Phaser.Scene {
         };
 
         this.time.delayedCall(220, () => {
+            console.log('[KONAMI] _endShift: fromFinalCase=%s isLastDay=%s konamiTriggered=%s', fromFinalCase, GameState.isLastDay(), this._konamiFinaleTriggered);
             if (fromFinalCase && (GameState.isLastDay() || this._konamiFinaleTriggered)) {
                 this.scene.start('End');
                 return;
