@@ -5,8 +5,8 @@ import { GameState } from '../GameState.js';
 const DEPTH        = 430;
 const CX           = 640;   // panel center X
 const CY           = 360;   // panel center Y
-const PANEL_W      = 860;
-const PANEL_H      = 560;
+const PANEL_W      = 900;
+const PANEL_H      = 520;
 
 // Subsystem tag colors
 const TAG_COLORS = {
@@ -109,32 +109,32 @@ export default class RulebookOverlay {
             .setStrokeStyle(1, 0x2a3840, 0.72);
 
         // ── Header bar ────────────────────────────────────────────────────────
-        const headerH  = 44;
+        const headerH  = 50;
         const headerY  = -(PANEL_H / 2) + (headerH / 2);
         const headerBg = this.scene.add.rectangle(0, headerY, PANEL_W, headerH, 0x131d25, 1)
             .setStrokeStyle(1, 0x304050, 0.8);
         const accentLine = this.scene.add.rectangle(0, headerY + headerH / 2, PANEL_W, 1, 0x3ea8c0, 0.55);
 
-        this._headerTitle = this.scene.add.text(-(PANEL_W / 2) + 20, headerY, 'RULEBOOK', {
-            fontFamily: 'Courier New', fontSize: '15px', color: '#c8e8f4', letterSpacing: 3,
+        this._headerTitle = this.scene.add.text(-(PANEL_W / 2) + 24, headerY, 'RULEBOOK', {
+            fontFamily: 'Courier New', fontSize: '17px', color: '#c8e8f4', letterSpacing: 4,
         }).setOrigin(0, 0.5);
 
         this._headerDay = this.scene.add.text(0, headerY, '', {
-            fontFamily: 'Courier New', fontSize: '11px', color: '#4e8fa0', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '13px', color: '#4e8fa0', letterSpacing: 2,
         }).setOrigin(0.5);
 
         // Close button
-        const closeBg = this.scene.add.rectangle((PANEL_W / 2) - 36, headerY, 56, 26, 0x1c2a34, 1)
+        const closeBg = this.scene.add.rectangle((PANEL_W / 2) - 40, headerY, 64, 30, 0x1c2a34, 1)
             .setStrokeStyle(1, 0x4a6070, 0.82).setInteractive({ useHandCursor: true });
-        const closeLabel = this.scene.add.text((PANEL_W / 2) - 36, headerY, 'ESC', {
-            fontFamily: 'Courier New', fontSize: '11px', color: '#8ab4c4', letterSpacing: 2,
+        const closeLabel = this.scene.add.text((PANEL_W / 2) - 40, headerY, 'ESC', {
+            fontFamily: 'Courier New', fontSize: '13px', color: '#8ab4c4', letterSpacing: 2,
         }).setOrigin(0.5);
         closeBg.on('pointerover', () => { closeBg.setFillStyle(0x243644, 1); closeLabel.setColor('#c8e8f4'); });
         closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x1c2a34, 1); closeLabel.setColor('#8ab4c4'); });
         closeBg.on('pointerdown', () => this.hide());
 
         // ── Content container (rebuilt on every show/refresh) ─────────────────
-        this._contentContainer = this.scene.add.container(-(PANEL_W / 2) + 24, headerY + headerH / 2 + 14);
+        this._contentContainer = this.scene.add.container(-(PANEL_W / 2) + 28, headerY + headerH / 2 + 18);
 
         this._panel.add([
             shadow, shell, inner,
@@ -172,36 +172,34 @@ export default class RulebookOverlay {
 
             // ── Rule header row ───────────────────────────────────────────────
             if (ruleIndex > 0) {
-                // Separator between rules
-                const sep = this.scene.add.rectangle(contentW / 2, y + 4, contentW, 1, 0x253038, 0.8).setOrigin(0.5, 0);
+                const sep = this.scene.add.rectangle(contentW / 2, y + 6, contentW, 1, 0x253038, 0.8).setOrigin(0.5, 0);
                 this._push(sep);
-                y += 14;
+                y += 20;
             }
 
             // Day badge + rule headline
             const badgeColor = rule.id === 101 ? '#7c4fc7' : isNew ? '#d4a841' : '#2a5a6a';
             const badgeStroke = rule.id === 101 ? 0x9b6de8 : isNew ? 0xe6c060 : 0x3d7a8a;
-            const badgeBg = this.scene.add.rectangle(22, y + 10, 40, 18, Phaser.Display.Color.HexStringToColor(badgeColor).color, 0.9)
+            const badgeBg = this.scene.add.rectangle(24, y + 10, 46, 22, Phaser.Display.Color.HexStringToColor(badgeColor).color, 0.9)
                 .setOrigin(0.5, 0).setStrokeStyle(1, badgeStroke, 0.8);
-            const badgeText = this.scene.add.text(22, y + 10, rule.id === 101 ? 'NET' : `D${rule.period}`, {
-                fontFamily: 'Courier New', fontSize: '9px',
+            const badgeText = this.scene.add.text(24, y + 10, rule.id === 101 ? 'NET' : `D${rule.period}`, {
+                fontFamily: 'Courier New', fontSize: '11px',
                 color: rule.id === 101 ? '#e2c8ff' : isNew ? '#fff8d4' : '#8fd4e8',
                 letterSpacing: 1,
             }).setOrigin(0.5, 0);
 
-            const headline = this.scene.add.text(52, y + 10, rule.text, {
-                fontFamily: 'Courier New', fontSize: '13px',
+            const headline = this.scene.add.text(58, y + 10, rule.text, {
+                fontFamily: 'Courier New', fontSize: '16px',
                 color: isNew ? '#f0d98a' : '#c8dce8',
-                wordWrap: { width: bodyW - 52 }, lineSpacing: 3,
+                wordWrap: { width: bodyW - 58 }, lineSpacing: 5,
             }).setOrigin(0, 0);
 
             this._push(badgeBg, badgeText, headline);
-            y += headline.height + 24;
+            y += headline.height + 28;
 
-            // ── Subsystem details (always visible, compact) ───────────────────
+            // ── Subsystem details ─────────────────────────────────────────────
             if (Array.isArray(rule.details) && rule.details.length > 0) {
                 rule.details.forEach((detail) => {
-                    // Parse [TAG] prefix from detail string → coloured pill
                     const tagMatch = detail.match(/^\[([A-Z]+)\]\s*/);
                     const tag      = tagMatch ? tagMatch[1] : null;
                     const bodyStr  = tag ? detail.slice(tagMatch[0].length) : detail;
@@ -210,58 +208,27 @@ export default class RulebookOverlay {
                     let lineX = 8;
 
                     if (tag) {
-                        // Pill background
-                        const pillBg = this.scene.add.rectangle(lineX + 20, y + 6, 44, 14, 0x0e1a20, 1)
+                        const pillBg = this.scene.add.rectangle(lineX + 24, y + 5, 54, 19, 0x0e1a20, 1)
                             .setOrigin(0.5, 0).setStrokeStyle(1, Phaser.Display.Color.HexStringToColor(tagColor).color, 0.7);
-                        const pillText = this.scene.add.text(lineX + 20, y + 6, tag, {
-                            fontFamily: 'Courier New', fontSize: '9px', color: tagColor, letterSpacing: 1,
+                        const pillText = this.scene.add.text(lineX + 24, y + 5, tag, {
+                            fontFamily: 'Courier New', fontSize: '12px', color: tagColor, letterSpacing: 1,
                         }).setOrigin(0.5, 0);
                         this._push(pillBg, pillText);
-                        lineX += 48;
+                        lineX += 60;
                     }
 
-                    const bodyText = this.scene.add.text(lineX, y + 5, bodyStr, {
-                        fontFamily: 'Courier New', fontSize: '11px', color: '#9ab4c2',
-                        wordWrap: { width: bodyW - lineX }, lineSpacing: 3,
+                    const bodyText = this.scene.add.text(lineX, y + 4, bodyStr, {
+                        fontFamily: 'Courier New', fontSize: '14px', color: '#9ab4c2',
+                        wordWrap: { width: bodyW - lineX }, lineSpacing: 4,
                     }).setOrigin(0, 0);
                     this._push(bodyText);
 
-                    y += Math.max(bodyText.height, 14) + 8;
+                    y += Math.max(bodyText.height, 18) + 12;
                 });
 
-                y += 4;
+                y += 6;
             }
         });
-
-        // ── Quick-ref footer strip ────────────────────────────────────────────
-        const footerY = PANEL_H - 44 - 10;  // 10px from bottom inside-panel coords
-        const footerBg = this.scene.add.rectangle(contentW / 2 - 12, footerY, contentW + 24, 32, 0x0b1319, 1)
-            .setOrigin(0.5, 0).setStrokeStyle(1, 0x253038, 0.7);
-
-        const quickRefs = [
-            { t: 'GRID',  c: TAG_COLORS.GRID,  d: 'match pips + links' },
-            { t: 'FLOW',  c: TAG_COLORS.FLOW,  d: 'route power' },
-            { t: 'GEAR',  c: TAG_COLORS.GEAR,  d: 'slide to output' },
-            { t: 'CODE',  c: TAG_COLORS.CODE,  d: 'type exactly' },
-        ];
-
-        let qx = 12;
-        quickRefs.forEach((ref) => {
-            const lbl = this.scene.add.text(qx, footerY + 8, ref.t, {
-                fontFamily: 'Courier New', fontSize: '9px', color: ref.c, letterSpacing: 1,
-            }).setOrigin(0, 0);
-            const desc = this.scene.add.text(qx + lbl.width + 6, footerY + 8, ref.d, {
-                fontFamily: 'Courier New', fontSize: '9px', color: '#4a6878', letterSpacing: 0,
-            }).setOrigin(0, 0);
-            this._push(lbl, desc);
-            qx += lbl.width + desc.width + 30;
-        });
-
-        const kbHint = this.scene.add.text(contentW - 4, footerY + 8, '[B] toggle', {
-            fontFamily: 'Courier New', fontSize: '9px', color: '#2d4050', letterSpacing: 1,
-        }).setOrigin(1, 0);
-
-        this._push(footerBg, kbHint);
         this._contentContainer.add(this._contentNodes);
     }
 
@@ -273,7 +240,7 @@ export default class RulebookOverlay {
 
     _addNote(text, y, contentW) {
         const t = this.scene.add.text(0, y, text, {
-            fontFamily: 'Courier New', fontSize: '12px', color: '#506070',
+            fontFamily: 'Courier New', fontSize: '15px', color: '#506070',
             wordWrap: { width: contentW }, lineSpacing: 4,
         });
         this._push(t);
