@@ -176,9 +176,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         const title = this.scene.add.text(-520, -284, `${this._machineName} // SOFTWARE DIAGNOSTIC`, {
             fontFamily: 'Courier New',
-            fontSize: '26px',
+            fontSize: '22px',
             color: '#edf9ff',
             letterSpacing: 2,
+            wordWrap: { width: 900 },
         }).setOrigin(0, 0.5);
         const subtitle = this.scene.add.text(-520, -252, [
             debugPuzzle.description || 'Type the command exactly. If the output drifts, patch it and stabilize the machine.',

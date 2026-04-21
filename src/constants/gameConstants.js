@@ -66,6 +66,7 @@ const createMachineDialogueSoundAssets = (machineIds) => Object.fromEntries(
 );
 
 export const SOUND_ASSETS = Object.freeze({
+    // Decision SFX — files not yet in assets/, kept as stubs so references don't crash
     approveDecision: createSoundAsset('sfx', 'sfx_approve', 'sfx_approve.mp3'),
     scrapDecision: createSoundAsset('sfx', 'sfx_scrap', 'sfx_scrap.mp3'),
     repairDecision: createSoundAsset('sfx', 'sfx_repair', 'sfx_repair.mp3'),
@@ -99,7 +100,38 @@ export const SOUND_ASSETS = Object.freeze({
     ...createMachineDialogueSoundAssets(MACHINE_DIALOGUE_SOUND_IDS),
 });
 
-export const SOUND_MANIFEST = Object.freeze(Object.values(SOUND_ASSETS));
+/**
+ * Only assets that actually exist on disk should be in this manifest.
+ * Phaser's loader calls this list, so entries for non-existent files are
+ * removed here to prevent audio decoder EncodingError crashes.
+ * (The missing asset keys still exist in SOUND_ASSETS above so that all
+ * in-game code references remain valid — they just silently skip playback
+ * via cache.audio.has() checks.)
+ */
+const SOUND_ASSETS_ON_DISK = new Set([
+    'inspectionReveal',
+    'workdayMusic',
+    'cuttingItCloseMusic',
+    'paydayMusic',
+    'titlePlay',
+    'phoneRing',
+    'phoneVoiceIntro',
+    'phoneIntroLine1',
+    'phoneIntroLine2',
+    'phoneIntroYesLine3',
+    'phoneIntroYesLine4',
+    'phoneIntroYesLine5',
+    'phoneIntroYesLine6',
+    'phoneIntroNoLine3',
+    'phoneIntroNoLine4',
+    ...MACHINE_DIALOGUE_SOUND_IDS.map((id) => `machineVoice_${id}`),
+]);
+
+export const SOUND_MANIFEST = Object.freeze(
+    Object.entries(SOUND_ASSETS)
+        .filter(([key]) => SOUND_ASSETS_ON_DISK.has(key))
+        .map(([, asset]) => asset)
+);
 
 export const SOUND_VOLUMES = Object.freeze({
     decision: 0.8,

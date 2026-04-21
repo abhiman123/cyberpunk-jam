@@ -410,11 +410,11 @@ export default class GameScene extends Phaser.Scene {
             tint: 0xffffff,
         });
         this._rulebookDeskItem = this._createDeskTablet('desk_tablet', {
-            x: 430,
-            y: 74,
+            x: 440,
+            y: 72,
             angle: -8,
-            width: 118,
-            height: 76,
+            width: 128,
+            height: 84,
         });
         // Y values are in deskContainer-local space (deskContainer.y = scale.height - 172 = 548).
         // To appear at screen y≈624-626, subtract 548 → container-local y≈76-78.
@@ -498,38 +498,140 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _createDeskTablet(itemId, options = {}) {
-        const width = options.width || 118;
-        const height = options.height || 76;
+        const width = options.width || 128;
+        const height = options.height || 84;
 
         return this._createDeskItem(itemId, {
             ...options,
             width,
             height,
             allowRotate: false,
-            selectedScale: 1.03,
+            selectedScale: 1.04,
             dragScale: 1.1,
             onActivate: () => this._toggleRulebookTablet(),
             buildVisual: () => {
-                const liftShadow = this.add.ellipse(6, 9, width + 10, height - 12, 0x000000, 0.18);
-                const focusGlow = this.add.rectangle(0, 0, width + 16, height + 16, 0xb9fbff, 0)
-                    .setStrokeStyle(2, 0xe3feff, 0);
-                const shell = this.add.rectangle(0, 0, width, height, 0x1b1f24, 1)
-                    .setStrokeStyle(2, 0x7e878f, 0.72);
-                const glass = this.add.rectangle(0, 0, width - 12, height - 12, 0x0d151b, 1)
-                    .setStrokeStyle(1, 0x62b9c8, 0.55);
-                const glow = this.add.rectangle(0, 0, width - 20, height - 20, 0x173744, 0.96);
-                const topGloss = this.add.rectangle(0, -(height / 2) + 18, width - 18, 16, 0xffffff, 0.08);
-                const label = this.add.text(0, -8, 'RULES', {
-                    fontFamily: 'Courier New', fontSize: '17px', color: '#dffafe', letterSpacing: 2,
+                // ── Drop shadow ──────────────────────────────────────────
+                const liftShadow = this.add.ellipse(8, 12, width + 14, height - 8, 0x000000, 0.22);
+
+                // ── Hover glow (invisible until hover) ───────────────────
+                const focusGlow = this.add.rectangle(0, 0, width + 20, height + 20, 0x62f6ff, 0)
+                    .setStrokeStyle(2, 0xb8fdff, 0);
+
+                // ── Outer casing — chunky industrial dark shell ──────────
+                const shell = this.add.rectangle(0, 0, width, height, 0x151a1f, 1)
+                    .setStrokeStyle(3, 0x3d4d57, 0.96);
+
+                // ── Inner bezel — slightly inset lighter ring ─────────────
+                const bezel = this.add.rectangle(0, 1, width - 8, height - 8, 0x1c262d, 1)
+                    .setStrokeStyle(1, 0x4e6370, 0.62);
+
+                // ── Screen glass ─────────────────────────────────────────
+                const screen = this.add.rectangle(0, 2, width - 18, height - 20, 0x061017, 0.98)
+                    .setStrokeStyle(1, 0x40b8cc, 0.72);
+
+                // ── Screen inner glow / ambient ───────────────────────────
+                const screenGlow = this.add.rectangle(0, 2, width - 22, height - 24, 0x0a2535, 0.84);
+
+                // ── Scanlines (faint CRT effect via thin rects) ───────────
+                const scanLines = this.add.graphics();
+                const screenTop = 2 - (height - 24) / 2;
+                const screenH = height - 24;
+                scanLines.fillStyle(0x000000, 0.18);
+                for (let sy = 0; sy < screenH; sy += 4) {
+                    scanLines.fillRect(-(width - 22) / 2, screenTop + sy, width - 22, 1);
+                }
+
+                // ── Top label strip — "INSPECTOR" branding ────────────────
+                const labelStrip = this.add.rectangle(0, -(height / 2) + 7, width - 8, 10, 0x0e2430, 1)
+                    .setStrokeStyle(0, 0, 0);
+                const brandLabel = this.add.text(0, -(height / 2) + 7, 'INSPECTOR', {
+                    fontFamily: 'Courier New',
+                    fontSize: '7px',
+                    color: '#4fb8cc',
+                    letterSpacing: 3,
                 }).setOrigin(0.5);
-                const sublabel = this.add.text(0, 14, 'Click to open', {
-                    fontFamily: 'Courier New', fontSize: '10px', color: '#79becc',
+
+                // ── Screen main label ─────────────────────────────────────
+                const screenLabel = this.add.text(0, -2, 'RULEBOOK', {
+                    fontFamily: 'Courier New',
+                    fontSize: '13px',
+                    color: '#c8f4ff',
+                    letterSpacing: 2,
                 }).setOrigin(0.5);
-                const camera = this.add.circle(0, -(height / 2) + 8, 3, 0x32404d, 1)
-                    .setStrokeStyle(1, 0x8194a1, 0.55);
+
+                // ── Screen sublabel ───────────────────────────────────────
+                const screenSub = this.add.text(0, 13, '[ TAP TO OPEN ]', {
+                    fontFamily: 'Courier New',
+                    fontSize: '7px',
+                    color: '#3d9db5',
+                    letterSpacing: 1,
+                }).setOrigin(0.5);
+
+                // ── Status LED ────────────────────────────────────────────
+                const led = this.add.circle((width / 2) - 9, -(height / 2) + 7, 3.5, 0x23ff8c, 1);
+                const ledHalo = this.add.circle((width / 2) - 9, -(height / 2) + 7, 6, 0x23ff8c, 0.18);
+
+                // ── Corner rivets ─────────────────────────────────────────
+                const rivetPositions = [
+                    [-(width / 2) + 5, -(height / 2) + 4],
+                    [ (width / 2) - 5, -(height / 2) + 4],
+                    [-(width / 2) + 5,  (height / 2) - 4],
+                    [ (width / 2) - 5,  (height / 2) - 4],
+                ];
+                const rivets = this.add.graphics();
+                rivets.fillStyle(0x2d3d47, 1);
+                rivetPositions.forEach(([rx, ry]) => {
+                    rivets.fillCircle(rx, ry, 2.5);
+                    rivets.lineStyle(1, 0x5a7482, 0.6);
+                    rivets.strokeCircle(rx, ry, 2.5);
+                });
+
+                // ── Bottom port strip ─────────────────────────────────────
+                const portStrip = this.add.rectangle(0, (height / 2) - 6, width - 8, 8, 0x0d1b23, 1)
+                    .setStrokeStyle(0, 0, 0);
+                const portSlot = this.add.rectangle(0, (height / 2) - 6, 18, 3, 0x1e3240, 1)
+                    .setStrokeStyle(1, 0x2f5068, 0.7);
+
+                // ── Screen pulsing border tween ───────────────────────────
+                this.tweens.add({
+                    targets: screen,
+                    alpha: { from: 0.92, to: 1 },
+                    duration: 2200,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.InOut',
+                });
+
+                // ── LED breathing tween ───────────────────────────────────
+                this.tweens.add({
+                    targets: [led, ledHalo],
+                    alpha: { from: 0.6, to: 1 },
+                    duration: 1400,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.InOut',
+                });
+
+                // ── Subtle screen-text shimmer ───────────────────────────
+                this.tweens.add({
+                    targets: screenLabel,
+                    alpha: { from: 0.82, to: 1 },
+                    duration: 1800,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.InOut',
+                });
 
                 return {
-                    nodes: [liftShadow, focusGlow, shell, glass, glow, topGloss, label, sublabel, camera],
+                    nodes: [
+                        liftShadow, focusGlow,
+                        shell, bezel, screen, screenGlow, scanLines,
+                        labelStrip, brandLabel,
+                        screenLabel, screenSub,
+                        led, ledHalo,
+                        rivets,
+                        portStrip, portSlot,
+                    ],
                     frame: shell,
                     focusGlow,
                     liftShadow,

@@ -181,12 +181,12 @@ export default class GearGridPuzzle extends MinigameBase {
             color: '#ffd39c',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._statusHintText = this.scene.add.text(198, -178, 'Drag parts onto empty cells. Walls block power and cannot connect.', {
+        this._statusHintText = this.scene.add.text(198, -178, 'Drag parts onto empty cells.', {
             fontFamily: 'Courier New',
-            fontSize: '11px',
+            fontSize: '10px',
             color: '#8bb1bf',
             wordWrap: { width: 220 },
-            lineSpacing: 4,
+            lineSpacing: 3,
         }).setOrigin(0, 0);
         this._summaryText = this.scene.add.text(198, -72, '', {
             fontFamily: 'Courier New',
@@ -199,9 +199,9 @@ export default class GearGridPuzzle extends MinigameBase {
         const closeBg = this.scene.add.rectangle(318, 236, 210, 42, 0x243846, 0.94)
             .setStrokeStyle(2, 0xa8c8d2, 0.82)
             .setInteractive({ useHandCursor: true });
-        const closeText = this.scene.add.text(318, 236, 'CLOSE GEAR PANEL [ESC]', {
+        const closeText = this.scene.add.text(318, 236, 'CLOSE [ESC]', {
             fontFamily: 'Courier New',
-            fontSize: '15px',
+            fontSize: '13px',
             color: '#e6f3f6',
             letterSpacing: 1,
         }).setOrigin(0.5);

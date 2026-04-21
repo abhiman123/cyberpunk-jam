@@ -5082,146 +5082,434 @@ function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePl
     return gridOption;
 }
 
-function findDominoTiling(grid, chargeCells, openCells, targetCount, randomFn) {
-    const placed = [];
+// ─── Forward Generation ──────────────────────────────────────────────────────
+// Build domino puzzles by forward-tiling then deriving constraints.
+// O(n) in board size — zero backtracking latency.
+
+/**
+ * Greedily tile a grid with dominos. We snake through the grid left-to-right,
+ * top-to-bottom. When a cell is free we try to pair it right then down.
+ * Any un-paired cell at the end of a pass is left open (becomes a singleton
+ * charge cell that must be covered by a domino spanning it).
+ */
+function greedyTileGrid(grid, openKeys, randomFn) {
     const used = new Set();
-    const isUsed = (r, c) => used.has(`${r},${c}`);
-    
-    function search(chargesRemaining) {
-        if (placed.length === targetCount) {
-            return chargesRemaining.length === 0;
+    const pairs = [];
+
+    // Shuffle the candidate list so we get different tilings each run.
+    const candidates = [...openKeys].sort(() => randomFn() - 0.5);
+
+    for (const key of candidates) {
+        if (used.has(key)) continue;
+        const [r, c] = key.split(',').map(Number);
+
+        // Try to pair with a random neighbor: right, down, left, up.
+        const dirs = [
+            [r, c + 1], [r + 1, c], [r, c - 1], [r - 1, c],
+        ].sort(() => randomFn() - 0.5);
+
+        let paired = false;
+        for (const [nr, nc] of dirs) {
+            const nk = `${nr},${nc}`;
+            if (!openKeys.has(nk) || used.has(nk)) continue;
+            pairs.push([[r, c], [nr, nc]]);
+            used.add(key);
+            used.add(nk);
+            paired = true;
+            break;
         }
-        
-        let targetCell;
-        if (chargesRemaining.length > 0) {
-            targetCell = chargesRemaining[0];
-        } else {
-            const available = openCells.filter(c => !isUsed(c.r, c.c));
-            if (available.length === 0) return false;
-            // sort to randomize
-            targetCell = available[Math.floor(randomFn() * available.length)];
+
+        if (!paired) {
+            // Singleton — we will handle it by picking a neighbor on a second pass.
+            // Leave for now; the second-pass below cleans up.
         }
-        
-        const r1 = targetCell.r;
-        const c1 = targetCell.c;
-        if (isUsed(r1, c1)) {
-           if (chargesRemaining.length > 0) {
-               return search(chargesRemaining.slice(1));
-           }
-           return false; 
-        }
-        
-        const neighbors = [
-            {r: r1-1, c: c1}, {r: r1+1, c: c1}, {r: r1, c: c1-1}, {r: r1, c: c1+1}
-        ].filter(n => 
-            n.r >= 0 && n.r < grid.length && 
-            n.c >= 0 && n.c < grid[n.r].length && 
-            grid[n.r][n.c] !== CELL_WALL &&
-            !isUsed(n.r, n.c)
-        );
-        
-        neighbors.sort(() => randomFn() - 0.5);
-        
-        for (const n of neighbors) {
-            placed.push([{r: r1, c: c1}, n]);
-            used.add(`${r1},${c1}`);
-            used.add(`${n.r},${n.c}`);
-            
-            const nextCharges = chargesRemaining.filter(c => !isUsed(c.r, c.c));
-            if (search(nextCharges)) return true;
-            
-            used.delete(`${r1},${c1}`);
-            used.delete(`${n.r},${n.c}`);
-            placed.pop();
-        }
-        
-        return false;
     }
-    
-    if (search(chargeCells)) {
-        return placed;
+
+    // Second pass: pair any remaining singletons with any free neighbour.
+    for (const key of candidates) {
+        if (used.has(key)) continue;
+        const [r, c] = key.split(',').map(Number);
+        const dirs = [[r, c + 1], [r + 1, c], [r, c - 1], [r - 1, c]];
+        for (const [nr, nc] of dirs) {
+            const nk = `${nr},${nc}`;
+            if (!openKeys.has(nk) || used.has(nk)) continue;
+            pairs.push([[r, c], [nr, nc]]);
+            used.add(key);
+            used.add(nk);
+            break;
+        }
     }
-    return null;
+
+    return pairs;
 }
 
-function generateProceduralDominos(gridOption, randomFn) {
-    const grid = gridOption.grid;
-    const originalDominos = gridOption.dominos;
-    
-    if (gridOption.impossible) {
-        return originalDominos;
+/**
+ * Assign pip values to a tiled pair such that the resulting domino is
+ * interesting (values differ by 1–3) and covers charge cells correctly.
+ */
+function assignPipsForPair(pair, chargeMap, randomFn) {
+    const [a, b] = pair;
+    const aKey = `${a[0]},${a[1]}`;
+    const bKey = `${b[0]},${b[1]}`;
+    const aCharge = chargeMap.get(aKey);
+    const bCharge = chargeMap.get(bKey);
+
+    const randomPip = () => Math.floor(randomFn() * 5); // 0-4
+    const first = aCharge !== undefined ? aCharge : randomPip();
+    const second = bCharge !== undefined ? bCharge : randomPip();
+    return { first, second };
+}
+
+/**
+ * Build a new grid with charge cells injected at positions that will be
+ * covered by domino halves, derived directly from the tiling.
+ * We choose a random subset of pairs to become charge targets so the
+ * board isn't entirely charge-constrained on day 1.
+ */
+function deriveChargeGridFromTiling(baseGrid, pairs, chargeMap, randomFn) {
+    const grid = cloneShapeGrid(baseGrid);
+
+    // Strip all existing charge codes first.
+    for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+            if (isChargeCode(grid[r][c])) {
+                grid[r][c] = CELL_EMPTY;
+            }
+        }
     }
-    
-    const chargeCells = [];
-    const openCells = [];
-    grid.forEach((row, r) => row.forEach((cell, c) => {
+
+    // Re-inject charge cells from pairs.
+    for (const pair of pairs) {
+        for (const [r, c] of pair) {
+            const k = `${r},${c}`;
+            const pip = chargeMap.get(k);
+            if (pip !== undefined) {
+                // charge code = pip + 1 (MIN_CHARGE_CODE = 2 means pip 1)
+                const code = Math.min(MAX_CHARGE_CODE, Math.max(MIN_CHARGE_CODE, pip + 1));
+                grid[r][c] = code;
+            }
+        }
+    }
+
+    return grid;
+}
+
+/**
+ * Main forward-generation entry point. Replaces the old
+ * generateProceduralDominos + iterative backtracking inside
+ * buildStageConstraintProfile.
+ *
+ * Steps:
+ *  1. Tile the grid forward → guaranteed valid cover, O(n).
+ *  2. Assign pip values (honouring any existing charge cells).
+ *  3. Choose which halves become charge constraints.
+ *  4. Build domino objects.
+ *  5. Return { dominos, grid } — the grid may differ if we derived new charges.
+ */
+function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
+    if (gridOption.impossible) {
+        return { dominos: gridOption.dominos || [], grid: gridOption.grid };
+    }
+
+    const baseGrid = stripGridConstraintMarkers(gridOption.grid);
+
+    // --- 1. Collect open cells ---
+    const openKeys = new Set();
+    const existingChargeMap = new Map(); // key -> required pip (0-4)
+    baseGrid.forEach((row, r) => row.forEach((cell, c) => {
         if (cell === CELL_WALL) return;
-        if (isChargeCode(cell)) chargeCells.push({r, c, req: cell - 1});
-        openCells.push({r, c});
+        openKeys.add(`${r},${c}`);
+        if (isChargeCode(cell)) {
+            existingChargeMap.set(`${r},${c}`, cell - 1);
+        }
     }));
 
-    const reservedDominos = originalDominos.filter(d => d.variant === 'clown' || d.variant === 'purple');
-    let targetCount = Math.max(Math.ceil(chargeCells.length / 2), Math.max(2, Math.floor(randomFn() * 3) + 2));
-    
-    let placed = null;
-    while(targetCount <= Math.floor(openCells.length / 2)) {
-        placed = findDominoTiling(grid, chargeCells, openCells, targetCount, randomFn);
-        if (placed) break;
-        targetCount++;
+    if (openKeys.size < 2) {
+        return { dominos: gridOption.dominos || [], grid: gridOption.grid };
     }
-    
-    if (!placed) return originalDominos;
 
-    const newDominos = placed.map(pair => {
-        const getPips = (cell) => {
-            const charge = chargeCells.find(c => c.r === cell.r && c.c === cell.c);
-            if (charge) return charge.req;
-            return Math.floor(randomFn() * 5);
-        };
-        return createDomino(getPips(pair[0]), getPips(pair[1]));
+    // Preserve any special dominos (clown/purple) from the original set.
+    const reservedDominos = (gridOption.dominos || []).filter(
+        (d) => d.variant === 'clown' || d.variant === 'purple'
+    );
+
+    // --- 2. Tile the grid ---
+    const pairs = greedyTileGrid(baseGrid, openKeys, randomFn);
+    if (pairs.length === 0) {
+        return { dominos: gridOption.dominos || [], grid: gridOption.grid };
+    }
+
+    // --- 3. Choose which cells become charge constraints ---
+    // We want a mix: 40-70% of pairs have at least one charge half.
+    // Day 1: fewer, Day 3+: more.
+    const chargeRatio = stage === 1 ? 0.4 : stage === 2 ? 0.55 : 0.7;
+    const chargeMap = new Map(existingChargeMap); // start from any pre-existing charges
+
+    // Shuffle pairs for random charge selection.
+    const shuffledPairs = [...pairs].sort(() => randomFn() - 0.5);
+    const chargeTarget = Math.max(1, Math.round(pairs.length * chargeRatio));
+    let chargeCount = 0;
+
+    for (const pair of shuffledPairs) {
+        if (chargeCount >= chargeTarget) break;
+        // Pick one or both halves.
+        const applyBoth = randomFn() < 0.4;
+        for (const [r, c] of pair) {
+            const k = `${r},${c}`;
+            if (chargeMap.has(k)) continue; // already fixed by existing charge
+            // Pip values 0–4, but we favour 1–3 for interesting gameplay.
+            const pip = Math.floor(randomFn() * 4) + 1;
+            chargeMap.set(k, Math.min(4, pip));
+            chargeCount++;
+            if (!applyBoth) break;
+        }
+    }
+
+    // --- 4. Assign pips to each pair and build dominos ---
+    const newGrid = deriveChargeGridFromTiling(baseGrid, pairs, chargeMap, randomFn);
+    const newDominos = pairs.map((pair) => {
+        const { first, second } = assignPipsForPair(pair, chargeMap, randomFn);
+        return createDomino(first, second);
     });
 
-    return [...newDominos, ...reservedDominos];
+    return {
+        dominos: [...newDominos, ...reservedDominos],
+        grid: newGrid,
+    };
 }
 
-function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.random) {
-    const normalizedStage = Math.max(1, Number(stage) || 1);
-    const baseOption = {
-        ...cloneGridOption(gridOption),
-        grid: stripGridConstraintMarkers(gridOption.grid),
-    };
-    baseOption.dominos = generateProceduralDominos(baseOption, randomFn);
+/**
+ * Inject equality (=) constraint links between two domino halves that share
+ * the same pip value. This is derived directly from the forward-tiling so
+ * it is always solvable — no backtracking needed.
+ */
+function injectDerivedEqualityLinks(grid, pairs, chargeMap, randomFn, count = 1) {
+    const out = cloneShapeGrid(grid);
 
-    let bestCandidate = baseOption;
-    const attempts = baseOption.impossible ? 1 : 10;
-
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-        let candidate = {
-            ...cloneGridOption(baseOption),
-            grid: stripGridConstraintMarkers(baseOption.grid),
-        };
-
-        candidate = injectChargeGroupsIntoGridOption(candidate, randomFn, {
-            allowLessThan: normalizedStage >= 2,
-            forceLessThan: normalizedStage >= 2,
-            minGroups: normalizedStage === 1 ? 2 : 1,
-        });
-
-        if (normalizedStage >= 1) {
-            candidate = injectEqualityConstraint(candidate, randomFn, !baseOption.impossible);
-        }
-
-        if (normalizedStage >= 3) {
-            candidate = injectNotEqualConstraint(candidate, randomFn, !baseOption.impossible);
-        }
-
-        bestCandidate = candidate;
-        if (baseOption.impossible || isPlayableGridOption(candidate)) {
-            return candidate;
+    // Find pairs of cells (from different dominos) that share the same pip.
+    const cellPipList = [];
+    for (const pair of pairs) {
+        for (const [r, c] of pair) {
+            const k = `${r},${c}`;
+            const pip = chargeMap.get(k);
+            if (pip !== undefined) {
+                cellPipList.push({ r, c, pip });
+            }
         }
     }
 
-    return bestCandidate;
+    // Group by pip value, then pick random pairs across different dominos.
+    const byPip = new Map();
+    for (const entry of cellPipList) {
+        if (!byPip.has(entry.pip)) byPip.set(entry.pip, []);
+        byPip.get(entry.pip).push(entry);
+    }
+
+    let placed = 0;
+    const usedCells = new Set();
+    const pipGroups = [...byPip.values()].filter((g) => g.length >= 2);
+    const shuffled = pipGroups.sort(() => randomFn() - 0.5);
+
+    for (const group of shuffled) {
+        if (placed >= count) break;
+        const sorted = group.sort(() => randomFn() - 0.5);
+        const a = sorted[0];
+        const b = sorted[1];
+        const ak = `${a.r},${a.c}`;
+        const bk = `${b.r},${b.c}`;
+        if (usedCells.has(ak) || usedCells.has(bk)) continue;
+        out[a.r][a.c] = linkCell(b.r, b.c);
+        out[b.r][b.c] = linkCell(a.r, a.c);
+        usedCells.add(ak);
+        usedCells.add(bk);
+        placed++;
+    }
+
+    return out;
+}
+
+/**
+ * Inject ≠ constraint links between cells that will have different pip values.
+ */
+function injectDerivedNotEqualLinks(grid, pairs, chargeMap, randomFn, count = 1) {
+    const out = cloneShapeGrid(grid);
+    const usedCells = new Set();
+
+    const allCells = [];
+    for (const pair of pairs) {
+        for (const [r, c] of pair) {
+            const k = `${r},${c}`;
+            const pip = chargeMap.get(k);
+            if (pip !== undefined) allCells.push({ r, c, pip, k });
+        }
+    }
+
+    const shuffled = allCells.sort(() => randomFn() - 0.5);
+    let placed = 0;
+
+    outer: for (let i = 0; i < shuffled.length; i++) {
+        for (let j = i + 1; j < shuffled.length; j++) {
+            if (placed >= count) break outer;
+            const a = shuffled[i];
+            const b = shuffled[j];
+            if (a.pip === b.pip) continue; // must differ
+            if (usedCells.has(a.k) || usedCells.has(b.k)) continue;
+            out[a.r][a.c] = notLinkCell(b.r, b.c);
+            out[b.r][b.c] = notLinkCell(a.r, a.c);
+            usedCells.add(a.k);
+            usedCells.add(b.k);
+            placed++;
+        }
+    }
+
+    return out;
+}
+
+/**
+ * Inject charge-group constraints derived from adjacent placed cells that
+ * share the same pip value. Groups are guaranteed correct because we know
+ * the intended pip values.
+ */
+function injectDerivedChargeGroups(grid, pairs, chargeMap, randomFn, stage = 1) {
+    const out = cloneShapeGrid(grid);
+    const usedCells = new Set();
+
+    // Pre-mark any cells that are already occupied by equality/not-equal links
+    // so the charge group injector doesn't overwrite them (which would corrupt
+    // the anchor resolution chain and throw "Invalid charge group link target").
+    grid.forEach((row, r) => row.forEach((cell, c) => {
+        if (isLinkCell(cell) || isNotEqualLinkCell(cell)
+            || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) {
+            usedCells.add(`${r},${c}`);
+        }
+    }));
+
+    // Build adjacency list of (cell, pip) pairs
+    const pipGrid = new Map();
+    for (const pair of pairs) {
+        for (const [r, c] of pair) {
+            const k = `${r},${c}`;
+            const pip = chargeMap.get(k);
+            if (pip !== undefined) pipGrid.set(k, { r, c, pip });
+        }
+    }
+
+    const allowLessThan = stage >= 2;
+    let groupsPlaced = 0;
+    const maxGroups = stage >= 3 ? 3 : stage === 2 ? 2 : 1;
+
+    // Find contiguous runs of charge cells and group them.
+    const visited = new Set();
+    const components = [];
+    for (const [, entry] of pipGrid) {
+        const startKey = `${entry.r},${entry.c}`;
+        if (visited.has(startKey)) continue;
+        const comp = [];
+        const q = [entry];
+        visited.add(startKey);
+        while (q.length > 0) {
+            const cur = q.shift();
+            comp.push(cur);
+            for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+                const nk = `${cur.r + dr},${cur.c + dc}`;
+                if (!pipGrid.has(nk) || visited.has(nk)) continue;
+                visited.add(nk);
+                q.push(pipGrid.get(nk));
+            }
+        }
+        if (comp.length >= 2) components.push(comp);
+    }
+
+    for (const comp of components.sort(() => randomFn() - 0.5)) {
+        if (groupsPlaced >= maxGroups) break;
+        const available = comp.filter((c) => !usedCells.has(`${c.r},${c.c}`));
+        if (available.length < 2) continue;
+
+        const cluster = available.slice(0, Math.min(available.length, randomFn() < 0.5 ? 2 : 3));
+        const anchor = cluster[0];
+        const exactTarget = cluster.reduce((s, e) => s + e.pip, 0);
+        const useLessThan = allowLessThan && randomFn() < 0.4;
+        const threshold = exactTarget + 1 + Math.floor(randomFn() * Math.max(2, cluster.length));
+
+        out[anchor.r][anchor.c] = createChargeGroupAnchor(useLessThan ? -threshold : exactTarget);
+        cluster.slice(1).forEach((cell) => {
+            out[cell.r][cell.c] = createChargeGroupLink(anchor.r, anchor.c);
+        });
+
+        cluster.forEach((cell) => usedCells.add(`${cell.r},${cell.c}`));
+        groupsPlaced++;
+    }
+
+    return out;
+}
+
+/**
+ * Replacement for buildStageConstraintProfile.
+ * Uses forward-generation for zero-latency guaranteed-solvable puzzles.
+ */
+function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.random) {
+    const normalizedStage = Math.max(1, Number(stage) || 1);
+
+    if (gridOption.impossible) {
+        // For impossible layouts we still need dominos — fast path.
+        const baseOption = {
+            ...cloneGridOption(gridOption),
+            grid: stripGridConstraintMarkers(gridOption.grid),
+        };
+        return {
+            ...baseOption,
+            dominos: (gridOption.dominos || []).map((d, i) => ({
+                id: d.id || `domino_${i + 1}`,
+                firstOptionAmount: d.firstOptionAmount ?? 0,
+                secondOptionAmount: d.secondOptionAmount ?? 0,
+                ...d,
+            })),
+        };
+    }
+
+    // --- Forward generation ---
+    const { dominos, grid: derivedGrid } = forwardGeneratePuzzle(gridOption, normalizedStage, randomFn);
+
+    // We now have a clean grid with charge cells baked in and correct dominos.
+    // Apply layered constraint injection (all derived, so always solvable).
+    const baseOption = {
+        ...cloneGridOption(gridOption),
+        grid: derivedGrid,
+        dominos,
+        dayStage: normalizedStage,
+        impossible: false,
+        inspectionFault: null,
+        scrapKind: null,
+        scrapStatus: null,
+        scrapReason: null,
+    };
+
+    // Collect pairs and chargeMap for constraint derivation.
+    const openKeys = new Set();
+    const chargeMap = new Map();
+    derivedGrid.forEach((row, r) => row.forEach((cell, c) => {
+        if (cell === CELL_WALL) return;
+        openKeys.add(`${r},${c}`);
+        if (isChargeCode(cell)) {
+            chargeMap.set(`${r},${c}`, cell - 1);
+        }
+    }));
+    const pairs = greedyTileGrid(derivedGrid, openKeys, randomFn);
+
+    // -- Equality links (Day 1+) FIRST so their usedCells set is populated --
+    const equalityCount = normalizedStage >= 3 ? 2 : 1;
+    let resultGrid = injectDerivedEqualityLinks(derivedGrid, pairs, chargeMap, randomFn, equalityCount);
+
+    // -- Not-equal links (Day 3+) SECOND --
+    if (normalizedStage >= 3) {
+        resultGrid = injectDerivedNotEqualLinks(resultGrid, pairs, chargeMap, randomFn, 1);
+    }
+
+    // -- Charge groups LAST so they can see which cells are already link cells --
+    // and avoid overwriting them (which would corrupt the anchor chain).
+    resultGrid = injectDerivedChargeGroups(resultGrid, pairs, chargeMap, randomFn, normalizedStage);
+
+    return { ...baseOption, grid: resultGrid };
 }
 
 function pickBrokenRegionGlyph(randomFn = Math.random) {

@@ -2,45 +2,44 @@
   {
     "id": 1,
     "period": 1,
-    "text": "DAY 1 MANDATE: IF A CRITICAL SUBSYSTEM IS UNWINNABLE, YOU MUST SCRAP THE UNIT.",
+    "text": "DAY 1: Scrap units with an unwinnable subsystem.",
     "details": [
-      "[CRITICAL STEP] Open the Port Map, click the red ERROR text to confirm the fault, then hit SCRAP.",
-      "[CODE] If the returned payload code cannot be patched to match the protocol, scrap it.",
-      "[GEAR] A cracked input or output drive is a hard fail — cannot be repaired.",
-      "[FLOW] If the first live lead from the power source is missing, scrap the machine.",
-      "[GRID] If cells are stuck in dead space (!) or there aren't enough charge dominoes for the minimum, scrap it."
+      "[GRID] Place dominos so every charge cell pip matches its required value. == links require equal pips. < group regions must stay under their threshold. Isolated charge cells boxed in by walls = SCRAP.",
+      "[FLOW] Route power from the source to every required subsystem. Dead-end paths or a missing first link = SCRAP.",
+      "[GEAR] Slide loose gears until the output drive spins. Cracked input or output = SCRAP.",
+      "[CODE] Type the command exactly. Failed test generates a repair command — squash crawling bugs before they corrupt the line. Unresolvable mismatch = SCRAP."
     ]
   },
   {
     "id": 2,
     "period": 2,
-    "text": "DAY 2 MANDATE: STRICT COMPLIANCE REQUIRED. SCRAP ANY UNIT THAT BREAKS COMPLIANCE FILTERS.",
+    "text": "DAY 2: Scrap units that break compliance filters, even if the puzzle looks solvable.",
     "details": [
-      "[CODE] Outputs may drift or come back corrupted. Noncompliant returns (wrong characters, mismatched protocol) are scrap signals.",
-      "[GEAR] Rejection-marked rusty parts may appear. If one is required to connect the drives, scrap the machine.",
-      "[FLOW] Green and orange filters recolor power routing. If a required module receives the wrong power class, scrap it.",
-      "[GRID] Grids now use `<` regions. Broken glyph markers (e.g. `#`, `@`) and intentionally isolated charge cells are compliance failures. Scrap."
+      "[GRID] Broken glyphs (#, @, etc.) on any region marker = SCRAP. Intentionally isolated charge cells = SCRAP.",
+      "[FLOW] Power filters active (green / orange). If a required module receives the wrong power class = SCRAP.",
+      "[GEAR] Rust-marked gears are now possible. If a rusted part is required to bridge the drives = SCRAP.",
+      "[CODE] Output drift is now possible. Noncompliant or corrupted return values = SCRAP."
     ]
   },
   {
     "id": 3,
     "period": 3,
-    "text": "DAY 3 MANDATE: ZERO TOLERANCE FOR HAZARDOUS INSTABILITY. IF IT SPARKS OR CONTAMINATES, SCRAP IT.",
+    "text": "DAY 3: Zero tolerance. Sparks, contamination, or instability = SCRAP immediately.",
     "details": [
-      "[CODE] A green debugger bug accompanied by red sparks indicates hazardous contamination. Scrap immediately.",
-      "[GEAR] Deadlock clamps create true dead space. Red sparks mark unsafe discharge. Any live spark state is a mandatory scrap.",
-      "[FLOW] Multiple power sources enabled. RED power lines and Crackling components are severely unsafe fire hazards. Scrap the unit.",
-      "[GRID] Grids mix groups, `<`, `=`, AND `!=` links. ANY corrupted red clown/wildcard domino denotes an overridden system. Automatic scrap."
+      "[GRID] Red corrupted (clown) domino on the rack = automatic SCRAP. != links also active — both linked cells must have different pips.",
+      "[FLOW] Multiple power sources. Any red power line or crackling component = SCRAP.",
+      "[GEAR] Deadlock clamps may appear — they grey out cells permanently. Red spark discharge = SCRAP.",
+      "[CODE] Green debug bug + red sparks = hazardous contamination. SCRAP immediately."
     ]
   },
   {
     "id": 101,
     "period": 1,
-    "text": "UNOFFICIAL: The underground Umbrella network needs your help to build rebellion units.",
+    "text": "UNOFFICIAL: The Umbrella network may contact you with off-book assignments.",
     "details": [
-      "This is a story lead, not a payroll directive. Keep an ear on the comms channel.",
-      "If you receive unusual umbrella parts or purple circuits, they might be needed for specific machines.",
-      "Rebellion circuits overrule factory mandated protocols, but you must still manually clear the board."
+      "This is a story thread, not a payroll directive.",
+      "Purple or umbrella-marked parts on the rack signal a rebellion build — clear the board as normal.",
+      "Rebellion circuits override factory rules, but YOU still file the final decision."
     ]
   }
 ]
