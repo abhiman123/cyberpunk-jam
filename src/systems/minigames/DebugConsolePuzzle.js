@@ -192,13 +192,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
             lineSpacing: 4,
         }).setOrigin(0, 0);
 
-        const commandLabel = this.scene.add.text(-458, -164, 'COMMAND LINE', {
+        const commandLabel = this.scene.add.text(-458, -155, 'COMMAND LINE', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#cdeaf3',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._modeText = this.scene.add.text(-68, -164, '', {
+        this._modeText = this.scene.add.text(-68, -155, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#ffe4ac',
