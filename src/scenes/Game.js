@@ -174,7 +174,7 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleOverlay.onClose = (evidence) => this._handleGearPuzzleClosed(evidence);
         this._debugPuzzleOverlay = new DebugConsolePuzzle(this, { depth: 360 });
         this._debugPuzzleOverlay.onClose = (evidence) => this._handleDebugPuzzleClosed(evidence);
-        this.input.keyboard?.on('keydown', this._handleKonamiKey);
+        window.addEventListener('keydown', this._handleKonamiKey);
 
         const newRuleIds = GameState.day <= 3
             ? allRules.filter((rule) => rule.period === GameState.day).map((rule) => rule.id)
@@ -203,7 +203,7 @@ export default class GameScene extends Phaser.Scene {
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
             this.input.off('gameout', this._handleDeskItemPointerUp, this);
-            this.input.keyboard?.off('keydown', this._handleKonamiKey);
+            window.removeEventListener('keydown', this._handleKonamiKey);
             this._phoneBodyMaskSource?.destroy();
             this._miniMachineScreenMaskSource?.destroy();
             this._rulebook?.destroy();
