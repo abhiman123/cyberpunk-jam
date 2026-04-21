@@ -193,10 +193,10 @@ const createIntroSequence = ({
 
 export const FIRST_SHIFT_INTRO = Object.freeze({
     enabled: true,
-    silenceBeforePhoneMs: 2200,
-    caseArrivalDelayMs: 700,
-    fallbackVoiceMs: 1400,
-    lineGapMs: 140,
+    silenceBeforePhoneMs: 0,
+    caseArrivalDelayMs: 0,
+    fallbackVoiceMs: 0,
+    lineGapMs: 0,
     incomingHeader: 'Notification:',
     sequences: Object.freeze({
         '1-1': createIntroSequence({
@@ -322,7 +322,7 @@ export const MACHINE_PUZZLE = Object.freeze({
     inspectButtonX: 1118,
     inspectButtonY: 652,
     debugCellFontSize: 21,
-    debugCellTextColor: '#f5f0d8',
+    debugCellTextColor: '#f4f2e5',
 });
 
 export const FACTORY_DEBUG = Object.freeze({

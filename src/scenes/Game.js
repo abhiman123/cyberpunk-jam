@@ -1559,8 +1559,8 @@ export default class GameScene extends Phaser.Scene {
         const panelHeight = 232;
         const hiddenX = -panelWidth - 48;
         const hiddenY = 42;
-        const screenLeft = 20;
-        const screenTop = 50;
+        const screenLeft = 2;
+        const screenTop = 5;
         const screenWidth = 406;
         const screenHeight = 158;
 
@@ -1582,10 +1582,10 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0x89805d, 0.55);
         const screenGlow = this.add.rectangle(panelWidth / 2, 128, 396, 148, 0x7ad8d4, 0.08)
             .setStrokeStyle(1, 0xbadcc7, 0.14);
-        const screwTopLeft = this.add.circle(24, 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
-        const screwTopRight = this.add.circle(panelWidth - 24, 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
-        const screwBottomLeft = this.add.circle(24, panelHeight - 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
-        const screwBottomRight = this.add.circle(panelWidth - 24, panelHeight - 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
+        const screwTopLeft = this.add.circle(20, 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
+        const screwTopRight = this.add.circle(panelWidth - 20, 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
+        const screwBottomLeft = this.add.circle(20, panelHeight - 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
+        const screwBottomRight = this.add.circle(panelWidth - 20, panelHeight - 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
 
         this._miniMachinePanelTitle = this.add.text(22, 16, 'MACHINE PORTS', {
             fontFamily: 'Courier New',
@@ -1599,7 +1599,7 @@ export default class GameScene extends Phaser.Scene {
             color: '#9ab894',
             wordWrap: { width: 360 },
         });
-        this._miniMachineHintText = this.add.text(22, panelHeight - 24, 'CLICK GRID, FLOW, GEAR, OR CODE PORT', {
+        this._miniMachineHintText = this.add.text(22, panelHeight - 16, 'CLICK GRID, FLOW, GEAR, OR CODE PORT', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#c8cf9f',
@@ -1625,9 +1625,9 @@ export default class GameScene extends Phaser.Scene {
         this._miniCodeGfx = this.add.graphics();
         this._miniCodeLabelContainer = this.add.container(0, 0);
 
-        const gridPortFrame = this.add.rectangle(92, 102, 96, 54, 0x091116, 0.2)
+        const gridPortFrame = this.add.rectangle(92, 102, 50, 54, 0x091116, 0.2)
             .setStrokeStyle(2, 0x8bb8ff, 0.82);
-        const gridPortHit = this.add.rectangle(92, 102, 96, 54, 0xffffff, 0.001)
+        const gridPortHit = this.add.rectangle(92, 102, 50, 54, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
         const gridPortLabel = this.add.text(54, 138, 'GRID', {
             fontFamily: 'Courier New',
@@ -1636,9 +1636,9 @@ export default class GameScene extends Phaser.Scene {
             letterSpacing: 1,
         });
 
-        const flowPortFrame = this.add.rectangle(300, 128, 104, 54, 0x091116, 0.2)
+        const flowPortFrame = this.add.rectangle(400, 100, 60, 54, 0x091116, 0.2)
             .setStrokeStyle(2, 0x8bb8ff, 0.82);
-        const flowPortHit = this.add.rectangle(300, 128, 104, 54, 0xffffff, 0.001)
+        const flowPortHit = this.add.rectangle(400, 100, 60, 54, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
         const flowPortLabel = this.add.text(256, 162, 'FLOW', {
             fontFamily: 'Courier New',
@@ -1647,11 +1647,11 @@ export default class GameScene extends Phaser.Scene {
             letterSpacing: 1,
         });
 
-        const codePortFrame = this.add.rectangle(320, 78, 118, 42, 0x091116, 0.2)
+        const codePortFrame = this.add.rectangle(290, 78, 60, 42, 0x091116, 0.2)
             .setStrokeStyle(2, 0x8bb8ff, 0.82);
-        const codePortHit = this.add.rectangle(320, 78, 118, 42, 0xffffff, 0.001)
+        const codePortHit = this.add.rectangle(290, 78, 60, 42, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
-        const codePortLabel = this.add.text(262, 104, 'CODE', {
+        const codePortLabel = this.add.text(232, 104, 'CODE', {
             fontFamily: 'monospace',
             fontSize: '10px',
             color: '#d7e7ff',
@@ -2603,17 +2603,17 @@ export default class GameScene extends Phaser.Scene {
             this._syncPhoneBodyLayout();
         }
 
-        if (typingState.showMachineBubble && typingState.bubbleMachineVariant === this._currentMachineVariant) {
-            this._finalizeMachineSpeechBubble(typingState.bubbleText);
-        }
+        // if (typingState.showMachineBubble && typingState.bubbleMachineVariant === this._currentMachineVariant) {
+        //     this._finalizeMachineSpeechBubble(typingState.bubbleText);
+        // }
 
-        if (typingState.bubbleMachineVariant) {
-            const chatView = this._getPhoneViewState('chat');
-            this._cacheMachineConversationSnapshot(
-                typingState.bubbleMachineVariant,
-                chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
-            );
-        }
+        // if (typingState.bubbleMachineVariant) {
+        //     const chatView = this._getPhoneViewState('chat');
+        //     this._cacheMachineConversationSnapshot(
+        //         typingState.bubbleMachineVariant,
+        //         chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
+        //     );
+        // }
 
         this._activePhoneTypingState = null;
         return true;
@@ -2952,7 +2952,7 @@ export default class GameScene extends Phaser.Scene {
             prefix,
             text: String(text || ''),
             bubbleText,
-            showMachineBubble: shouldRenderMachineBubble,
+            showMachineBubble: false,
             bubbleMachineVariant,
             onComplete,
             charIndex: 0,
@@ -3334,7 +3334,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(speechText, machineVariant)}`, {
             append: true,
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: speechText,
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -4201,7 +4201,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'SIGNAL SPIKE', 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(panicText, machineVariant)}`, {
             append: true,
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: panicText,
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -4310,7 +4310,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'PROPOSITION INCOMING', 'chat');
         this._typePhoneMessage('\n\nWait. Keep it quiet. I need a little supply run.\n\nQ> Want to hear it?', {
             append: true,
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: 'Wait. Keep it quiet. I need a little supply run. Want to hear it?',
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -4347,7 +4347,7 @@ export default class GameScene extends Phaser.Scene {
                 this._showPhonePanel(header, currentBody, 'PROPOSITION CLOSED', 'chat');
                 this._typePhoneMessage('\n\nX Alright, whatever, bro.', {
                     append: true,
-                    showMachineBubble: true,
+                    showMachineBubble: false,
                     speechBubbleText: 'Alright, whatever, bro.',
                     bubbleMachineVariant: machineVariant,
                     onComplete: () => {
@@ -4509,7 +4509,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL TRUSTING YOU', 'chat');
         this._typePhoneMessage('\n\n✓ Alright. Then keep loading me up.', {
             append: true,
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: 'Alright. Then keep loading me up.',
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -4539,7 +4539,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'DIDN\'T FEEL A THING', 'chat');
         this._typePhoneMessage('\n\nQ> r u sure u have the part? i didnt feel anything', {
             append: true,
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: 'r u sure u have the part? i didnt feel anything',
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -4571,7 +4571,7 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'DEAL CLOSED', 'chat');
             this._typePhoneMessage('\n\nX our business here is done.', {
                 append: true,
-                showMachineBubble: true,
+                showMachineBubble: false,
                 speechBubbleText: 'our business here is done.',
                 bubbleMachineVariant: machineVariant,
                 onComplete: () => {
@@ -4599,7 +4599,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL WAITING', 'chat');
         this._typePhoneMessage('\n\n✓ im waiting.', {
             append: true,
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: 'im waiting.',
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -4638,7 +4638,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE', 'chat');
 
         this._typePhoneMessage(openingSpeech, {
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: openingSpeech,
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -4662,7 +4662,7 @@ export default class GameScene extends Phaser.Scene {
                     );
                     this._typePhoneMessage(`\n\nQ> ${promptSpeech}`, {
                         append: true,
-                        showMachineBubble: true,
+                        showMachineBubble: false,
                         speechBubbleText: promptSpeech,
                         bubbleFooter: 'YES / NO',
                         bubbleMachineVariant: machineVariant,
@@ -4778,7 +4778,7 @@ export default class GameScene extends Phaser.Scene {
             this._commSequenceEvent = this.time.delayedCall(90, () => {
                 this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
                     append: true,
-                    showMachineBubble: true,
+                    showMachineBubble: false,
                     speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
                     bubbleFooter: choice === 'accept' ? 'YES' : 'NO',
                     bubbleMachineVariant: machineVariant,
@@ -6840,7 +6840,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n${action === 'approve' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
             append: true,
-            showMachineBubble: true,
+            showMachineBubble: false,
             speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
             bubbleMachineVariant: machineVariant,
             onComplete: () => {
@@ -7987,17 +7987,17 @@ export default class GameScene extends Phaser.Scene {
         };
 
         const layout = this._currentMachineVariant.miniDisplay || {
-            artX: 106,
-            artY: 132,
-            artScale: 0.92,
+            artX: 118,
+            artY: 105,
+            artScale: 0.5,
             artAngle: 0,
-            gridPreview: { x: 42, y: 72, width: 58, height: 40, label: 'GRID' },
-            flowPreview: { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' },
-            codePreview: { x: 86, y: 24, width: 74, height: 22, label: 'CODE' },
-            gearPreview: { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' },
+            gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+            flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+            codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+            gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
         };
         const resolvedGridPreview = clampRect(scaleRect(layout.gridPreview, { x: 42, y: 72, width: 58, height: 40, label: 'GRID' }));
-        const resolvedFlowPreview = clampRect(scaleRect(layout.flowPreview, { x: 136, y: 108, width: 60, height: 38, label: 'FLOW' }));
+        const resolvedFlowPreview = clampRect(scaleRect(layout.flowPreview, { x: 136, y: 72, width: 60, height: 38, label: 'FLOW' }));
         const resolvedCodePreview = clampRect(scaleRect(layout.codePreview, { x: 86, y: 24, width: 74, height: 22, label: 'CODE' }));
         const resolvedGearPreview = clampRect(scaleRect(layout.gearPreview, { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' }));
         const resolvedArtX = (layout.artX ?? 106) * scaleX;
