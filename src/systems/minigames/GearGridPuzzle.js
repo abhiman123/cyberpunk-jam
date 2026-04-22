@@ -196,10 +196,10 @@ export default class GearGridPuzzle extends MinigameBase {
             wordWrap: { width: 220 },
         }).setOrigin(0, 0);
 
-        const closeBg = this.scene.add.rectangle(318, 256, 210, 42, 0x243846, 0.94)
+        const closeBg = this.scene.add.rectangle(318, 245, 210, 42, 0x243846, 0.94)
             .setStrokeStyle(2, 0xa8c8d2, 0.82)
             .setInteractive({ useHandCursor: true });
-        const closeText = this.scene.add.text(318, 256, 'CLOSE [ESC]', {
+        const closeText = this.scene.add.text(318, 245, 'CLOSE', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#e6f3f6',
