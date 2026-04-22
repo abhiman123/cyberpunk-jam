@@ -11,7 +11,7 @@ const _origTextInit = Phaser.GameObjects.Text.prototype.initRTL ?? (() => {});
 const _origTextStyle = Phaser.GameObjects.Text.prototype.setStyle;
 Phaser.GameObjects.Text.prototype.setStyle = function (style) {
     if (style && !style.resolution) {
-        style.resolution = window.devicePixelRatio || 1;
+        style.resolution = Math.max(2, window.devicePixelRatio || 1);
     }
     return _origTextStyle.call(this, style);
 };
@@ -24,6 +24,12 @@ const config = {
     antialias: false,
     roundPixels: true,
     backgroundColor: '#0a0a0a',
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 1280,
+        height: 720,
+    },
     scene: [BootScene, TitleScene, GameScene, SummaryScene, TransitionScene, EndScene],
 };
 

@@ -5570,7 +5570,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (!mainReady) {
             if (mainScrapRequired && !mainInspected) {
-                text = 'OPEN MAIN PUZZLE // CONFIRM THE SCRAP SIGNAL';
+                text = 'OPEN MAIN PUZZLE // INSPECT THE SUBSYSTEM';
                 color = '#ffd685';
             } else {
                 text = otherRequired
@@ -5581,18 +5581,14 @@ export default class GameScene extends Phaser.Scene {
                 color = '#8fc1cf';
             }
         } else if (!otherSolved) {
-            text = scrapRequired
-                ? (pendingLabels.length === 1
-                    ? `SCRAP SIGNAL FOUND // CLEAR ${pendingLabels[0]} PUZZLE`
-                    : 'SCRAP SIGNAL FOUND // CLEAR AUX PUZZLES')
-                : (pendingLabels.length === 1
-                    ? `MAIN PUZZLE CLEARED // FINISH ${pendingLabels[0]} PUZZLE`
-                    : 'MAIN PUZZLE CLEARED // FINISH AUX PUZZLES');
+            text = pendingLabels.length === 1
+                ? `MAIN PUZZLE CLEARED // FINISH ${pendingLabels[0]} PUZZLE`
+                : 'MAIN PUZZLE CLEARED // FINISH AUX PUZZLES';
             color = '#9bc2ff';
         } else if (scrapRequired) {
             text = scrapBonusEligible
-                ? 'ALL REQUIRED CHECKS CLEARED // SCRAP BONUS READY'
-                : 'ALL REQUIRED CHECKS CLEARED // SCRAP READY';
+                ? 'ALL REQUIRED CHECKS CLEARED // FILE YOUR RULING'
+                : 'ALL REQUIRED CHECKS CLEARED // FILE YOUR RULING';
             color = scrapBonusEligible ? '#ffd685' : '#ffb49b';
         } else {
             text = otherRequired
@@ -6292,13 +6288,13 @@ export default class GameScene extends Phaser.Scene {
             this._showFeedback(
                 gateState.ready
                     ? (gateState.scrapBonusEligible
-                        ? 'FLOW SCRAP CONFIRMED // FILE SCRAP'
-                        : 'FLOW DISQUALIFIED // FILE SCRAP')
+                        ? 'FLOW DIAGNOSTIC COMPLETE // FILE YOUR RULING'
+                        : 'FLOW DIAGNOSTIC COMPLETE // FILE YOUR RULING')
                     : gateState.mainReady
                         ? (pendingLabels.length === 1
-                            ? `FLOW SIGNAL FOUND // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'FLOW SIGNAL FOUND // FINISH REMAINING PUZZLES')
-                        : 'FLOW SIGNAL FOUND // FINISH MAIN PUZZLE',
+                            ? `FLOW DIAGNOSTIC COMPLETE // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'FLOW DIAGNOSTIC COMPLETE // FINISH REMAINING PUZZLES')
+                        : 'FLOW DIAGNOSTIC COMPLETE // FINISH MAIN PUZZLE',
                 evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
             );
             this._setPhoneInfoNote(
@@ -6444,13 +6440,13 @@ export default class GameScene extends Phaser.Scene {
             this._showFeedback(
                 gateState.ready
                     ? (gateState.scrapBonusEligible
-                        ? 'GEAR SCRAP CONFIRMED // FILE SCRAP'
-                        : 'GEAR DISQUALIFIED // FILE SCRAP')
+                        ? 'GEAR DIAGNOSTIC COMPLETE // FILE YOUR RULING'
+                        : 'GEAR DIAGNOSTIC COMPLETE // FILE YOUR RULING')
                     : gateState.mainReady
                         ? (pendingLabels.length === 1
-                            ? `GEAR SIGNAL FOUND // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'GEAR SIGNAL FOUND // FINISH REMAINING PUZZLES')
-                        : 'GEAR SIGNAL FOUND // FINISH MAIN PUZZLE',
+                            ? `GEAR DIAGNOSTIC COMPLETE // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'GEAR DIAGNOSTIC COMPLETE // FINISH REMAINING PUZZLES')
+                        : 'GEAR DIAGNOSTIC COMPLETE // FINISH MAIN PUZZLE',
                 evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
             );
             this._setPhoneInfoNote(
@@ -6555,13 +6551,13 @@ export default class GameScene extends Phaser.Scene {
             this._showFeedback(
                 gateState.ready
                     ? (gateState.scrapBonusEligible
-                        ? 'SCRAP SIGNAL CONFIRMED // FILE SCRAP'
-                        : 'DISQUALIFYING SIGNAL CONFIRMED // FILE SCRAP')
+                        ? 'CODE DIAGNOSTIC COMPLETE // FILE YOUR RULING'
+                        : 'CODE DIAGNOSTIC COMPLETE // FILE YOUR RULING')
                     : gateState.mainReady
                         ? (pendingLabels.length === 1
-                            ? `CODE SIGNAL FOUND // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'CODE SIGNAL FOUND // FINISH REMAINING PUZZLES')
-                        : 'CODE SIGNAL FOUND // FINISH MAIN PUZZLE',
+                            ? `CODE DIAGNOSTIC COMPLETE // FINISH ${pendingLabels[0]} PUZZLE`
+                            : 'CODE DIAGNOSTIC COMPLETE // FINISH REMAINING PUZZLES')
+                        : 'CODE DIAGNOSTIC COMPLETE // FINISH MAIN PUZZLE',
                 evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
             );
             this._setPhoneInfoNote(
