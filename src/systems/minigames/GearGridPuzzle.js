@@ -140,7 +140,7 @@ export default class GearGridPuzzle extends MinigameBase {
         const gridWidth = cols * this._cellSize;
         const gridHeight = rows * this._cellSize;
         this._boardLeft = -154 - 250 + ((500 - gridWidth) / 2);
-        this._boardTop = 8 - 210 + ((420 - gridHeight) / 2);
+        this._boardTop = 28 - 210 + ((420 - gridHeight) / 2);
 
         const depth = this.config.depth;
 
@@ -155,9 +155,9 @@ export default class GearGridPuzzle extends MinigameBase {
             .setStrokeStyle(2, 0x8cb9c7, 0.78);
         const inner = this.scene.add.rectangle(0, 0, 1066, 596, 0x112029, 0.92)
             .setStrokeStyle(1, 0x365160, 0.82);
-        const boardFrame = this.scene.add.rectangle(-154, 8, 560, 476, 0x081317, 0.94)
+        const boardFrame = this.scene.add.rectangle(-154, 28, 560, 476, 0x081317, 0.94)
             .setStrokeStyle(2, 0x5e899a, 0.7);
-        const sidePanel = this.scene.add.rectangle(314, 0, 276, 520, 0x081117, 0.88)
+        const sidePanel = this.scene.add.rectangle(314, 20, 276, 520, 0x081117, 0.88)
             .setStrokeStyle(1, 0x395968, 0.72);
         const headerRule = this.scene.add.rectangle(0, -244, 1006, 2, 0x315161, 0.7);
         this._inspectionFaultGfx = this.scene.add.graphics();
@@ -175,20 +175,20 @@ export default class GearGridPuzzle extends MinigameBase {
             wordWrap: { width: 620 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
-        this._statusText = this.scene.add.text(198, -208, 'OUTPUT OFFLINE', {
+        this._statusText = this.scene.add.text(198, -188, 'OUTPUT OFFLINE', {
             fontFamily: 'Courier New',
             fontSize: '18px',
             color: '#ffd39c',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._statusHintText = this.scene.add.text(198, -178, 'Drag parts onto empty cells.', {
+        this._statusHintText = this.scene.add.text(198, -158, 'Drag parts onto empty cells.', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#8bb1bf',
             wordWrap: { width: 220 },
             lineSpacing: 3,
         }).setOrigin(0, 0);
-        this._summaryText = this.scene.add.text(198, -112, '', {
+        this._summaryText = this.scene.add.text(198, -92, '', {
             fontFamily: 'Courier New',
             fontSize: '11px',
             color: '#d6edf2',
@@ -196,10 +196,10 @@ export default class GearGridPuzzle extends MinigameBase {
             wordWrap: { width: 220 },
         }).setOrigin(0, 0);
 
-        const closeBg = this.scene.add.rectangle(318, 236, 210, 42, 0x243846, 0.94)
+        const closeBg = this.scene.add.rectangle(318, 256, 210, 42, 0x243846, 0.94)
             .setStrokeStyle(2, 0xa8c8d2, 0.82)
             .setInteractive({ useHandCursor: true });
-        const closeText = this.scene.add.text(318, 236, 'CLOSE [ESC]', {
+        const closeText = this.scene.add.text(318, 256, 'CLOSE [ESC]', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#e6f3f6',
@@ -213,10 +213,10 @@ export default class GearGridPuzzle extends MinigameBase {
         });
 
         if (this._specialAction) {
-            this._specialActionButton = this.scene.add.rectangle(318, 184, 194, 38, 0x2a4124, 0.95)
+            this._specialActionButton = this.scene.add.rectangle(318, 204, 194, 38, 0x2a4124, 0.95)
                 .setStrokeStyle(2, 0x9de087, 0.9)
                 .setInteractive({ useHandCursor: true });
-            this._specialActionLabel = this.scene.add.text(318, 184, this._specialAction.label || 'SPECIAL', {
+            this._specialActionLabel = this.scene.add.text(318, 204, this._specialAction.label || 'SPECIAL', {
                 fontFamily: 'Courier New',
                 fontSize: '13px',
                 color: '#e3ffd9',
@@ -251,8 +251,8 @@ export default class GearGridPuzzle extends MinigameBase {
         this.container.add([blocker, panel]);
         this._panel = panel;
 
-        const legendDivider = this.scene.add.rectangle(314, 16, 234, 1, 0x395968, 0.6);
-        const legendTitle = this.scene.add.text(198, 36, 'MOVABLE PARTS', {
+        const legendDivider = this.scene.add.rectangle(314, 36, 234, 1, 0x395968, 0.6);
+        const legendTitle = this.scene.add.text(198, 56, 'MOVABLE PARTS', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#cde6ee',
@@ -413,7 +413,7 @@ export default class GearGridPuzzle extends MinigameBase {
 
         const movablePieces = this._pieceViews.filter((pieceView) => pieceView.piece.movable !== false);
         if (movablePieces.length === 0) {
-            const emptyText = this.scene.add.text(218, 84, 'NO LOOSE PARTS', {
+            const emptyText = this.scene.add.text(218, 104, 'NO LOOSE PARTS', {
                 fontFamily: 'Courier New',
                 fontSize: '11px',
                 color: '#c9dbe3',
@@ -424,7 +424,7 @@ export default class GearGridPuzzle extends MinigameBase {
         }
 
         movablePieces.forEach((pieceView, index) => {
-            const y = 72 + (index * 56);
+            const y = 92 + (index * 56);
             const sample = this._createGearVisual(pieceView.piece.type, true);
             sample.container.setScale(0.48);
             sample.container.setPosition(218, y);
