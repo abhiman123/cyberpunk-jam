@@ -50,9 +50,6 @@ export default class FactorySettingsOverlay {
             scan.fillRect(24, y, PANEL_WIDTH - 48, 4);
         }
 
-        this._sweep = this.scene.add.rectangle(-48, PANEL_HEIGHT / 2, 52, PANEL_HEIGHT - 40, 0x8cf7ff, 0.16)
-            .setOrigin(0, 0.5);
-
         const settingsBox = this.scene.add.rectangle(40, 126, PANEL_WIDTH - 80, 166, 0x071722, 0.82)
             .setOrigin(0)
             .setStrokeStyle(1, 0x50e4f2, 0.55);
@@ -120,7 +117,6 @@ export default class FactorySettingsOverlay {
             shell,
             inner,
             scan,
-            this._sweep,
             title,
             subtitle,
             settingsBox,
@@ -187,12 +183,11 @@ export default class FactorySettingsOverlay {
         this.refresh();
         this._callbacks.onOpen?.();
 
-        this.scene.tweens.killTweensOf([this._root, this._panel, this._sweep]);
+        this.scene.tweens.killTweensOf([this._root, this._panel]);
 
         this._root.setVisible(true).setAlpha(1);
         this._backdrop.setAlpha(0);
         this._panel.setScale(0.02, 1).setAlpha(0.95);
-        this._sweep.x = -64;
 
         this.scene.tweens.add({
             targets: this._backdrop,
@@ -206,12 +201,6 @@ export default class FactorySettingsOverlay {
             duration: 240,
             ease: 'Cubic.Out',
         });
-        this.scene.tweens.add({
-            targets: this._sweep,
-            x: PANEL_WIDTH + 18,
-            duration: 260,
-            ease: 'Cubic.Out',
-        });
     }
 
     close(immediate = false) {
@@ -221,7 +210,7 @@ export default class FactorySettingsOverlay {
         this._setSliderHoverState(false);
 
         if (immediate) {
-            this.scene.tweens.killTweensOf([this._backdrop, this._panel, this._sweep]);
+            this.scene.tweens.killTweensOf([this._backdrop, this._panel]);
             this._root.setVisible(false);
             this._backdrop.setAlpha(0);
             this._panel.setScale(0.02, 1);
@@ -229,15 +218,9 @@ export default class FactorySettingsOverlay {
             return;
         }
 
-        this.scene.tweens.killTweensOf([this._backdrop, this._panel, this._sweep]);
-        this._sweep.x = PANEL_WIDTH + 18;
+        this.scene.tweens.killTweensOf([this._backdrop, this._panel]);
 
-        this.scene.tweens.add({
-            targets: this._sweep,
-            x: -70,
-            duration: 190,
-            ease: 'Cubic.In',
-        });
+
         this.scene.tweens.add({
             targets: this._backdrop,
             alpha: 0,
