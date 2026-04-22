@@ -376,11 +376,11 @@ export default class MachinePuzzleOverlay {
             ? Math.min(124, (tableWidth - (MACHINE_PUZZLE.overlayTablePadding * 2)) / (count - 1))
             : 0;
         const slotStartX = count > 1 ? -(slotSpacing * (count - 1)) / 2 : 0;
-        const slotY = tableCenterY + 8;
+        const slotY = tableCenterY;
 
         dominos.forEach((dominoState, index) => {
             const slotX = slotStartX + (slotSpacing * index);
-            const slotRect = this.scene.add.rectangle(slotX, slotY + 10, MACHINE_PUZZLE.dominoWidth + 18, MACHINE_PUZZLE.dominoHeight + 18, 0x2f2018, 0.5)
+            const slotRect = this.scene.add.rectangle(slotX, slotY, MACHINE_PUZZLE.dominoWidth + 18, MACHINE_PUZZLE.dominoHeight + 18, 0x2f2018, 0.5)
                 .setStrokeStyle(1, 0x8d6a4f, 0.35);
             this._dominoLayer.add(slotRect);
 
