@@ -24,12 +24,12 @@
   {
     "id": 3,
     "period": 3,
-    "text": "DAY 3: Zero tolerance. Sparks, contamination, or instability = SCRAP immediately.",
+    "text": "DAY 3: Zero tolerance. Sparks or instability = SCRAP.",
     "details": [
-      "[GRID] Red corrupted (clown) domino on the rack = automatic SCRAP. != links also active — both linked cells must have different pips.",
+      "[GRID] Red corrupted domino on rack = automatic SCRAP. != links active: linked cells must have different pips.",
       "[FLOW] Multiple power sources. Any red power line or crackling component = SCRAP.",
-      "[GEAR] Deadlock clamps may appear — they grey out cells permanently. Red spark discharge = SCRAP.",
-      "[CODE] Green debug bug + red sparks = hazardous contamination. SCRAP immediately."
+      "[GEAR] Deadlock clamps grey out cells. Red spark discharge = SCRAP.",
+      "[CODE] Debug bug (green) + red sparks = contamination. SCRAP."
     ]
   },
   {

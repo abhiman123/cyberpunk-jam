@@ -10,11 +10,11 @@ const PANEL_H      = 520;
 
 // Subsystem tag colors
 const TAG_COLORS = {
-    GRID:  '#62e8a4',
-    FLOW:  '#62b4ff',
-    GEAR:  '#ffcc55',
-    CODE:  '#ff8fdb',
-    NOTE:  '#aaaaaa',
+    GRID:  '#00ffa3', // Brighter neon green
+    FLOW:  '#00bfff', // Brighter neon blue
+    GEAR:  '#ffcc00', // Gold/Amber
+    CODE:  '#ff4de1', // Neon pink
+    NOTE:  '#94a3b8', // Muted slate
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,30 +111,30 @@ export default class RulebookOverlay {
         // ── Header bar ────────────────────────────────────────────────────────
         const headerH  = 50;
         const headerY  = -(PANEL_H / 2) + (headerH / 2);
-        const headerBg = this.scene.add.rectangle(0, headerY, PANEL_W, headerH, 0x131d25, 1)
-            .setStrokeStyle(1, 0x304050, 0.8);
-        const accentLine = this.scene.add.rectangle(0, headerY + headerH / 2, PANEL_W, 1, 0x3ea8c0, 0.55);
+        const headerBg = this.scene.add.rectangle(0, headerY, PANEL_W, headerH, 0x0f172a, 1)
+            .setStrokeStyle(1, 0x1e293b, 1);
+        const accentLine = this.scene.add.rectangle(0, headerY + headerH / 2, PANEL_W, 1, 0x0ea5e9, 0.4);
 
-        this._headerTitle = this.scene.add.text(-(PANEL_W / 2) + 24, headerY, 'RULEBOOK', {
-            fontFamily: 'Courier New', fontSize: '17px', color: '#c8e8f4', letterSpacing: 4,
-        }).setOrigin(0, 0.5);
+        this._headerTitle = this.scene.add.text(-(PANEL_W / 2) + 24, headerY, 'FACTORY DIRECTIVES', {
+            fontFamily: 'Orbitron, Courier New, monospace', fontSize: '18px', color: '#f8fafc', letterSpacing: 4,
+        }).setOrigin(0, 0.5).setResolution(2);
 
         this._headerDay = this.scene.add.text(0, headerY, '', {
-            fontFamily: 'Courier New', fontSize: '13px', color: '#4e8fa0', letterSpacing: 2,
-        }).setOrigin(0.5);
+            fontFamily: 'Courier New, monospace', fontSize: '12px', color: '#94a3b8', letterSpacing: 2,
+        }).setOrigin(0.5).setResolution(2);
 
         // Close button
         const closeBg = this.scene.add.rectangle((PANEL_W / 2) - 40, headerY, 64, 30, 0x1c2a34, 1)
             .setStrokeStyle(1, 0x4a6070, 0.82).setInteractive({ useHandCursor: true });
         const closeLabel = this.scene.add.text((PANEL_W / 2) - 40, headerY, 'ESC', {
-            fontFamily: 'Courier New', fontSize: '13px', color: '#8ab4c4', letterSpacing: 2,
-        }).setOrigin(0.5);
+            fontFamily: 'Courier New, monospace', fontSize: '12px', color: '#64748b', fontWeight: 'bold',
+        }).setOrigin(0.5).setResolution(2);
         closeBg.on('pointerover', () => { closeBg.setFillStyle(0x243644, 1); closeLabel.setColor('#c8e8f4'); });
         closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x1c2a34, 1); closeLabel.setColor('#8ab4c4'); });
         closeBg.on('pointerdown', () => this.hide());
 
         // ── Content container (rebuilt on every show/refresh) ─────────────────
-        this._contentContainer = this.scene.add.container(-(PANEL_W / 2) + 28, headerY + headerH / 2 + 18);
+        this._contentContainer = this.scene.add.container(-(PANEL_W / 2) + 28, headerY + headerH / 2 + 15);
 
         this._panel.add([
             shadow, shell, inner,
@@ -159,7 +159,7 @@ export default class RulebookOverlay {
         this._headerDay.setText(`DAY ${GameState.day}  ·  ACTIVE DIRECTIVES`);
 
         const activeRules = this.allRules.filter((r) => this.activeRuleIds.includes(r.id));
-        const contentW    = PANEL_W - 48;  // available width inside container
+        const contentW    = PANEL_W - 56;  
         const bodyW       = contentW - 24;
         let y = 0;
 
@@ -178,24 +178,23 @@ export default class RulebookOverlay {
             }
 
             // Day badge + rule headline
-            const badgeColor = rule.id === 101 ? '#7c4fc7' : isNew ? '#d4a841' : '#2a5a6a';
-            const badgeStroke = rule.id === 101 ? 0x9b6de8 : isNew ? 0xe6c060 : 0x3d7a8a;
-            const badgeBg = this.scene.add.rectangle(24, y + 10, 46, 22, Phaser.Display.Color.HexStringToColor(badgeColor).color, 0.9)
+            const badgeColor = rule.id === 101 ? '#7c4fc7' : isNew ? '#f59e0b' : '#334155';
+            const badgeStroke = rule.id === 101 ? 0x9b6de8 : isNew ? 0xfbbf24 : 0x475569;
+            const badgeBg = this.scene.add.rectangle(24, y + 10, 46, 20, Phaser.Display.Color.HexStringToColor(badgeColor).color, 0.9)
                 .setOrigin(0.5, 0).setStrokeStyle(1, badgeStroke, 0.8);
             const badgeText = this.scene.add.text(24, y + 10, rule.id === 101 ? 'NET' : `D${rule.period}`, {
-                fontFamily: 'Courier New', fontSize: '11px',
-                color: rule.id === 101 ? '#e2c8ff' : isNew ? '#fff8d4' : '#8fd4e8',
-                letterSpacing: 1,
-            }).setOrigin(0.5, 0);
+                fontFamily: 'Courier New, monospace', fontSize: '11px', fontWeight: 'bold',
+                color: rule.id === 101 ? '#e2c8ff' : isNew ? '#fffbeb' : '#cbd5e1',
+            }).setOrigin(0.5, 0).setResolution(2);
 
-            const headline = this.scene.add.text(58, y + 10, rule.text, {
-                fontFamily: 'Courier New', fontSize: '16px',
-                color: isNew ? '#f0d98a' : '#c8dce8',
-                wordWrap: { width: bodyW - 58 }, lineSpacing: 5,
-            }).setOrigin(0, 0);
+            const headline = this.scene.add.text(58, y + 8, rule.text, {
+                fontFamily: 'Courier New, monospace', fontSize: '15px', fontWeight: 'bold',
+                color: isNew ? '#fcd34d' : '#f8fafc',
+                wordWrap: { width: bodyW - 60 }, lineSpacing: 2,
+            }).setOrigin(0, 0).setResolution(2);
 
             this._push(badgeBg, badgeText, headline);
-            y += headline.height + 28;
+            y += headline.height + 20;
 
             // ── Subsystem details ─────────────────────────────────────────────
             if (Array.isArray(rule.details) && rule.details.length > 0) {
@@ -203,30 +202,30 @@ export default class RulebookOverlay {
                     const tagMatch = detail.match(/^\[([A-Z]+)\]\s*/);
                     const tag      = tagMatch ? tagMatch[1] : null;
                     const bodyStr  = tag ? detail.slice(tagMatch[0].length) : detail;
-                    const tagColor = tag ? (TAG_COLORS[tag] || '#aaaaaa') : TAG_COLORS.NOTE;
+                    const tagColor = tag ? (TAG_COLORS[tag] || '#94a3b8') : TAG_COLORS.NOTE;
 
-                    let lineX = 8;
+                    let lineX = 10;
 
                     if (tag) {
-                        const pillBg = this.scene.add.rectangle(lineX + 24, y + 5, 54, 19, 0x0e1a20, 1)
-                            .setOrigin(0.5, 0).setStrokeStyle(1, Phaser.Display.Color.HexStringToColor(tagColor).color, 0.7);
+                        const pillBg = this.scene.add.rectangle(lineX + 24, y + 5, 50, 17, 0x0f172a, 1)
+                            .setOrigin(0.5, 0).setStrokeStyle(1, Phaser.Display.Color.HexStringToColor(tagColor).color, 0.6);
                         const pillText = this.scene.add.text(lineX + 24, y + 5, tag, {
-                            fontFamily: 'Courier New', fontSize: '12px', color: tagColor, letterSpacing: 1,
-                        }).setOrigin(0.5, 0);
+                            fontFamily: 'Courier New, monospace', fontSize: '11px', color: tagColor, fontWeight: 'bold',
+                        }).setOrigin(0.5, 0).setResolution(2);
                         this._push(pillBg, pillText);
-                        lineX += 60;
+                        lineX += 56;
                     }
 
                     const bodyText = this.scene.add.text(lineX, y + 4, bodyStr, {
-                        fontFamily: 'Courier New', fontSize: '14px', color: '#9ab4c2',
-                        wordWrap: { width: bodyW - lineX }, lineSpacing: 4,
-                    }).setOrigin(0, 0);
+                        fontFamily: 'Courier New, monospace', fontSize: '13px', color: '#cbd5e1',
+                        wordWrap: { width: bodyW - lineX }, lineSpacing: 3,
+                    }).setOrigin(0, 0).setResolution(2);
                     this._push(bodyText);
 
-                    y += Math.max(bodyText.height, 18) + 12;
+                    y += Math.max(bodyText.height, 16) + 6;
                 });
 
-                y += 6;
+                y += 4;
             }
         });
         this._contentContainer.add(this._contentNodes);
