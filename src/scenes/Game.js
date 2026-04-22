@@ -1917,15 +1917,15 @@ export default class GameScene extends Phaser.Scene {
             fontSize: '26px',
             glowColor: 0xffffff,
         });
-        const reject = this._createPhoneButton(366, 148, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
+        const reject = this._createPhoneButton(366, 155, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
             width: 42,
             height: 46,
             fontSize: '23px',
             glowColor: 0xffdddd,
         });
         const infoButton = this._createPhoneChannelButton(214, 160, 'INFO', 30);
-        const chatButton = this._createPhoneChannelButton(246, 160, 'CHAT', 30);
-        const alertButton = this._createPhoneChannelButton(274, 160, '!', 18);
+        const chatButton = this._createPhoneChannelButton(249, 160, 'CHAT', 30);
+        const alertButton = this._createPhoneChannelButton(284, 160, '!', 18);
 
         accept.bg.on('pointerover', () => this._setPhoneButtonHover(accept, true));
         accept.bg.on('pointerout', () => this._setPhoneButtonHover(accept, false));
