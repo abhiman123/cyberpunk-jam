@@ -181,8 +181,6 @@ export default class GameScene extends Phaser.Scene {
             : [];
         this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds, {
             canToggle: () => this._canOpenRulebookOverlay(),
-            onOpen: () => this._setGameplayPaused(true),
-            onClose: () => this._setGameplayPaused(false),
         });
         this._settingsOverlay = new FactorySettingsOverlay(this, {
             onOpen: () => this._setGameplayPaused(true),
