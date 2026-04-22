@@ -267,21 +267,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
             lineSpacing: 7,
         }).setOrigin(0, 0);
 
-<<<<<<< HEAD
-        const expectedLabel = this.scene.add.text(115, -42, 'EXPECTED OUTPUT', {
-=======
         const expectedLabel = this.scene.add.text(115, -28, 'EXPECTED OUTPUT', {
->>>>>>> 51aea0bdef588cfd63489067543933080ebf87b9
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#cdeaf3',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-<<<<<<< HEAD
-        this._expectedOutputText = this.scene.add.text(115, -18, '', {
-=======
         this._expectedOutputText = this.scene.add.text(115, -8, '', {
->>>>>>> 51aea0bdef588cfd63489067543933080ebf87b9
             fontFamily: 'monospace',
             fontSize: '16px',
             color: '#b7ffca',
