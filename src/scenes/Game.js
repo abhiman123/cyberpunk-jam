@@ -6150,7 +6150,7 @@ export default class GameScene extends Phaser.Scene {
         if (this._debugPuzzleOverlay?.active) return;
 
         if (!this._currentMachineVariant._uiOtherPuzzleRequired) {
-            this._showFeedback('NO OTHER PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
+            this._showFeedback('NO FLOW PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
             this._setPhoneInfoNote(
                 'No secondary diagnostic is attached to this unit.',
                 'MAIN PUZZLE ONLY'
