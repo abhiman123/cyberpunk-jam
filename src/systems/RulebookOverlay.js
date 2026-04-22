@@ -116,19 +116,19 @@ export default class RulebookOverlay {
         const accentLine = this.scene.add.rectangle(0, headerY + headerH / 2, PANEL_W, 1, 0x0ea5e9, 0.4);
 
         this._headerTitle = this.scene.add.text(-(PANEL_W / 2) + 24, headerY, 'FACTORY DIRECTIVES', {
-            fontFamily: 'Orbitron, Courier New, monospace', fontSize: '18px', color: '#f8fafc', letterSpacing: 4,
-        }).setOrigin(0, 0.5).setResolution(2);
+        fontFamily: 'Courier New', fontSize: '18px', fontStyle: 'bold', color: '#f8fafc', letterSpacing: 4,
+        }).setOrigin(0, 0.5);
 
-        this._headerDay = this.scene.add.text(0, headerY, '', {
-            fontFamily: 'Courier New, monospace', fontSize: '12px', color: '#94a3b8', letterSpacing: 2,
-        }).setOrigin(0.5).setResolution(2);
+        this._headerDay = this.scene.add.text(50, headerY, '', {
+            fontFamily: 'Courier New', fontSize: '15px', fontStyle: 'bold', color: '#94a3b8', letterSpacing: 2,
+        }).setOrigin(0.5);
 
         // Close button
         const closeBg = this.scene.add.rectangle((PANEL_W / 2) - 40, headerY, 64, 30, 0x1c2a34, 1)
             .setStrokeStyle(1, 0x4a6070, 0.82).setInteractive({ useHandCursor: true });
         const closeLabel = this.scene.add.text((PANEL_W / 2) - 40, headerY, 'ESC', {
             fontFamily: 'Courier New, monospace', fontSize: '12px', color: '#64748b', fontWeight: 'bold',
-        }).setOrigin(0.5).setResolution(2);
+        }).setOrigin(0.5);
         closeBg.on('pointerover', () => { closeBg.setFillStyle(0x243644, 1); closeLabel.setColor('#c8e8f4'); });
         closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x1c2a34, 1); closeLabel.setColor('#8ab4c4'); });
         closeBg.on('pointerdown', () => this.hide());
