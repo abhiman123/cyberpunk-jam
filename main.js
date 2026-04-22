@@ -6,6 +6,16 @@ import SummaryScene from './src/scenes/Summary.js';
 import TransitionScene from './src/scenes/Transition.js';
 import EndScene from './src/scenes/End.js';
 
+// Make all text objects render at device pixel ratio for crisp text on HiDPI screens
+const _origTextInit = Phaser.GameObjects.Text.prototype.initRTL ?? (() => {});
+const _origTextStyle = Phaser.GameObjects.Text.prototype.setStyle;
+Phaser.GameObjects.Text.prototype.setStyle = function (style) {
+    if (style && !style.resolution) {
+        style.resolution = window.devicePixelRatio || 1;
+    }
+    return _origTextStyle.call(this, style);
+};
+
 const config = {
     type: Phaser.AUTO,
     width: 1280,

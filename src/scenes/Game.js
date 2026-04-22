@@ -263,37 +263,29 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer = this.add.container(0, 0).setDepth(200);
         this._factoryControlsContainer = this.add.container(0, 0).setDepth(208).setVisible(false);
 
-        const topBarShadow = this.add.rectangle(640, 130, 1280, 244, 0x000000, 0.24);
-        const topBar = this.add.rectangle(640, 118, 1280, 228, 0x524c40, 0.96)
-            .setStrokeStyle(2, 0x9d947d, 0.95);
-        const topBarInner = this.add.rectangle(640, 118, 1234, 192, 0x2d2c28, 0.98)
-            .setStrokeStyle(1, 0xbcae84, 0.28);
-        const topBarPocket = this.add.rectangle(640, 120, 1186, 162, 0x161714, 0.9)
-            .setStrokeStyle(1, 0x757058, 0.24);
-        const topStrip = this.add.rectangle(640, 24, 1280, 48, 0x090807, 0.94)
-            .setStrokeStyle(1, 0x6a6556, 0.25);
-        this._hudContainer.add([topBarShadow, topBar, topBarInner, topBarPocket, topStrip]);
+        const topStrip = this.add.rectangle(0, 0, this.scale.width, 48, 0x111111, 0.94).setStrokeStyle(1, 0x6a6556, 0.25).setOrigin(0);
+        this._hudContainer.add(topStrip);
 
-        this._hudPeriodText = this.add.text(12, 14,
+        this._hudPeriodText = this.add.text(12, 24,
             `DAY ${GameState.day}`, {
-                fontFamily: 'Courier New', fontSize: '11px', color: '#cccccc',
+                fontFamily: 'Courier New', fontSize: '18px', fontStyle: 'bold', color: '#dddddd',
             }
-        );
+        ).setOrigin(0, 0.5);
         this._hudContainer.add(this._hudPeriodText);
 
-        this._hudCasesText = this.add.text(502, 25, 'CASES: 0', {
-            fontFamily: 'Courier New', fontSize: '11px', color: '#888888',
+        this._hudCasesText = this.add.text(320, 24, 'CASES: 0', {
+            fontFamily: 'Courier New', fontSize: '18px', fontStyle: 'bold', color: '#6cb1df'
         }).setOrigin(0.5);
         this._hudContainer.add(this._hudCasesText);
 
-        this._hudPayText = this.add.text(1268, 12, this._fmtPay(), {
-            fontFamily: 'Courier New', fontSize: '14px', color: '#4ff3a9',
-        }).setOrigin(1, 0);
+        this._hudPayText = this.add.text(1268, 24, this._fmtPay(), {
+            fontFamily: 'Courier New', fontSize: '18px', fontStyle: 'bold', color: '#00dd00',
+        }).setOrigin(1, 0.5);
         this._hudContainer.add(this._hudPayText);
 
-        this._hudViolText = this.add.text(1268, 30, 'Violations: 0', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#666666',
-        }).setOrigin(1, 0);
+        this._hudViolText = this.add.text(640, 24, 'VIOLATIONS: 0', {
+            fontFamily: 'Courier New', fontSize: '18px', fontStyle: 'bold', color: '#d8251e',
+        }).setOrigin(0.5);
         this._hudContainer.add(this._hudViolText);
 
         this._buildDeskSurface();
@@ -1925,15 +1917,15 @@ export default class GameScene extends Phaser.Scene {
             fontSize: '26px',
             glowColor: 0xffffff,
         });
-        const reject = this._createPhoneButton(366, 148, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
+        const reject = this._createPhoneButton(366, 155, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
             width: 42,
             height: 46,
             fontSize: '23px',
             glowColor: 0xffdddd,
         });
         const infoButton = this._createPhoneChannelButton(214, 160, 'INFO', 30);
-        const chatButton = this._createPhoneChannelButton(246, 160, 'CHAT', 30);
-        const alertButton = this._createPhoneChannelButton(274, 160, '!', 18);
+        const chatButton = this._createPhoneChannelButton(249, 160, 'CHAT', 30);
+        const alertButton = this._createPhoneChannelButton(284, 160, '!', 18);
 
         accept.bg.on('pointerover', () => this._setPhoneButtonHover(accept, true));
         accept.bg.on('pointerout', () => this._setPhoneButtonHover(accept, false));
@@ -6158,7 +6150,7 @@ export default class GameScene extends Phaser.Scene {
         if (this._debugPuzzleOverlay?.active) return;
 
         if (!this._currentMachineVariant._uiOtherPuzzleRequired) {
-            this._showFeedback('NO OTHER PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
+            this._showFeedback('NO FLOW PUZZLE LOADED FOR THIS UNIT', '#8fc1cf');
             this._setPhoneInfoNote(
                 'No secondary diagnostic is attached to this unit.',
                 'MAIN PUZZLE ONLY'

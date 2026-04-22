@@ -60,7 +60,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._specialCommandButtonBg = null;
         this._specialCommandButtonText = null;
         this._charWidth = 14;
-        this._commandTextStartX = -420;
+        this._commandTextStartX = -471;
         this._commandTextY = -100;
         this._commandZoneWidth = 520;
         this._commandZoneHeight = 48;
@@ -160,78 +160,113 @@ export default class DebugConsolePuzzle extends MinigameBase {
         });
 
         this._panel = this.scene.add.container(640, 360).setDepth(depth);
-        const outer = this.scene.add.rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x061017, 0.97)
-            .setStrokeStyle(2, 0x8bc1d1, 0.88);
-        const inner = this.scene.add.rectangle(0, 0, PANEL_WIDTH - 34, PANEL_HEIGHT - 34, 0x0c1720, 0.95)
-            .setStrokeStyle(1, 0x2c4856, 0.84);
-        const headerRule = this.scene.add.rectangle(0, -252, PANEL_WIDTH - 90, 2, 0x315768, 0.72);
-        const commandFrame = this.scene.add.rectangle(-180, -112, 572, 118, 0x09131a, 0.94)
-            .setStrokeStyle(2, 0x4f8fa0, 0.82);
-        const actualFrame = this.scene.add.rectangle(286, -126, 352, 146, 0x091218, 0.94)
-            .setStrokeStyle(1, 0x365a68, 0.82);
-        const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x091218, 0.94)
-            .setStrokeStyle(1, 0x365a68, 0.82);
-        const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x091218, 0.94)
-            .setStrokeStyle(1, 0x365a68, 0.82);
 
+        // --- Frames ---
+        const outer = this.scene.add.rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x050c07, 0.98)
+            .setStrokeStyle(2, 0x3a6b28, 0.95);
+        const inner = this.scene.add.rectangle(0, 0, PANEL_WIDTH - 34, PANEL_HEIGHT - 34, 0x070f09, 0.96)
+            .setStrokeStyle(1, 0x1e3d18, 0.72);
+        const headerRule = this.scene.add.rectangle(0, -252, PANEL_WIDTH - 90, 2, 0x3a6b28, 0.82);
+        // Command frame — amber-accented focal point
+        const commandFrame = this.scene.add.rectangle(-231, -112, 572, 118, 0x060e07, 0.97)
+            .setStrokeStyle(2, 0xb87200, 0.88);
+        const commandTopAccent = this.scene.add.rectangle(-231, -171, 572, 2, 0xFFB000, 0.55);
+        const actualFrame = this.scene.add.rectangle(286, -126, 352, 146, 0x060d08, 0.96)
+            .setStrokeStyle(1, 0x235018, 0.82);
+        const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x060d08, 0.96)
+            .setStrokeStyle(1, 0x1e6018, 0.85);
+        const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x060d08, 0.96)
+            .setStrokeStyle(1, 0x1e3d18, 0.72);
+
+        // --- Corner bracket decorations (outer panel) ---
+        const cornerGfx = this.scene.add.graphics();
+        cornerGfx.lineStyle(3, 0xFFB000, 0.82);
+        const hw = PANEL_WIDTH / 2, hh = PANEL_HEIGHT / 2, arm = 26;
+        cornerGfx.lineBetween(-hw, -hh + arm, -hw, -hh); cornerGfx.lineBetween(-hw, -hh, -hw + arm, -hh);
+        cornerGfx.lineBetween(hw - arm, -hh, hw, -hh);   cornerGfx.lineBetween(hw, -hh, hw, -hh + arm);
+        cornerGfx.lineBetween(-hw, hh - arm, -hw, hh);   cornerGfx.lineBetween(-hw, hh, -hw + arm, hh);
+        cornerGfx.lineBetween(hw - arm, hh, hw, hh);     cornerGfx.lineBetween(hw, hh - arm, hw, hh);
+
+        // Corner brackets on command frame
+        const cmdBracketGfx = this.scene.add.graphics();
+        cmdBracketGfx.lineStyle(2, 0xFFB000, 0.65);
+        const cfx = -231, cfy = -112, cfw2 = 286, cfh2 = 59, ca = 12;
+        cmdBracketGfx.lineBetween(cfx - cfw2, cfy - cfh2 + ca, cfx - cfw2, cfy - cfh2);
+        cmdBracketGfx.lineBetween(cfx - cfw2, cfy - cfh2, cfx - cfw2 + ca, cfy - cfh2);
+        cmdBracketGfx.lineBetween(cfx + cfw2 - ca, cfy - cfh2, cfx + cfw2, cfy - cfh2);
+        cmdBracketGfx.lineBetween(cfx + cfw2, cfy - cfh2, cfx + cfw2, cfy - cfh2 + ca);
+        cmdBracketGfx.lineBetween(cfx - cfw2, cfy + cfh2 - ca, cfx - cfw2, cfy + cfh2);
+        cmdBracketGfx.lineBetween(cfx - cfw2, cfy + cfh2, cfx - cfw2 + ca, cfy + cfh2);
+        cmdBracketGfx.lineBetween(cfx + cfw2 - ca, cfy + cfh2, cfx + cfw2, cfy + cfh2);
+        cmdBracketGfx.lineBetween(cfx + cfw2, cfy + cfh2 - ca, cfx + cfw2, cfy + cfh2);
+
+        // --- Scanline overlay ---
+        const scanlines = this.scene.add.graphics();
+        scanlines.lineStyle(1, 0x000000, 0.1);
+        for (let sy = -hh; sy < hh; sy += 3) {
+            scanlines.lineBetween(-hw, sy, hw, sy);
+        }
+
+        // --- Text ---
         const title = this.scene.add.text(-520, -284, `${this._machineName} // SOFTWARE DIAGNOSTIC`, {
             fontFamily: 'Courier New',
             fontSize: '22px',
-            color: '#edf9ff',
-            letterSpacing: 2,
+            color: '#d8f0cc',
+            letterSpacing: 3,
             wordWrap: { width: 900 },
         }).setOrigin(0, 0.5);
         const subtitle = this.scene.add.text(-520, -234, [
-            debugPuzzle.description || 'Type the command exactly. If the output drifts, patch it and stabilize the machine.',
+            debugPuzzle.description || 'Run the diagnostic command. If the output drifts, patch the machine and stabilize the test.',
             this._specialCommand?.hint || '',
         ].filter(Boolean).join('\n'), {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#8eb1bd',
+            color: '#5a8a50',
             wordWrap: { width: 840 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
 
-        const commandLabel = this.scene.add.text(-458, -155, 'COMMAND LINE', {
+        const commandLabel = this.scene.add.text(-509, -155, 'COMMAND LINE', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#cdeaf3',
-            letterSpacing: 1,
+            color: '#FFB000',
+            letterSpacing: 2,
         }).setOrigin(0, 0.5);
-        this._modeText = this.scene.add.text(-68, -155, '', {
+        this._modeText = this.scene.add.text(-119, -155, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#ffe4ac',
-            letterSpacing: 1,
+            color: '#FFB000',
+            letterSpacing: 2,
         }).setOrigin(0, 0.5);
-        this._statusText = this.scene.add.text(-458, -40, '', {
+        this._statusText = this.scene.add.text(-509, -40, '', {
             fontFamily: 'Courier New',
             fontSize: '14px',
-            color: '#9affbd',
+            color: '#FFB000',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        this._specialCommandButtonBg = this.scene.add.rectangle(-146, -40, 176, 30, 0x24323e, 0.96)
-            .setStrokeStyle(1, 0x7ca2b3, 0.82)
+
+        this._specialCommandButtonBg = this.scene.add.rectangle(-146, -40, 176, 30, 0x1a2b18, 0.96)
+            .setStrokeStyle(1, 0x4a7a38, 0.82)
             .setInteractive({ useHandCursor: true });
         this._specialCommandButtonText = this.scene.add.text(-146, -40, 'STEAL DATA', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#d6f6ff',
+            color: '#7acc5a',
             letterSpacing: 1,
         }).setOrigin(0.5);
         this._specialCommandButtonBg.on('pointerover', () => {
-            this._specialCommandButtonBg?.setFillStyle(0x2f4554, 0.98);
+            this._specialCommandButtonBg?.setFillStyle(0x253d22, 0.98);
         });
         this._specialCommandButtonBg.on('pointerout', () => {
-            this._specialCommandButtonBg?.setFillStyle(0x24323e, 0.96);
+            this._specialCommandButtonBg?.setFillStyle(0x1a2b18, 0.96);
         });
         this._specialCommandButtonBg.on('pointerdown', (_pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
             this._toggleSpecialCommandMode();
         });
 
-        this._commandZone = this.scene.add.rectangle(-180, -96, this._commandZoneWidth, this._commandZoneHeight, 0x0d1d26, 0.98)
-            .setStrokeStyle(2, 0x8cd0df, 0.72)
+        this._commandZone = this.scene.add.rectangle(-231, -96, this._commandZoneWidth, this._commandZoneHeight, 0x030a05, 0.99)
+            .setStrokeStyle(2, 0xFFB000, 0.48)
             .setInteractive({ useHandCursor: true });
         this._commandZone.on('pointerdown', (pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
@@ -243,24 +278,25 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._setSelectionRange(index, index);
         });
 
-        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xe8ffff, 1).setOrigin(0, 0.5);
+        // Amber block cursor with hard blink
+        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xFFB000, 1).setOrigin(0, 0.5);
         this._caretTween = this.scene.tweens.add({
             targets: this._caret,
-            alpha: 0.08,
-            duration: 380,
+            alpha: 0,
+            duration: 500,
             yoyo: true,
             repeat: -1,
-            ease: 'Sine.InOut',
+            ease: 'Stepped',
         });
 
         const actualLabel = this.scene.add.text(115, -188, 'ACTUAL OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#cdeaf3',
-            letterSpacing: 1,
+            color: '#4a7a58',
+            letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._actualOutputText = this.scene.add.text(115, -164, '', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '16px',
             color: '#ffd6b0',
             wordWrap: { width: 320 },
@@ -270,13 +306,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const expectedLabel = this.scene.add.text(115, -28, 'EXPECTED OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#cdeaf3',
-            letterSpacing: 1,
+            color: '#32CD32',
+            letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._expectedOutputText = this.scene.add.text(115, -8, '', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '16px',
-            color: '#b7ffca',
+            color: '#32CD32',
             wordWrap: { width: 320 },
             lineSpacing: 7,
         }).setOrigin(0, 0);
@@ -284,44 +320,64 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const detailLabel = this.scene.add.text(-488, 124, 'PATCH NOTES', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#cdeaf3',
-            letterSpacing: 1,
+            color: '#4a7a38',
+            letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._instructionText = this.scene.add.text(-488, 150, '', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#9eb4bf',
+            color: '#5a8050',
             wordWrap: { width: 596 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
         this._bugCounterText = this.scene.add.text(148, 126, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#ffe7a6',
-            letterSpacing: 1,
+            color: '#FFB000',
+            letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._messageText = this.scene.add.text(148, 152, '', {
-            fontFamily: 'monospace',
+            fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#8bcde0',
+            color: '#4a7a58',
             wordWrap: { width: 332 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
 
-        this._closeButtonBg = this.scene.add.rectangle(0, 284, 286, 44, 0x1d3440, 0.96)
-            .setStrokeStyle(2, 0xa9d2de, 0.86)
+        // --- Mechanical close button ---
+        const closeBaseY = 284;
+        this._closeButtonBg = this.scene.add.rectangle(0, closeBaseY, 286, 44, 0x0c1e0c, 0.97)
+            .setStrokeStyle(2, 0x3a6b28, 0.9)
             .setInteractive({ useHandCursor: true });
-        this._closeButtonText = this.scene.add.text(0, 284, 'RETURN TO BOOTH [ESC]', {
+        this._closeButtonText = this.scene.add.text(0, closeBaseY, 'RETURN TO BOOTH [ESC]', {
             fontFamily: 'Courier New',
             fontSize: '15px',
-            color: '#edf8fc',
-            letterSpacing: 1,
+            color: '#7acc5a',
+            letterSpacing: 2,
         }).setOrigin(0.5);
-        this._closeButtonBg.on('pointerover', () => this._closeButtonBg.setFillStyle(0x2b4a59, 0.98));
-        this._closeButtonBg.on('pointerout', () => this._closeButtonBg.setFillStyle(0x1d3440, 0.96));
+        this._closeButtonBg.on('pointerover', () => {
+            this._closeButtonBg?.setFillStyle(0x163a16, 0.99).setStrokeStyle(2, 0x7acc5a, 0.95);
+            this._closeButtonText?.setColor('#b8ff94');
+        });
+        this._closeButtonBg.on('pointerout', () => {
+            this._closeButtonBg?.setFillStyle(0x0c1e0c, 0.97).setStrokeStyle(2, 0x3a6b28, 0.9);
+            this._closeButtonText?.setColor('#7acc5a');
+            this.scene.tweens.add({
+                targets: [this._closeButtonBg, this._closeButtonText],
+                y: closeBaseY,
+                duration: 80,
+                ease: 'Cubic.Out',
+            });
+        });
         this._closeButtonBg.on('pointerdown', (_pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
-            this.close();
+            this.scene.tweens.add({
+                targets: [this._closeButtonBg, this._closeButtonText],
+                y: closeBaseY + 3,
+                duration: 45,
+                ease: 'Cubic.Out',
+                onComplete: () => this.close(),
+            });
         });
 
         this._panel.add([
@@ -329,9 +385,12 @@ export default class DebugConsolePuzzle extends MinigameBase {
             inner,
             headerRule,
             commandFrame,
+            commandTopAccent,
             actualFrame,
             expectedFrame,
             detailFrame,
+            cornerGfx,
+            cmdBracketGfx,
             title,
             subtitle,
             commandLabel,
@@ -351,6 +410,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._messageText,
             this._closeButtonBg,
             this._closeButtonText,
+            scanlines,
         ]);
 
         this.container.add([this._blocker, this._panel]);
@@ -838,21 +898,21 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
         this._actualOutputText?.setText(showActualOutput ? (this.evidence.actualOutput || '') : '');
-        this._expectedOutputText?.setColor('#b7ffca');
+        this._expectedOutputText?.setColor('#32CD32');
         this._actualOutputText?.setColor(
             this.evidence.completed
-                ? '#d9ffe4'
+                ? '#7aff8a'
                 : (this.evidence.phase === 'scrap'
-                    ? '#ffb39b'
-                    : (outputMismatch ? '#ff7b7b' : '#ffd6b0'))
+                    ? '#ff7a5a'
+                    : (outputMismatch ? '#ff5f5f' : '#ffd6b0'))
         );
 
-        let statusColor = '#ffd98e';
+        let statusColor = '#FFB000';
         let detailText = 'Type the highlighted command exactly. Correct letters stay cool, wrong letters go red, and overflow letters go dark red. Bugs try to ruin letters you already locked in.';
         let message = 'Tap the console to focus. Start typing to surface the live output.';
 
         if (this.evidence.completed) {
-            statusColor = '#98ffad';
+            statusColor = '#32CD32';
             detailText = this.evidence.fixed
                 ? ['Patch command applied.', 'AUTO RETEST PASS.', '', 'Repair prompt:', this.evidence.repairPrompt].join('\n')
                 : ['Primary test passed.', 'No patch required.', '', 'Prompt:', this.evidence.prompt].join('\n');
@@ -874,11 +934,11 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 ? ['This subsystem is not repairable on the floor.', `Observed output: ${this.evidence.actualOutput}`, 'Return to the booth and file SCRAP.'].join('\n')
                 : 'This subsystem is not repairable on the floor. Return to the booth and file SCRAP.';
         } else if (this.evidence.phase === 'repair') {
-            statusColor = '#ffcc7a';
+            statusColor = '#FFB000';
             detailText = ['Mismatch detected.', 'Type the repair command exactly.', '', 'Repair prompt:', this.evidence.repairPrompt].join('\n');
             message = ['Actual output drifted away from the expected result.', `Unexpected output: ${this.evidence.actualOutput}`].join('\n');
         } else {
-            statusColor = '#8bcde0';
+            statusColor = '#FFB000';
             detailText = this._specialCommandMode && this._canUseSpecialCommand()
                 ? ['Special command armed.', 'Type the theft command exactly.', '', 'Command:', this._specialCommand.command].join('\n')
                 : ['Prompt:', this.evidence.prompt, '', 'Expected output:', this.evidence.expectedOutput].join('\n');
