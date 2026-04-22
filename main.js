@@ -24,12 +24,6 @@ const config = {
     antialias: false,
     roundPixels: true,
     backgroundColor: '#0a0a0a',
-    scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: 1280,
-        height: 720,
-    },
     scene: [BootScene, TitleScene, GameScene, SummaryScene, TransitionScene, EndScene],
 };
 
