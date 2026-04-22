@@ -263,16 +263,8 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer = this.add.container(0, 0).setDepth(200);
         this._factoryControlsContainer = this.add.container(0, 0).setDepth(208).setVisible(false);
 
-        const topBarShadow = this.add.rectangle(640, 130, 1280, 244, 0x000000, 0.24);
-        const topBar = this.add.rectangle(640, 118, 1280, 228, 0x524c40, 0.96)
-            .setStrokeStyle(2, 0x9d947d, 0.95);
-        const topBarInner = this.add.rectangle(640, 118, 1234, 192, 0x2d2c28, 0.98)
-            .setStrokeStyle(1, 0xbcae84, 0.28);
-        const topBarPocket = this.add.rectangle(640, 120, 1186, 162, 0x161714, 0.9)
-            .setStrokeStyle(1, 0x757058, 0.24);
-        const topStrip = this.add.rectangle(640, 24, 1280, 48, 0x090807, 0.94)
-            .setStrokeStyle(1, 0x6a6556, 0.25);
-        this._hudContainer.add([topBarShadow, topBar, topBarInner, topBarPocket, topStrip]);
+        const topStrip = this.add.rectangle(640, 24, 1280, 48, 0x111111, 0.94).setStrokeStyle(1, 0x6a6556, 0.25);
+        this._hudContainer.add(topStrip);
 
         this._hudPeriodText = this.add.text(12, 14,
             `DAY ${GameState.day}`, {
