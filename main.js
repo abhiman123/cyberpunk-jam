@@ -20,9 +20,8 @@ const config = {
     type: Phaser.AUTO,
     width: 1280,
     height: 720,
-    pixelArt: true,
-    antialias: false,
-    roundPixels: true,
+    antialias: true,
+    resolution: window.devicePixelRatio,
     backgroundColor: '#0a0a0a',
     scene: [BootScene, TitleScene, GameScene, SummaryScene, TransitionScene, EndScene],
 };

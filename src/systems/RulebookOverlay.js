@@ -185,13 +185,13 @@ export default class RulebookOverlay {
             const badgeText = this.scene.add.text(24, y + 10, rule.id === 101 ? 'NET' : `D${rule.period}`, {
                 fontFamily: 'Courier New, monospace', fontSize: '11px', fontWeight: 'bold',
                 color: rule.id === 101 ? '#e2c8ff' : isNew ? '#fffbeb' : '#cbd5e1',
-            }).setOrigin(0.5, 0).setResolution(2);
+            }).setOrigin(0.5, 0);
 
             const headline = this.scene.add.text(58, y + 8, rule.text, {
                 fontFamily: 'Courier New, monospace', fontSize: '15px', fontWeight: 'bold',
                 color: isNew ? '#fcd34d' : '#f8fafc',
                 wordWrap: { width: bodyW - 60 }, lineSpacing: 2,
-            }).setOrigin(0, 0).setResolution(2);
+            }).setOrigin(0, 0);
 
             this._push(badgeBg, badgeText, headline);
             y += headline.height + 20;
@@ -211,7 +211,7 @@ export default class RulebookOverlay {
                             .setOrigin(0.5, 0).setStrokeStyle(1, Phaser.Display.Color.HexStringToColor(tagColor).color, 0.6);
                         const pillText = this.scene.add.text(lineX + 24, y + 5, tag, {
                             fontFamily: 'Courier New, monospace', fontSize: '11px', color: tagColor, fontWeight: 'bold',
-                        }).setOrigin(0.5, 0).setResolution(2);
+                        }).setOrigin(0.5, 0);
                         this._push(pillBg, pillText);
                         lineX += 56;
                     }
@@ -219,7 +219,7 @@ export default class RulebookOverlay {
                     const bodyText = this.scene.add.text(lineX, y + 4, bodyStr, {
                         fontFamily: 'Courier New, monospace', fontSize: '13px', color: '#cbd5e1',
                         wordWrap: { width: bodyW - lineX }, lineSpacing: 3,
-                    }).setOrigin(0, 0).setResolution(2);
+                    }).setOrigin(0, 0);
                     this._push(bodyText);
 
                     y += Math.max(bodyText.height, 16) + 6;
