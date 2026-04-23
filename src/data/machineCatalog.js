@@ -1719,6 +1719,52 @@ const SHARED_GEAR_OPTIONS = Object.freeze([
     }),
 ]);
 
+const SHARED_FLOW_OPTIONS = Object.freeze([
+    createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'POWER', 3: 'CPU' }, forbiddenCount: 0, previewTitle: 'MAIN BUS' }),
+    createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'POWER', 2: 'MEMORY', 4: 'MOTOR' }, forbiddenCount: 1, previewTitle: 'SYS LOOP' }),
+    createFlowPuzzleOption({ sourceRow: 3, outputs: { 1: 'CPU', 2: 'SENSOR' }, forbiddenCount: 0, previewTitle: 'CTRL BUS' }),
+    createFlowPuzzleOption({ sourceRow: 2, outputs: { 0: 'MOTOR', 3: 'POWER', 4: 'SENSE' }, forbiddenCount: 1, previewTitle: 'DRIVE BUS' }),
+]);
+
+const SHARED_DEBUG_OPTIONS = Object.freeze([
+    createDebugPuzzleOption({
+        prompt: 'run system boot',
+        repairPrompt: 'patch boot.seq.reset',
+        expectedOutput: 'BOOT OK // ALL SYSTEMS NOMINAL',
+        actualOutputs: [
+            'BOOT FAIL // INIT SEQUENCE STALLED',
+            'BOOT OK // SENSOR ARRAY SKIPPED',
+            'BOOT BAD // CLOCK DRIFT HIGH',
+            'BOOT FAIL // MEMORY CHECK TIMEOUT',
+            'BOOT OK // REDUNDANCY OFFLINE',
+        ],
+    }),
+    createDebugPuzzleOption({
+        prompt: 'test power relay',
+        repairPrompt: 'patch relay.volt.sync',
+        expectedOutput: 'RELAY OK // VOLTAGE STABLE',
+        actualOutputs: [
+            'RELAY FAIL // VOLTAGE SPIKE DETECTED',
+            'RELAY OK // OUTPUT CLIPPED',
+            'RELAY BAD // GROUND LOOP PRESENT',
+            'RELAY FAIL // DRAW EXCEEDS LIMIT',
+            'RELAY OK // REGULATOR BYPASSED',
+        ],
+    }),
+    createDebugPuzzleOption({
+        prompt: 'check sensor array',
+        repairPrompt: 'patch sensor.cal.restore',
+        expectedOutput: 'SENSOR OK // ARRAY CALIBRATED',
+        actualOutputs: [
+            'SENSOR FAIL // PROXIMITY DRIFT',
+            'SENSOR OK // THERMAL OFFSET HIGH',
+            'SENSOR BAD // CAL TABLE CORRUPTED',
+            'SENSOR FAIL // SCAN LOOP FROZEN',
+            'SENSOR OK // RANGE CLIPPED',
+        ],
+    }),
+]);
+
 const UMBRELLA_GEAR_OPTIONS = Object.freeze([
     createGearPuzzleOption({
         previewTitle: 'SHAFT COLLAR',
@@ -2459,6 +2505,9 @@ const createRosterMachineDefinition = ({
     name,
     spriteFileName: null,
     possibleGrids: GENERIC_ROSTER_GRID_OPTIONS,
+    possibleCircuits: SHARED_FLOW_OPTIONS,
+    possibleGears: SHARED_GEAR_OPTIONS,
+    possibleDebugs: SHARED_DEBUG_OPTIONS,
     availableDays: [day],
     availablePeriods: [Math.max(1, Math.min(3, day))],
     openingDialogues: [opening],
@@ -5782,7 +5831,7 @@ export function createMachineVariant(options = {}) {
         targetPeriod ?? 1,
         randomFn,
     );
-    const selectedFlowPuzzle = applyFlowStageToOption(
+    let selectedFlowPuzzle = applyFlowStageToOption(
         cloneFlowPuzzleOption(pickRandomEntry(definition.possibleCircuits, randomFn)),
         targetPeriod ?? 1,
         randomFn,
@@ -5794,12 +5843,12 @@ export function createMachineVariant(options = {}) {
         const rustFreePool = possibleGears.filter((gearOption) => !gearOptionHasRustedContent(gearOption));
         return rustFreePool.length > 0 ? rustFreePool : possibleGears;
     })();
-    const selectedGearPuzzle = applyGearStageToOption(
+    let selectedGearPuzzle = applyGearStageToOption(
         cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
         targetPeriod ?? 1,
         randomFn,
     );
-    const selectedDebugPuzzle = applyDebugStageToOption(
+    let selectedDebugPuzzle = applyDebugStageToOption(
         cloneDebugPuzzleOption(pickRandomEntry(definition.possibleDebugs, randomFn)),
         targetPeriod ?? 1,
         randomFn,
@@ -5833,6 +5882,21 @@ export function createMachineVariant(options = {}) {
             selectedDebugPuzzle.scrapReason = null;
         }
         selectedDebugPuzzle.progress = createDebugProgress(selectedDebugPuzzle, randomFn);
+    }
+    if (!protectedStoryMachine) {
+        const optionalSlots = [
+            { get: () => selectedFlowPuzzle, clear: () => { selectedFlowPuzzle = null; } },
+            { get: () => selectedGearPuzzle, clear: () => { selectedGearPuzzle = null; } },
+            { get: () => selectedDebugPuzzle, clear: () => { selectedDebugPuzzle = null; } },
+        ].filter((slot) => slot.get() !== null);
+        if (optionalSlots.length > 1) {
+            for (let i = optionalSlots.length - 1; i > 0; i--) {
+                const j = Math.floor(randomFn() * (i + 1));
+                [optionalSlots[i], optionalSlots[j]] = [optionalSlots[j], optionalSlots[i]];
+            }
+            const keepCount = optionalSlots.length >= 3 ? (randomFn() < 0.45 ? 1 : 2) : 1;
+            optionalSlots.slice(keepCount).forEach((slot) => slot.clear());
+        }
     }
     const puzzleState = new MachinePuzzleState(selectedGrid);
     const hasCommunication = randomFn() <= (definition.communicationChance ?? 1);
