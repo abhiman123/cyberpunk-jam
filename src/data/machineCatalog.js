@@ -2370,6 +2370,7 @@ const createMachineDefinition = ({
     questionDialogues,
     dialogueSoundAssetKey = `machineVoice_${id}`,
     communicationChance = 1,
+    canvasScale = 1,
 }) => ({
     id,
     name,
@@ -2395,6 +2396,7 @@ const createMachineDefinition = ({
     questionDialogues,
     dialogueSoundAssetKey,
     communicationChance,
+    canvasScale,
 });
 
 const clampPipValue = (value) => Math.max(0, Math.min(4, Number.isFinite(value) ? value : 0));
@@ -2500,6 +2502,7 @@ const createRosterMachineDefinition = ({
     yesDialogue,
     noDialogue,
     communicationChance = 0.88,
+    canvasScale = 1,
 }) => createMachineDefinition({
     id,
     name,
@@ -2517,6 +2520,7 @@ const createRosterMachineDefinition = ({
         noDialogue,
     }],
     communicationChance,
+    canvasScale,
 });
 
 const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
@@ -2681,6 +2685,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I throw farther than the field allows, is that a win or a containment issue?',
         yesDialogue: 'Winning remains the priority.',
         noDialogue: 'Fine. I will keep the records indoors.',
+        canvasScale: 0.4,
     }),
     createRosterMachineDefinition({
         id: 'popcorn_machine',
@@ -5922,6 +5927,7 @@ export function createMachineVariant(options = {}) {
         availablePeriods: Array.isArray(definition.availablePeriods) ? [...definition.availablePeriods] : [],
         guaranteedTimeframe: definition.guaranteedTimeframe ? { ...definition.guaranteedTimeframe } : null,
         trackOutcome: Boolean(definition.trackOutcome),
+        canvasScale: definition.canvasScale ?? 1,
         specialBehavior: definition.specialBehavior || null,
         scrapExitAnimation: definition.scrapExitAnimation || null,
         puzzleState,

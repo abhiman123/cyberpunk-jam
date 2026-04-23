@@ -7398,7 +7398,7 @@ export default class GameScene extends Phaser.Scene {
             stateSyncDurationMs,
         });
 
-        this._applyMachineSprite(this._conveyorUnitSprite, 1.0);
+        this._applyMachineSprite(this._conveyorUnitSprite, this._currentMachineVariant.canvasScale ?? 1.0);
         this._syncCurrentUnitClownEffects(this._currentMachineVariant);
 
         this._unitContainer.setVisible(true);
