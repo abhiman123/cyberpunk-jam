@@ -294,26 +294,28 @@ export default class GameScene extends Phaser.Scene {
         this._clockDialCenterX = clockPanelCenterX - 62;
         this._clockDialCenterY = clockPanelCenterY;
 
+        this._clockContainer = this.add.container(0, 0);
+
         const clockBg = this.add.rectangle(clockPanelCenterX, clockPanelCenterY, 210, 86, 0x050505, 0.92)
             .setStrokeStyle(1, 0x4e7c8f, 0.75);
-        this._hudContainer.add(clockBg);
+        this._clockContainer.add(clockBg);
 
         const clockFaceFrame = this.add.rectangle(this._clockDialCenterX, this._clockDialCenterY, 52, 52, 0x08141a, 0.95)
             .setStrokeStyle(1, 0x66aacc, 0.75);
-        this._hudContainer.add(clockFaceFrame);
+        this._clockContainer.add(clockFaceFrame);
 
         this._clockIcon = this.add.graphics();
-        this._hudContainer.add(this._clockIcon);
+        this._clockContainer.add(this._clockIcon);
 
         const clockLabel = this.add.text(clockPanelCenterX - 30, clockPanelCenterY - 26, 'SHIFT CLOCK', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#66aacc', letterSpacing: 3,
         });
-        this._hudContainer.add(clockLabel);
+        this._clockContainer.add(clockLabel);
 
         this._clockText = this.add.text(clockPanelCenterX - 30, clockPanelCenterY + 4, '12:00 PM', {
             fontFamily: 'Courier New', fontSize: '24px', color: '#ccefff',
         }).setOrigin(0, 0.5);
-        this._hudContainer.add(this._clockText);
+        this._clockContainer.add(this._clockText);
 
         this._clockPauseNotice = this.add.container(986, clockPanelCenterY + 52).setVisible(false).setAlpha(0);
         const pauseGlow = this.add.rectangle(0, 0, 274, 32, 0xffffff, 0.04)
@@ -353,7 +355,8 @@ export default class GameScene extends Phaser.Scene {
             pauseBroadcastBars,
             pauseText,
         ]);
-        this._hudContainer.add(this._clockPauseNotice);
+        this._clockContainer.add(this._clockPauseNotice);
+        this._hudContainer.add(this._clockContainer);
 
         this._buildMiniMachinePanel();
     }
@@ -990,6 +993,10 @@ export default class GameScene extends Phaser.Scene {
 
     _restoreHudOverlayOrder() {
         if (!this._hudContainer) return;
+        // clock sits inside the desk area visually, so must be above _deskContainer
+        if (this._clockContainer) {
+            this._hudContainer.bringToTop(this._clockContainer);
+        }
         if (this._miniMachinePanel) {
             this._hudContainer.bringToTop(this._miniMachinePanel);
         }
@@ -5047,6 +5054,10 @@ export default class GameScene extends Phaser.Scene {
                 return !guaranteeEntry || guaranteeEntry.fulfilled;
             })
             .map((definition) => definition.id);
+        for (let i = machineIds.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [machineIds[i], machineIds[j]] = [machineIds[j], machineIds[i]];
+        }
         this._machineQueue = [...machineIds];
     }
 
