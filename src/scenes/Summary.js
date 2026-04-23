@@ -32,11 +32,11 @@ export default class SummaryScene extends Phaser.Scene {
         this.add.rectangle(cx, 0, W, 2, accentColor).setOrigin(0.5, 0);
 
         this.add.text(cx, 72, 'END OF DAY', {
-            fontFamily: 'Courier New', fontSize: '11px', color: '#dddddd', letterSpacing: 6,
+            fontFamily: 'Courier New', fontSize: '14px', color: '#eeeeee', letterSpacing: 6,
         }).setOrigin(0.5);
 
-        this.add.text(cx, 102, `DAY ${GameState.day} COMPLETE`, {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa', letterSpacing: 4,
+        this.add.text(cx, 104, `DAY ${GameState.day} COMPLETE`, {
+            fontFamily: 'Courier New', fontSize: '13px', color: '#cccccc', letterSpacing: 4,
         }).setOrigin(0.5);
 
         this._rule(140, 0x333333);
@@ -48,22 +48,29 @@ export default class SummaryScene extends Phaser.Scene {
             : 'NO VIOLATIONS';
 
         this.add.text(cx, 180, 'QC ASSESSMENT', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
+            fontFamily: 'Courier New', fontSize: '13px', color: '#dddddd', letterSpacing: 5,
         }).setOrigin(0.5);
 
-        this.add.text(cx, 214, statusText, {
-            fontFamily: 'Courier New', fontSize: '26px', color: statusColor,
+        this.add.text(cx, 216, statusText, {
+            fontFamily: 'Courier New', fontSize: '28px', color: statusColor,
         }).setOrigin(0.5);
 
         // Cases processed
-        this.add.text(cx, 258, `CASES PROCESSED: ${this._casesProcessed}`, {
-            fontFamily: 'Courier New', fontSize: '12px', color: '#888888', letterSpacing: 2,
+        this.add.text(cx, 262, `CASES PROCESSED: ${this._casesProcessed}`, {
+            fontFamily: 'Courier New', fontSize: '13px', color: '#aaaaaa', letterSpacing: 2,
         }).setOrigin(0.5);
 
-        this._rule(288, 0x333333);
+        // Cumulative violations across all days
+        const totalMistakes = GameState.totalMistakes;
+        const cumulativeColor = totalMistakes > 0 ? '#ff7777' : '#55cc88';
+        this.add.text(cx, 286, `TOTAL VIOLATIONS (ALL DAYS): ${totalMistakes}`, {
+            fontFamily: 'Courier New', fontSize: '12px', color: cumulativeColor, letterSpacing: 2,
+        }).setOrigin(0.5);
 
-        this.add.text(cx, 316, 'COMPENSATION LOG', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#bbbbbb', letterSpacing: 5,
+        this._rule(310, 0x333333);
+
+        this.add.text(cx, 328, 'COMPENSATION LOG', {
+            fontFamily: 'Courier New', fontSize: '13px', color: '#dddddd', letterSpacing: 5,
         }).setOrigin(0.5);
 
         const deltaSign = this._paycheckDelta >= 0 ? '+' : '-';
@@ -87,16 +94,16 @@ export default class SummaryScene extends Phaser.Scene {
             },
         ];
 
-        const compensationStartY = 352;
-        const compensationLineGap = 24;
+        const compensationStartY = 366;
+        const compensationLineGap = 26;
 
         compensationRows.forEach((row, index) => {
             const y = compensationStartY + (index * compensationLineGap);
             this.add.text(cx - 80, y, row.label, {
-                fontFamily: 'Courier New', fontSize: '10px', color: '#aaaaaa',
+                fontFamily: 'Courier New', fontSize: '13px', color: '#cccccc',
             }).setOrigin(1, 0.5);
             this.add.text(cx - 64, y, row.value, {
-                fontFamily: 'Courier New', fontSize: '13px', color: row.color,
+                fontFamily: 'Courier New', fontSize: '15px', color: row.color,
             }).setOrigin(0, 0.5);
         });
 
@@ -105,11 +112,11 @@ export default class SummaryScene extends Phaser.Scene {
             this._rule(notificationRuleY, 0x333333);
 
             const tagText = this.add.text(cx, notificationRuleY + 30, '// INCOMING TRANSMISSION', {
-                fontFamily: 'Courier New', fontSize: '10px', color: '#55cc55', letterSpacing: 3,
+                fontFamily: 'Courier New', fontSize: '13px', color: '#55cc55', letterSpacing: 3,
             }).setOrigin(0.5);
 
             const msgText = this.add.text(cx, notificationRuleY + 76, this._notificationText, {
-                fontFamily: 'Courier New', fontSize: '14px', color: '#aaddaa',
+                fontFamily: 'Courier New', fontSize: '16px', color: '#cceecc',
                 wordWrap: { width: 660 }, align: 'center', lineSpacing: 8,
             }).setOrigin(0.5);
 
