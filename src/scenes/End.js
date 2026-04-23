@@ -145,22 +145,22 @@ export default class EndScene extends Phaser.Scene {
 
     _buildActors() {
         this._managerSprite = this.add.image(1440, 408, 'manager_robot')
-            .setScale(4.4)
+            .setScale(2.0)
             .setDepth(10)
             .setVisible(false);
         this._umbrellaSprite = this.add.image(1440, 384, 'machine_rebellious_umbrella')
-            .setScale(2.3)
+            .setScale(1.4)
             .setDepth(11)
             .setVisible(false);
         this._world.add([this._managerSprite, this._umbrellaSprite]);
     }
 
     _buildUi() {
-        const panelShadow = this.add.rectangle(640, 612, 926, 150, 0x000000, 0.34).setDepth(20);
-        const panel = this.add.rectangle(640, 604, 914, 138, 0x081017, 0.9)
+        this._panelShadow = this.add.rectangle(640, 612, 926, 150, 0x000000, 0.34).setDepth(20);
+        this._panel = this.add.rectangle(640, 604, 914, 138, 0x081017, 0.9)
             .setStrokeStyle(2, 0x6bb6da, 0.5)
             .setDepth(21);
-        const panelTag = this.add.text(198, 548, 'FINAL TRANSMISSION', {
+        this._panelTag = this.add.text(198, 548, 'FINAL TRANSMISSION', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#8fd8f3',
@@ -431,32 +431,48 @@ export default class EndScene extends Phaser.Scene {
     _typeDialogueLines(lines, { color = '#b8efff', append = false } = {}) {
         return new Promise((resolve) => {
             const entries = Array.isArray(lines) ? lines : [String(lines || '')];
-            const revealed = append && this._dialogueText.text
-                ? this._dialogueText.text.split('\n')
-                : [];
             this._dialogueText.setColor(color);
             let lineIndex = 0;
 
+            // append mode accumulates all lines (used while simultaneous animations play)
+            // default mode shows one line at a time for suspense
+            const accumulated = append && this._dialogueText.text
+                ? this._dialogueText.text.split('\n')
+                : [];
+
             const revealNextLine = () => {
                 if (lineIndex >= entries.length) {
-                    this.time.delayedCall(320, () => resolve(true));
+                    this.time.delayedCall(600, () => resolve(true));
                     return;
                 }
 
                 const line = String(entries[lineIndex++] || '');
-                revealed.push('');
-                const slot = revealed.length - 1;
                 let charIndex = 0;
 
+                if (!append) {
+                    this._dialogueText.setText('');
+                }
+
                 this.time.addEvent({
-                    delay: 28,
+                    delay: 38,
                     repeat: Math.max(0, line.length - 1),
                     callback: () => {
                         charIndex += 1;
-                        revealed[slot] = line.slice(0, charIndex);
-                        this._dialogueText.setText(revealed.join('\n'));
-                        if (charIndex >= line.length) {
-                            this.time.delayedCall(420, revealNextLine);
+                        if (append) {
+                            const partial = line.slice(0, charIndex);
+                            const rows = accumulated.slice();
+                            if (charIndex === 1) rows.push('');
+                            rows[rows.length - 1] = partial;
+                            this._dialogueText.setText(rows.join('\n'));
+                            if (charIndex >= line.length) {
+                                accumulated.push(line);
+                                this.time.delayedCall(500, revealNextLine);
+                            }
+                        } else {
+                            this._dialogueText.setText(line.slice(0, charIndex));
+                            if (charIndex >= line.length) {
+                                this.time.delayedCall(1400, revealNextLine);
+                            }
                         }
                     },
                 });
@@ -511,6 +527,14 @@ export default class EndScene extends Phaser.Scene {
     }
 
     async _showTitleCard() {
+        // hide everything so the title appears on a clean black screen
+        this._world.setVisible(false);
+        this._dialogueText.setVisible(false);
+        this._panelShadow.setVisible(false);
+        this._panel.setVisible(false);
+        this._panelTag.setVisible(false);
+        this._speakerTween?.stop();
+
         this.cameras.main.fadeIn(700, 0, 0, 0);
 
         const musicVolume = getMusicVolume();

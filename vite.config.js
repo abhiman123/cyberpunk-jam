@@ -32,6 +32,8 @@ function assetNotFoundPlugin() {
 export default defineConfig({
     plugins: [assetNotFoundPlugin()],
 
+    base: './',
+
     build: {
         // Suppress the "chunk too large" warning — Phaser is intentionally large.
         chunkSizeWarningLimit: 2500,

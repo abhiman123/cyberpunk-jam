@@ -7220,13 +7220,7 @@ export default class GameScene extends Phaser.Scene {
 
     _armKonamiFinale() {
         if (this._konamiFinaleTriggered) return;
-
-        const finalCase = this._findFinalCaseDefinition();
-        if (!finalCase) return;
-
         this._konamiFinaleTriggered = true;
-        finalCase._konamiOverride = true;
-        this._pendingKonamiFinalCase = finalCase;
 
         this._nextCaseEvent?.remove(false);
         this._nextCaseEvent = null;
@@ -7234,29 +7228,12 @@ export default class GameScene extends Phaser.Scene {
         this._advanceCaseEvent = null;
         this._clearUnsafeAcceptConfirmation();
         this._clearPhoneTyping();
-        this._showFeedback('KONAMI OVERRIDE // FINAL UNIT ROUTING', '#ffd685');
-        this._pushPhoneNotification(
-            'OVERRIDE ACCEPTED',
-            'Konami sequence received. The final unit will route after the current inspection clears.',
-            'SECRET ROUTE',
-            {
-                activate: false,
-                unread: this._phoneViewMode !== 'notifications',
-                soundAsset: SOUND_ASSETS.notificationAlert,
-            }
-        );
+        this._showFeedback('KONAMI OVERRIDE // SKIPPING TO END', '#ffd685');
 
-        if (!this._currentCase && !this._currentMachineVariant) {
-            this._queue = [finalCase];
-            this._baseQueue = [finalCase];
-            this._queueIndex = 0;
-            this._pendingKonamiFinalCase = null;
-            this._loadNextCase();
-            this._setPhoneInfoNote('Hidden override active. The final inspection unit is on the way.', 'SECRET ROUTE');
-            return;
-        }
-
-        this._setPhoneInfoNote('Hidden override armed. Finish the current inspection and the final unit will route next.', 'SECRET ROUTE');
+        this.cameras.main.fade(600, 0, 0, 0);
+        this.time.delayedCall(620, () => {
+            this.scene.start('End');
+        });
     }
 
     _loadNextCase() {
