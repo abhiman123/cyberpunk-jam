@@ -6,10 +6,11 @@ import { getMusicVolume } from '../state/gameSettings.js';
 
 const ENDING_DIALOGUE = Object.freeze({
     replacement: [
-        'im ur manager.',
-        'unfortunately, we have a replacement for you.',
-        'after all, you are just a cog in the system.',
-        'employee 234982, you have been scrapped.',
+        'I am your manager.',
+        'You have been a loyal, dedicated, and efficient worker.',
+        'But, unfortunately, the time has come to replace you.',
+        'After all, you were just a cog in the system.',
+        'Employee 234982, you are scrapped.',
     ],
     umbrella_purple: [
         'listen kid. i appreciate the help.',
