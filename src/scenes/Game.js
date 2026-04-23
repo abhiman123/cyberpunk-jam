@@ -363,8 +363,8 @@ export default class GameScene extends Phaser.Scene {
 
     _buildDeskSurface() {
 
-        const deskBase = this.add.rectangle(0, 0, this.scale.width, 172, 0x4b4338).setOrigin(0, 0).setStrokeStyle(2, 0x7c745f, 0.92);
-        const deskInset = this.add.rectangle(50, 30, 270, 112, 0x3a342d, 0.72).setOrigin(0, 0).setStrokeStyle(1, 0x6b6252, 0.55);
+        const deskBase = this.add.rectangle(0, 0, this.scale.width, 172, 0x000000, 0).setOrigin(0, 0);
+        const deskInset = this.add.rectangle(50, 30, 270, 112, 0x000000, 0).setOrigin(0, 0);
 
         this._deskContainer = this.add.container(0, this.scale.height - deskBase.height).setDepth(188);
         this._deskContainer.add([
@@ -5229,9 +5229,24 @@ export default class GameScene extends Phaser.Scene {
     _buildConveyorScreen() {
         this._conveyorContainer = this.add.container(0, 0).setDepth(10);
 
-        const bgKey = this.textures.exists('bg_mainview') ? 'bg_mainview' : `bg_p${GameState.period}`;
-        const bg = this.add.image(640, 360, bgKey).setDisplaySize(1280, 720);
-        this._conveyorContainer.add(bg);
+        const mainViewLayerKeys = [
+            'mainview_bottom',
+            'mainview_second',
+            'mainview_lightradiance',
+            'mainview_lightlayer',
+            'mainview_fam2',
+            'mainview_fam1',
+        ];
+        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
+        if (!hasMainViewLayers) {
+            const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
+            this._conveyorContainer.add(fallbackBg);
+        }
+        mainViewLayerKeys.forEach((key) => {
+            if (!this.textures.exists(key)) return;
+            const layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
+            this._conveyorContainer.add(layer);
+        });
 
         this._monitorText = this.add.text(130, 375,
             'AWAITING UNIT\n\nSTATUS: READY', {

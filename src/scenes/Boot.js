@@ -39,7 +39,12 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('family_photo_source', 'Untitled_Artwork2.png');
         this.load.image('manager_human_source', 'Untitled_Artwork4.png');
         this.load.image('manager_robot_source', 'Untitled_Artwork3.png');
-        this.load.image('bg_mainview_source', 'Background_1.png');
+        this.load.image('mainview_bottom_source', 'bottomLayer.png');
+        this.load.image('mainview_second_source', 'secondlayer.png');
+        this.load.image('mainview_lightradiance_source', 'lightradiance.png');
+        this.load.image('mainview_lightlayer_source', 'lightlayer.png');
+        this.load.image('mainview_fam2_source', 'Fam2.png');
+        this.load.image('mainview_fam1_source', 'Fam1.png');
         this.load.image('track_and_discus_robot_source', 'Tennis.png');
         this.load.image('track_and_discus_robot_close_source', 'TennisClose.png');
 
@@ -60,7 +65,12 @@ export default class BootScene extends Phaser.Scene {
     }
 
     _createMainBackgroundFromSource() {
-        this._createNearestUpscaledTexture('bg_mainview_source', 'bg_mainview', 4);
+        this._createNearestUpscaledTexture('mainview_bottom_source', 'mainview_bottom', 4);
+        this._createNearestUpscaledTexture('mainview_second_source', 'mainview_second', 4);
+        this._createNearestUpscaledTexture('mainview_lightradiance_source', 'mainview_lightradiance', 4);
+        this._createNearestUpscaledTexture('mainview_lightlayer_source', 'mainview_lightlayer', 4);
+        this._createNearestUpscaledTexture('mainview_fam2_source', 'mainview_fam2', 4);
+        this._createNearestUpscaledTexture('mainview_fam1_source', 'mainview_fam1', 4);
     }
 
     _createTrackAndDiscusRobotFromSource() {
