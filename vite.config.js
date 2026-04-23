@@ -14,10 +14,10 @@ function assetNotFoundPlugin() {
         configureServer(server) {
             server.middlewares.use((req, res, next) => {
                 const url = req.url?.split('?')[0] ?? '';
-                const isAsset = url.startsWith('/assets/') || url.startsWith('/src/data/');
+                const isAsset = url.startsWith('/assets/') || url.startsWith('/data/');
                 if (!isAsset) return next();
 
-                const filePath = path.join(process.cwd(), decodeURIComponent(url));
+                const filePath = path.join(process.cwd(), 'public', decodeURIComponent(url));
                 if (!fs.existsSync(filePath)) {
                     res.statusCode = 404;
                     res.end('Not Found');

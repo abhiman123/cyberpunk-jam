@@ -20,11 +20,11 @@ export default class BootScene extends Phaser.Scene {
         });
 
         // Required JSON data
-        this.load.json('cases',         'src/data/cases.json');
-        this.load.json('rules',         'src/data/rules.json');
-        this.load.json('notifications', 'src/data/notifications.json');
-        this.load.json('schedule',      'src/data/schedule.json');
-        this.load.json('briefings',     'src/data/briefings.json');
+        this.load.json('cases',         'data/cases.json');
+        this.load.json('rules',         'data/rules.json');
+        this.load.json('notifications', 'data/notifications.json');
+        this.load.json('schedule',      'data/schedule.json');
+        this.load.json('briefings',     'data/briefings.json');
 
         SOUND_MANIFEST.forEach((asset) => {
             this.load.audio(asset.key, asset.path);
