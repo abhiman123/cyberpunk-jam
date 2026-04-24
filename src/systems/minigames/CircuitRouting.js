@@ -225,6 +225,14 @@ export default class CircuitRouting extends MinigameBase {
         this._specialActionButton = null;
         this._specialActionLabel = null;
         this._escKeyDown = null;
+
+        // Spider-Man-style inventory state. Counts of each piece type that
+        // have been picked up off the board and are awaiting re-placement.
+        this._inventory = { straight: 0, curve: 0, tee: 0, cross: 0 };
+        this._selectedInventoryType = null;
+        this._inventoryViews = {};
+        this._inventoryPanelGfx = null;
+        this._voltageHudText = null;
     }
 
     _defaultEvidence() {
@@ -256,6 +264,9 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         this._circuit = circuit;
+        // Disable the browser context menu so right-click on tiles can be
+        // used as the "pick up piece back to inventory" gesture.
+        try { this.scene.input.mouse?.disableContextMenu(); } catch {}
         this.rows = Math.max(3, Number(circuit.rows || circuit.tiles?.length || 5));
         this.cols = Math.max(3, Number(circuit.cols || circuit.tiles?.[0]?.length || 5));
         this.cellSize = Math.max(46, Math.min(64, Math.floor(Math.min(420 / this.cols, 350 / this.rows))));
@@ -433,6 +444,18 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
         this._drawInspectionFault();
+
+        // Spider-Man-style HUD additions: voltage meter at top, inventory
+        // panel on the left. Both are wired up to state that _updateAll()
+        // refreshes after every tile rotation / pickup / placement.
+        this._buildVoltageHud(depth + 2);
+        this._buildInventoryPanel(depth + 2);
+
+        // Seed the inventory by popping a few non-critical path tiles from the
+        // board so there's something in the inventory to place from the
+        // start — this gives puzzles the "assemble the circuit" feel instead
+        // of only rotating pre-placed pieces.
+        this._seedInitialInventory(circuit);
 
         // Close button — added to the container LAST so it sits on top of all tiles
         // in Phaser's render list and wins input hit-testing reliably.
@@ -621,14 +644,25 @@ export default class CircuitRouting extends MinigameBase {
         const tile = this._tiles[y][x];
         const locked = tile.locked === true || isForbidden;
 
-        // bg is a direct child of this.container (not nested inside tileContainer)
-        // so Phaser's input hit-testing reliably reaches it.
+        // Invisible square rectangle acts purely as the input hit target so
+        // Phaser's hit-testing remains reliable. The visible cell frame is an
+        // octagonal Graphics drawn on top (Spider-Man Microcable style).
         const bg = this.scene.add.rectangle(cx, cy, this.cellSize - 4, this.cellSize - 4,
-            isForbidden ? 0x2a1e00 : 0x001f22, 0.9)
-            .setStrokeStyle(1, isForbidden ? 0xddaa33 : 0x225566, 0.8)
+            0x000000, 0)
+            .setStrokeStyle(0, 0x000000, 0)
             .setInteractive({ useHandCursor: true })
             .setDepth(depth);
         this.container.add(bg);
+
+        const octGfx = this.scene.add.graphics().setDepth(depth);
+        this._drawOctagonFrame(octGfx, cx, cy, this.cellSize - 4, {
+            fill: isForbidden ? 0x2a1e00 : 0x001f22,
+            fillAlpha: 0.92,
+            stroke: isForbidden ? 0xddaa33 : 0x225566,
+            strokeAlpha: 0.85,
+            strokeWidth: 1.2,
+        });
+        this.container.add(octGfx);
 
         // tileContainer only holds the rotating pipe/energy graphics.
         // A square bg looks identical at every 90° step so it never needs to rotate.
@@ -655,6 +689,9 @@ export default class CircuitRouting extends MinigameBase {
         const tileView = {
             container: tileContainer,
             bg,
+            octGfx,
+            cx,
+            cy,
             energy,
             pipe,
             modifierGfx,
@@ -664,8 +701,22 @@ export default class CircuitRouting extends MinigameBase {
             rotationTween: null,
         };
 
-        bg.on('pointerdown', (_pointer, _localX, _localY, event) => {
+        const repaintOct = (hovered) => {
+            this._drawOctagonFrame(octGfx, cx, cy, this.cellSize - 4, {
+                fill: isForbidden ? 0x2a1e00 : (hovered ? 0x0a2f35 : 0x001f22),
+                fillAlpha: 0.92,
+                stroke: isForbidden
+                    ? 0xddaa33
+                    : (hovered ? 0x66ccff : 0x225566),
+                strokeAlpha: hovered ? 1 : 0.85,
+                strokeWidth: hovered ? 1.6 : 1.2,
+            });
+        };
+        tileView.repaintOct = repaintOct;
+
+        bg.on('pointerdown', (pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
+            if (this._handleInventoryClick?.(x, y, pointer)) return;
             if (locked || tile.type === 'empty') return;
 
             tile.rotation = (tile.rotation + 1) % 4;
@@ -677,13 +728,316 @@ export default class CircuitRouting extends MinigameBase {
             event?.stopPropagation?.();
         });
         bg.on('pointerover', () => {
-            if (!locked && tile.type !== 'empty') bg.setStrokeStyle(1, 0x66ccff, 1);
+            if (!locked && tile.type !== 'empty') repaintOct(true);
         });
         bg.on('pointerout', () => {
-            bg.setStrokeStyle(1, isForbidden ? 0xddaa33 : 0x225566, 0.8);
+            repaintOct(false);
         });
 
         return tileView;
+    }
+
+    _drawOctagonFrame(gfx, cx, cy, size, opts = {}) {
+        const {
+            fill = 0x001f22,
+            fillAlpha = 0.92,
+            stroke = 0x225566,
+            strokeAlpha = 0.85,
+            strokeWidth = 1.2,
+            chamferRatio = 0.28,
+        } = opts;
+        gfx.clear();
+        const half = size / 2;
+        const cham = Math.max(4, Math.floor(size * chamferRatio));
+        const points = [
+            [cx - half + cham, cy - half],
+            [cx + half - cham, cy - half],
+            [cx + half,       cy - half + cham],
+            [cx + half,       cy + half - cham],
+            [cx + half - cham, cy + half],
+            [cx - half + cham, cy + half],
+            [cx - half,       cy + half - cham],
+            [cx - half,       cy - half + cham],
+        ];
+        gfx.fillStyle(fill, fillAlpha);
+        gfx.beginPath();
+        gfx.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length; i++) gfx.lineTo(points[i][0], points[i][1]);
+        gfx.closePath();
+        gfx.fillPath();
+
+        gfx.lineStyle(strokeWidth, stroke, strokeAlpha);
+        gfx.beginPath();
+        gfx.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length; i++) gfx.lineTo(points[i][0], points[i][1]);
+        gfx.closePath();
+        gfx.strokePath();
+
+        // Corner accent ticks (a tiny inner notch at each chamfer) — gives the
+        // Microcable HUD look with bright corner anchors.
+        gfx.lineStyle(strokeWidth, stroke, Math.min(1, strokeAlpha + 0.15));
+        const tick = Math.max(2, cham * 0.32);
+        [points[0], points[1], points[4], points[5]].forEach(([px, py]) => {
+            const towardY = py < cy ? 1 : -1;
+            gfx.lineBetween(px, py, px, py + (tick * towardY));
+        });
+    }
+
+    // ── Spider-Man Microcable additions ────────────────────────────────
+
+    _buildVoltageHud(depth) {
+        const hudX = 640;
+        const hudY = this.boardY - 40;
+        // Left "ACTUAL" panel
+        const leftBg = this.scene.add.rectangle(hudX - 170, hudY, 160, 34, 0x02222a, 0.9)
+            .setStrokeStyle(1, 0x00cccc, 0.8)
+            .setDepth(depth);
+        const leftLabel = this.scene.add.text(hudX - 170, hudY - 6, 'ACTUAL POWER', {
+            fontFamily: 'Courier New', fontSize: '8px', color: '#66aaaa', letterSpacing: 2,
+        }).setOrigin(0.5).setDepth(depth + 1);
+        this._voltageActualText = this.scene.add.text(hudX - 170, hudY + 8, '0 / 0', {
+            fontFamily: 'Courier New', fontSize: '14px', color: '#00ffcc', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(depth + 1);
+
+        // Center meter bar
+        const meterBg = this.scene.add.rectangle(hudX, hudY, 160, 18, 0x001018, 0.95)
+            .setStrokeStyle(1, 0x2a6680, 0.8)
+            .setDepth(depth);
+        this._voltageMeterBar = this.scene.add.graphics().setDepth(depth + 1);
+
+        // Right "TARGET" panel
+        const rightBg = this.scene.add.rectangle(hudX + 170, hudY, 160, 34, 0x02222a, 0.9)
+            .setStrokeStyle(1, 0x00cccc, 0.8)
+            .setDepth(depth);
+        const rightLabel = this.scene.add.text(hudX + 170, hudY - 6, 'TARGET POWER', {
+            fontFamily: 'Courier New', fontSize: '8px', color: '#66aaaa', letterSpacing: 2,
+        }).setOrigin(0.5).setDepth(depth + 1);
+        this._voltageTargetText = this.scene.add.text(hudX + 170, hudY + 8, '0', {
+            fontFamily: 'Courier New', fontSize: '14px', color: '#ffcc44', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(depth + 1);
+
+        this.container.add([
+            leftBg, leftLabel, this._voltageActualText,
+            meterBg, this._voltageMeterBar,
+            rightBg, rightLabel, this._voltageTargetText,
+        ]);
+        this._voltageMeterCenter = { x: hudX, y: hudY };
+    }
+
+    _buildInventoryPanel(depth) {
+        const panelX = Math.max(120, this.boardX - 130);
+        const panelY = this.boardY;
+        const panelH = Math.max(220, this.rows * this.cellSize);
+        const panelW = 108;
+
+        const panelBg = this.scene.add.rectangle(panelX, panelY + panelH / 2, panelW, panelH, 0x001a20, 0.9)
+            .setStrokeStyle(1, 0x00cccc, 0.75)
+            .setDepth(depth);
+        const title = this.scene.add.text(panelX, panelY + 14, 'INVENTORY', {
+            fontFamily: 'Courier New', fontSize: '10px', color: '#00eeee', letterSpacing: 2,
+        }).setOrigin(0.5).setDepth(depth + 1);
+        const hint = this.scene.add.text(panelX, panelY + panelH - 14,
+            'L-click: place   R-click: pickup', {
+                fontFamily: 'Courier New', fontSize: '7px', color: '#66aaaa', align: 'center',
+                wordWrap: { width: panelW - 12 },
+            }).setOrigin(0.5).setDepth(depth + 1);
+        this.container.add([panelBg, title, hint]);
+
+        const pieces = ['straight', 'curve', 'tee', 'cross'];
+        const slotSize = 50;
+        const slotGap = 8;
+        const slotsStartY = panelY + 38;
+        pieces.forEach((type, idx) => {
+            const sx = panelX;
+            const sy = slotsStartY + idx * (slotSize + slotGap) + slotSize / 2;
+            const slotGfx = this.scene.add.graphics().setDepth(depth + 1);
+            const pipeGfx = this.scene.add.graphics().setDepth(depth + 2);
+            const countText = this.scene.add.text(sx + slotSize / 2 - 4, sy + slotSize / 2 - 4,
+                '0', {
+                    fontFamily: 'Courier New', fontSize: '13px', color: '#e6faff',
+                    stroke: '#000000', strokeThickness: 2, fontStyle: 'bold',
+                }).setOrigin(1, 1).setDepth(depth + 3);
+            const labelText = this.scene.add.text(sx, sy + slotSize / 2 + 4,
+                type.toUpperCase(), {
+                    fontFamily: 'Courier New', fontSize: '7px', color: '#9dd6d6',
+                }).setOrigin(0.5, 0).setDepth(depth + 2);
+            const hitArea = this.scene.add.rectangle(sx, sy, slotSize, slotSize, 0x000000, 0)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(depth + 4);
+            hitArea.on('pointerdown', (_p, _lx, _ly, event) => {
+                event?.stopPropagation?.();
+                this._toggleInventorySelection(type);
+            });
+            this.container.add([slotGfx, pipeGfx, labelText, countText, hitArea]);
+            this._inventoryViews[type] = { type, sx, sy, slotSize, slotGfx, pipeGfx, countText, hitArea };
+        });
+
+        this._refreshInventoryPanel();
+    }
+
+    _refreshInventoryPanel() {
+        Object.values(this._inventoryViews).forEach((view) => {
+            const count = this._inventory[view.type] || 0;
+            const selected = this._selectedInventoryType === view.type;
+            const hasAny = count > 0;
+            const fill = selected ? 0x00404a : (hasAny ? 0x02272e : 0x10191c);
+            const stroke = selected ? 0x66ffff : (hasAny ? 0x5fcae0 : 0x2a4048);
+            const strokeAlpha = selected ? 1 : (hasAny ? 0.9 : 0.6);
+            this._drawOctagonFrame(view.slotGfx, view.sx, view.sy, view.slotSize - 4, {
+                fill,
+                fillAlpha: 0.94,
+                stroke,
+                strokeAlpha,
+                strokeWidth: selected ? 2 : 1.2,
+                chamferRatio: 0.26,
+            });
+            view.pipeGfx.clear();
+            this._drawInventoryPieceIcon(view.pipeGfx, view.sx, view.sy, view.type,
+                hasAny ? 0x00ffcc : 0x335055);
+            view.countText.setText(String(count));
+            view.countText.setColor(hasAny ? '#e6faff' : '#557075');
+        });
+    }
+
+    _drawInventoryPieceIcon(gfx, cx, cy, type, color) {
+        const r = 14; // icon radius
+        gfx.lineStyle(3, color, 1);
+        const conns = TILE_BASE[type] || [0, 0, 0, 0];
+        // simple tile icon: render the base orientation connections as lines
+        // from center to each open edge. Cross/tee look different enough.
+        if (conns[0]) gfx.lineBetween(cx, cy, cx, cy - r);
+        if (conns[1]) gfx.lineBetween(cx, cy, cx + r, cy);
+        if (conns[2]) gfx.lineBetween(cx, cy, cx, cy + r);
+        if (conns[3]) gfx.lineBetween(cx, cy, cx - r, cy);
+        gfx.fillStyle(color, 1);
+        gfx.fillCircle(cx, cy, 3.2);
+    }
+
+    _toggleInventorySelection(type) {
+        const count = this._inventory[type] || 0;
+        if (count <= 0) {
+            this._selectedInventoryType = null;
+            this._refreshInventoryPanel();
+            return;
+        }
+        this._selectedInventoryType = (this._selectedInventoryType === type) ? null : type;
+        this._refreshInventoryPanel();
+    }
+
+    _handleInventoryClick(x, y, pointer) {
+        const tile = this._tiles?.[y]?.[x];
+        if (!tile) return false;
+        const isForbidden = this._forbidden.has(`${x},${y}`);
+        const rightClick = pointer?.rightButtonDown?.() === true
+            || pointer?.buttons === 2
+            || pointer?.button === 2;
+
+        // Right-click: pick up a placed piece → inventory
+        if (rightClick) {
+            if (isForbidden) return true; // swallow, no-op
+            if (tile.type === 'empty' || tile.locked) return true;
+            if (!Object.prototype.hasOwnProperty.call(this._inventory, tile.type)) return true;
+            this._inventory[tile.type] = (this._inventory[tile.type] || 0) + 1;
+            this._tiles[y][x] = { type: 'empty', rotation: 0 };
+            this._refreshInventoryPanel();
+            this._updateAll();
+            this._playWireTurnSound?.();
+            return true;
+        }
+
+        // Left-click with an active selection on an empty cell → place
+        const sel = this._selectedInventoryType;
+        if (sel && tile.type === 'empty' && !isForbidden) {
+            const count = this._inventory[sel] || 0;
+            if (count <= 0) return false;
+            this._inventory[sel] = count - 1;
+            this._tiles[y][x] = { type: sel, rotation: 0 };
+            if ((this._inventory[sel] || 0) <= 0) this._selectedInventoryType = null;
+            // Full rebuild of this tile's visual state (its pipe graphics was
+            // tied to the old empty tile). Cheapest path: re-render via
+            // _updateAll which repaints all pipes from _tiles.
+            this._refreshInventoryPanel();
+            this._updateAll();
+            this._playWireTurnSound?.();
+            return true;
+        }
+
+        return false;
+    }
+
+    _seedInitialInventory(circuit) {
+        // If the circuit defines an explicit inventory, honour it verbatim and
+        // remove the matching pieces from the board at authored positions.
+        if (circuit?.inventory && typeof circuit.inventory === 'object') {
+            Object.entries(circuit.inventory).forEach(([type, count]) => {
+                const n = Math.max(0, Math.floor(Number(count) || 0));
+                if (!Object.prototype.hasOwnProperty.call(this._inventory, type)) return;
+                this._inventory[type] = (this._inventory[type] || 0) + n;
+            });
+            this._refreshInventoryPanel();
+            return;
+        }
+
+        // Otherwise, auto-pop a couple of interior non-critical tiles off the
+        // board and place them in the inventory so the user has something to
+        // place from the start. Pick cells that are in the interior (not in
+        // source column 0 and not in output column cols-1).
+        const interior = [];
+        const outRows = new Set(this._outputSpecs.map((s) => s.row));
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 1; x < this.cols - 1; x++) {
+                if (this._forbidden.has(`${x},${y}`)) continue;
+                const t = this._tiles[y][x];
+                if (!t || t.type === 'empty') continue;
+                if (!Object.prototype.hasOwnProperty.call(this._inventory, t.type)) continue;
+                // Skip tees/crosses (they're usually junctions; removing them
+                // breaks the puzzle more than desired for a default seed).
+                if (t.type === 'tee' || t.type === 'cross') continue;
+                interior.push({ x, y, type: t.type });
+            }
+        }
+        if (interior.length === 0) return;
+        // Seed 2-3 pieces for 5-cell-wide boards, more for larger grids.
+        const budget = Math.min(interior.length, Math.max(2, Math.floor(interior.length * 0.25)));
+        // Deterministic pick based on grid size + output rows so the same
+        // puzzle always pops the same tiles.
+        const seedHash = (this.rows * 31 + this.cols * 17 + [...outRows].reduce((a, b) => a + b, 0)) % 9973;
+        for (let i = 0; i < budget; i++) {
+            const idx = (seedHash + i * 37) % interior.length;
+            const pick = interior.splice(idx, 1)[0];
+            if (!pick) break;
+            this._inventory[pick.type] = (this._inventory[pick.type] || 0) + 1;
+            this._tiles[pick.y][pick.x] = { type: 'empty', rotation: 0 };
+        }
+        this._refreshInventoryPanel();
+    }
+
+    _refreshVoltageHud() {
+        if (!this._voltageActualText) return;
+        const targetCount = this._outputSpecs.length;
+        const powered = this.evidence?.repairedTargets?.length || 0;
+        this._voltageActualText.setText(`${powered} / ${targetCount}`);
+        this._voltageTargetText.setText(String(targetCount));
+
+        // Fill the meter bar based on powered / target.
+        const cx = this._voltageMeterCenter?.x ?? 640;
+        const cy = this._voltageMeterCenter?.y ?? (this.boardY - 40);
+        const width = 150;
+        const height = 10;
+        const left = cx - width / 2;
+        const top = cy - height / 2;
+        const ratio = targetCount > 0 ? Math.max(0, Math.min(1, powered / targetCount)) : 0;
+        this._voltageMeterBar.clear();
+        // segmented fill
+        const segCount = Math.max(4, targetCount * 2);
+        const segWidth = (width - (segCount - 1) * 2) / segCount;
+        const lit = Math.round(ratio * segCount);
+        for (let i = 0; i < segCount; i++) {
+            const x = left + i * (segWidth + 2);
+            const on = i < lit;
+            this._voltageMeterBar.fillStyle(on ? 0x00ffcc : 0x0f2a2e, on ? 0.95 : 0.9);
+            this._voltageMeterBar.fillRect(x, top, segWidth, height);
+        }
     }
 
     _animateTileRotation(tileView, targetRotation) {
@@ -1210,6 +1564,7 @@ export default class CircuitRouting extends MinigameBase {
         this._refreshAnimatedCircuitEffects();
 
         this._syncCircuitProgress(this._lastResult);
+        this._refreshVoltageHud?.();
     }
 
     _triggerSpecialAction() {
