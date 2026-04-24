@@ -45,6 +45,8 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('mainview_lightlayer_source', 'lightlayer.png');
         this.load.image('mainview_fam2_source', 'Fam2.png');
         this.load.image('mainview_fam1_source', 'Fam1.png');
+        this.load.image('btn_scrap_source', 'Red.png');
+        this.load.image('btn_accept_source', 'Green.png');
         this.load.image('track_and_discus_robot_source', 'Tennis.png');
         this.load.image('track_and_discus_robot_close_source', 'TennisClose.png');
 
@@ -71,6 +73,8 @@ export default class BootScene extends Phaser.Scene {
         this._createNearestUpscaledTexture('mainview_lightlayer_source', 'mainview_lightlayer', 4);
         this._createNearestUpscaledTexture('mainview_fam2_source', 'mainview_fam2', 4);
         this._createNearestUpscaledTexture('mainview_fam1_source', 'mainview_fam1', 4);
+        this._createCroppedUpscaledTexture('btn_scrap_source', 'btn_scrap', 4, { sx: 96, sy: 169, sw: 54, sh: 20 });
+        this._createCroppedUpscaledTexture('btn_accept_source', 'btn_accept', 4, { sx: 96, sy: 169, sw: 54, sh: 20 });
     }
 
     _createTrackAndDiscusRobotFromSource() {
@@ -95,6 +99,35 @@ export default class BootScene extends Phaser.Scene {
 
     _createManagerRobotFromSource() {
         this._createNearestUpscaledTexture('manager_robot_source', 'manager_robot', 5);
+    }
+
+    _createCroppedUpscaledTexture(sourceKey, targetKey, integerScale, crop) {
+        if (!this.textures.exists(sourceKey)) return;
+
+        const sourceTexture = this.textures.get(sourceKey);
+        const sourceImage = sourceTexture?.getSourceImage();
+        if (!sourceImage) return;
+
+        const { sx, sy, sw, sh } = crop;
+        const targetWidth = sw * integerScale;
+        const targetHeight = sh * integerScale;
+
+        if (this.textures.exists(targetKey)) {
+            this.textures.remove(targetKey);
+        }
+
+        const canvasTexture = this.textures.createCanvas(targetKey, targetWidth, targetHeight);
+        const context = canvasTexture.getContext();
+
+        context.imageSmoothingEnabled = false;
+        context.mozImageSmoothingEnabled = false;
+        context.webkitImageSmoothingEnabled = false;
+        context.msImageSmoothingEnabled = false;
+        context.clearRect(0, 0, targetWidth, targetHeight);
+        context.drawImage(sourceImage, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+        canvasTexture.refresh();
+
+        this.textures.get(targetKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
 
     _createNearestUpscaledTexture(sourceKey, targetKey, integerScale = 5) {

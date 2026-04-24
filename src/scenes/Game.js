@@ -3,7 +3,6 @@ import { GameState } from '../GameState.js';
 import RulebookOverlay from '../systems/RulebookOverlay.js';
 import MachinePuzzleOverlay from '../systems/MachinePuzzleOverlay.js';
 import FactorySettingsOverlay from '../systems/FactorySettingsOverlay.js';
-import Animations from '../fx/Animations.js';
 import { applyCyberpunkLook, glitchBurst } from '../fx/applyCyberpunkLook.js';
 import {
     FIRST_SHIFT_INTRO,
@@ -378,7 +377,7 @@ export default class GameScene extends Phaser.Scene {
         this.input.on('gameout', this._handleDeskItemPointerUp, this);
 
         this._rulebookDeskItem = this._createDeskTablet('desk_tablet', {
-            x: 440,
+            x: 75,
             y: 130,
             angle: -2,
             width: 128,
@@ -1841,6 +1840,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._phoneHeaderText = this.add.text(34, 30, 'FACTORY LINK', {
             fontFamily: 'Arial Black', fontSize: '16px', color: '#0c171b',
+            wordWrap: { width: 258 },
         });
         this._phoneBodyText = this.add.text(36, 60, '', {
             fontFamily: 'Arial', fontSize: '14px', color: '#101010',
@@ -5289,7 +5289,7 @@ export default class GameScene extends Phaser.Scene {
         // ]);
         // this._conveyorContainer.add(this._machineBayLightContainer);
 
-        this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 420).setDepth(15);
+        this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 490).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText = this.add.text(0, 115, '', {
             fontFamily: 'Courier New', fontSize: '13px', color: '#ccddee',
@@ -5329,70 +5329,62 @@ export default class GameScene extends Phaser.Scene {
         this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID, FLOW, GEAR, OR CODE');
 
         const controlsCenterX = 804;
+        const buttonBaseScale = 0.76;
+        const buttonY = 650;
         const rulingDefs = [
-            { action: 'scrap', x: 704, width: 164, label: 'SCRAP', subtitle: 'drop from the line', fillColor: 0x5b1815, strokeColor: 0xff7d77, textColor: '#ffd6d2' },
-            { action: 'approve', x: 900, width: 164, label: 'ACCEPT', subtitle: 'send it onward', fillColor: 0x174b2a, strokeColor: 0x75ffaf, textColor: '#d4ffea' },
+            { action: 'scrap', x: 465, textureKey: 'btn_scrap' },
+            { action: 'approve', x: 520, textureKey: 'btn_accept' },
         ];
 
         this._conveyorRulingButtons = {};
         rulingDefs.forEach((def) => {
-            const shadowRect = this.add.rectangle(def.x + 6, 656, def.width + 24, 78, 0x000000, 0.22);
-            const frameRect = this.add.rectangle(def.x, 650, def.width + 20, 74, 0x2b261f, 0.96)
-                .setStrokeStyle(2, 0x8d816a, 0.9);
-            const innerFrameRect = this.add.rectangle(def.x, 650, def.width + 8, 66, 0x433c32, 0.96)
-                .setStrokeStyle(1, 0xc0b18d, 0.28);
-            const bgRect = this.add.rectangle(def.x, 650, def.width, 62, def.fillColor, 0.94)
-                .setStrokeStyle(2, def.strokeColor, 0.92)
+            const buttonImage = this.add.image(def.x, buttonY, def.textureKey)
+                .setScale(buttonBaseScale)
                 .setInteractive({ useHandCursor: true });
-            const label = this.add.text(def.x, 641, def.label, {
-                fontFamily: 'Courier New', fontSize: '19px', color: def.textColor, letterSpacing: 2,
-                stroke: '#000000', strokeThickness: 3,
-            }).setOrigin(0.5);
-            const subtitle = this.add.text(def.x, 664, def.subtitle, {
-                fontFamily: 'Courier New', fontSize: '10px', color: def.textColor,
-                stroke: '#000000', strokeThickness: 2,
-            }).setOrigin(0.5);
 
-            bgRect.on('pointerover', () => {
+            buttonImage.setData('baseScale', buttonBaseScale);
+
+            const setScaleTween = (targetScale, duration) => {
+                this.tweens.killTweensOf(buttonImage);
+                this.tweens.add({
+                    targets: buttonImage,
+                    scale: targetScale,
+                    duration,
+                    ease: 'Quad.Out',
+                });
+            };
+
+            buttonImage.on('pointerover', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                bgRect.setScale(1.04);
-                frameRect.setScale(1.04);
-                innerFrameRect.setScale(1.04);
-                shadowRect.setScale(1.04);
-                subtitle.setY(662);
+                setScaleTween(buttonBaseScale * 1.08, 90);
             });
-            bgRect.on('pointerout', () => {
-                bgRect.setScale(1);
-                frameRect.setScale(1);
-                innerFrameRect.setScale(1);
-                shadowRect.setScale(1);
-                subtitle.setY(664);
+            buttonImage.on('pointerout', () => {
+                setScaleTween(buttonBaseScale, 120);
             });
-            bgRect.on('pointerdown', () => {
+            buttonImage.on('pointerdown', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                Animations.buttonPunch(this, bgRect);
+                this.tweens.killTweensOf(buttonImage);
+                this.tweens.add({
+                    targets: buttonImage,
+                    scale: buttonBaseScale * 0.82,
+                    duration: 60,
+                    ease: 'Quad.Out',
+                    yoyo: true,
+                    onComplete: () => buttonImage.setScale(buttonBaseScale),
+                });
                 this._submitRuling(def.action);
             });
 
-            this._factoryControlsContainer.add(shadowRect);
-            this._factoryControlsContainer.add(frameRect);
-            this._factoryControlsContainer.add(innerFrameRect);
-            this._factoryControlsContainer.add(bgRect);
-            this._factoryControlsContainer.add(label);
-            this._factoryControlsContainer.add(subtitle);
+            this._factoryControlsContainer.add(buttonImage);
 
             this._conveyorRulingButtons[def.action] = {
-                shadowRect,
-                frameRect,
-                innerFrameRect,
-                bgRect,
-                label,
-                subtitle,
+                bgRect: buttonImage,
+                buttonImage,
                 def,
             };
         });
 
-        this._conveyorDecisionHint = this.add.text(controlsCenterX, 596, 'OPEN THE GRID AND DECIDE FROM THE FACTORY FLOOR', {
+        this._conveyorDecisionHint = this.add.text(controlsCenterX, 702, 'OPEN THE GRID AND DECIDE FROM THE FACTORY FLOOR', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#8fc1cf', letterSpacing: 2,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5).setVisible(false);
@@ -5462,16 +5454,9 @@ export default class GameScene extends Phaser.Scene {
     _setConveyorRulingButtonsVisible(visible) {
         const isVisible = Boolean(visible) && this._screen === 'conveyor';
         Object.values(this._conveyorRulingButtons).forEach((button) => {
-            button.shadowRect.setVisible(isVisible);
-            button.frameRect.setVisible(isVisible);
-            button.innerFrameRect.setVisible(isVisible);
             button.bgRect.setVisible(isVisible);
-            button.label.setVisible(isVisible);
-            button.subtitle.setVisible(isVisible);
-            button.bgRect.setScale(1);
-            button.shadowRect.setScale(1);
-            button.frameRect.setScale(1);
-            button.innerFrameRect.setScale(1);
+            const baseScale = button.bgRect.getData('baseScale') || 1;
+            button.bgRect.setScale(baseScale);
         });
 
         if (this._factoryControlsContainer) this._factoryControlsContainer.setVisible(this._screen === 'conveyor');
@@ -6127,12 +6112,7 @@ export default class GameScene extends Phaser.Scene {
             const alpha = action === 'scrap'
                 ? readyAlpha
                 : ((gateState.ready || acceptOverrideReady) ? readyAlpha : gatedAlpha);
-            button.shadowRect.setAlpha(alpha * 0.68);
-            button.frameRect.setAlpha(alpha);
-            button.innerFrameRect.setAlpha(alpha);
             button.bgRect.setAlpha(alpha);
-            button.label.setAlpha(alpha);
-            button.subtitle.setAlpha(alpha);
         });
 
         this._refreshOtherPuzzleButton();
@@ -7394,7 +7374,7 @@ export default class GameScene extends Phaser.Scene {
         this._unitContainer.setVisible(true);
         this._setMachineWorklightVisible(true);
         this._unitContainer.x = MACHINE_PRESENTATION.conveyorEntryX;
-        this._unitContainer.y = 420;
+        this._unitContainer.y = 490;
         this._unitContainer.setAngle(0);
         this._unitContainer.setAlpha(1);
         this._unitNameText.setText(this._currentMachineVariant.name);
