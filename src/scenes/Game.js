@@ -7703,7 +7703,7 @@ export default class GameScene extends Phaser.Scene {
 
     _startMusic() {
         this._musicPhase = 1;
-        this._activeMusicKey = SOUND_ASSETS.clockingInMusic.key;
+        this._activeMusicKey = SOUND_ASSETS.corporateMusic.key;
 
         if (this._currentMusic) {
             this._currentMusic.stop();
