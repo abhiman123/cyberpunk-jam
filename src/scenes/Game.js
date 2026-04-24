@@ -5259,13 +5259,13 @@ export default class GameScene extends Phaser.Scene {
             this._mainViewLayers[key] = layer;
         });
 
-        this._monitorText = this.add.text(130, 375,
-            'AWAITING UNIT\n\nSTATUS: READY', {
-                fontFamily: 'Courier New', fontSize: '10px', color: '#301934',
-                align: 'center', lineSpacing: 4,
-            }
-        ).setOrigin(0.5);
-        this._conveyorContainer.add(this._monitorText);
+        // this._monitorText = this.add.text(130, 375,
+        //     'AWAITING UNIT\n\nSTATUS: READY', {
+        //         fontFamily: 'Courier New', fontSize: '10px', color: '#301934',
+        //         align: 'center', lineSpacing: 4,
+        //     }
+        // ).setOrigin(0.5);
+        // this._conveyorContainer.add(this._monitorText);
 
         this._machineDialogueText = this.add.text(966, 460, '', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#bceef8',
@@ -5457,7 +5457,7 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleReturnPhoneState = null;
         this._gearPuzzleReturnPhoneState = null;
         this._debugPuzzleReturnPhoneState = null;
-        if (this._monitorText) this._monitorText.setText(message);
+        // if (this._monitorText) this._monitorText.setText(message);
         if (this._unitContainer) this._unitContainer.setVisible(false);
         this._setMachineWorklightVisible(false);
         if (this._machineDialogueText) this._machineDialogueText.setText('');
@@ -7407,9 +7407,9 @@ export default class GameScene extends Phaser.Scene {
         const monitorStatus = this._currentCase._konamiOverride || this._currentCase.isFinalCase
             ? 'STATUS: FINAL'
             : 'STATUS: ACTIVE';
-        this._monitorText.setText(
-            `UNIT INCOMING\n\n${this._currentCase.id}\n${this._currentCase.name}\n${monitorStatus}`
-        );
+        // this._monitorText.setText(
+        //     `UNIT INCOMING\n\n${this._currentCase.id}\n${this._currentCase.name}\n${monitorStatus}`
+        // );
 
         this._machineDialogueText.setText('');
         const stateSyncStartedAt = this._getPerfNow();

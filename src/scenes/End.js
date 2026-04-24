@@ -260,13 +260,6 @@ export default class EndScene extends Phaser.Scene {
     }
 
     async _runReplacementEnding() {
-        // this.scene.add.text(640, 360, '12:00 PM', {
-        //     fontFamily: 'Courier New',
-        //     fontSize: '50px',
-        //     color: '#ffffff',
-        //     align: 'center',
-        // }).setOrigin(0.5).setDepth(40);
-
         this._managerSprite.setTint(0x8ccfff);
         await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 950 });
         await this._typeDialogueLines(ENDING_DIALOGUE.replacement, { color: '#aee7ff' });
