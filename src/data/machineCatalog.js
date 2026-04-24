@@ -2497,6 +2497,12 @@ const createChargeGroupLink = (row, col) => ({
     col,
 });
 
+const createComparatorCell = (op, threshold) => ({
+    kind: 'comparator',
+    op: op === '>' ? '>' : '<',
+    threshold: Math.max(0, Math.min(4, Number.isInteger(threshold) ? threshold : 0)),
+});
+
 function isChargeGroupAnchorCell(value) {
     return Boolean(value)
         && typeof value === 'object'
@@ -2510,6 +2516,14 @@ function isChargeGroupLinkCell(value) {
         && value.kind === 'charge-group-link'
         && Number.isInteger(value.row)
         && Number.isInteger(value.col);
+}
+
+function isComparatorCell(value) {
+    return Boolean(value)
+        && typeof value === 'object'
+        && value.kind === 'comparator'
+        && (value.op === '<' || value.op === '>')
+        && Number.isInteger(value.threshold);
 }
 
 const GENERIC_ROSTER_GRID_OPTIONS = Object.freeze([
@@ -4375,6 +4389,7 @@ function cloneGridCell(cell) {
     if (isLinkCell(cell)) return [cell[0], cell[1]];
     if (isNotEqualLinkCell(cell)) return { ...cell };
     if (isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) return { ...cell };
+    if (isComparatorCell(cell)) return { ...cell };
     return cell;
 }
 
@@ -4856,6 +4871,9 @@ function stripGridConstraintMarkers(shapeGrid) {
         if (isLinkCell(cell) || isNotEqualLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) {
             return CELL_EMPTY;
         }
+        if (isComparatorCell(cell)) {
+            return CELL_EMPTY;
+        }
 
         return Number.isInteger(cell) ? cell : CELL_EMPTY;
     }));
@@ -4901,6 +4919,7 @@ function injectEqualityConstraint(gridOption, randomFn = Math.random, validatePl
 function normalizeGridDefinition(shapeGrid) {
     const baseGrid = cloneShapeGrid(shapeGrid).map((row) => row.map((cell) => {
         if (isLinkCell(cell) || isNotEqualLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) return CELL_EMPTY;
+        if (isComparatorCell(cell)) return CELL_EMPTY;
         return Number.isInteger(cell) ? cell : CELL_EMPTY;
     }));
 
@@ -4908,6 +4927,7 @@ function normalizeGridDefinition(shapeGrid) {
     const notEqualLinks = new Map();
     const groupAnchors = new Map();
     const groupLinks = new Map();
+    const comparators = new Map();
     shapeGrid.forEach((row, rowIndex) => {
         row.forEach((cell, colIndex) => {
             if (isLinkCell(cell)) {
@@ -4928,6 +4948,10 @@ function normalizeGridDefinition(shapeGrid) {
             }
             if (isChargeGroupLinkCell(cell)) {
                 groupLinks.set(cellKey(rowIndex, colIndex), { row: cell.row, col: cell.col });
+                return;
+            }
+            if (isComparatorCell(cell)) {
+                comparators.set(cellKey(rowIndex, colIndex), { op: cell.op, threshold: cell.threshold });
             }
         });
     });
@@ -5041,6 +5065,7 @@ function normalizeGridDefinition(shapeGrid) {
         chargeGroups,
         chargeGroupCells,
         chargeGroupLinks,
+        comparators,
     };
 }
 
@@ -5070,6 +5095,7 @@ export class MachinePuzzleState {
         }));
         this.chargeGroupCells = new Map(normalizedGrid.chargeGroupCells);
         this.chargeGroupLinks = new Map(normalizedGrid.chargeGroupLinks);
+        this.comparators = new Map(normalizedGrid.comparators);
         this.impossible = Boolean(clonedGridOption.impossible);
         this.inspectionFault = clonedGridOption.inspectionFault ? { ...clonedGridOption.inspectionFault } : null;
         this.scrapKind = clonedGridOption.scrapKind || this.inspectionFault?.kind || null;
@@ -5178,6 +5204,40 @@ export class MachinePuzzleState {
 
     isNotEqualLinkCell(row, col) {
         return this.notEqualLinks.has(cellKey(row, col));
+    }
+
+    isComparatorCell(row, col) {
+        return this.comparators.has(cellKey(row, col));
+    }
+
+    getComparator(row, col) {
+        const cmp = this.comparators.get(cellKey(row, col));
+        return cmp ? { ...cmp } : null;
+    }
+
+    getComparatorCells() {
+        const result = [];
+        this.comparators.forEach((cmp, key) => {
+            const { row, col } = parseCellKey(key);
+            result.push({
+                row,
+                col,
+                op: cmp.op,
+                threshold: cmp.threshold,
+                matched: this.isComparatorMatched(row, col),
+            });
+        });
+        return result;
+    }
+
+    isComparatorMatched(row, col) {
+        const cmp = this.comparators.get(cellKey(row, col));
+        if (!cmp) return false;
+        const currentValue = this.getCurrentCellValue(row, col);
+        if (!isPlacedCode(currentValue)) return false;
+        if (this.isPurpleCell(row, col)) return true;
+        const pip = decodePipCount(currentValue);
+        return cmp.op === '<' ? pip < cmp.threshold : pip > cmp.threshold;
     }
 
     isChargeGroupCell(row, col) {
@@ -5325,7 +5385,16 @@ export class MachinePuzzleState {
         const chargeGroupSummaries = this.getChargeGroupSummaries();
         const totalChargeGroups = chargeGroupSummaries.length;
         const matchedChargeGroups = chargeGroupSummaries.reduce((count, group) => count + (group.matched ? 1 : 0), 0);
-        const totalObjectives = totalChargeCells + totalEqualityPairs + totalInequalityPairs + totalChargeGroups;
+
+        let totalComparators = 0;
+        let matchedComparators = 0;
+        this.comparators.forEach((_, key) => {
+            totalComparators += 1;
+            const { row, col } = parseCellKey(key);
+            if (this.isComparatorMatched(row, col)) matchedComparators += 1;
+        });
+
+        const totalObjectives = totalChargeCells + totalEqualityPairs + totalInequalityPairs + totalChargeGroups + totalComparators;
         const clownCorrupted = Boolean(this.clownCorruption);
 
         return {
@@ -5345,11 +5414,14 @@ export class MachinePuzzleState {
             matchedInequalityPairs,
             totalChargeGroups,
             matchedChargeGroups,
+            totalComparators,
+            matchedComparators,
             solved: totalObjectives > 0
                 && matchedChargeCells === totalChargeCells
                 && matchedEqualityPairs === totalEqualityPairs
                 && matchedInequalityPairs === totalInequalityPairs
-                && matchedChargeGroups === totalChargeGroups,
+                && matchedChargeGroups === totalChargeGroups
+                && matchedComparators === totalComparators,
         };
     }
 
@@ -5971,15 +6043,88 @@ function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
 
     // --- 4. Assign pips to each pair and build dominos ---
     const newGrid = deriveChargeGridFromTiling(baseGrid, pairs, chargeMap, randomFn);
-    const newDominos = pairs.map((pair) => {
-        const { first, second } = assignPipsForPair(pair, chargeMap, randomFn);
-        return createDomino(first, second);
+    const pipAssignments = pairs.map((pair) => assignPipsForPair(pair, chargeMap, randomFn));
+    const newDominos = pipAssignments.map(({ first, second }) => createDomino(first, second));
+
+    // Build a pip map that captures the tiled pip at every cell (solution basis).
+    const solutionPipMap = new Map();
+    pairs.forEach((pair, index) => {
+        const { first, second } = pipAssignments[index];
+        solutionPipMap.set(`${pair[0][0]},${pair[0][1]}`, first);
+        solutionPipMap.set(`${pair[1][0]},${pair[1][1]}`, second);
     });
 
     return {
         dominos: [...newDominos, ...reservedDominos],
         grid: newGrid,
+        solution: {
+            pairs,
+            pipMap: solutionPipMap,
+        },
     };
+}
+
+/**
+ * Inject per-cell comparator (`<N` / `>N`) constraints on open cells. The
+ * generation tiling's pip map is used as the source of truth so every
+ * comparator placed is satisfiable by the reference solution.
+ */
+function injectPerCellComparators(grid, pipMap, randomFn, stage = 1) {
+    const out = cloneShapeGrid(grid);
+
+    const candidates = [];
+    for (let r = 0; r < out.length; r++) {
+        for (let c = 0; c < out[r].length; c++) {
+            if (out[r][c] !== CELL_EMPTY) continue;
+            const pip = pipMap.get(`${r},${c}`);
+            if (!Number.isInteger(pip)) continue;
+            candidates.push({ r, c, pip });
+        }
+    }
+
+    if (candidates.length === 0) return out;
+
+    // Density: aim for ~35-55% of eligible empty cells to get a comparator.
+    // Stage 1: 0.35, 2: 0.45, 3+: 0.55.
+    const ratio = stage >= 3 ? 0.55 : stage === 2 ? 0.45 : 0.35;
+    const target = Math.max(1, Math.round(candidates.length * ratio));
+
+    // Shuffle (Fisher–Yates with seeded randomFn).
+    for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(randomFn() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    let placed = 0;
+    for (const { r, c, pip } of candidates) {
+        if (placed >= target) break;
+        const canLessThan = pip < 4;   // threshold in [pip+1, 4]
+        const canGreaterThan = pip > 0; // threshold in [0, pip-1]
+
+        let op;
+        if (canLessThan && canGreaterThan) {
+            op = randomFn() < 0.5 ? '<' : '>';
+        } else if (canLessThan) {
+            op = '<';
+        } else if (canGreaterThan) {
+            op = '>';
+        } else {
+            continue;
+        }
+
+        let threshold;
+        if (op === '<') {
+            const range = 4 - pip;
+            threshold = pip + 1 + Math.floor(randomFn() * range);
+        } else {
+            threshold = Math.floor(randomFn() * pip);
+        }
+
+        out[r][c] = createComparatorCell(op, threshold);
+        placed += 1;
+    }
+
+    return out;
 }
 
 /**
@@ -6014,18 +6159,30 @@ function injectDerivedEqualityLinks(grid, pairs, chargeMap, randomFn, count = 1)
     const pipGroups = [...byPip.values()].filter((g) => g.length >= 2);
     const shuffled = pipGroups.sort(() => randomFn() - 0.5);
 
+    const isPlainCell = (r, c) => {
+        const v = out[r]?.[c];
+        return Number.isInteger(v);
+    };
+
     for (const group of shuffled) {
         if (placed >= count) break;
         const sorted = group.sort(() => randomFn() - 0.5);
-        const a = sorted[0];
-        const b = sorted[1];
-        const ak = `${a.r},${a.c}`;
-        const bk = `${b.r},${b.c}`;
-        if (usedCells.has(ak) || usedCells.has(bk)) continue;
+        // Find first two cells still available (plain, not already linked).
+        let a = null;
+        let b = null;
+        for (const candidate of sorted) {
+            const k = `${candidate.r},${candidate.c}`;
+            if (usedCells.has(k)) continue;
+            if (!isPlainCell(candidate.r, candidate.c)) continue;
+            if (!a) { a = candidate; continue; }
+            b = candidate;
+            break;
+        }
+        if (!a || !b) continue;
         out[a.r][a.c] = linkCell(b.r, b.c);
         out[b.r][b.c] = linkCell(a.r, a.c);
-        usedCells.add(ak);
-        usedCells.add(bk);
+        usedCells.add(`${a.r},${a.c}`);
+        usedCells.add(`${b.r},${b.c}`);
         placed++;
     }
 
@@ -6038,6 +6195,8 @@ function injectDerivedEqualityLinks(grid, pairs, chargeMap, randomFn, count = 1)
 function injectDerivedNotEqualLinks(grid, pairs, chargeMap, randomFn, count = 1) {
     const out = cloneShapeGrid(grid);
     const usedCells = new Set();
+
+    const isPlainCell = (r, c) => Number.isInteger(out[r]?.[c]);
 
     const allCells = [];
     for (const pair of pairs) {
@@ -6058,6 +6217,7 @@ function injectDerivedNotEqualLinks(grid, pairs, chargeMap, randomFn, count = 1)
             const b = shuffled[j];
             if (a.pip === b.pip) continue; // must differ
             if (usedCells.has(a.k) || usedCells.has(b.k)) continue;
+            if (!isPlainCell(a.r, a.c) || !isPlainCell(b.r, b.c)) continue;
             out[a.r][a.c] = notLinkCell(b.r, b.c);
             out[b.r][b.c] = notLinkCell(a.r, a.c);
             usedCells.add(a.k);
@@ -6172,7 +6332,8 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
     }
 
     // --- Forward generation ---
-    const { dominos, grid: derivedGrid } = forwardGeneratePuzzle(gridOption, normalizedStage, randomFn);
+    const { dominos, grid: derivedGrid, solution } = forwardGeneratePuzzle(gridOption, normalizedStage, randomFn);
+    const solutionPipMap = solution?.pipMap || new Map();
 
     // We now have a clean grid with charge cells baked in and correct dominos.
     // Apply layered constraint injection (all derived, so always solvable).
@@ -6198,20 +6359,28 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
             chargeMap.set(`${r},${c}`, cell - 1);
         }
     }));
-    const pairs = greedyTileGrid(derivedGrid, openKeys, randomFn);
+    const pairs = (solution?.pairs && solution.pairs.length > 0)
+        ? solution.pairs
+        : greedyTileGrid(derivedGrid, openKeys, randomFn);
 
     // -- Equality links (Day 1+) FIRST so their usedCells set is populated --
-    const equalityCount = normalizedStage >= 3 ? 2 : 1;
+    // Denser on later stages so the board feels fuller.
+    const equalityCount = normalizedStage >= 3 ? 3 : normalizedStage === 2 ? 2 : 1;
     let resultGrid = injectDerivedEqualityLinks(derivedGrid, pairs, chargeMap, randomFn, equalityCount);
 
-    // -- Not-equal links (Day 3+) SECOND --
-    if (normalizedStage >= 3) {
-        resultGrid = injectDerivedNotEqualLinks(resultGrid, pairs, chargeMap, randomFn, 1);
+    // -- Not-equal links (Day 2+) SECOND --
+    const notEqualCount = normalizedStage >= 3 ? 2 : normalizedStage === 2 ? 1 : 0;
+    if (notEqualCount > 0) {
+        resultGrid = injectDerivedNotEqualLinks(resultGrid, pairs, chargeMap, randomFn, notEqualCount);
     }
 
-    // -- Charge groups LAST so they can see which cells are already link cells --
+    // -- Charge groups SECOND-TO-LAST so they can see which cells are already link cells --
     // and avoid overwriting them (which would corrupt the anchor chain).
     resultGrid = injectDerivedChargeGroups(resultGrid, pairs, chargeMap, randomFn, normalizedStage);
+
+    // -- Per-cell comparators (<N / >N) LAST so they only land on cells that
+    // are still CELL_EMPTY — never clobbers other constraints.
+    resultGrid = injectPerCellComparators(resultGrid, solutionPipMap, randomFn, normalizedStage);
 
     return { ...baseOption, grid: resultGrid };
 }
@@ -6222,17 +6391,31 @@ function pickBrokenRegionGlyph(randomFn = Math.random) {
 
 function isolateChargeFaultOnGridOption(gridOption, randomFn = Math.random) {
     const grid = cloneShapeGrid(gridOption.grid);
-    const chargeCandidates = [];
 
+    const isInBounds = (row, col) => (
+        Array.isArray(grid[row]) && col >= 0 && col < grid[row].length
+    );
+    // Only cells that are CELL_EMPTY are safe to wall without corrupting
+    // an adjacent constraint (link/group/comparator).
+    const isSafeToWall = (row, col) => {
+        if (!isInBounds(row, col)) return false;
+        return grid[row][col] === CELL_EMPTY;
+    };
+
+    const chargeCandidates = [];
     grid.forEach((row, rowIndex) => {
         row.forEach((cell, colIndex) => {
             if (!isChargeCode(cell)) return;
-            const inBoundsNeighbors = getOrthogonalCellNeighbors(rowIndex, colIndex)
-                .filter((neighbor) => Array.isArray(grid[neighbor.row]) && neighbor.col >= 0 && neighbor.col < grid[neighbor.row].length);
+            const neighbors = getOrthogonalCellNeighbors(rowIndex, colIndex).filter((n) => isInBounds(n.row, n.col));
+            const openNeighbors = neighbors.filter((n) => grid[n.row][n.col] !== CELL_WALL);
+            if (openNeighbors.length === 0) return;
+            // Only accept this charge if every open neighbor is safe to wall
+            // (i.e. plain CELL_EMPTY, not a link/group/comparator).
+            if (!openNeighbors.every((n) => isSafeToWall(n.row, n.col))) return;
             chargeCandidates.push({
                 row: rowIndex,
                 col: colIndex,
-                neighborCount: inBoundsNeighbors.length,
+                neighborCount: openNeighbors.length,
             });
         });
     });
@@ -6244,13 +6427,13 @@ function isolateChargeFaultOnGridOption(gridOption, randomFn = Math.random) {
         };
     }
 
-    const target = [...chargeCandidates]
-        .sort((left, right) => right.neighborCount - left.neighborCount)
-        .slice(0, Math.max(1, Math.min(4, chargeCandidates.length)));
+    // Prefer charges with fewer open neighbors (minimal disturbance).
+    const sorted = [...chargeCandidates].sort((left, right) => left.neighborCount - right.neighborCount);
+    const target = sorted.slice(0, Math.max(1, Math.min(4, sorted.length)));
     const chosen = pickRandomEntry(target, randomFn) || target[0];
 
     getOrthogonalCellNeighbors(chosen.row, chosen.col).forEach((neighbor) => {
-        if (!Array.isArray(grid[neighbor.row]) || neighbor.col < 0 || neighbor.col >= grid[neighbor.row].length) return;
+        if (!isSafeToWall(neighbor.row, neighbor.col)) return;
         grid[neighbor.row][neighbor.col] = CELL_WALL;
     });
 
@@ -6323,11 +6506,14 @@ function applyBrokenGlyphFault(gridOption, randomFn = Math.random) {
 }
 
 function applyIsolatedChargeFault(gridOption, stage = 1, randomFn = Math.random) {
-    const isolated = isolateChargeFaultOnGridOption(gridOption, randomFn);
+    // Stage a normal NYT-shaped puzzle first, THEN isolate a charge on it.
+    // This ensures scrap cases also benefit from the NYT-style fully-filled
+    // board shape + dense constraint mix, rather than rendering a sparse 5x5.
     const staged = buildStageConstraintProfile({
-        ...isolated.option,
+        ...gridOption,
         impossible: false,
     }, stage, randomFn);
+    const isolated = isolateChargeFaultOnGridOption(staged, randomFn);
 
     const kind = stage >= 3 ? 'hazard' : (stage === 2 ? 'compliance' : 'unsalvageable');
     const status = stage >= 3 ? 'ISOLATED HAZARD CELL' : 'ISOLATED CHARGE CELL';
@@ -6336,7 +6522,7 @@ function applyIsolatedChargeFault(gridOption, stage = 1, randomFn = Math.random)
         : 'A charge cell has been boxed into dead space and can never be completed. Scrap the unit.';
 
     return {
-        ...staged,
+        ...isolated.option,
         inspectionFault: isolated.target ? {
             row: isolated.target.row,
             col: isolated.target.col,
