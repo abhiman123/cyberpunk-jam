@@ -5428,13 +5428,13 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setVisible(false);
         this._factoryControlsContainer.add(this._conveyorDecisionHint);
 
-        this._tutorialArrow = this.add.text(MACHINE_PRESENTATION.conveyorTargetX, 610, '▼ CLICK ROBOT ▼', {
+        this._tutorialArrow = this.add.text(MACHINE_PRESENTATION.conveyorTargetX, 340, '▼ CLICK ROBOT ▼', {
             fontFamily: 'Arial Black', fontSize: '14px', color: '#ffdd55',
             stroke: '#000000', strokeThickness: 3,
         }).setOrigin(0.5).setVisible(false).setDepth(20);
         this.tweens.add({
             targets: this._tutorialArrow,
-            y: 622,
+            y: 352,
             duration: 520,
             ease: 'Sine.InOut',
             yoyo: true,
