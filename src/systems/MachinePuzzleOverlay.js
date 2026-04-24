@@ -1407,8 +1407,16 @@ export default class MachinePuzzleOverlay {
         if (comparators.length === 0) return;
 
         const cellSize = MACHINE_PUZZLE.overlayCellSize;
-        const badgeRadius = Math.max(10, Math.floor(cellSize * 0.34));
-
+        // Pill tag rendered as a small caption hanging off the bottom edge of
+        // the cell. Half inside the cell, half outside, so placed dominoes
+        // never fully obscure the constraint while also not colliding with
+        // the next row's content.
+        const pillWidth = Math.max(28, Math.floor(cellSize * 0.78));
+        const pillHeight = Math.max(12, Math.floor(cellSize * 0.26));
+        const pillRadius = Math.floor(pillHeight / 2);
+        // Mark each cell that hosts a comparator so _refreshCell can skip
+        // drawing the in-cell diamond there (we now show it as a pill below
+        // the cell instead).
         comparators.forEach((entry) => {
             const center = this._getCellCenter(entry.row, entry.col);
             const isLessThan = entry.op === '<';
@@ -1423,44 +1431,42 @@ export default class MachinePuzzleOverlay {
             const glowColor = isLessThan ? 0x4a8fbe : 0x9d66b4;
             const glowAlpha = isMatched ? 0.42 : 0.22;
 
-            // soft diamond halo
+            const pillX = center.x - pillWidth / 2;
+            // Bottom edge of the pill sits at the bottom edge of the cell, so
+            // the pill hangs halfway inside the cell and halfway outside.
+            const pillY = center.y + (cellSize / 2) - pillHeight / 2;
+
+            // soft halo behind the pill
             this._comparatorGfx.fillStyle(glowColor, glowAlpha);
-            this._comparatorGfx.beginPath();
-            this._comparatorGfx.moveTo(center.x, center.y - badgeRadius - 3);
-            this._comparatorGfx.lineTo(center.x + badgeRadius + 3, center.y);
-            this._comparatorGfx.lineTo(center.x, center.y + badgeRadius + 3);
-            this._comparatorGfx.lineTo(center.x - badgeRadius - 3, center.y);
-            this._comparatorGfx.closePath();
-            this._comparatorGfx.fillPath();
+            this._comparatorGfx.fillRoundedRect(
+                pillX - 2,
+                pillY - 2,
+                pillWidth + 4,
+                pillHeight + 4,
+                pillRadius + 2,
+            );
 
-            // solid diamond core
-            this._comparatorGfx.fillStyle(fillColor, 0.95);
-            this._comparatorGfx.beginPath();
-            this._comparatorGfx.moveTo(center.x, center.y - badgeRadius);
-            this._comparatorGfx.lineTo(center.x + badgeRadius, center.y);
-            this._comparatorGfx.lineTo(center.x, center.y + badgeRadius);
-            this._comparatorGfx.lineTo(center.x - badgeRadius, center.y);
-            this._comparatorGfx.closePath();
-            this._comparatorGfx.fillPath();
+            // pill core
+            this._comparatorGfx.fillStyle(fillColor, 0.98);
+            this._comparatorGfx.fillRoundedRect(pillX, pillY, pillWidth, pillHeight, pillRadius);
 
-            // diamond stroke
-            this._comparatorGfx.lineStyle(2, strokeColor, isMatched ? 1 : 0.9);
-            this._comparatorGfx.beginPath();
-            this._comparatorGfx.moveTo(center.x, center.y - badgeRadius);
-            this._comparatorGfx.lineTo(center.x + badgeRadius, center.y);
-            this._comparatorGfx.lineTo(center.x, center.y + badgeRadius);
-            this._comparatorGfx.lineTo(center.x - badgeRadius, center.y);
-            this._comparatorGfx.closePath();
-            this._comparatorGfx.strokePath();
+            // pill stroke
+            this._comparatorGfx.lineStyle(1.5, strokeColor, isMatched ? 1 : 0.9);
+            this._comparatorGfx.strokeRoundedRect(pillX, pillY, pillWidth, pillHeight, pillRadius);
 
-            const label = this.scene.add.text(center.x, center.y, `${entry.op}${entry.threshold}`, {
-                fontFamily: 'Courier New',
-                fontSize: '15px',
-                fontStyle: 'bold',
-                color: isMatched ? '#ffffff' : (isLessThan ? '#e9f5ff' : '#fbe7ff'),
-                stroke: '#000000',
-                strokeThickness: 2,
-            }).setOrigin(0.5);
+            const label = this.scene.add.text(
+                pillX + pillWidth / 2,
+                pillY + pillHeight / 2,
+                `${entry.op}${entry.threshold}`,
+                {
+                    fontFamily: 'Courier New',
+                    fontSize: `${Math.max(10, Math.floor(pillHeight * 0.82))}px`,
+                    fontStyle: 'bold',
+                    color: isMatched ? '#ffffff' : (isLessThan ? '#e9f5ff' : '#fbe7ff'),
+                    stroke: '#000000',
+                    strokeThickness: 1.5,
+                },
+            ).setOrigin(0.5);
             this._comparatorLabelLayer.add(label);
         });
 

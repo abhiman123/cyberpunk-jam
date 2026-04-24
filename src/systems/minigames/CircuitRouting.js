@@ -639,7 +639,9 @@ export default class CircuitRouting extends MinigameBase {
         const modifierText = this.scene.add.text(0, -(this.cellSize / 2) + 12, '', {
             fontFamily: 'monospace', fontSize: '8px', color: '#d9f0f4',
         }).setOrigin(0.5).setVisible(false);
-        tileContainer.add([energy, pipe, modifierGfx, modifierText]);
+        // Energy (the travelling power dot/dash) is added AFTER pipe so the
+        // dot renders ON TOP of the pipe graphic, not hidden underneath.
+        tileContainer.add([pipe, energy, modifierGfx, modifierText]);
         tileContainer.angle = tile.rotation * 90;
         this.container.add(tileContainer);
 
@@ -938,19 +940,27 @@ export default class CircuitRouting extends MinigameBase {
         const dashHead = 3 + (phase * (half + dashLength - 2));
         const dashTail = Math.max(0, dashHead - dashLength);
 
-        energy.lineStyle(4, palette.tint, 0.16);
-        energy.fillStyle(palette.tint, 0.2);
+        // Bright dashed "power" trail + moving dot, rendered ABOVE the pipe so
+        // the player can clearly read the flow direction.
+        energy.lineStyle(3, palette.tint, 0.55);
+        energy.fillStyle(palette.tint, 0.95);
         directionVectors.forEach((vector, index) => {
             if (!conns[index]) return;
 
             const tail = Math.min(half, dashTail);
             const head = Math.min(half, dashHead);
             energy.lineBetween(vector.x * tail, vector.y * tail, vector.x * head, vector.y * head);
-            energy.fillCircle(vector.x * head, vector.y * head, 2.8);
+            // Outer halo behind the travelling dot for extra pop on the pipe.
+            energy.fillStyle(palette.tint, 0.35);
+            energy.fillCircle(vector.x * head, vector.y * head, 5);
+            energy.fillStyle(palette.tint, 0.95);
+            energy.fillCircle(vector.x * head, vector.y * head, 3);
         });
 
-        energy.fillStyle(palette.tint, 0.24);
-        energy.fillCircle(0, 0, 4.2);
+        energy.fillStyle(palette.tint, 0.5);
+        energy.fillCircle(0, 0, 5.5);
+        energy.fillStyle(0xffffff, 0.85);
+        energy.fillCircle(0, 0, 2.2);
     }
 
     _computeReached() {
