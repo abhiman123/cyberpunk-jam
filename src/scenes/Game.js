@@ -288,8 +288,8 @@ export default class GameScene extends Phaser.Scene {
 
         this._buildDeskSurface();
 
-        const clockPanelCenterX = 1150;
-        const clockPanelCenterY = this._deskContainer.y + 86;
+        const clockPanelCenterX = 1160;
+        const clockPanelCenterY = this._deskContainer.y + 125;
 
         this._clockDialCenterX = clockPanelCenterX - 62;
         this._clockDialCenterY = clockPanelCenterY;
@@ -377,35 +377,10 @@ export default class GameScene extends Phaser.Scene {
         this.input.on('pointerup', this._handleDeskItemPointerUp, this);
         this.input.on('gameout', this._handleDeskItemPointerUp, this);
 
-        this._createDeskPhoto('manager_human', 'manager_human', {
-            x: 100,
-            y: 75,
-            angle: -18,
-            portraitScale: 0.1,
-            width: 66,
-            height: 52,
-        });
-        this._createDeskPhoto('manager_robot', 'manager_robot', {
-            x: 190,
-            y: 85,
-            angle: -6,
-            portraitScale: 0.1,
-            width: 66,
-            height: 52,
-        });
-        this._createDeskPhoto('family_photo', 'family_photo', {
-            x: 270,
-            y: 70,
-            angle: 4,
-            portraitScale: 0.2,
-            width: 62,
-            height: 48,
-            tint: 0xffffff,
-        });
         this._rulebookDeskItem = this._createDeskTablet('desk_tablet', {
             x: 440,
-            y: 72,
-            angle: -8,
+            y: 130,
+            angle: -2,
             width: 128,
             height: 84,
         });
