@@ -287,8 +287,8 @@ export default class GameScene extends Phaser.Scene {
 
         this._buildDeskSurface();
 
-        const clockPanelCenterX = 1160;
-        const clockPanelCenterY = this._deskContainer.y + 125;
+        const clockPanelCenterX = 1165;
+        const clockPanelCenterY = this._deskContainer.y + 118;
 
         this._clockDialCenterX = clockPanelCenterX - 62;
         this._clockDialCenterY = clockPanelCenterY;
