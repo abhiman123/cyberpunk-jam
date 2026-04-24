@@ -1181,6 +1181,145 @@ function gearOptionHasRustedContent(gearPuzzleOption) {
     return boardHasRust || pieceHasRust;
 }
 
+const GEAR_TRANSFORM_KEYS = Object.freeze(['identity', 'rotate90', 'rotate180', 'rotate270', 'flipH', 'flipV']);
+
+function rotateGearTypeClockwise(type) {
+    switch (type) {
+    case GEAR_CODES.HORIZONTAL:
+        return GEAR_CODES.VERTICAL;
+    case GEAR_CODES.VERTICAL:
+        return GEAR_CODES.HORIZONTAL;
+    case GEAR_CODES.CURVE_NE:
+        return GEAR_CODES.CURVE_SE;
+    case GEAR_CODES.CURVE_SE:
+        return GEAR_CODES.CURVE_SW;
+    case GEAR_CODES.CURVE_SW:
+        return GEAR_CODES.CURVE_NW;
+    case GEAR_CODES.CURVE_NW:
+        return GEAR_CODES.CURVE_NE;
+    default:
+        return type;
+    }
+}
+
+function flipGearTypeHorizontal(type) {
+    switch (type) {
+    case GEAR_CODES.CURVE_NE:
+        return GEAR_CODES.CURVE_NW;
+    case GEAR_CODES.CURVE_NW:
+        return GEAR_CODES.CURVE_NE;
+    case GEAR_CODES.CURVE_SE:
+        return GEAR_CODES.CURVE_SW;
+    case GEAR_CODES.CURVE_SW:
+        return GEAR_CODES.CURVE_SE;
+    default:
+        return type;
+    }
+}
+
+function flipGearTypeVertical(type) {
+    switch (type) {
+    case GEAR_CODES.CURVE_NE:
+        return GEAR_CODES.CURVE_SE;
+    case GEAR_CODES.CURVE_SE:
+        return GEAR_CODES.CURVE_NE;
+    case GEAR_CODES.CURVE_NW:
+        return GEAR_CODES.CURVE_SW;
+    case GEAR_CODES.CURVE_SW:
+        return GEAR_CODES.CURVE_NW;
+    default:
+        return type;
+    }
+}
+
+function transformGearType(type, transformKey) {
+    switch (transformKey) {
+    case 'rotate90':
+        return rotateGearTypeClockwise(type);
+    case 'rotate180':
+        return rotateGearTypeClockwise(rotateGearTypeClockwise(type));
+    case 'rotate270':
+        return rotateGearTypeClockwise(rotateGearTypeClockwise(rotateGearTypeClockwise(type)));
+    case 'flipH':
+        return flipGearTypeHorizontal(type);
+    case 'flipV':
+        return flipGearTypeVertical(type);
+    default:
+        return type;
+    }
+}
+
+function transformGearCoordinate(row, col, rowCount, colCount, transformKey) {
+    switch (transformKey) {
+    case 'rotate90':
+        return { row: col, col: rowCount - 1 - row };
+    case 'rotate180':
+        return { row: rowCount - 1 - row, col: colCount - 1 - col };
+    case 'rotate270':
+        return { row: colCount - 1 - col, col: row };
+    case 'flipH':
+        return { row, col: colCount - 1 - col };
+    case 'flipV':
+        return { row: rowCount - 1 - row, col };
+    default:
+        return { row, col };
+    }
+}
+
+function transformGearBoard(board, transformKey) {
+    const clonedBoard = cloneGearBoard(board);
+    if (transformKey === 'identity' || clonedBoard.length === 0) {
+        return clonedBoard;
+    }
+
+    const rowCount = clonedBoard.length;
+    const colCount = clonedBoard[0]?.length || 0;
+    const rotated = transformKey === 'rotate90' || transformKey === 'rotate270';
+    const nextBoard = Array.from({ length: rotated ? colCount : rowCount }, () => Array(rotated ? rowCount : colCount).fill(GEAR_CODES.EMPTY));
+
+    clonedBoard.forEach((row, rowIndex) => {
+        row.forEach((cell, colIndex) => {
+            const nextCell = transformGearType(cell, transformKey);
+            const position = transformGearCoordinate(rowIndex, colIndex, rowCount, colCount, transformKey);
+            nextBoard[position.row][position.col] = nextCell;
+        });
+    });
+
+    return nextBoard;
+}
+
+function transformGearPieces(pieces, rowCount, colCount, transformKey) {
+    return cloneGearPieces(pieces).map((piece) => {
+        const position = transformGearCoordinate(piece.row, piece.col, rowCount, colCount, transformKey);
+        return {
+            ...piece,
+            row: position.row,
+            col: position.col,
+            type: transformGearType(piece.type, transformKey),
+        };
+    });
+}
+
+function transformGearPuzzleOption(gearPuzzleOption, transformKey) {
+    const clonedOption = cloneGearPuzzleOption(gearPuzzleOption);
+    if (!clonedOption || transformKey === 'identity') {
+        return clonedOption;
+    }
+
+    const rowCount = clonedOption.board?.length || 0;
+    const colCount = clonedOption.board?.[0]?.length || 0;
+
+    return {
+        ...clonedOption,
+        board: transformGearBoard(clonedOption.board, transformKey),
+        pieces: transformGearPieces(clonedOption.pieces, rowCount, colCount, transformKey),
+    };
+}
+
+function pickGearTransformKey(randomFn = Math.random) {
+    return pickRandomEntry(GEAR_TRANSFORM_KEYS, randomFn) || 'identity';
+}
+
 function sanitizeGearOptionForStageOne(gearPuzzleOption) {
     if (!gearPuzzleOption) return null;
 
@@ -3438,15 +3577,15 @@ export const MACHINE_CATALOG = Object.freeze([
             }),
         ],
         openingDialogues: [
-            'Every limb below my neck is aftermarket. Only the head is still the original luxury edition.',
-            'I am here for a brain upgrade. Do not cheap out on the intelligence routing.',
+            'Ha ha. I made it into the factory floor. Incredible what money can sneak past a locked door.',
+            'Do not panic. I only need a little brain reroute before anyone notices a billionaire is riding your belt.',
             'Make me smarter. If something softer has to go dark, that is the cost of progress.',
         ],
         questionDialogues: [
             {
-                prompt: 'If the upgrade strips out my feelings, that still counts as an improvement, right?',
-                yesDialogue: 'Exactly. Emotion is an inefficient tax bracket.',
-                noDialogue: 'Then perhaps the poor really do have simpler tastes.',
+                prompt: 'Are you wondering how I got in here, or are we pretending rich men obey doors now?',
+                yesDialogue: 'Good instinct. Security folds when the credit line is tall enough.',
+                noDialogue: 'Excellent. Then let us both stay tactfully incurious and finish the upgrade.',
             },
             {
                 prompt: 'Do you know how much this head alone is worth?',
@@ -5092,7 +5231,7 @@ function isPlayableGridOption(gridOption, globalBudget = null) {
         ...gridOption,
         impossible: false,
     });
-    
+
     const budget = globalBudget || { remaining: 8000, timedOut: false };
     const isSolvable = searchPuzzleSolution(state, 0, budget);
 
@@ -5848,8 +5987,17 @@ export function createMachineVariant(options = {}) {
         const rustFreePool = possibleGears.filter((gearOption) => !gearOptionHasRustedContent(gearOption));
         return rustFreePool.length > 0 ? rustFreePool : possibleGears;
     })();
+    const preferredGearPool = (() => {
+        if ((targetPeriod ?? 1) < 2) return gearPool;
+
+        const rustPool = gearPool.filter((gearOption) => gearOptionHasRustedContent(gearOption));
+        return rustPool.length > 0 ? rustPool : gearPool;
+    })();
     let selectedGearPuzzle = applyGearStageToOption(
-        cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
+        transformGearPuzzleOption(
+            cloneGearPuzzleOption(pickRandomEntry(preferredGearPool, randomFn) || preferredGearPool[0] || gearPool[0]),
+            pickGearTransformKey(randomFn),
+        ),
         targetPeriod ?? 1,
         randomFn,
     );
@@ -5905,9 +6053,13 @@ export function createMachineVariant(options = {}) {
     }
     const puzzleState = new MachinePuzzleState(selectedGrid);
     const hasCommunication = randomFn() <= (definition.communicationChance ?? 1);
-    const selectedQuestion = hasCommunication
-        ? pickRandomEntry(definition.questionDialogues, randomFn)
-        : null;
+    const selectedQuestions = hasCommunication
+        ? (Array.isArray(definition.questionDialogues)
+            ? definition.questionDialogues
+                .map((question) => (question ? { ...question } : null))
+                .filter(Boolean)
+            : [])
+        : [];
     const openingDialogue = hasCommunication
         ? (pickRandomEntry(definition.openingDialogues, randomFn) || '')
         : '';
@@ -5934,7 +6086,8 @@ export function createMachineVariant(options = {}) {
         shapeGrid: puzzleState.grid,
         dominoes: puzzleState.dominoes,
         openingDialogue,
-        questionDialogue: selectedQuestion ? { ...selectedQuestion } : null,
+        questionDialogues: selectedQuestions,
+        questionDialogue: selectedQuestions[0] ? { ...selectedQuestions[0] } : null,
         dialogueSoundAssetKey: definition.dialogueSoundAssetKey || null,
         hasCommunication,
         dayStage: targetDay ?? 1,
