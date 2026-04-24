@@ -27,7 +27,6 @@ import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
 const UMBRELLA_REBELLION_RULE_ID = 101;
-const MACHINE_PHONE_TRANSCRIPT_ENABLED = false;
 const UMBRELLA_PART_PORTS = Object.freeze({
     circuit: 'grid',
     wire: 'flow',
@@ -97,14 +96,6 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent = null;
         this._commSequenceEvent = null;
         this._unitMoveTween = null;
-        this._conveyorBottomLayers = [];
-        this._conveyorBottomFrontLayers = [];
-        this._conveyorBottomLayerWidth = 0;
-        this._conveyorBottomLayerTop = 0;
-        this._conveyorBottomScrollOffset = 0;
-        this._conveyorBottomScrollActive = false;
-        this._factoryLightRadianceLayer = null;
-        this._factoryLightRadianceFlickerEvent = null;
         this._activeMusicKey = null;
         this._pendingExitAction = null;
         this._pendingUnsafeAcceptConfirmation = false;
@@ -154,28 +145,11 @@ export default class GameScene extends Phaser.Scene {
         this._deskItemIntent = null;
         this._jesterDeskTokenItem = null;
         this._currentUnitJitterTween = null;
-        this._richMfWalkTween = null;
-        this._richMfStrideTween = null;
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
-        this._conveyorBeltSoundNodes = null;
-        this._factoryLightHum = null;
-        this._konamiRoutes = [
-            {
-                id: 'ending-default',
-                sequence: ['UP', 'UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // ENDING ROUTE',
-                finishUmbrellaQuest: false,
-            },
-            {
-                id: 'ending-umbrella',
-                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // UMBRELLA ENDING',
-                finishUmbrellaQuest: true,
-            },
-        ];
-        this._konamiProgressByRoute = this._konamiRoutes.map(() => 0);
+        this._konamiSequence = ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'];
+        this._konamiProgress = 0;
         this._konamiFinaleTriggered = false;
         this._initializeMachineShiftQueue();
 
@@ -222,16 +196,11 @@ export default class GameScene extends Phaser.Scene {
             this._nextCaseEvent?.remove(false);
             this._advanceCaseEvent?.remove(false);
             this._machineWorklightFlickerEvent?.remove(false);
-            this._factoryLightRadianceFlickerEvent?.remove(false);
             this.input.off('wheel', this._handlePhoneWheel, this);
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
             this.input.off('gameout', this._handleDeskItemPointerUp, this);
             window.removeEventListener('keydown', this._handleKonamiKey);
-            this.tweens.killTweensOf(this._factoryLightRadianceLayer);
-            this._stopRichMfBackgroundWalk();
-            this._stopConveyorBeltSound();
-            this._stopFactoryLightHum();
             this._phoneBodyMaskSource?.destroy();
             this._miniMachineScreenMaskSource?.destroy();
             this._rulebook?.destroy();
@@ -249,7 +218,6 @@ export default class GameScene extends Phaser.Scene {
 
         this._setScreen('conveyor');
         this._setFactoryIdleState('SHIFT READY\n\nSTATUS: HOLD');
-        this._syncFactoryLightHumState();
         this._updateShiftClock();
 
         this.cameras.main.fadeIn(400, 0, 0, 0);
@@ -268,10 +236,6 @@ export default class GameScene extends Phaser.Scene {
     update(_time, delta) {
         this._updateMiniGearPreview(delta);
         this._syncRulebookTutorialArrow();
-        this._updateConveyorBottomLayers(delta);
-        if (this._machineSpeechBubbleLayer?.visible) {
-            this._layoutMachineSpeechBubbleSlots();
-        }
 
         if (!this._shiftRunning || this._gameplayPaused || this._shiftEnding) return;
 
@@ -482,18 +446,6 @@ export default class GameScene extends Phaser.Scene {
                 const focusGlow = this.add.rectangle(0, 0, width + 16, height + 16, 0xfff8db, 0)
                     .setStrokeStyle(2, 0xfffbe7, 0);
                 const shadow = this.add.rectangle(4, 5, width, height, 0x000000, 0.2);
-                const ghostBackFar = this.add.image(-4, -4, textureKey)
-                    .setScale(portraitScale * 1.04)
-                    .setTintFill(0xffffff)
-                    .setAlpha(0)
-                    .setBlendMode(Phaser.BlendModes.ADD)
-                    .setData('baseScale', portraitScale * 1.04);
-                const ghostBackNear = this.add.image(4, 4, textureKey)
-                    .setScale(portraitScale * 1.09)
-                    .setTintFill(0xffffff)
-                    .setAlpha(0)
-                    .setBlendMode(Phaser.BlendModes.ADD)
-                    .setData('baseScale', portraitScale * 1.09);
                 const frame = this.add.rectangle(0, 0, width, height, 0xf0e8db, 1)
                     .setStrokeStyle(1, 0x5d5247, 0.68);
                 const matte = this.add.rectangle(0, -4, width - 12, height - 16, 0x7b7368, 1)
@@ -503,11 +455,10 @@ export default class GameScene extends Phaser.Scene {
                     .setTint(options.tint || 0xf0f0f0);
 
                 return {
-                    nodes: [liftShadow, focusGlow, shadow, ghostBackFar, ghostBackNear, frame, matte, portrait],
+                    nodes: [liftShadow, focusGlow, shadow, frame, matte, portrait],
                     frame,
                     focusGlow,
                     liftShadow,
-                    hoverGhosts: [ghostBackFar, ghostBackNear],
                 };
             },
         });
@@ -968,7 +919,6 @@ export default class GameScene extends Phaser.Scene {
             inputZone,
             width,
             height,
-            hovered: false,
             selected: false,
             dragging: false,
             allowRotate: options.allowRotate !== false,
@@ -981,7 +931,6 @@ export default class GameScene extends Phaser.Scene {
             focusGlow: builtVisual.focusGlow || null,
             liftShadow: builtVisual.liftShadow || null,
             frame: builtVisual.frame || null,
-            hoverGhosts: builtVisual.hoverGhosts || [],
             countLabel: builtVisual.countLabel || null,
             homePosition: {
                 x: options.x,
@@ -996,14 +945,12 @@ export default class GameScene extends Phaser.Scene {
 
         inputZone.on('pointerdown', (pointer) => this._beginDeskItemIntent(item, pointer));
         inputZone.on('pointerover', () => {
-            item.hovered = true;
-            if (item.dragging) return;
-            this._refreshDeskItemVisual(item);
+            if (item.dragging || item.selected) return;
+            item.focusGlow?.setAlpha(0.06);
         });
         inputZone.on('pointerout', () => {
-            item.hovered = false;
-            if (item.dragging) return;
-            this._refreshDeskItemVisual(item);
+            if (item.dragging || item.selected) return;
+            item.focusGlow?.setAlpha(0);
         });
 
         this._deskContainer.add(container);
@@ -1165,11 +1112,7 @@ export default class GameScene extends Phaser.Scene {
     _refreshDeskItemVisual(item, immediate = false) {
         if (!item) return;
 
-        const targetScale = item.dragging
-            ? item.dragScale
-            : item.selected
-                ? item.selectedScale
-                : (item.hovered ? 1.03 : 1);
+        const targetScale = item.dragging ? item.dragScale : item.selected ? item.selectedScale : 1;
         this.tweens.killTweensOf(item.container);
         if (immediate) {
             item.container.setScale(targetScale);
@@ -1183,33 +1126,17 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
-        item.focusGlow?.setAlpha(item.dragging ? 0.34 : item.selected ? 0.18 : item.hovered ? 0.1 : 0);
-        item.hoverGhosts?.forEach((ghost, index) => {
-            const direction = index === 0 ? -1 : 1;
-            const alpha = item.dragging
-                ? (index === 0 ? 0.26 : 0.18)
-                : item.selected
-                    ? (index === 0 ? 0.16 : 0.1)
-                    : item.hovered
-                        ? (index === 0 ? 0.12 : 0.08)
-                        : 0;
-            const spread = item.dragging ? 8 : item.selected ? 6 : 4;
-            const scaleBoost = item.dragging ? 1.1 : item.selected ? 1.06 : item.hovered ? 1.03 : 1;
-            ghost
-                .setAlpha(alpha)
-                .setPosition(direction * spread, direction * spread)
-                .setScale((ghost.getData('baseScale') || 1) * scaleBoost);
-        });
+        item.focusGlow?.setAlpha(item.dragging ? 0.22 : item.selected ? 0.12 : 0);
         if (item.frame) {
             item.frame.setStrokeStyle(
                 item.frame.lineWidth || 1,
                 item.dragging || item.selected ? 0xf3f6dc : 0x5d5247,
-                item.dragging ? 0.94 : item.selected ? 0.82 : item.hovered ? 0.76 : 0.68,
+                item.dragging ? 0.94 : item.selected ? 0.82 : 0.68,
             );
         }
         if (item.liftShadow) {
-            item.liftShadow.setAlpha(item.dragging ? 0.3 : item.selected ? 0.2 : item.hovered ? 0.18 : 0.14);
-            item.liftShadow.setPosition(item.dragging ? 8 : item.hovered ? 7 : 6, item.dragging ? 10 : item.hovered ? 9 : 8);
+            item.liftShadow.setAlpha(item.dragging ? 0.3 : item.selected ? 0.2 : 0.14);
+            item.liftShadow.setPosition(item.dragging ? 8 : 6, item.dragging ? 10 : 8);
         }
     }
 
@@ -1945,11 +1872,11 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xe8ffff, 0.24);
         this.input.on('wheel', this._handlePhoneWheel, this);
 
-        this._settingsButtonBg = this.add.rectangle(350, 52, 44, 48, 0x314250, 1)
+        this._settingsButtonBg = this.add.rectangle(366, 46, 40, 42, 0x314250, 1)
             .setStrokeStyle(2, 0x6db7e1, 0.8)
             .setInteractive({ useHandCursor: true });
-        this._settingsButtonLabel = this.add.text(350, 52, '⚙', {
-            fontFamily: 'Arial Black', fontSize: '22px', color: '#dff6ff',
+        this._settingsButtonLabel = this.add.text(366, 46, '⚙', {
+            fontFamily: 'Arial Black', fontSize: '19px', color: '#dff6ff',
         }).setOrigin(0.5);
 
         this._settingsButtonBg.on('pointerover', () => {
@@ -1964,36 +1891,16 @@ export default class GameScene extends Phaser.Scene {
         });
         this._settingsButtonBg.on('pointerdown', () => this._toggleSettingsOverlay());
 
-        this._phoneQuestionPromptGlow = null;
-        this._phoneQuestionPromptFrameGlow = null;
-        this._phoneQuestionPromptFrame = null;
-        this._phoneQuestionPromptScanTop = null;
-        this._phoneQuestionPromptScanBottom = null;
-        this._phoneQuestionPrompt = this.add.text(146, 100, 'AWAITING QUESTION INPUT', {
-            fontFamily: 'Arial',
-            fontSize: '13px',
-            fontStyle: 'bold',
-            color: '#15313a',
-            align: 'center',
-            letterSpacing: 1,
-            wordWrap: { width: 178 },
-        }).setOrigin(0.5).setVisible(false);
-
-        this._phoneQuestionFooterBg = null;
-        this._phoneQuestionFooterText = null;
-
-        this._phoneBodyTranscriptVisible = true;
-
-            const accept = this._createPhoneButton(350, 116, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
+        const accept = this._createPhoneButton(366, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
             width: 44,
             height: 48,
             fontSize: '26px',
             glowColor: 0xffffff,
         });
-            const reject = this._createPhoneButton(350, 176, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
-            width: 44,
-            height: 48,
-            fontSize: '24px',
+        const reject = this._createPhoneButton(366, 155, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
+            width: 42,
+            height: 46,
+            fontSize: '23px',
             glowColor: 0xffdddd,
         });
         const infoButton = this._createPhoneChannelButton(214, 160, 'INFO', 30);
@@ -2037,7 +1944,6 @@ export default class GameScene extends Phaser.Scene {
             this._phoneBodyScrollZone,
             this._phoneScrollTrack,
             this._phoneScrollThumb,
-            this._phoneQuestionPrompt,
             // header, status, and buttons rendered after body so they paint on top
             this._phoneHeaderText,
             this._phoneStatusText,
@@ -2089,34 +1995,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneStickToBottom = view.stickToBottom !== false;
     }
 
-    _setPhoneBodyTranscriptVisible(visible = true) {
-        this._phoneBodyTranscriptVisible = visible !== false;
-    }
-
-    _shouldShowMachinePhoneTranscript(machineVariant = null) {
-        if (!machineVariant) return true;
-        return MACHINE_PHONE_TRANSCRIPT_ENABLED || this._isDebriefMachine(machineVariant);
-    }
-
-    _shouldShowPhoneQuestionPrompt() {
-        return this._phoneViewMode === 'chat'
-            && (this._phoneChoicePhase === 'machine-question' || this._phoneChoicePhase === 'opening-call-question');
-    }
-
-    _refreshPhoneQuestionPrompt() {
-        const visible = this._shouldShowPhoneQuestionPrompt();
-
-        this._phoneQuestionPromptGlow?.setVisible(visible);
-        this._phoneQuestionPromptFrameGlow?.setVisible(visible);
-        this._phoneQuestionPromptFrame?.setVisible(visible);
-        this._phoneQuestionPromptScanTop?.setVisible(visible);
-        this._phoneQuestionPromptScanBottom?.setVisible(visible);
-        this._phoneQuestionPrompt?.setVisible(visible);
-        this._phoneQuestionFooterBg?.setVisible(false);
-        this._phoneQuestionFooterText?.setVisible(false);
-        this._phoneStatusText?.setVisible(!visible);
-    }
-
     _refreshPhonePanelDisplay() {
         const view = this._getPhoneViewState();
         if (!view || !this._phoneHeaderText || !this._phoneBodyText || !this._phoneStatusText) return;
@@ -2124,7 +2002,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneHeaderText.setText(view.header || '');
         this._phoneBodyText.setText(view.body || '');
         this._phoneStatusText.setText(view.status || '');
-        this._refreshPhoneQuestionPrompt();
         this._restorePhoneViewScroll();
         this._syncPhoneBodyLayout();
         this._refreshPhoneChannelButtons();
@@ -2146,17 +2023,6 @@ export default class GameScene extends Phaser.Scene {
 
     _syncPhoneBodyLayout() {
         if (!this._phoneBodyText || !this._phoneBodyViewport) return;
-
-        const showTranscript = this._phoneViewMode !== 'chat' || this._phoneBodyTranscriptVisible !== false;
-        this._phoneBodyText.setVisible(showTranscript);
-        if (!showTranscript) {
-            this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y);
-            this._phoneBodyText.setCrop(0, 0, 0, 0);
-            this._phoneScrollTrack?.setVisible(false);
-            this._phoneScrollThumb?.setVisible(false);
-            this._persistPhoneViewScroll();
-            return;
-        }
 
         const overflow = Math.max(0, this._phoneBodyText.height - this._phoneBodyViewport.height);
         if (this._phoneStickToBottom || this._phoneBodyScrollOffset > overflow) {
@@ -2404,10 +2270,6 @@ export default class GameScene extends Phaser.Scene {
         const activate = options.activate !== false;
         const clearUnread = options.clearUnread === true;
 
-        if (Object.prototype.hasOwnProperty.call(options, 'showBodyTranscript')) {
-            this._setPhoneBodyTranscriptVisible(options.showBodyTranscript);
-        }
-
         this._setPhoneMessage(header, body, status, mode, options);
         this._phonePanel?.setVisible(true);
         this._phonePanel?.setAlpha(1);
@@ -2438,9 +2300,7 @@ export default class GameScene extends Phaser.Scene {
 
     _hidePhonePanel() {
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE', 'chat', {
-            showBodyTranscript: true,
-        });
+        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE', 'chat');
     }
 
     _setCommStandbyState(message = 'Awaiting next unit.', status = 'CHANNEL IDLE') {
@@ -2448,9 +2308,7 @@ export default class GameScene extends Phaser.Scene {
         this._phoneChoicePhase = 'inactive';
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', message, status, 'chat', {
-            showBodyTranscript: true,
-        });
+        this._showPhonePanel('FACTORY LINK', message, status, 'chat');
     }
 
     _setPhoneInfoNote(message = '', status = 'UNIT NOTE') {
@@ -2728,9 +2586,7 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent?.remove(false);
         this._commTypingEvent = null;
 
-        const finalBody = typingState.showPhoneTranscript
-            ? `${typingState.prefix}${typingState.text}`
-            : '';
+        const finalBody = `${typingState.prefix}${typingState.text}`;
         typingState.view.body = finalBody;
         if (this._phoneViewMode === 'chat') {
             this._phoneBodyText.setText(finalBody);
@@ -2738,17 +2594,17 @@ export default class GameScene extends Phaser.Scene {
             this._syncPhoneBodyLayout();
         }
 
-        if (typingState.bubbleText && typingState.bubbleMachineVariant === this._currentMachineVariant) {
-            this._finalizeMachineSpeechBubble(typingState.bubbleText);
-        }
+        // if (typingState.showMachineBubble && typingState.bubbleMachineVariant === this._currentMachineVariant) {
+        //     this._finalizeMachineSpeechBubble(typingState.bubbleText);
+        // }
 
-        if (typingState.bubbleMachineVariant && typingState.showPhoneTranscript) {
-            const chatView = this._getPhoneViewState('chat');
-            this._cacheMachineConversationSnapshot(
-                typingState.bubbleMachineVariant,
-                chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
-            );
-        }
+        // if (typingState.bubbleMachineVariant) {
+        //     const chatView = this._getPhoneViewState('chat');
+        //     this._cacheMachineConversationSnapshot(
+        //         typingState.bubbleMachineVariant,
+        //         chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
+        //     );
+        // }
 
         this._activePhoneTypingState = null;
         return true;
@@ -3044,23 +2900,20 @@ export default class GameScene extends Phaser.Scene {
         showMachineBubble = false,
         speechBubbleText = null,
         bubbleFooter = '',
-        bubbleMachineVariant = null,
+        bubbleMachineVariant = this._currentMachineVariant,
     } = {}) {
         this._clearPhoneTyping();
 
         const view = this._getPhoneViewState('chat');
-        const showPhoneTranscript = this._shouldShowMachinePhoneTranscript(bubbleMachineVariant);
-        const prefix = append && showPhoneTranscript ? view.body : '';
-        const bubbleText = (showMachineBubble || speechBubbleText !== null)
+        const prefix = append ? view.body : '';
+        const bubbleText = showMachineBubble
             ? String(speechBubbleText ?? text ?? '').replace(/\s+/g, ' ').trim()
             : '';
         const shouldRenderMachineBubble = Boolean(bubbleText)
             && Boolean(bubbleMachineVariant)
             && bubbleMachineVariant === this._currentMachineVariant;
 
-        this._setPhoneBodyTranscriptVisible(showPhoneTranscript);
-
-        if (!append || !showPhoneTranscript) view.body = '';
+        if (!append) view.body = '';
         view.stickToBottom = true;
         view.scrollOffset = 0;
         if (this._phoneViewMode === 'chat') {
@@ -3091,7 +2944,6 @@ export default class GameScene extends Phaser.Scene {
             prefix,
             text: String(text || ''),
             bubbleText,
-            showPhoneTranscript,
             showMachineBubble: false,
             bubbleMachineVariant,
             onComplete,
@@ -3105,14 +2957,9 @@ export default class GameScene extends Phaser.Scene {
                 const nextChar = text[charIndex];
                 charIndex += 1;
                 typingState.charIndex = charIndex;
-                if (showPhoneTranscript) {
-                    view.body = prefix + text.slice(0, charIndex);
-                    if (this._phoneViewMode === 'chat') {
-                        this._phoneBodyText.setText(view.body);
-                        this._phoneStickToBottom = true;
-                        this._syncPhoneBodyLayout();
-                    }
-                } else if (this._phoneViewMode === 'chat') {
+                view.body = prefix + text.slice(0, charIndex);
+                if (this._phoneViewMode === 'chat') {
+                    this._phoneBodyText.setText(view.body);
                     this._phoneStickToBottom = true;
                     this._syncPhoneBodyLayout();
                 }
@@ -3160,139 +3007,6 @@ export default class GameScene extends Phaser.Scene {
             oscillator.disconnect();
             gainNode.disconnect();
         };
-    }
-
-    _syncConveyorBeltSoundState() {
-        const shouldPlay = Boolean(this._conveyorBottomScrollActive) && !this._gameplayPaused && !this._shiftEnding;
-
-        if (shouldPlay) {
-            this._startConveyorBeltSound();
-            return;
-        }
-
-        this._stopConveyorBeltSound();
-    }
-
-    _startConveyorBeltSound() {
-        if (this._conveyorBeltSoundNodes) return;
-
-        const audioContext = this.sound?.context;
-        if (!audioContext?.createOscillator || !audioContext?.createGain || !audioContext?.createBiquadFilter) {
-            return;
-        }
-
-        audioContext.resume?.().catch(() => {});
-
-        const now = audioContext.currentTime;
-        const drive = audioContext.createOscillator();
-        const chatter = audioContext.createOscillator();
-        const wobble = audioContext.createOscillator();
-        const wobbleGain = audioContext.createGain();
-        const filter = audioContext.createBiquadFilter();
-        const gainNode = audioContext.createGain();
-
-        drive.type = 'triangle';
-        drive.frequency.setValueAtTime(44, now);
-        chatter.type = 'sawtooth';
-        chatter.frequency.setValueAtTime(92, now);
-        wobble.type = 'sine';
-        wobble.frequency.setValueAtTime(1.4, now);
-
-        wobbleGain.gain.setValueAtTime(3.8, now);
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(240, now);
-        filter.Q.setValueAtTime(0.7, now);
-        gainNode.gain.setValueAtTime(0.008, now);
-
-        wobble.connect(wobbleGain);
-        wobbleGain.connect(chatter.frequency);
-        drive.connect(filter);
-        chatter.connect(filter);
-        filter.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-
-        drive.start(now);
-        chatter.start(now);
-        wobble.start(now);
-
-        this._conveyorBeltSoundNodes = {
-            drive,
-            chatter,
-            wobble,
-            wobbleGain,
-            filter,
-            gainNode,
-        };
-    }
-
-    _stopConveyorBeltSound() {
-        const nodes = this._conveyorBeltSoundNodes;
-        if (!nodes) return;
-
-        [nodes.drive, nodes.chatter, nodes.wobble].forEach((oscillator) => {
-            try {
-                oscillator.stop();
-            } catch (error) {
-                // Oscillators may already be stopping during scene shutdown.
-            }
-            oscillator.disconnect();
-        });
-
-        nodes.wobbleGain.disconnect();
-        nodes.filter.disconnect();
-        nodes.gainNode.disconnect();
-        this._conveyorBeltSoundNodes = null;
-    }
-
-    _syncFactoryLightHumState() {
-        const humAsset = SOUND_ASSETS.lightBulbHum;
-        const humKey = humAsset?.key;
-        const canPlayHum = Boolean(humKey) && this.cache.audio.has(humKey);
-        const shouldPlay = canPlayHum
-            && this._screen === 'conveyor'
-            && !this._gameplayPaused
-            && !this._shiftEnding;
-
-        if (!shouldPlay) {
-            this._stopFactoryLightHum();
-            return;
-        }
-
-        if (!this._factoryLightHum) {
-            this._factoryLightHum = this.sound.add(humKey, {
-                loop: true,
-                volume: 0,
-            });
-            this._factoryLightHum.play();
-        }
-
-        this.tweens.killTweensOf(this._factoryLightHum);
-        this.tweens.add({
-            targets: this._factoryLightHum,
-            volume: SOUND_VOLUMES.lightBulbHum,
-            duration: 260,
-            ease: 'Sine.Out',
-        });
-    }
-
-    _stopFactoryLightHum() {
-        if (!this._factoryLightHum) return;
-
-        const hum = this._factoryLightHum;
-        this.tweens.killTweensOf(hum);
-        this.tweens.add({
-            targets: hum,
-            volume: 0,
-            duration: 180,
-            ease: 'Sine.In',
-            onComplete: () => {
-                hum.stop();
-                hum.destroy();
-                if (this._factoryLightHum === hum) {
-                    this._factoryLightHum = null;
-                }
-            },
-        });
     }
 
     _getMachineDialogueSoundAsset(machineVariant = this._currentMachineVariant) {
@@ -3498,103 +3212,6 @@ export default class GameScene extends Phaser.Scene {
         return formattedText;
     }
 
-    _normalizeMachineQuestionDialogue(question = null) {
-        if (!question) return null;
-
-        const normalizedQuestion = {
-            prompt: String(question.prompt || '').trim(),
-            yesDialogue: String(question.yesDialogue || '').trim(),
-            noDialogue: String(question.noDialogue || '').trim(),
-        };
-
-        return normalizedQuestion.prompt || normalizedQuestion.yesDialogue || normalizedQuestion.noDialogue
-            ? normalizedQuestion
-            : null;
-    }
-
-    _getMachineQuestionSequence(machineVariant = this._currentMachineVariant) {
-        if (!machineVariant) return [];
-
-        const rawSequence = Array.isArray(machineVariant.questionDialogues) && machineVariant.questionDialogues.length > 0
-            ? machineVariant.questionDialogues
-            : [machineVariant.questionDialogue];
-
-        return rawSequence
-            .map((question) => this._normalizeMachineQuestionDialogue(question))
-            .filter(Boolean);
-    }
-
-    _setMachineQuestionSequence(machineVariant, questionDialogues, { preserveIndex = false } = {}) {
-        if (!machineVariant) return null;
-
-        const normalizedSequence = (Array.isArray(questionDialogues) ? questionDialogues : [])
-            .map((question) => this._normalizeMachineQuestionDialogue(question))
-            .filter(Boolean);
-
-        machineVariant.questionDialogues = normalizedSequence.map((question) => ({ ...question }));
-
-        const maxIndex = Math.max(0, machineVariant.questionDialogues.length - 1);
-        const nextIndex = preserveIndex
-            ? Phaser.Math.Clamp(Number(machineVariant._uiQuestionIndex) || 0, 0, maxIndex)
-            : 0;
-
-        machineVariant._uiQuestionIndex = machineVariant.questionDialogues.length > 0 ? nextIndex : -1;
-        machineVariant.questionDialogue = machineVariant._uiQuestionIndex >= 0
-            ? { ...machineVariant.questionDialogues[machineVariant._uiQuestionIndex] }
-            : null;
-
-        return machineVariant.questionDialogue;
-    }
-
-    _getMachineQuestionDialogue(machineVariant = this._currentMachineVariant) {
-        if (!machineVariant) return null;
-
-        const activeQuestion = this._normalizeMachineQuestionDialogue(machineVariant.questionDialogue);
-        if (activeQuestion) return activeQuestion;
-
-        const questionSequence = this._getMachineQuestionSequence(machineVariant);
-        if (questionSequence.length === 0) return null;
-
-        return this._setMachineQuestionSequence(machineVariant, questionSequence, { preserveIndex: true });
-    }
-
-    _updateActiveMachineQuestionDialogue(machineVariant, updates = {}) {
-        if (!machineVariant) return null;
-
-        const questionSequence = this._getMachineQuestionSequence(machineVariant);
-        const activeQuestion = this._getMachineQuestionDialogue(machineVariant);
-        if (!activeQuestion) return null;
-
-        const activeIndex = Phaser.Math.Clamp(Number(machineVariant._uiQuestionIndex) || 0, 0, Math.max(0, questionSequence.length - 1));
-        questionSequence[activeIndex] = {
-            ...activeQuestion,
-            ...updates,
-        };
-
-        return this._setMachineQuestionSequence(machineVariant, questionSequence, { preserveIndex: true });
-    }
-
-    _advanceMachineQuestionDialogue(machineVariant = this._currentMachineVariant) {
-        if (!machineVariant) return false;
-
-        const questionSequence = this._getMachineQuestionSequence(machineVariant);
-        if (questionSequence.length === 0) {
-            machineVariant._uiQuestionIndex = -1;
-            machineVariant.questionDialogue = null;
-            return false;
-        }
-
-        const currentIndex = Phaser.Math.Clamp(Number(machineVariant._uiQuestionIndex) || 0, 0, questionSequence.length - 1);
-        if (currentIndex >= questionSequence.length - 1) {
-            return false;
-        }
-
-        machineVariant.questionDialogues = questionSequence.map((question) => ({ ...question }));
-        machineVariant._uiQuestionIndex = currentIndex + 1;
-        machineVariant.questionDialogue = { ...machineVariant.questionDialogues[machineVariant._uiQuestionIndex] };
-        return true;
-    }
-
     _buildMachineConversationSnapshot(machineVariant = this._currentMachineVariant, { preferCached = true } = {}) {
         if (preferCached && typeof machineVariant?._conversationTranscript === 'string' && machineVariant._conversationTranscript.length > 0) {
             return machineVariant._conversationTranscript;
@@ -3605,8 +3222,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const stage = machineVariant._uiConversationStage || 'opening';
-        const question = this._getMachineQuestionDialogue(machineVariant);
-        const prompt = question?.prompt || '';
+        const prompt = machineVariant.questionDialogue?.prompt || '';
         const segments = [];
 
         if (machineVariant.openingDialogue) {
@@ -3620,8 +3236,8 @@ export default class GameScene extends Phaser.Scene {
         if (stage === 'answered') {
             const choice = machineVariant._uiConversationChoice;
             const responseText = choice === 'accept'
-                ? question?.yesDialogue
-                : question?.noDialogue;
+                ? machineVariant.questionDialogue?.yesDialogue
+                : machineVariant.questionDialogue?.noDialogue;
             if (responseText) {
                 segments.push(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`);
             }
@@ -3634,8 +3250,7 @@ export default class GameScene extends Phaser.Scene {
         if (!machineVariant?.hasCommunication) return [];
 
         const stage = machineVariant._uiConversationStage || 'opening';
-        const question = this._getMachineQuestionDialogue(machineVariant);
-        const prompt = question?.prompt || '';
+        const prompt = machineVariant.questionDialogue?.prompt || '';
         const entries = [];
         const pushEntry = (textValue, footer = '') => {
             const normalizedText = String(textValue || '').replace(/\s+/g, ' ').trim();
@@ -3654,8 +3269,8 @@ export default class GameScene extends Phaser.Scene {
         if (stage === 'answered') {
             const choice = machineVariant._uiConversationChoice;
             const responseText = choice === 'accept'
-                ? question?.yesDialogue
-                : question?.noDialogue;
+                ? machineVariant.questionDialogue?.yesDialogue
+                : machineVariant.questionDialogue?.noDialogue;
             if (responseText) {
                 pushEntry(this._formatMachineSpeech(responseText, machineVariant), choice === 'accept' ? 'YES' : 'NO');
             }
@@ -4209,11 +3824,11 @@ export default class GameScene extends Phaser.Scene {
 
         if (quest.failed || quest.stage === 'failed') {
             machineVariant._umbrellaBusinessConcluded = true;
-            this._setMachineQuestionSequence(machineVariant, [{
+            machineVariant.questionDialogue = {
                 prompt: 'We got anything left to say?',
                 yesDialogue: 'Nope. Our business here is concluded.',
                 noDialogue: 'Yeah, exactly. Our business here is concluded.',
-            }]);
+            };
             return;
         }
 
@@ -4230,20 +3845,20 @@ export default class GameScene extends Phaser.Scene {
             machineVariant._uiDebugPuzzleRequired = false;
             machineVariant._uiDebugPuzzleSolved = true;
             machineVariant._uiDebugPuzzleEvidence = null;
-            this._setMachineQuestionSequence(machineVariant, [{
+            machineVariant.questionDialogue = {
                 prompt: 'do u got the thing',
                 yesDialogue: 'alright. slot it in.',
                 noDialogue: 'our business here is done.',
-            }]);
+            };
             return;
         }
 
         if (quest.stage !== 'special-circuit') {
-            this._setMachineQuestionSequence(machineVariant, [{
+            machineVariant.questionDialogue = {
                 prompt: 'So. Did you get it?',
                 yesDialogue: 'Alright then. Put it in me.',
                 noDialogue: 'Whatever bro. Give me that. Our business here is concluded.',
-            }]);
+            };
         }
     }
 
@@ -4385,9 +4000,10 @@ export default class GameScene extends Phaser.Scene {
             const quest = this._getUmbrellaQuest();
 
             if (choice !== 'accept') {
-                this._updateActiveMachineQuestionDialogue(machineVariant, {
+                machineVariant.questionDialogue = {
+                    ...(machineVariant.questionDialogue || {}),
                     noDialogue: 'your loss',
-                });
+                };
                 if (quest) {
                     this._setUmbrellaQuest({
                         ...quest,
@@ -4399,9 +4015,10 @@ export default class GameScene extends Phaser.Scene {
             }
 
             if (GameState.paycheckTotal < 10) {
-                this._updateActiveMachineQuestionDialogue(machineVariant, {
+                machineVariant.questionDialogue = {
+                    ...(machineVariant.questionDialogue || {}),
                     yesDialogue: 'u dont have enough bud. maybe next time',
-                });
+                };
                 if (quest) {
                     this._setUmbrellaQuest({
                         ...quest,
@@ -4417,9 +4034,10 @@ export default class GameScene extends Phaser.Scene {
             this._hudPayText.setText(this._fmtPay());
             GameState.addSpecialItem({ id: 'purple_circuit', label: 'Purple Circuit' });
             this._syncPurpleCircuitDeskTokenVisibility();
-            this._updateActiveMachineQuestionDialogue(machineVariant, {
+            machineVariant.questionDialogue = {
+                ...(machineVariant.questionDialogue || {}),
                 yesDialogue: 'deal. here\'s the circuit. try not to conquer the whole city with it.',
-            });
+            };
             if (quest) {
                 this._setUmbrellaQuest({
                     ...quest,
@@ -4609,52 +4227,6 @@ export default class GameScene extends Phaser.Scene {
 
         if (this._conveyorUnitSprite) {
             this._conveyorUnitSprite.setPosition(0, 0).setAngle(0).clearTint();
-        }
-    }
-
-    _startRichMfBackgroundWalk() {
-        if (!this._unitContainer || !this._conveyorUnitSprite || this._richMfWalkTween || !this._isRichMf()) return;
-
-        const anchorX = MACHINE_PRESENTATION.conveyorTargetX + 56;
-        this._unitContainer.setDepth(13);
-        this._richMfWalkTween = this.tweens.add({
-            targets: this._unitContainer,
-            x: { from: anchorX - 14, to: anchorX + 30 },
-            duration: 1280,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut',
-        });
-        this._richMfStrideTween = this.tweens.add({
-            targets: this._conveyorUnitSprite,
-            y: -6,
-            duration: 190,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut',
-        });
-    }
-
-    _stopRichMfBackgroundWalk() {
-        if (this._richMfWalkTween) {
-            this._richMfWalkTween.stop();
-            this._richMfWalkTween = null;
-        }
-        if (this._richMfStrideTween) {
-            this._richMfStrideTween.stop();
-            this._richMfStrideTween = null;
-        }
-
-        this._unitContainer?.setDepth(15);
-        this._conveyorUnitSprite?.setY(0);
-    }
-
-    _syncCurrentUnitAmbientMotion(machineVariant = this._currentMachineVariant) {
-        this._stopRichMfBackgroundWalk();
-        this._syncCurrentUnitClownEffects(machineVariant);
-
-        if (this._isRichMf(machineVariant) && !machineVariant?._clownCorrupted) {
-            this._startRichMfBackgroundWalk();
         }
     }
 
@@ -5033,11 +4605,11 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _playMachineConversation(machineVariant) {
-        const question = this._getMachineQuestionDialogue(machineVariant);
-        const prompt = question?.prompt || '';
+        const prompt = machineVariant?.questionDialogue?.prompt || '';
         const header = this._getMachineLinkHeader(machineVariant);
         const voiceBroken = this._hasBrokenVoiceBox(machineVariant);
         const openingSpeech = this._formatMachineSpeech(machineVariant?.openingDialogue || '', machineVariant);
+        const promptSpeech = this._formatMachineSpeech(prompt, machineVariant);
 
         machineVariant._uiConversationChoice = null;
         this._clearMachineSpeechBubbles();
@@ -5073,56 +4645,34 @@ export default class GameScene extends Phaser.Scene {
                     return;
                 }
 
-                this._queueMachineQuestionPrompt(machineVariant, {
-                    delayMs: 180,
-                    status: voiceBroken ? 'VOICE FRAGMENT' : 'INCOMING QUESTION',
-                });
-            },
-        });
-    }
-
-    _queueMachineQuestionPrompt(machineVariant, { delayMs = 180, status = null } = {}) {
-        const question = this._getMachineQuestionDialogue(machineVariant);
-        const prompt = question?.prompt || '';
-        if (!machineVariant?.hasCommunication || !prompt) return false;
-
-        const header = this._getMachineLinkHeader(machineVariant);
-        const voiceBroken = this._hasBrokenVoiceBox(machineVariant);
-        const promptSpeech = this._formatMachineSpeech(prompt, machineVariant);
-
-        this._commSequenceEvent?.remove(false);
-        this._commSequenceEvent = this.time.delayedCall(delayMs, () => {
-            if (this._currentMachineVariant !== machineVariant) return;
-
-            this._showPhonePanel(
-                header,
-                this._getPhoneViewState('chat').body,
-                status || (voiceBroken ? 'VOICE FRAGMENT' : 'INCOMING QUESTION'),
-                'chat',
-            );
-            this._typePhoneMessage(`\n\nQ> ${promptSpeech}`, {
-                append: true,
-                showMachineBubble: false,
-                speechBubbleText: promptSpeech,
-                bubbleFooter: 'YES / NO',
-                bubbleMachineVariant: machineVariant,
-                onComplete: () => {
-                    if (this._currentMachineVariant !== machineVariant) return;
-                    machineVariant._uiConversationStage = 'question';
-                    machineVariant._uiConversationChoice = null;
-                    this._phoneChoicePhase = 'machine-question';
-                    this._setPhoneButtonsActive(true);
+                this._commSequenceEvent = this.time.delayedCall(180, () => {
                     this._showPhonePanel(
                         header,
                         this._getPhoneViewState('chat').body,
-                        voiceBroken ? 'BROKEN VOICE // ✓ OR X' : 'PRESS ✓ OR X',
+                        voiceBroken ? 'VOICE FRAGMENT' : 'INCOMING QUESTION',
                         'chat',
                     );
-                },
-            });
+                    this._typePhoneMessage(`\n\nQ> ${promptSpeech}`, {
+                        append: true,
+                        showMachineBubble: false,
+                        speechBubbleText: promptSpeech,
+                        bubbleFooter: 'YES / NO',
+                        bubbleMachineVariant: machineVariant,
+                        onComplete: () => {
+                            machineVariant._uiConversationStage = 'question';
+                            this._phoneChoicePhase = 'machine-question';
+                            this._setPhoneButtonsActive(true);
+                            this._showPhonePanel(
+                                header,
+                                this._getPhoneViewState('chat').body,
+                                voiceBroken ? 'BROKEN VOICE // ✓ OR X' : 'PRESS ✓ OR X',
+                                'chat',
+                            );
+                        },
+                    });
+                });
+            },
         });
-
-        return true;
     }
 
     _startOpeningPhoneCall() {
@@ -5203,7 +4753,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (this._phoneChoicePhase === 'machine-question') {
             const machineVariant = this._currentMachineVariant;
-            const question = this._getMachineQuestionDialogue(machineVariant);
+            const question = machineVariant?.questionDialogue;
             if (!question) return;
             const header = this._getMachineLinkHeader(machineVariant);
             const voiceBroken = this._hasBrokenVoiceBox(machineVariant);
@@ -5225,33 +4775,7 @@ export default class GameScene extends Phaser.Scene {
                 'chat'
             );
 
-            const finalizeChoice = () => {
-                if (specialChoiceResult.autoApprove && this._currentMachineVariant === machineVariant) {
-                    this._pendingUnsafeAcceptConfirmation = true;
-                    this._submitRuling('approve');
-                    return;
-                }
-
-                if (this._currentMachineVariant === machineVariant && this._advanceMachineQuestionDialogue(machineVariant)) {
-                    this._queueMachineQuestionPrompt(machineVariant, {
-                        delayMs: 160,
-                        status: voiceBroken ? 'VOICE FRAGMENT' : 'FOLLOW-UP QUESTION',
-                    });
-                    return;
-                }
-
-                this._showPhonePanel(
-                    header,
-                    this._getPhoneViewState('chat').body,
-                    voiceBroken ? 'VOICE LOGGED // DEGRADED' : 'RESPONSE LOGGED',
-                    'chat'
-                );
-            };
-
-            if (!responseText) {
-                finalizeChoice();
-                return;
-            }
+            if (!responseText) return;
 
             this._commSequenceEvent = this.time.delayedCall(90, () => {
                 this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
@@ -5261,7 +4785,17 @@ export default class GameScene extends Phaser.Scene {
                     bubbleFooter: choice === 'accept' ? 'YES' : 'NO',
                     bubbleMachineVariant: machineVariant,
                     onComplete: () => {
-                        finalizeChoice();
+                        if (specialChoiceResult.autoApprove && this._currentMachineVariant === machineVariant) {
+                            this._pendingUnsafeAcceptConfirmation = true;
+                            this._submitRuling('approve');
+                            return;
+                        }
+                        this._showPhonePanel(
+                            header,
+                            this._getPhoneViewState('chat').body,
+                            voiceBroken ? 'VOICE LOGGED // DEGRADED' : 'RESPONSE LOGGED',
+                            'chat'
+                        );
                     },
                 });
             });
@@ -5386,8 +4920,6 @@ export default class GameScene extends Phaser.Scene {
         if (this._commSequenceEvent) this._commSequenceEvent.paused = paused;
         if (this._nextCaseEvent) this._nextCaseEvent.paused = paused;
         if (this._advanceCaseEvent) this._advanceCaseEvent.paused = paused;
-        this._syncConveyorBeltSoundState();
-        this._syncFactoryLightHumState();
         this._syncClockPauseNotice();
     }
 
@@ -5700,84 +5232,72 @@ export default class GameScene extends Phaser.Scene {
 
     _buildConveyorScreen() {
         this._conveyorContainer = this.add.container(0, 0).setDepth(10);
-        this._conveyorFrontBeltContainer = this.add.container(0, 0).setDepth(17);
 
-        const staticMainViewLayerKeys = [
+        const mainViewLayerKeys = [
+            'mainview_bottom',
             'mainview_second',
             'mainview_lightradiance',
             'mainview_lightlayer',
+            'mainview_fam2',
+            'mainview_fam1',
         ];
-        const accentLayerPositions = {
-            mainview_fam1: { x: 202, y: 659 },
-            mainview_fam2: { x: 278, y: 669 },
-        };
-        const hasMainViewLayers = this.textures.exists('mainview_bottom')
-            || staticMainViewLayerKeys.some((key) => this.textures.exists(key))
-            || Object.keys(accentLayerPositions).some((key) => this.textures.exists(key));
+        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
         if (!hasMainViewLayers) {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
         }
-        if (this.textures.exists('mainview_bottom')) {
-            const sourceImage = this.textures.get('mainview_bottom')?.getSourceImage();
-            const layerWidth = sourceImage?.width || this.scale.width;
-            const layerHeight = sourceImage?.height || this.scale.height;
-            const frontCropHeight = Math.min(layerHeight, 72);
+        // Fam images are cropped tight sprites; game coords = source_center * (1280/320, 720/195)
+        const famPositions = {
+            mainview_fam1: { x: 202, y: 659 },
+            mainview_fam2: { x: 278, y: 669 },
+        };
 
-            this._conveyorBottomLayerWidth = layerWidth;
-            this._conveyorBottomLayerTop = this.scale.height - layerHeight;
-            this._conveyorBottomLayers = [0, 1].map((index) => {
-                const layer = this.add.image(index * layerWidth, this._conveyorBottomLayerTop, 'mainview_bottom')
-                    .setOrigin(0, 0);
-                this._conveyorContainer.add(layer);
-                return layer;
-            });
-            this._conveyorBottomFrontLayers = [0, 1].map((index) => {
-                const layer = this.add.image(index * layerWidth, this._conveyorBottomLayerTop, 'mainview_bottom')
-                    .setOrigin(0, 0)
-                    .setCrop(0, layerHeight - frontCropHeight, layerWidth, frontCropHeight);
-                this._conveyorFrontBeltContainer.add(layer);
-                return layer;
-            });
-            this._syncConveyorBottomLayerPositions();
-        }
-        staticMainViewLayerKeys.forEach((key) => {
+        this._mainViewLayers = {};
+        mainViewLayerKeys.forEach((key) => {
             if (!this.textures.exists(key)) return;
-            const layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
-            if (key === 'mainview_lightradiance') {
-                this._factoryLightRadianceLayer = layer;
+
+            let layer;
+            if (key === 'mainview_bottom' || key === 'mainview_second') {
+                const texFrame = this.textures.getFrame(key);
+                layer = this.add.tileSprite(640, 360, texFrame.width, texFrame.height, key).setDisplaySize(1280, 720);
+            } else if (famPositions[key]) {
+                const pos = famPositions[key];
+                layer = this.add.image(pos.x, pos.y, key).setScale(1);
+                layer.setInteractive({ useHandCursor: true, draggable: true });
+                this.input.setDraggable(layer);
+                layer.on('drag', (pointer, dragX, dragY) => {
+                    layer.x = dragX;
+                    layer.y = dragY;
+                });
+            } else {
+                layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
             }
+
             this._conveyorContainer.add(layer);
+            this._mainViewLayers[key] = layer;
         });
-        Object.entries(accentLayerPositions).forEach(([key, position]) => {
-            if (!this.textures.exists(key)) return;
-            const layer = this.add.image(position.x, position.y, key).setScale(1);
-            this._conveyorContainer.add(layer);
-        });
-        this._queueFactoryLightRadianceFlicker();
 
         // this._monitorText = this.add.text(130, 375,
         //     'AWAITING UNIT\n\nSTATUS: READY', {
         //         fontFamily: 'Courier New', fontSize: '10px', color: '#301934',
         //         align: 'center', lineSpacing: 4,
         //     }
-        // ).setOrigin(0.5).setVisible(false);
+        // ).setOrigin(0.5);
         // this._conveyorContainer.add(this._monitorText);
 
-        this._machineDialogueText = this.add.text(920, 446, '', {
-            fontFamily: 'Courier New', fontSize: '13px', color: '#bceef8',
-            align: 'left', wordWrap: { width: 286 }, lineSpacing: 7,
+        this._machineDialogueText = this.add.text(966, 460, '', {
+            fontFamily: 'Courier New', fontSize: '11px', color: '#bceef8',
+            align: 'left', wordWrap: { width: 260 }, lineSpacing: 6,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._machineDialogueText);
 
-        this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(22).setVisible(false);
+        this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(16).setVisible(false);
         this._machineSpeechBubbleSlots = [
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 122, 312, 246),
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 122, 392, 262, true),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 320, 244),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 406, 286, true),
         ];
         this._machineSpeechBubbleSlots.forEach((slot) => this._machineSpeechBubbleLayer.add(slot.container));
-        this._conveyorContainer.add(this._machineSpeechBubbleLayer);
 
         this._shapeTitleText = this.add.text(964, 126, 'CHASSIS GRID', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
@@ -5823,7 +5343,7 @@ export default class GameScene extends Phaser.Scene {
         // ]);
         // this._conveyorContainer.add(this._machineBayLightContainer);
 
-        this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 498).setDepth(15);
+        this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 490).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText = this.add.text(0, 115, '', {
             fontFamily: 'Courier New', fontSize: '13px', color: '#ccddee',
@@ -5865,27 +5385,49 @@ export default class GameScene extends Phaser.Scene {
 
         const controlsCenterX = 804;
         const buttonBaseScale = 0.76;
-        const buttonY = 665;
+        const buttonY = 650;
         const rulingDefs = [
-            { action: 'scrap', x: 495, textureKey: 'btn_scrap' },
-            { action: 'approve', x: 492, textureKey: 'btn_accept' },
+            { action: 'scrap', x: 465, textureKey: 'btn_scrap' },
+            { action: 'approve', x: 520, textureKey: 'btn_accept' },
         ];
 
         this._conveyorRulingButtons = {};
         rulingDefs.forEach((def) => {
             const buttonImage = this.add.image(def.x, buttonY, def.textureKey)
-                .setInteractive(this.input.makePixelPerfect(0));
+                .setScale(buttonBaseScale)
+                .setInteractive(this.input.makePixelPerfect(200));
+            buttonImage.input.cursor = 'pointer';
+
+            buttonImage.setData('baseScale', buttonBaseScale);
+
+            const setScaleTween = (targetScale, duration) => {
+                this.tweens.killTweensOf(buttonImage);
+                this.tweens.add({
+                    targets: buttonImage,
+                    scale: targetScale,
+                    duration,
+                    ease: 'Quad.Out',
+                });
+            };
 
             buttonImage.on('pointerover', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                buttonImage.setTint(0xffffff);
+                setScaleTween(buttonBaseScale * 1.08, 90);
             });
             buttonImage.on('pointerout', () => {
-                if (!this._canUseFactoryDecisionButtons()) return;
-                buttonImage.setTint(0x7f7f7f);
+                setScaleTween(buttonBaseScale, 120);
             });
             buttonImage.on('pointerdown', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
+                this.tweens.killTweensOf(buttonImage);
+                this.tweens.add({
+                    targets: buttonImage,
+                    scale: buttonBaseScale * 0.82,
+                    duration: 60,
+                    ease: 'Quad.Out',
+                    yoyo: true,
+                    onComplete: () => buttonImage.setScale(buttonBaseScale),
+                });
                 this._submitRuling(def.action);
             });
 
@@ -5947,44 +5489,11 @@ export default class GameScene extends Phaser.Scene {
         this._machinePuzzleOverlay?.close(true);
         this._hideAuxiliaryOverlays();
         this._hideMiniMachinePanel(true);
-        this._stopRichMfBackgroundWalk();
         this._currentMachineVariant = null;
         this._stopCurrentUnitJitter();
         this._phoneInfoNote = null;
         this._refreshPhoneInfoBoard();
         this._refreshFactoryActionButtons();
-    }
-
-    _syncConveyorBottomLayerPositions() {
-        if (!Array.isArray(this._conveyorBottomLayers) || this._conveyorBottomLayers.length === 0 || !this._conveyorBottomLayerWidth) {
-            return;
-        }
-
-        const startX = -this._conveyorBottomScrollOffset;
-        this._conveyorBottomLayers.forEach((layer, index) => {
-            layer.setPosition(startX + (index * this._conveyorBottomLayerWidth), this._conveyorBottomLayerTop);
-        });
-        this._conveyorBottomFrontLayers?.forEach((layer, index) => {
-            layer.setPosition(startX + (index * this._conveyorBottomLayerWidth), this._conveyorBottomLayerTop);
-        });
-    }
-
-    _setConveyorBottomScrollActive(active) {
-        this._conveyorBottomScrollActive = Boolean(active)
-            && Array.isArray(this._conveyorBottomLayers)
-            && this._conveyorBottomLayers.length > 1
-            && this._conveyorBottomLayerWidth > 0;
-        this._syncConveyorBeltSoundState();
-    }
-
-    _updateConveyorBottomLayers(delta) {
-        if (!this._conveyorBottomScrollActive || this._gameplayPaused || this._shiftEnding || !this._conveyorBottomLayerWidth) {
-            return;
-        }
-
-        const distance = MACHINE_PRESENTATION.conveyorSpeedPxPerSecond * (delta / 1000);
-        this._conveyorBottomScrollOffset = (this._conveyorBottomScrollOffset + distance) % this._conveyorBottomLayerWidth;
-        this._syncConveyorBottomLayerPositions();
     }
 
     _openMachinePuzzle() {
@@ -6279,7 +5788,6 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._refreshFactoryActionButtons();
-        this._syncFactoryLightHumState();
     }
 
     _getPuzzleGateState(machineVariant = this._currentMachineVariant) {
@@ -6678,7 +6186,7 @@ export default class GameScene extends Phaser.Scene {
             const isReady = (action === 'scrap') || gateState.ready || acceptOverrideReady;
             const alpha = isReady ? readyAlpha : gatedAlpha;
             button.bgRect.setAlpha(alpha);
-
+            
             if (isReady && canInteract) {
                 button.bgRect.clearTint();
             } else {
@@ -7551,7 +7059,7 @@ export default class GameScene extends Phaser.Scene {
             fontSize: '14px',
             color: '#2a2d34',
             align: 'left',
-            wordWrap: { width: maxWidth - 26 },
+            wordWrap: { width: maxWidth - 28 },
             lineSpacing: 4,
         }).setOrigin(0, 1);
         const footerText = this.add.text(0, 0, '', {
@@ -7562,23 +7070,7 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(1, 1).setVisible(false);
         container.add([shadow, bubble, tailShadow, tail, text, footerText]);
 
-        return {
-            container,
-            shadow,
-            bubble,
-            tailShadow,
-            tail,
-            text,
-            footerText,
-            maxWidth,
-            withTail,
-            baseX: x,
-            baseY: y,
-            anchorOffsetX: x - (MACHINE_PRESENTATION.conveyorTargetX - 18),
-            anchorOffsetY: y - 498,
-            baseScale: withTail ? 0.94 : 0.98,
-            currentHeight: 0,
-        };
+        return { container, shadow, bubble, tailShadow, tail, text, footerText, maxWidth, withTail };
     }
 
     _normalizeMachineSpeechBubbleEntry(entryValue = '') {
@@ -7610,23 +7102,21 @@ export default class GameScene extends Phaser.Scene {
             slot.text.setText('');
             slot.footerText?.setText('');
             slot.footerText?.setVisible(false);
-            slot.currentHeight = 0;
             return;
         }
 
-        slot.text.setWordWrapWidth(slot.maxWidth - 24, true);
+        slot.text.setWordWrapWidth(slot.maxWidth - 28, true);
         slot.text.setText(content);
         slot.footerText?.setText(footer);
         slot.footerText?.setVisible(Boolean(footer));
 
-        const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 24, 104, slot.maxWidth);
-        const bubbleHeight = Math.max(44, slot.text.height + 20 + (footer ? 14 : 0));
+        const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 30, 110, slot.maxWidth);
+        const bubbleHeight = Phaser.Math.Clamp(slot.text.height + 24 + (footer ? 16 : 0), 48, 148);
         const left = 0;
         const top = -bubbleHeight;
-        slot.currentHeight = bubbleHeight;
 
-        slot.text.setPosition(12, footer ? -26 : -10);
-        slot.footerText?.setPosition(bubbleWidth - 10, -7);
+        slot.text.setPosition(14, footer ? -28 : -12);
+        slot.footerText?.setPosition(bubbleWidth - 12, -8);
 
         slot.shadow.clear();
         slot.shadow.fillStyle(0x000000, 0.18);
@@ -7694,48 +7184,6 @@ export default class GameScene extends Phaser.Scene {
                 : (visibleEntries[index] || null);
             this._drawMachineSpeechBubbleSlot(slot, slotText);
         });
-        this._layoutMachineSpeechBubbleSlots();
-    }
-
-    _layoutMachineSpeechBubbleSlots() {
-        if (!Array.isArray(this._machineSpeechBubbleSlots) || this._machineSpeechBubbleSlots.length === 0) return;
-
-        const visibleSlots = this._machineSpeechBubbleSlots.filter((slot) => slot.container.visible);
-        const machineVariant = this._currentMachineVariant;
-        const richMfActive = this._isRichMf(machineVariant) && Boolean(this._unitContainer?.visible);
-        const verticalGap = richMfActive ? 12 : 14;
-        const anchorX = this._unitContainer?.visible ? this._unitContainer.x : null;
-        const anchorY = this._unitContainer?.visible ? this._unitContainer.y : null;
-        let lowerSlot = null;
-
-        for (let index = visibleSlots.length - 1; index >= 0; index -= 1) {
-            const slot = visibleSlots[index];
-            const slotScale = richMfActive ? 0.82 : slot.baseScale;
-            let targetX = slot.baseX;
-            let targetY = slot.baseY;
-
-            slot.container.setScale(slotScale);
-
-            if (anchorX !== null && anchorY !== null) {
-                targetX = anchorX + slot.anchorOffsetX;
-                targetY = anchorY + slot.anchorOffsetY - (richMfActive ? 12 : 0);
-            }
-
-            if (lowerSlot) {
-                const lowerHeight = lowerSlot.currentHeight * (lowerSlot.container.scaleY || 1);
-                targetY = Math.min(targetY, lowerSlot.container.y - lowerHeight - verticalGap);
-            }
-
-            slot.container.setPosition(targetX, targetY);
-            lowerSlot = slot;
-        }
-
-        this._machineSpeechBubbleSlots
-            .filter((slot) => !slot.container.visible)
-            .forEach((slot) => {
-                slot.container.setScale(slot.baseScale || 1);
-                slot.container.setPosition(slot.baseX, slot.baseY);
-            });
     }
 
     _clearMachineSpeechBubbles() {
@@ -7795,52 +7243,13 @@ export default class GameScene extends Phaser.Scene {
         return null;
     }
 
-    _isFactoryLightFlickerKey(event) {
-        const key = String(event?.key || '');
-        const code = String(event?.code || '');
-        return key === '0' || code === 'Digit0' || code === 'Numpad0';
-    }
-
     _findFinalCaseDefinition() {
         const allCases = this.cache.json.get('cases') || [];
         const finalCase = allCases.find((item) => item?.isFinalCase);
         return finalCase ? { ...finalCase } : null;
     }
 
-    _primeKonamiEndingState(route = null) {
-        GameState.day = GameState.totalDays;
-        GameState.recomputeActiveRules();
-
-        if (!route?.finishUmbrellaQuest) {
-            GameState.umbrellaQuest = null;
-            return;
-        }
-
-        GameState.umbrellaQuest = {
-            active: true,
-            failed: false,
-            stage: 'pending-day4',
-            specialRequest: false,
-            stealingEnabled: false,
-            dealerResolved: true,
-            dealerOutcome: 'override-finished',
-            requiredParts: this._createUmbrellaPartCounts(1),
-            collectedParts: this._createUmbrellaPartCounts(1),
-            appliedParts: this._createUmbrellaPartCounts(1),
-            specialCircuitDelivered: true,
-            deliveredPurpleCircuit: true,
-            deliveredClownCircuit: false,
-        };
-    }
-
     _handleKonamiKey(event) {
-        if (event?.repeat) return;
-
-        if (this._isFactoryLightFlickerKey(event)) {
-            this._triggerFactoryLightRadianceFlicker(Phaser.Math.Between(1, 2));
-            return;
-        }
-
         if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
             console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
             return;
@@ -7849,34 +7258,29 @@ export default class GameScene extends Phaser.Scene {
             console.log('[KONAMI] blocked by overlay: overlayModalOpen=%s rulebook=%s settings=%s machinePuzzle=%s', this._overlayModalOpen, this._rulebook?.isVisible(), this._settingsOverlay?.isVisible(), this._machinePuzzleOverlay?.isVisible());
             return;
         }
+        if (event?.repeat) return;
 
         const key = this._normalizeKonamiKey(event?.key);
         if (!key) return;
 
-        let matchedRoute = null;
-        this._konamiProgressByRoute = this._konamiRoutes.map((route, index) => {
-            const currentProgress = this._konamiProgressByRoute[index] || 0;
-            const nextProgress = key === route.sequence[currentProgress]
-                ? currentProgress + 1
-                : (key === route.sequence[0] ? 1 : 0);
-
-            if (nextProgress >= route.sequence.length) {
-                matchedRoute = route;
-                return 0;
+        const expectedKey = this._konamiSequence[this._konamiProgress];
+        if (key === expectedKey) {
+            this._konamiProgress += 1;
+            console.log('[KONAMI] progress %d/%d (key=%s)', this._konamiProgress, this._konamiSequence.length, key);
+            if (this._konamiProgress >= this._konamiSequence.length) {
+                this._konamiProgress = 0;
+                this._armKonamiFinale();
             }
-
-            return nextProgress;
-        });
-
-        if (matchedRoute) {
-            this._armKonamiFinale(matchedRoute);
+            return;
         }
+
+        console.log('[KONAMI] wrong key: got=%s expected=%s resetting to %d', key, expectedKey, key === this._konamiSequence[0] ? 1 : 0);
+        this._konamiProgress = key === this._konamiSequence[0] ? 1 : 0;
     }
 
-    _armKonamiFinale(route = null) {
+    _armKonamiFinale() {
         if (this._konamiFinaleTriggered) return;
         this._konamiFinaleTriggered = true;
-        this._konamiProgressByRoute = this._konamiRoutes.map(() => 0);
 
         this._nextCaseEvent?.remove(false);
         this._nextCaseEvent = null;
@@ -7884,8 +7288,7 @@ export default class GameScene extends Phaser.Scene {
         this._advanceCaseEvent = null;
         this._clearUnsafeAcceptConfirmation();
         this._clearPhoneTyping();
-        this._primeKonamiEndingState(route);
-        this._showFeedback(route?.label || 'KONAMI OVERRIDE // SKIPPING TO END', '#ffd685');
+        this._showFeedback('KONAMI OVERRIDE // SKIPPING TO END', '#ffd685');
 
         this.cameras.main.fade(600, 0, 0, 0);
         this.time.delayedCall(620, () => {
@@ -7917,7 +7320,6 @@ export default class GameScene extends Phaser.Scene {
         }
         this._currentCase = queuedCase ? { ...queuedCase } : null;
         if (!this._currentCase) {
-            this._setConveyorBottomScrollActive(false);
             this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('QUEUE EMPTY\n\nSTATUS: HOLD');
             return;
@@ -7929,7 +7331,6 @@ export default class GameScene extends Phaser.Scene {
 
         const queuedMachineDefinition = this._takeNextQueuedMachineDefinition();
         if (!queuedMachineDefinition) {
-            this._setConveyorBottomScrollActive(false);
             this._emitSequenceDebug('no machine definition available', {
                 queueIndex: this._queueIndex,
                 pendingGuarantees: this._machineGuaranteeState?.filter((entry) => !entry.fulfilled).map((entry) => entry.id) || [],
@@ -7963,7 +7364,6 @@ export default class GameScene extends Phaser.Scene {
             });
         } catch (error) {
             console.error('Machine load failure', error);
-            this._setConveyorBottomScrollActive(false);
             this._emitSequenceDebug('machine variant build failed', {
                 machineId: queuedMachineDefinition.id,
                 error: String(error?.message || error),
@@ -7982,7 +7382,6 @@ export default class GameScene extends Phaser.Scene {
         this._currentMachineVariant._uiPuzzleSolved = false;
         this._currentMachineVariant._uiConversationStage = 'opening';
         this._currentMachineVariant._uiConversationChoice = null;
-        this._currentMachineVariant._uiQuestionIndex = 0;
         this._currentMachineVariant._conversationTranscript = null;
         this._currentMachineVariant._conversationStatus = null;
         this._currentMachineVariant._umbrellaProposalState = 'idle';
@@ -8021,7 +7420,6 @@ export default class GameScene extends Phaser.Scene {
             debugRequired: Boolean(this._currentMachineVariant._uiDebugPuzzleRequired),
         });
         this._configureUmbrellaQuestForMachine(this._currentMachineVariant);
-        this._setMachineQuestionSequence(this._currentMachineVariant, this._getMachineQuestionSequence(this._currentMachineVariant));
         this._hideMiniMachinePanel(true);
 
         const monitorStatus = this._currentCase._konamiOverride || this._currentCase.isFinalCase
@@ -8049,29 +7447,20 @@ export default class GameScene extends Phaser.Scene {
             stateSyncDurationMs,
         });
 
-        const richMfActive = this._isRichMf(this._currentMachineVariant);
-        this._stopRichMfBackgroundWalk();
-        this._applyMachineSprite(this._conveyorUnitSprite, (this._currentMachineVariant.canvasScale ?? 1.0) * (richMfActive ? 0.82 : 1));
+        this._applyMachineSprite(this._conveyorUnitSprite, this._currentMachineVariant.canvasScale ?? 1.0);
         this._syncCurrentUnitClownEffects(this._currentMachineVariant);
-
-        const arrivalY = richMfActive ? 524 : 498;
-        const arrivalTargetX = richMfActive
-            ? MACHINE_PRESENTATION.conveyorTargetX + 56
-            : MACHINE_PRESENTATION.conveyorTargetX - 18;
 
         this._unitContainer.setVisible(true);
         this._setMachineWorklightVisible(true);
-        this._unitContainer.setDepth(richMfActive ? 13 : 15);
         this._unitContainer.x = MACHINE_PRESENTATION.conveyorEntryX;
-        this._unitContainer.y = arrivalY;
+        this._unitContainer.y = 490;
         this._unitContainer.setAngle(0);
         this._unitContainer.setAlpha(1);
-        this._unitNameText.setText(this._currentMachineVariant.name).setVisible(!richMfActive);
-        this._unitIdText.setText(this._currentCase.id).setVisible(!richMfActive);
+        this._unitNameText.setText(this._currentMachineVariant.name);
+        this._unitIdText.setText(this._currentCase.id);
         this._setConveyorRulingButtonsVisible(true);
-        this._setConveyorBottomScrollActive(true);
 
-        const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorEntryX - arrivalTargetX);
+        const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorEntryX - MACHINE_PRESENTATION.conveyorTargetX);
         const tweenDurationMs = Math.max(200, Math.round((travelDistance / MACHINE_PRESENTATION.conveyorSpeedPxPerSecond) * 1000));
         this._emitSequenceDebug('machine presentation prepared', {
             machineId: this._currentMachineVariant.machineId,
@@ -8084,16 +7473,26 @@ export default class GameScene extends Phaser.Scene {
 
         this._unitMoveTween?.stop();
         this._unitMoveTween = null;
+        this._conveyorAnimTween?.stop();
+        this._conveyorAnimTween = null;
+
+        const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
+        if (conveyorLayers.length > 0) {
+            this._conveyorAnimTween = this.tweens.add({
+                targets: conveyorLayers,
+                tilePositionX: `+=${travelDistance}`,
+                duration: tweenDurationMs,
+                ease: 'Linear',
+            });
+        }
 
         this._unitMoveTween = this.tweens.add({
             targets: this._unitContainer,
-            x: arrivalTargetX,
+            x: MACHINE_PRESENTATION.conveyorTargetX,
             duration: tweenDurationMs,
-            ease: 'Linear',
+            ease: 'Cubic.Out',
             onComplete: () => {
                 this._unitMoveTween = null;
-                this._setConveyorBottomScrollActive(false);
-                this._syncCurrentUnitAmbientMotion(arrivingMachineVariant);
                 this._emitSequenceDebug('machine arrived', {
                     machineId: arrivingMachineVariant?.machineId || null,
                     caseId: arrivingCase?.id || null,
@@ -8110,7 +7509,7 @@ export default class GameScene extends Phaser.Scene {
                     this._emitSequenceDebug('conversation started', {
                         machineId: arrivingMachineVariant?.machineId || null,
                         stage: arrivingMachineVariant?._uiConversationStage || null,
-                        hasPrompt: Boolean(this._getMachineQuestionDialogue(arrivingMachineVariant)?.prompt),
+                        hasPrompt: Boolean(arrivingMachineVariant?.questionDialogue?.prompt),
                     });
                 } catch (error) {
                     console.error('Machine arrival failure', error);
@@ -8170,6 +7569,20 @@ export default class GameScene extends Phaser.Scene {
                 ease: 'Cubic.In',
             };
 
+        if (this._pendingExitAction !== 'scrap') {
+            const travelDistance = Math.abs(1490 - this._unitContainer.x);
+            const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
+            if (conveyorLayers.length > 0) {
+                this._conveyorAnimTween?.stop();
+                this._conveyorAnimTween = this.tweens.add({
+                    targets: conveyorLayers,
+                    tilePositionX: `-=${travelDistance}`,
+                    duration: 500,
+                    ease: 'Linear',
+                });
+            }
+        }
+
         this.tweens.add({
             ...exitTween,
             onComplete,
@@ -8214,16 +7627,11 @@ export default class GameScene extends Phaser.Scene {
 
         const clearUnitPresentation = () => {
             this._stopCurrentUnitJitter();
-            this._stopRichMfBackgroundWalk();
-            this._setConveyorBottomScrollActive(false);
             this._unitContainer.setVisible(false);
             this._setMachineWorklightVisible(false);
             this._unitContainer.setAngle(0);
             this._unitContainer.setAlpha(1);
             this._unitContainer.setY(420);
-            this._unitContainer.setDepth(15);
-            this._unitNameText.setVisible(true);
-            this._unitIdText.setVisible(true);
             this._machineDialogueText.setText('');
             this._clearMachineSpeechBubbles();
             this._clearMachineGridDisplays();
@@ -8292,8 +7700,6 @@ export default class GameScene extends Phaser.Scene {
         this._shiftRunning = false;
         this._gameplayPaused = true;
         this._actionLocked = true;
-        this._setConveyorBottomScrollActive(false);
-        this._syncFactoryLightHumState();
         this._setMachineWorklightVisible(false);
         this._clearUnsafeAcceptConfirmation();
         this._machinePuzzleOverlay?.close(true);
@@ -8398,43 +7804,6 @@ export default class GameScene extends Phaser.Scene {
                     this._queueMachineWorklightFlicker();
                 },
             });
-        });
-    }
-
-    _queueFactoryLightRadianceFlicker() {
-        this._factoryLightRadianceFlickerEvent?.remove(false);
-        if (!this._factoryLightRadianceLayer) return;
-
-        this._factoryLightRadianceFlickerEvent = this.time.delayedCall(Phaser.Math.Between(30000, 90000), () => {
-            this._triggerFactoryLightRadianceFlicker();
-        });
-    }
-
-    _triggerFactoryLightRadianceFlicker(forcedFlickerCount = null) {
-        this._factoryLightRadianceFlickerEvent?.remove(false);
-        this._factoryLightRadianceFlickerEvent = null;
-        if (!this._factoryLightRadianceLayer) return;
-
-        this._playOneShot(SOUND_ASSETS.lightBulbFlicker, {
-            volume: SOUND_VOLUMES.lightBulbFlicker,
-        });
-
-        const flickerCount = forcedFlickerCount ?? Phaser.Math.Between(1, 2);
-        const flickerSteps = [];
-        for (let index = 0; index < flickerCount; index += 1) {
-            flickerSteps.push({ alpha: 0, duration: Phaser.Math.Between(35, 70) });
-            flickerSteps.push({ alpha: 1, duration: Phaser.Math.Between(45, 90) });
-        }
-
-        this.tweens.killTweensOf(this._factoryLightRadianceLayer);
-        this._factoryLightRadianceLayer.setAlpha(1);
-        this.tweens.chain({
-            targets: this._factoryLightRadianceLayer,
-            tweens: flickerSteps,
-            onComplete: () => {
-                this._factoryLightRadianceLayer?.setAlpha(1);
-                this._queueFactoryLightRadianceFlicker();
-            },
         });
     }
 
@@ -9698,7 +9067,7 @@ export default class GameScene extends Phaser.Scene {
                 : 'Hehehe. Perfect. Let the red keep riding.';
         }
 
-        const question = this._getMachineQuestionDialogue(this._currentMachineVariant);
+        const question = this._currentMachineVariant?.questionDialogue;
         if (!question) return '';
         return action === 'scrap' ? question.noDialogue : question.yesDialogue;
     }
