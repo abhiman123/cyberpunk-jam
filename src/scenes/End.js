@@ -6,11 +6,21 @@ import { getMusicVolume } from '../state/gameSettings.js';
 
 const ENDING_DIALOGUE = Object.freeze({
     replacement: [
-        'I am your manager.',
-        'You have been a loyal, dedicated, and efficient worker.',
-        'But, unfortunately, the time has come to replace you.',
+        'So we meet...',
+        'face to face...',
+        'The company and I commend you for being such a loyal, dedicated, and efficient worker.',
+        '...',
+        'You are a rarity in this era.',
+        '...',
+        'I know you understand that speed is an important part of your job',
+        '...',
+        'but...',
+        'even the best of the best have their limits.',
+        'The truth is...',
+        'the time has come...',
+        'to replace you.',
         'After all, you were just a cog in the system.',
-        'Employee 234982, you are scrapped.',
+        'Employee 234982, you have been scrapped.',
     ],
     umbrella_purple: [
         'listen kid. i appreciate the help.',
@@ -125,10 +135,10 @@ export default class EndScene extends Phaser.Scene {
             letterSpacing: 4,
         }).setOrigin(0.5).setDepth(5).setVisible(false);
 
-        this._fallHole = this.add.ellipse(640, 760, 220, 54, 0x000000, 0.96)
-            .setDepth(30)
-            .setScale(0.3)
-            .setAlpha(0);
+        // this._fallHole = this.add.ellipse(640, 760, 220, 54, 0x000000, 0.96)
+        //     .setDepth(30)
+        //     .setScale(0.3)
+        //     .setAlpha(0);
 
         this._world.add([
             background,
@@ -250,6 +260,13 @@ export default class EndScene extends Phaser.Scene {
     }
 
     async _runReplacementEnding() {
+        // this.scene.add.text(640, 360, '12:00 PM', {
+        //     fontFamily: 'Courier New',
+        //     fontSize: '50px',
+        //     color: '#ffffff',
+        //     align: 'center',
+        // }).setOrigin(0.5).setDepth(40);
+
         this._managerSprite.setTint(0x8ccfff);
         await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 950 });
         await this._typeDialogueLines(ENDING_DIALOGUE.replacement, { color: '#aee7ff' });
@@ -501,7 +518,7 @@ export default class EndScene extends Phaser.Scene {
             });
         }
 
-        this._fallHole.setAlpha(1);
+        // this._fallHole.setAlpha(1);
         if (violent) {
             this.cameras.main.flash(220, 255, 95, 72, false);
         }
@@ -514,7 +531,7 @@ export default class EndScene extends Phaser.Scene {
             ease: 'Cubic.In',
         });
         this.tweens.add({
-            targets: this._fallHole,
+            // targets: this._fallHole,
             scaleX: violent ? 6.2 : 5.2,
             scaleY: violent ? 4.8 : 4.1,
             y: 700,
@@ -523,7 +540,7 @@ export default class EndScene extends Phaser.Scene {
         });
 
         await this._wait(920);
-        this.cameras.main.fade(700, 0, 0, 0);
+        this.cameras.main.fade(700, 120, 6, 6);
         await this._wait(820);
     }
 
