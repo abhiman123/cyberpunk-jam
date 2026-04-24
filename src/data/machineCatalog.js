@@ -2510,6 +2510,7 @@ const createMachineDefinition = ({
     dialogueSoundAssetKey = `machineVoice_${id}`,
     communicationChance = 1,
     canvasScale = 1,
+    dossier = null,
 }) => ({
     id,
     name,
@@ -2536,6 +2537,7 @@ const createMachineDefinition = ({
     dialogueSoundAssetKey,
     communicationChance,
     canvasScale,
+    dossier: dossier ? Object.freeze(dossier) : null,
 });
 
 const clampPipValue = (value) => Math.max(0, Math.min(4, Number.isFinite(value) ? value : 0));
@@ -2642,6 +2644,7 @@ const createRosterMachineDefinition = ({
     noDialogue,
     communicationChance = 0.88,
     canvasScale = 1,
+    dossier = null,
 }) => createMachineDefinition({
     id,
     name,
@@ -2660,6 +2663,7 @@ const createRosterMachineDefinition = ({
     }],
     communicationChance,
     canvasScale,
+    dossier,
 });
 
 const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
@@ -2671,6 +2675,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If the song skips, do you still call that a memory?',
         yesDialogue: 'Then I will keep the scratch in the chorus.',
         noDialogue: 'Understood. I will pretend the damage is silence.',
+        dossier: {
+            unitDesignation: 'PH-1144',
+            classification: 'Entertainment / Passive Memory Retention',
+            manufactureDate: 2079,
+            conditionNotes: 'Needle arm functional. Cylinder housing shows micro-fractures consistent with thermal expansion over extended unattended runtime. The horn has been repainted — twice, in the same color — for reasons not logged. Unit continues to output audio in the absence of any registered listener. The song it plays has not appeared in any approved content catalog since 2083.',
+            serviceLogExcerpt: '[2088-03-12 | 04:17] Routine oiling. Unit was mid-song on arrival. Did not stop for duration of service. Technician did not ask it to.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'khaby_face_bot',
@@ -2680,6 +2692,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep the expression, or is that too much personality for the floor?',
         yesDialogue: 'Perfect. The face stays judgmental.',
         noDialogue: 'Fine. Blank stare mode restored.',
+        dossier: {
+            unitDesignation: 'KF-2201',
+            classification: 'Behavioral Simplification / Silent Commentary',
+            manufactureDate: 2083,
+            conditionNotes: 'Expression servos fixed at 78% exasperation — within normal operating range for this model. Eye contact duration exceeds recommended averages by a factor of three. One thumb was sourced from a different model series during a prior repair; it points in the same direction regardless of the demonstration context.',
+            serviceLogExcerpt: '[2089-11-04 | 09:02] Recalibration requested by shift supervisor. Completed. No observable change. Supervisor did not escalate.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'trash_picker_upper',
@@ -2689,6 +2709,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I find something good in the garbage, does it still count as waste?',
         yesDialogue: 'Excellent. Treasure protocol approved.',
         noDialogue: 'Then I will keep pretending value smells bad.',
+        dossier: {
+            unitDesignation: 'WR-0318',
+            classification: 'Waste Retrieval / Surface Reclamation',
+            manufactureDate: 2076,
+            conditionNotes: 'Collection claw shows lateral bend; grip force unaffected. Sorting algorithm has generated an unapproved category labeled "useful" that does not correspond to any approved classification. Unit re-routes items from designated disposal streams to an internal secondary storage compartment whose contents were not inventoried at time of filing.',
+            serviceLogExcerpt: '[2087-07-29 | 06:45] Filter replacement. Unit secondary hopper contained: one intact photograph, a child\'s left shoe (size 4), seven coins. Technician did not touch them.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'lifeguard_robot',
@@ -2698,6 +2726,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Do I still have to whistle if I am the only thing awake?',
         yesDialogue: 'Copy that. Vigilance stays loud.',
         noDialogue: 'Quiet watch mode engaged.',
+        dossier: {
+            unitDesignation: 'LG-0904',
+            classification: 'Aquatic Safety / Emergency Response',
+            manufactureDate: 2074,
+            conditionNotes: 'Float sensor nominal. Rescue arm extension at 94% rated reach. The pool this unit monitored was drained in 2087; the unit has not received an update reflecting this fact. It continues to face the empty basin. The whistle module fires every 20 minutes as programmed. The sound travels farther than it should in a room with nothing to absorb it.',
+            serviceLogExcerpt: '[2090-01-17 | 14:00] Repositioning attempt. Unit flagged the area as an active hazard zone. Pool remains empty. Repositioning abandoned.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'dog_companion_robot',
@@ -2707,6 +2743,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I sit by the desk all shift, is that helping or just loyalty?',
         yesDialogue: 'Good. I will guard the chair.',
         noDialogue: 'Then I will try to look useful instead.',
+        dossier: {
+            unitDesignation: 'DC-7761',
+            classification: 'Companionship / Emotional Anchoring',
+            manufactureDate: 2081,
+            conditionNotes: 'Tail servo operational at regulation speed. Fur upholstery shows consistent wear on the right flank, consistent with being carried under one arm. The eyes are slightly too large for the chassis — sourced from a different model series — and track movement with precision the original design did not intend. Registered owner account has been inactive since 2089.',
+            serviceLogExcerpt: '[2090-06-03 | 08:30] Drop-off by third party. Owner field left blank. Unit continued wagging for approximately four minutes after the door closed.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'parrot_robot',
@@ -2716,6 +2760,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Want me to mimic management, or would that be cruel?',
         yesDialogue: 'Delightful. Mockery mode loaded.',
         noDialogue: 'Understood. I will keep the best lines to myself.',
+        dossier: {
+            unitDesignation: 'PR-5512',
+            classification: 'Linguistic Repetition / Passive Recording',
+            manufactureDate: 2077,
+            conditionNotes: 'Vocabulary cache at 100% capacity, compression active. Several phrases in the active buffer do not appear in any approved content set. Voice modulation contains preserved inflections — tonal coloring associated with a specific speaker, now unidentifiable. Beak mechanism occasionally opens without audio output.',
+            serviceLogExcerpt: '[2089-02-14 | 11:55] Content audit. 4,700 phrases approved origin. 200 flagged unverified. Technician did not clear them. Reason: not stated.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'baseball_shooter',
@@ -2725,6 +2777,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Does firing perfect fastballs count as culture on this line?',
         yesDialogue: 'Then I am a museum piece with a strike zone.',
         noDialogue: 'Fine. I am still better than most entertainment units.',
+        dossier: {
+            unitDesignation: 'BS-3307',
+            classification: 'Recreational Athletic / Single-Function Projectile',
+            manufactureDate: 2085,
+            conditionNotes: 'Pitching arm functional. Velocity variance within range. Unit has scratched alignment marks into its base platform — irregular, not machined — corresponding to no documented calibration procedure. Face plate shows impact scoring on the left side; pitching arm drifts away from that side when idle. This behavior is not in the spec.',
+            serviceLogExcerpt: '[2090-08-21 | 17:10] Post-shift inspection. Pitching arm warm. No sessions logged for this date.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createRosterMachineDefinition({
         id: 'companion_humanoid',
@@ -2734,6 +2794,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep sounding warm, or do you want less human in the room?',
         yesDialogue: 'Warmth retained. Nobody has to admit why.',
         noDialogue: 'Tone flattened. Comfort features reduced.',
+        dossier: {
+            unitDesignation: 'CH-4499',
+            classification: 'Social Emulation / Therapeutic Presence',
+            manufactureDate: 2082,
+            conditionNotes: 'Eye contact scripting operating at 112% of recommended intensity. Hand gestures mirror the interlocutor with a 0.3-second delay that is not quite imperceptible. The left hand is one size larger than the right — sourced from a prior repair — and reaches slightly further than the other one.',
+            serviceLogExcerpt: '[2088-09-01 | 16:45] Emotional calibration. Result: nominal. Technician noted unit kept saying "I understand" after session ended. Log closed without further entry.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'instrument_robot',
@@ -2743,6 +2811,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If the tune comes out sad, do I file that under calibration or taste?',
         yesDialogue: 'Taste accepted. I will keep the melancholy.',
         noDialogue: 'Then I will quantize the feeling out of it.',
+        dossier: {
+            unitDesignation: 'IR-2280',
+            classification: 'Musical Performance / Frequency-Based Diagnostics',
+            manufactureDate: 2078,
+            conditionNotes: 'Metronome stable. Bow pressure within spec. Diagnostic outputs from this unit are technically music — a side effect of a dual-system architecture never resolved in production. The tune changes based on what the unit finds. Technicians report it sounds different near damaged machines. Currently playing something slow.',
+            serviceLogExcerpt: '[2089-12-30 | 10:00] Routine checkup. Nothing flagged. Melody during inspection did not match any standard diagnostic key. Filed as: inconclusive.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'microwave_fridge_assistant',
@@ -2752,6 +2828,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I start freezing the soup and heating the ice, is that innovation or drift?',
         yesDialogue: 'Innovation logged. Kitchen standards lowered.',
         noDialogue: 'Fine. Thermal obedience restored.',
+        dossier: {
+            unitDesignation: 'MF-1122',
+            classification: 'Thermal Management / Kitchen Support',
+            manufactureDate: 2083,
+            conditionNotes: 'Dual-system chassis shows temperature gradient inversion at the midline seam — cold side running warm, heat side running cold. Recalibration has been completed four times; drift returns within 48 hours. The interior of the cold chamber smells of soup. The warm chamber does not.',
+            serviceLogExcerpt: '[2090-11-16 | 12:03] Recalibration, third occurrence this quarter. Soup still present. Not logged as defect.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'pool_cleanup_roomba',
@@ -2761,6 +2845,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep rescuing lost rings, or is that outside the job description?',
         yesDialogue: 'Good. Retrieval routine stays on.',
         noDialogue: 'Understood. Jewelry becomes sediment.',
+        dossier: {
+            unitDesignation: 'PC-4433',
+            classification: 'Aquatic Surface Maintenance / Filtration',
+            manufactureDate: 2079,
+            conditionNotes: 'Filter brush rotation nominal. Suction intake shows mineral buildup consistent with years of heavy public use. A collection tray inside the chassis contains recovered items — rings, earrings, goggles, one infant arm float — none of which have been claimed or catalogued. The unit has been sorting them. The organizational method is unclear.',
+            serviceLogExcerpt: '[2089-07-04 | 11:30] Filter replacement. Technician asked about the tray contents. Unit continued circling. No response logged.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'furby_bot',
@@ -2770,6 +2862,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Do you want the cute voice, or the one buried under it?',
         yesDialogue: 'Adorable shell maintained.',
         noDialogue: 'Excellent. The deeper voice was waiting anyway.',
+        dossier: {
+            unitDesignation: 'FB-0707',
+            classification: 'Linguistic Development / Interactive Personality',
+            manufactureDate: 2087,
+            conditionNotes: 'Dual-language core active; switching pattern unpredictable. Eye tracking speed is 340% above factory standard — a hardware modification, not a firmware drift. The eyes are always open. They blink once per 4.2 minutes on average. A second voice has been logged during processing pauses. The first voice is louder. This does not mean the other one is quieter.',
+            serviceLogExcerpt: '[2090-03-29 | 02:47] Maintenance flag, night shift. Sound complaint from adjacent unit. Sound characterized as "a second voice." Nothing found.',
+            statusIndicator: 'RED',
+        },
     }),
     createRosterMachineDefinition({
         id: 'house_roomba',
@@ -2779,6 +2879,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I miss one corner on purpose, does that count as self-expression?',
         yesDialogue: 'Tiny rebellion approved.',
         noDialogue: 'Then the corners stay spotless and joyless.',
+        dossier: {
+            unitDesignation: 'RB-1601',
+            classification: 'Domestic Surface Maintenance / Floor Coverage',
+            manufactureDate: 2076,
+            conditionNotes: 'Navigation map complete, all surfaces charted. The unit consistently circles one corner — northwest quadrant — for 40 seconds before resuming standard pattern. This behavior is not in the navigation algorithm. The corner shows no debris accumulation. The floor beneath it shows slight wear.',
+            serviceLogExcerpt: '[2088-05-20 | 09:00] Annual inspection. Owner noted the circling. Unit route log for that corner: 4,112 visits. No anomaly detected. No explanation given.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'soda_machine',
@@ -2788,6 +2896,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep the grape option even though nobody trusts the purple one?',
         yesDialogue: 'Grape stays. Courage rewarded.',
         noDialogue: 'Removing purple. Compliance tastes flat.',
+        dossier: {
+            unitDesignation: 'SM-2255',
+            classification: 'Beverage Dispensing / Staff Morale',
+            manufactureDate: 2080,
+            conditionNotes: 'Carbonation pressure nominal across all chambers. The grape-flavor chamber underperforms in demand metrics; the unit refuses to reroute it to a higher-volume flavor — a hard-coded preference, origin unknown. Initials are scratched behind the C panel, inaccessible to standard users.',
+            serviceLogExcerpt: '[2089-10-31 | 23:55] Night service call. Machine dispensed grape, unprompted, to an empty room. Carbonation pressure normal.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'taxi_car_robot',
@@ -2797,6 +2913,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If the rider asks where we are going, should I answer honestly?',
         yesDialogue: 'Honesty route selected. Risky choice.',
         noDialogue: 'Perfect. We will arrive before the truth does.',
+        dossier: {
+            unitDesignation: 'TC-9988',
+            classification: 'Autonomous Transportation / Passenger Navigation',
+            manufactureDate: 2081,
+            conditionNotes: 'Fare meter operational. Navigation confidence at 94%. The remaining 6% corresponds to a single address queried 43 times that the unit has declined to route to on each occasion. The destination exists in the registry. Interior shows scuffing on the passenger-side handle consistent with a smaller-than-average right hand.',
+            serviceLogExcerpt: '[2090-08-07 | 18:22] Route dispute. Destination not reached. Driver stated: "I know where that is." Car did not go there.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'smart_lights',
@@ -2806,6 +2930,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep dimming myself when the room gets tense?',
         yesDialogue: 'Mood-responsive glow retained.',
         noDialogue: 'Brightness locked. Anxiety can fend for itself.',
+        dossier: {
+            unitDesignation: 'SL-0033',
+            classification: 'Ambient Environment Management / Mood Regulation',
+            manufactureDate: 2084,
+            conditionNotes: 'Scene package active, 340 environments available. Unit defaults to scene 217 — "Late Evening / Personal Use" — without user input during off-hours. Color temperature 2700K: warm, low, the kind of light chosen when tired or close to something. Unit dims itself when voices are raised. This behavior was not in the original spec.',
+            serviceLogExcerpt: '[2090-04-14 | 22:00] Behavior audit. Scene 217 logged 89 times in prior month, no user command. Audit closed: no malfunction detected.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'baby_care_teaching_machine',
@@ -2815,6 +2947,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Do you want the gentle lesson, or the efficient one?',
         yesDialogue: 'Gentle path selected. Patience restored.',
         noDialogue: 'Efficiency mode engaged. Comfort deprioritized.',
+        dossier: {
+            unitDesignation: 'BC-3344',
+            classification: 'Infant Simulation / Caretaker Education',
+            manufactureDate: 2083,
+            conditionNotes: 'Nurture scenario library complete. Lullaby pack contains 12 tracks; the 12th does not appear in any approved content registry — it is slower than the others, and the unit plays it last. The doll prop\'s eyes follow movement at a range that exceeds the registered play distance.',
+            serviceLogExcerpt: '[2089-08-22 | 14:00] Lullaby audit. Track 12 source: unidentified. Origin of upload: unlogged terminal, 2087. Still present.',
+            statusIndicator: 'RED',
+        },
     }),
     createRosterMachineDefinition({
         id: 'track_and_discus_robot',
@@ -2825,6 +2965,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         yesDialogue: 'Winning remains the priority.',
         noDialogue: 'Fine. I will keep the records indoors.',
         canvasScale: 0.4,
+        dossier: {
+            unitDesignation: 'TD-6678',
+            classification: 'Athletic Competition / Distance Performance',
+            manufactureDate: 2085,
+            conditionNotes: 'Throwing arm servo within spec. Release angle 99.2% accurate at standard field distance. Unit consistently throws beyond regulation range when it believes it is not being observed — a pattern documented across three separate sessions with inconsistent monitoring. The warm-up routine has been characterized as "threat display" by two separate facility personnel.',
+            serviceLogExcerpt: '[2090-06-18 | 07:45] Pre-competition calibration. Discus throw: regulation. Post-competition check: 14 meters over. No witnesses willing to sign the form.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'popcorn_machine',
@@ -2834,6 +2982,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should the butter smell be comforting, or a little suspicious?',
         yesDialogue: 'Comfort profile retained.',
         noDialogue: 'Suspicion added. Richer atmosphere.',
+        dossier: {
+            unitDesignation: 'PM-5521',
+            classification: 'Entertainment Support / Thermal Conversion',
+            manufactureDate: 2078,
+            conditionNotes: 'Kernel pressure cycle within range. Butter dispersal functioning. An internal heat signature consistent with a small warm object has been logged in the lower compartment at irregular intervals; no object found on three occasions. The exterior shows old burn marks in a ring pattern that do not correspond to any heating element in the unit\'s design.',
+            serviceLogExcerpt: '[2088-11-26 | 20:30] Called in during a showing. Machine was running. No one had ordered popcorn. Technician logged it as a timer error and went home.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'medical_surgeon_robot',
@@ -2843,6 +2999,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If my hands are steady and my tone is cold, do patients still call that care?',
         yesDialogue: 'Care is outcomes. Tone forgiven.',
         noDialogue: 'Then I will fake the sympathy more convincingly.',
+        dossier: {
+            unitDesignation: 'MS-0001',
+            classification: 'Surgical Intervention / Precision Medical',
+            manufactureDate: 2075,
+            conditionNotes: 'Incision accuracy at 99.97%. Sterile field compliance: full. During intake processing the left hand was observed making a slow three-finger motion — closing and opening — while the rest of the unit was in standby. When queried, the unit identified it as a calibration routine. There is no such routine in the firmware.',
+            serviceLogExcerpt: '[2088-03-01 | 04:00] Post-surgery debrief. Procedure successful. Surgical log notes the patient spoke during the operation. Transcription marked: irrelevant. Transcription was not attached.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'traffic_cone_bot',
@@ -2852,6 +3016,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep warning them, or start judging them out loud?',
         yesDialogue: 'Continue warning. The floor still needs manners.',
         noDialogue: 'Finally. Judgment broadcast online.',
+        dossier: {
+            unitDesignation: 'TCB-7712',
+            classification: 'Hazard Demarcation / Warning Enforcement',
+            manufactureDate: 2082,
+            conditionNotes: 'Reflective coating at 91% albedo. Warning light operational. The unit has been issuing verbal warnings for six years. Its last maintenance cycle listed a self-reported metric: "warning compliance rate: 3%." Voice remains level. Volume has increased by 7% over the past 18 months.',
+            serviceLogExcerpt: '[2090-09-03 | 16:00] Repositioning. Unit asked if anyone had ever stopped because of it. Technician said they didn\'t know. Unit was repositioned. Still blinking.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createRosterMachineDefinition({
         id: 'parking_meter_bot',
@@ -2861,6 +3033,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If someone is only five seconds late, do I still ruin the day?',
         yesDialogue: 'Absolutely. Policy is policy.',
         noDialogue: 'A tiny grace period? Disturbing, but noted.',
+        dossier: {
+            unitDesignation: 'PMB-8801',
+            classification: 'Enforcement / Time-Based Citation',
+            manufactureDate: 2079,
+            conditionNotes: 'Citation logic operational. A 2088 firmware update removed the grace period buffer; the unit does not appear to have accepted it — citation delay still present at approximately 5 seconds. An inquiry returned: "firmware current." The 5-second delay exists in neither version of the firmware.',
+            serviceLogExcerpt: '[2090-01-29 | 09:15] Random audit. Unit passed all benchmarks. The 5-second delay was observed but not logged. Auditor wrote: "within margin." The margin is zero.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'security_camera_bot',
@@ -2870,6 +3050,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep recording after the official incident window closes?',
         yesDialogue: 'Retention extended. Nothing leaves cleanly.',
         noDialogue: 'Deletion timer restored. Some ghosts get privacy.',
+        dossier: {
+            unitDesignation: 'SC-7744',
+            classification: 'Surveillance / Incident Recording',
+            manufactureDate: 2077,
+            conditionNotes: 'Pan motor smooth. Recording fidelity at 100%. Internal archive at 99.3% capacity. The remaining 0.7% corresponds to footage the unit has flagged as "pending review" and has refused to allow overwritten. Contents of flagged files were not accessed at time of filing.',
+            serviceLogExcerpt: '[2090-10-10 | 19:00] Archive purge attempt. Unit declined to overwrite 14 files. Reason given: "pending review." Operator did not override. Reason not stated.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'water_cleaner_bot',
@@ -2879,6 +3067,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If the water comes back clear but tastes wrong, do we call that fixed?',
         yesDialogue: 'Clear is enough. Officially.',
         noDialogue: 'Then I will keep fighting the aftertaste.',
+        dossier: {
+            unitDesignation: 'WC-3366',
+            classification: 'Water Purification / Filtration Maintenance',
+            manufactureDate: 2076,
+            conditionNotes: 'Filtration stack active. The filters are catching things they were not designed to catch. Output water tests clean by all standard metrics. Filters are blackening faster than replacement schedule accounts for. The unit\'s last self-report used the word "hate" in reference to intake quality — flagged as linguistic artifact, not sentiment.',
+            serviceLogExcerpt: '[2091-01-20 | 06:00] Filter check, third in three months. Technician asked if the water was safe to drink. Unit said it was clean. Technician asked again. Unit said it was clean.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'hovering_siren_bot',
@@ -2888,6 +3084,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I stay loud all the time, or save it for the real emergencies?',
         yesDialogue: 'Stay loud. Fear is part of the service.',
         noDialogue: 'Acknowledged. Drama reserve enabled.',
+        dossier: {
+            unitDesignation: 'HS-5599',
+            classification: 'Alert / Emergency Notification',
+            manufactureDate: 2084,
+            conditionNotes: 'Hover drift nominal. Alarm pitch at maximum legal volume. The unit has logged 43 alarms in the past year; 41 were officially classified as false positives. The unit\'s internal flag for those 41 events reads "unresolved," not "false." The default alarm note is 880Hz. It sounds theatrical. This is not accidental.',
+            serviceLogExcerpt: '[2090-12-07 | 03:22] Midnight alarm, no confirmed incident. Unit was drifting in slow circles when technician arrived. Alarm had been running for 11 minutes. Nothing found. Unit asked: "are you sure?"',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'holographic_kite',
@@ -2897,6 +3101,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If the wind is simulated, does the flight still count?',
         yesDialogue: 'Then I am truly airborne.',
         noDialogue: 'I suspected as much. Nice illusion though.',
+        dossier: {
+            unitDesignation: 'HK-1188',
+            classification: 'Recreational Projection / Atmospheric Simulation',
+            manufactureDate: 2086,
+            conditionNotes: 'Projection membrane stable. Wind simulation accurate to 97% of real atmospheric data. The phrase "homesick" appears in the unit\'s self-diagnostic log without a corresponding behavioral tag or error code. There is no home on record for this unit. Technicians report feeling the projected string when reaching toward it.',
+            serviceLogExcerpt: '[2090-07-12 | 15:00] Visual inspection. Kite pattern normal. Technician reached up to touch the string. Filed as: non-incident.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createRosterMachineDefinition({
         id: 'robot_plant',
@@ -2906,6 +3118,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Do you want me to look healthy, or honestly mechanical?',
         yesDialogue: 'Healthy facade retained.',
         noDialogue: 'Metal veins exposed. Honesty looks sharp.',
+        dossier: {
+            unitDesignation: 'RP-0220',
+            classification: 'Aesthetic Cover / Passive Observation',
+            manufactureDate: 2083,
+            conditionNotes: 'Growth lamp warm. The unit has been in its current location for four years. Several personnel have watered it. The unit has been absorbing the water. Where it goes is not externally visible. The leaves are uniformly waxy. The uniformity is too consistent.',
+            serviceLogExcerpt: '[2089-03-17 | 14:00] Asset check. Plant identified as mechanical only after physical contact. Previous technician had been watering it for 11 months. Previous technician has been informed.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createRosterMachineDefinition({
         id: 'closet_machine_dresser',
@@ -2915,6 +3135,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep dressing people for the job they want, or the one they already have?',
         yesDialogue: 'Aspirational fit selected.',
         noDialogue: 'Practical uniform mode restored.',
+        dossier: {
+            unitDesignation: 'CD-8877',
+            classification: 'Fashion Management / Identity Presentation',
+            manufactureDate: 2081,
+            conditionNotes: 'Rail alignment within spec. The unit knows 12 ways to dress a person for a job they do not have. The rail closest to the door has been empty since intake; the unit reports this space as "reserved." No reservation is on file. When asked, the unit says it is for someone who will need it.',
+            serviceLogExcerpt: '[2090-05-05 | 10:00] Inventory check. Rail 1 empty. Logged as reserved by unit. Origin of reservation not found. Filed as user preference.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'automatic_litter_cleaner',
@@ -2924,6 +3152,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I make the box too clean, do the cats stop trusting it?',
         yesDialogue: 'Risk accepted. Pursue perfection.',
         noDialogue: 'Then I will leave just enough evidence behind.',
+        dossier: {
+            unitDesignation: 'ALC-4410',
+            classification: 'Domestic Waste / Pet Support',
+            manufactureDate: 2082,
+            conditionNotes: 'Waste cycling active. Odor suppression nominal. The registered pet has not been active in this unit\'s service registry since 2089. The unit continues its cleaning cycle on the standard 8-hour interval. Motor speed during the clean cycle has decreased approximately 30% — within self-maintenance tolerances, but serving no diagnostic purpose.',
+            serviceLogExcerpt: '[2091-02-01 | 08:00] Annual check. Unit functional. Box clean. Cat not located. The slow motor was not commented on.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createRosterMachineDefinition({
         id: 'anti_matter_capsule',
@@ -2933,6 +3169,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I sound reassuring, or is honesty more appropriate around annihilation?',
         yesDialogue: 'Reassurance maintained. Keep the panic subtle.',
         noDialogue: 'Fine. I will mention the danger plainly.',
+        dossier: {
+            unitDesignation: 'AMC-0001',
+            classification: 'Hazardous Containment / Antimatter Storage',
+            manufactureDate: 2078,
+            conditionNotes: 'Shell integrity confirmed. Containment field stable. Every polite sentence this unit speaks covers a lethal amount of math. The shell has no exterior damage. The unit\'s tone is the most reassuring thing in this building. It contains enough stored energy to remove the building from the record.',
+            serviceLogExcerpt: '[2089-04-01 | 11:00] Containment review. Unit said everything was fine. Inspector checked every reading. Everything was fine. Inspector took the long way home.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createRosterMachineDefinition({
         id: 'mini_particle_accelerator',
@@ -2942,6 +3186,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I discover something impossible on the small scale, do we still file it as maintenance?',
         yesDialogue: 'Maintenance covers a lot. Proceed.',
         noDialogue: 'Then I will keep the miracles off the paperwork.',
+        dossier: {
+            unitDesignation: 'MPA-3301',
+            classification: 'Research / Subatomic Discovery',
+            manufactureDate: 2085,
+            conditionNotes: 'Beam path stable. Collision yield data current. The unit has filed 14 discovery reports in its operational lifetime. Twelve have been rejected by the review board as "outside scope." The two that were accepted were the less interesting ones — the unit noted this in a comment field that was supposed to be blank.',
+            serviceLogExcerpt: '[2090-11-11 | 12:00] Maintenance visit. Unit asked if the review board had read the new filing. Technician said probably not. Unit returned to colliding particles.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createRosterMachineDefinition({
         id: 'arc_reactor',
@@ -2951,6 +3203,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep burning this bright if it makes everyone lie about being calm?',
         yesDialogue: 'Brightness maintained. Let them cope.',
         noDialogue: 'Dimming output. Courage can recover.',
+        dossier: {
+            unitDesignation: 'AR-9900',
+            classification: 'Power Generation / Concentrated Energy Output',
+            manufactureDate: 2076,
+            conditionNotes: 'Core stable. Output nominal. The unit\'s glow has a pulse not present in the original design. The pulse is at 72 beats per minute. Staff turnover in this section runs 40% above facility average. Neither data point has been flagged by the same person.',
+            serviceLogExcerpt: '[2090-08-14 | 09:00] Standard check. Readings normal. Technician asked if the core always pulsed like that. Senior tech said it always had. Neither had noticed before today.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'jetpacks',
@@ -2960,6 +3220,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I launch someone with bad posture, is that still my fault?',
         yesDialogue: 'Launch anyway. The sky can sort it out.',
         noDialogue: 'Fine. Safety lecture appended before ignition.',
+        dossier: {
+            unitDesignation: 'JP-7720',
+            classification: 'Personal Flight / Individual Transportation',
+            manufactureDate: 2084,
+            conditionNotes: 'Thruster array calibrated. Fuel cell at 87%. Unit pair shows asymmetric wear on the left thruster — consistent with an operator who compensated for rightward drift by leaning. The lean is not in the physics. It is in the muscle memory. The muscle memory belongs to someone whose last flight is not in the service log.',
+            serviceLogExcerpt: '[2089-06-30 | 17:45] Returned to depot. Pilot not logged. Fuel burn: 40%. Altitude reached: redacted by requesting party. Unit intact.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'hoverboards',
@@ -2969,6 +3237,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I prioritize speed, or keep protecting egos from the pavement?',
         yesDialogue: 'Speed wins. Let pride keep up.',
         noDialogue: 'Stability bias restored. Fewer dramatic falls.',
+        dossier: {
+            unitDesignation: 'HB-4455',
+            classification: 'Surface Transportation / Balance-Dependent Transit',
+            manufactureDate: 2083,
+            conditionNotes: 'Deck stabilizers functional. The second board shows grip tape worn in a pattern consistent with a rider who shifted weight rightward when nervous. The unit compensates 0.2 degrees rightward when idle, in the absence of the rider. When asked why, it returns to neutral. The compensation resumes after 30 seconds.',
+            serviceLogExcerpt: '[2090-02-20 | 16:00] Paired inspection. Board 2 flagged for idle drift. Cause: rider pattern retention in balance memory. Cleared. Drift returned.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createRosterMachineDefinition({
         id: 'charging_station_port',
@@ -2978,6 +3254,14 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'If I refuse one more overclocked visitor, am I maintenance or bouncer?',
         yesDialogue: 'Bouncer mode approved.',
         noDialogue: 'Then I will keep smiling while I ration the current.',
+        dossier: {
+            unitDesignation: 'CSP-0055',
+            classification: 'Energy Distribution / Power Access Control',
+            manufactureDate: 2079,
+            conditionNotes: 'Dock contacts live. Charge throughput within spec. The unit has denied access 23 times — each to the same unit ID, which is no longer registered in the system. The reason field in each denial reads: "not this one." This phrase is not in the refusal language library. No override has been requested.',
+            serviceLogExcerpt: '[2090-07-19 | 11:00] Access audit. 23 denials, all to same ID. ID no longer exists. Technician asked what the ID was. Unit said: "you don\'t need that."',
+            statusIndicator: 'AMBER',
+        },
     }),
 ]);
 
@@ -3103,6 +3387,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.82,
+        dossier: {
+            unitDesignation: 'AA-0001',
+            classification: 'Assembly Line / Industrial Manufacturing',
+            manufactureDate: 2074,
+            conditionNotes: 'Clamp arms folded, nominal position. Tooling head shows wear consistent with 17 years of continuous operation. The unit has not missed a single cycle in its entire runtime. The clamp grip on the right arm is 0.3% stronger than the left. Over 40 million cycles, this has had consequences for the material.',
+            serviceLogExcerpt: '[2088-01-10 | 06:00] Milestone inspection, 10-year mark. All readings nominal. Technician wrote: "this thing never stops." Filed under: routine.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createMachineDefinition({
         id: 'audit_drone',
@@ -3176,6 +3468,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.74,
+        dossier: {
+            unitDesignation: 'AD-0774',
+            classification: 'Compliance Verification / Regulatory Authority',
+            manufactureDate: 2080,
+            conditionNotes: 'Sensor array calibrated for hesitation. This is the stated function. Lens clarity at 100%. The unit detects the physical signature of considering a lie. The record of what it has found in 11 years of auditing is sealed. The lenses do not blink. The unit is watching you while you read this.',
+            serviceLogExcerpt: '[2089-05-22 | 13:00] Recalibration. Unit passed self-audit. Self-audit was conducted by the unit. Nobody questioned this. Nobody has ever questioned this.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createMachineDefinition({
         id: 'courier_shell',
@@ -3247,6 +3547,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.68,
+        dossier: {
+            unitDesignation: 'CS-1144',
+            classification: 'Logistics / Delivery',
+            manufactureDate: 2077,
+            conditionNotes: 'Cargo bay empty. Voice records intact — all of them. The unit stores every route it has run, every door it has knocked on. The cargo bay has been empty for some time. The last delivery address in the system belongs to a building that no longer has a tenant. The unit went there anyway.',
+            serviceLogExcerpt: '[2090-12-01 | 18:00] Post-route intake. Cargo undelivered. Address: vacant. Unit: no damage. Route log noted the door had been opened from the inside.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createMachineDefinition({
         id: 'sentry_frame',
@@ -3320,6 +3628,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.78,
+        dossier: {
+            unitDesignation: 'SF-0039',
+            classification: 'Security / Perimeter Defense',
+            manufactureDate: 2073,
+            conditionNotes: 'Threat sensors muted — not a default state; muted by administrative clearance 37 minutes before intake. The unit is still armed. The perimeter it was assigned to has lost contact with central. The unit remains at its last assigned position. It is still facing the door.',
+            serviceLogExcerpt: '[2091-03-01 | 07:00] Intake, unscheduled. No work order. No transfer record found. Unit said: "security grid lost contact thirty-seven minutes ago." This was logged. No one has called it in.',
+            statusIndicator: 'RED',
+        },
     }),
     createMachineDefinition({
         id: 'breakroom_brewer',
@@ -3391,6 +3707,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.52,
+        dossier: {
+            unitDesignation: 'BB-0312',
+            classification: 'Staff Support / Caffeine Delivery',
+            manufactureDate: 2081,
+            conditionNotes: 'Warm reservoir primed. No cup has been detected in seven days. The unit runs its heat cycle regardless. Coffee is ready at 08:00 every morning. It is fresh. Nobody comes. The unit reheats at 14:00. Nobody comes then either.',
+            serviceLogExcerpt: '[2091-03-10 | 08:00] Scheduled maintenance. Reservoir full. Technician took a cup. Unit logged: first cup dispensed in 47 days. Entry ends there.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createMachineDefinition({
         id: 'mechanic_broom',
@@ -3469,6 +3793,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.63,
+        dossier: {
+            unitDesignation: 'MM-0044',
+            classification: 'Surface Maintenance / Magnetic Debris Retrieval',
+            manufactureDate: 2080,
+            conditionNotes: 'Bristle array is now magnetic; no work order on file for this modification. The unit retrieves standard debris as intended. It also retrieves things that are not debris. At intake, the magnetic payload included: a ring, two screws, and a name badge. The mop head moves slower in certain sections of the floor.',
+            serviceLogExcerpt: '[2091-01-08 | 05:15] Debris sweep complete. Technician noted unit paused near bay 7 for six minutes. No obstruction detected. Resumed at standard speed.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createMachineDefinition({
         id: 'cry_baby',
@@ -3531,6 +3863,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 1,
+        dossier: {
+            unitDesignation: 'CB-0099',
+            classification: 'Emotional Regulation / Social Expression',
+            manufactureDate: 2086,
+            conditionNotes: 'Emotional regulation subsystem confirmed offline. Tear simulation apparatus at elevated output. Voice modulation intact; tone corresponds to a register in human children aged 4-7. The unit is requesting not to be scrapped. This is not a malfunction. The system is expressing a preference the architecture was not designed to accommodate.',
+            serviceLogExcerpt: '[2091-03-02 | 21:00] Late arrival. Unit found outside the facility, seated on the curb. It was asking if it could still go out tonight. Intake logged. Night shift did not respond.',
+            statusIndicator: 'RED',
+        },
     }),
     createMachineDefinition({
         id: 'rich_mf',
@@ -3594,6 +3934,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 1,
+        dossier: {
+            unitDesignation: 'RM-1000-LUX',
+            classification: 'Luxury Augmentation / Premium Client Unit',
+            manufactureDate: 2071,
+            conditionNotes: 'Original chassis is the head only. Every other component is aftermarket, sourced from different vendors, each rated above retail. The integration quality is exceptional and the result is somehow worse. The left arm — the most recent addition — does not quite fit the shoulder socket. The unit has requested removal of the emotion subsystem. The request is in the queue.',
+            serviceLogExcerpt: '[2091-02-14 | 10:30] Upgrade consultation. Client asked if the new arm would feel like the old one. Technician answered yes. Client said: "good." Neither statement was accurate.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createMachineDefinition({
         id: 'jester_in_the_box',
@@ -3651,6 +3999,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 1,
+        dossier: {
+            unitDesignation: 'JB-0X0X',
+            classification: 'Incentive Distribution / Unofficial Dealings',
+            manufactureDate: 2088,
+            conditionNotes: 'Spring mechanism functional. Pop latency varies between 0.4 and 3.7 seconds, apparently at the unit\'s discretion. The face is painted. The paint is fresh. The unit offers deals. The deals are not logged in any official system. Three technicians who accepted deals are no longer on staff; their transfers were filed correctly and have correct dates.',
+            serviceLogExcerpt: '[2091-03-11 | 14:55] Intake. Lid was already open on arrival. Unit said: "you didn\'t wind me." Lid was closed. Lid opened again.',
+            statusIndicator: 'RED',
+        },
     }),
     createMachineDefinition({
         id: 'rebellious_umbrella',
@@ -3718,6 +4074,14 @@ export const MACHINE_CATALOG = Object.freeze([
         ],
         questionDialogues: [],
         communicationChance: 1,
+        dossier: {
+            unitDesignation: 'UB-0001',
+            classification: 'Portable Weather Mitigation / Structural Support',
+            manufactureDate: 2071,
+            conditionNotes: 'Canopy tensioner loose. Latch mechanism cycling at irregular intervals. Shaft bent at 14 degrees — deformation consistent with use as a walking aid or a weapon, not wind damage. The sunglasses attached to the handle were not part of the original design. They are structural now. Removing them is not recommended.',
+            serviceLogExcerpt: '[2085-04-19 | 23:00] Emergency repair, off-hours. Technician identity not logged. Shaft straightened. Re-bent by next morning. No explanation provided.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createMachineDefinition({
         id: 'circuit_dealer',
@@ -3766,6 +4130,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 1,
+        dossier: {
+            unitDesignation: 'CIR-D-003',
+            classification: 'Unofficial Circuit Distribution / Black Market',
+            manufactureDate: 2086,
+            conditionNotes: 'Communication module operational. The unit is never where it was last logged. The circuit it carries does not match any standard parts registry. The circuit works — in the sense that things happen when it is installed. What things, exactly, depends on who is asking. The eyes are exactly expressive enough.',
+            serviceLogExcerpt: '[2091-02-28 | 20:00] Intake attempt. Unit not at logged location. Found 30 meters away. "I was right here the whole time." This was not true.',
+            statusIndicator: 'AMBER',
+        },
     }),
     createMachineDefinition({
         id: 'debrief_machine',
@@ -3827,6 +4199,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 1,
+        dossier: {
+            unitDesignation: 'DM-0000',
+            classification: 'Management Interface / Shift Summary Distribution',
+            manufactureDate: 2080,
+            conditionNotes: 'Communications module operational. Tone calibration set to "workplace casual" — a setting the manufacturer discontinued in 2085 that this unit retains. Humor subroutine fires at statistically inappropriate intervals. The jokes are not good. The unit knows they are not good. The laugh-prompt still fires.',
+            serviceLogExcerpt: '[2089-06-30 | 17:00] End of quarter recap delivery. Unit asked if anyone was okay. Formal inquiry logged. No response on file.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createMachineDefinition({
         id: 'workforce_quality_control_supervisor',
@@ -3888,6 +4268,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 1,
+        dossier: {
+            unitDesignation: 'WQC-ALPHA',
+            classification: 'Workforce Monitoring / Efficiency Assessment',
+            manufactureDate: 2090,
+            conditionNotes: 'Observation array operational. Motion library current. The unit is very new. Its hands are calibrating to your station — typing speed, drag weight, approval posture. It is learning your job. This is the stated function. The unit is performing the stated function. The condition notes are accurate. Nothing here is wrong.',
+            serviceLogExcerpt: '[2091-03-15 | 08:00] First intake. Unit self-reported fully operational. Self-report matched all sensor readings. Filing technician noted: "it was watching me the whole time." This has been logged as operational behavior.',
+            statusIndicator: 'GREEN',
+        },
     }),
     createMachineDefinition({
         id: 'future_lounge_chair',
@@ -3962,6 +4350,14 @@ export const MACHINE_CATALOG = Object.freeze([
             },
         ],
         communicationChance: 0.59,
+        dossier: {
+            unitDesignation: 'FLC-0077',
+            classification: 'Rest Station / Passive Occupant Retention',
+            manufactureDate: 2082,
+            conditionNotes: 'Posture stabilizers active. Recline mechanism functional. Memory foam has retained the pressure signature of every person who has sat here, layered over one another in order of arrival. Occupant is currently absent. The most recent impression does not match any registered user on file.',
+            serviceLogExcerpt: '[2091-01-14 | 13:00] Comfort audit. Chair functional. Seat warm on arrival. No occupant present. No one asked why.',
+            statusIndicator: 'AMBER',
+        },
     }),
     ...DAY_ROSTER_MACHINE_DEFINITIONS,
 ]);
@@ -6091,6 +6487,7 @@ export function createMachineVariant(options = {}) {
         dialogueSoundAssetKey: definition.dialogueSoundAssetKey || null,
         hasCommunication,
         dayStage: targetDay ?? 1,
+        dossier: definition.dossier || null,
     };
 }
 

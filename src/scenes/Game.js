@@ -2536,11 +2536,29 @@ export default class GameScene extends Phaser.Scene {
                 ]
                 : [];
 
+            const d = machineVariant.dossier;
+            const dossierLines = d
+                ? [
+                    '────────────────────────',
+                    `UNIT: ${d.unitDesignation}`,
+                    `CLASS: ${d.classification}`,
+                    `MFR: ${d.manufactureDate}`,
+                    `STATUS: ${d.statusIndicator}`,
+                    '────────────────────────',
+                    d.conditionNotes,
+                    '',
+                    `LOG: ${d.serviceLogExcerpt}`,
+                    '────────────────────────',
+                    '',
+                ]
+                : [];
+
             view.header = machineVariant.name.toUpperCase();
             view.body = [
                 `UNIT: ${this._currentCase?.id || 'UNKNOWN'}`,
                 `MODEL: ${machineVariant.name}`,
                 '',
+                ...dossierLines,
                 `GRID: ${gridState}`,
                 `COMMS: ${commsLine}`,
                 `FLOW: ${flowLine}`,
