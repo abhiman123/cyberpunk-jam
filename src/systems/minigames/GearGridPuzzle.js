@@ -852,7 +852,7 @@ export default class GearGridPuzzle extends MinigameBase {
         const spinTargets = visual.spinMode === 'paired'
             ? [
                 { rotator: visual.primaryRotator, direction: safeDirection },
-                { rotator: visual.secondaryRotator, direction: safeDirection },
+                { rotator: visual.secondaryRotator, direction: -safeDirection },
             ]
             : [
                 { rotator: visual.primaryRotator, direction: safeDirection },

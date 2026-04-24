@@ -561,8 +561,64 @@ export default class MachinePuzzleOverlay {
         }
     }
 
+    _drawCircuitLine(graphics, startX, startY, endX, endY, color, width, alpha = 1) {
+        graphics.lineStyle(width, color, alpha);
+        graphics.beginPath();
+        graphics.moveTo(startX, startY);
+        graphics.lineTo(endX, endY);
+        graphics.strokePath();
+    }
+
+    _drawCircuitRing(graphics, x, y, radius, color, width, alpha = 1, centerDot = false) {
+        graphics.lineStyle(width, color, alpha);
+        graphics.strokeCircle(x, y, radius);
+        if (centerDot) {
+            graphics.fillStyle(color, alpha);
+            graphics.fillCircle(x, y, Math.max(1, radius * 0.28));
+        }
+    }
+
+    _drawCircuitPipPattern(graphics, count, sectionOffsetY, color, { glow = false } = {}) {
+        const lineWidth = glow ? 8 : 4;
+        const ringWidth = glow ? 6 : 3;
+        const alpha = glow ? 0.28 : 1;
+
+        switch (count) {
+        case 1:
+            this._drawCircuitLine(graphics, -12, sectionOffsetY - 14, -12, sectionOffsetY + 14, color, lineWidth, alpha);
+            this._drawCircuitLine(graphics, 12, sectionOffsetY - 14, 12, sectionOffsetY + 14, color, lineWidth, alpha);
+            break;
+        case 2:
+            this._drawCircuitRing(graphics, 0, sectionOffsetY, glow ? 18 : 16, color, ringWidth, alpha);
+            break;
+        case 3:
+            this._drawCircuitLine(graphics, -20, sectionOffsetY + 6, -4, sectionOffsetY + 22, color, lineWidth, alpha);
+            this._drawCircuitLine(graphics, -4, sectionOffsetY - 8, 12, sectionOffsetY + 8, color, lineWidth, alpha);
+            this._drawCircuitLine(graphics, 12, sectionOffsetY - 22, 28, sectionOffsetY - 6, color, lineWidth, alpha);
+            break;
+        case 4:
+            this._drawCircuitRing(graphics, -14, sectionOffsetY - 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
+            this._drawCircuitRing(graphics, 14, sectionOffsetY - 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
+            this._drawCircuitRing(graphics, -14, sectionOffsetY + 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
+            this._drawCircuitRing(graphics, 14, sectionOffsetY + 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
+            break;
+        default:
+            break;
+        }
+    }
+
     _drawPips(graphics, count, isTopHalf, shouldGlow, glowColor = 0xfff2a3, pipColor = 0xf4d850) {
         if (!count || count <= 0) return;
+
+        const sectionOffsetY = isTopHalf ? -(MACHINE_PUZZLE.dominoHeight / 4) : (MACHINE_PUZZLE.dominoHeight / 4);
+
+        if (count >= 1 && count <= 4) {
+            if (shouldGlow) {
+                this._drawCircuitPipPattern(graphics, count, sectionOffsetY, glowColor, { glow: true });
+            }
+            this._drawCircuitPipPattern(graphics, count, sectionOffsetY, pipColor, { glow: false });
+            return;
+        }
 
         const localPositions = [
             { x: 0, y: 0 },
@@ -575,8 +631,6 @@ export default class MachinePuzzleOverlay {
             { x: 0, y: -18 },
             { x: 0, y: 18 },
         ];
-
-        const sectionOffsetY = isTopHalf ? -(MACHINE_PUZZLE.dominoHeight / 4) : (MACHINE_PUZZLE.dominoHeight / 4);
         const pipCount = Math.min(count, localPositions.length);
 
         if (shouldGlow) {

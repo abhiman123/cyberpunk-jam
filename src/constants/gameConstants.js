@@ -78,6 +78,8 @@ export const SOUND_ASSETS = Object.freeze({
     fuseConnect: createSoundAsset('sfx', 'sfx_fuse_connect', 'sfx_fuse_connect_electric.wav'),
     circuitLock: createSoundAsset('sfx', 'sfx_circuit_lock', 'sfx_circuit_lock.wav'),
     circuitPower: createSoundAsset('sfx', 'sfx_circuit_power', 'sfx_circuit_power_charge.wav'),
+    lightBulbHum: createSoundAsset('sfx', 'sfx_light_bulb_hum', 'sfx_light_bulb_hum.wav'),
+    lightBulbFlicker: createSoundAsset('sfx', 'sfx_light_bulb_flicker', 'sfx_light_bulb_flicker.wav'),
 
     managerMusic: createSoundAsset('music', 'music_manager', 'music_manager.mp3'),
     clockingInMusic: createSoundAsset('music', 'music_clocking_in', 'music_clocking_in.mp3'),
@@ -148,6 +150,8 @@ export const SOUND_VOLUMES = Object.freeze({
     phoneRing: 0.8,
     phoneRinging: 0.6,
     voice: 0.9,
+    lightBulbHum: 0.2,
+    lightBulbFlicker: 0.42,
     music: 0.7,
 });
 
