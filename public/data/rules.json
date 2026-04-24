@@ -2,7 +2,7 @@
   {
     "id": 1,
     "period": 1,
-    "text": "DAY 1: Scrap units with an unwinnable subsystem.",
+    "text": "DAY 1: Scrap units with irreparable subsystems.",
     "details": [
       "[GRID] Place dominos so every charge cell pip matches its required value. == links require equal pips. < group regions must stay under their threshold. Isolated charge cells boxed in by walls = SCRAP.",
       "[FLOW] Route power from the source to every required subsystem. Dead-end paths or a missing first link = SCRAP.",
