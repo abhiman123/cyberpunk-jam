@@ -81,6 +81,7 @@ export const SOUND_ASSETS = Object.freeze({
 
     managerMusic: createSoundAsset('music', 'music_manager', 'music_manager.mp3'),
     clockingInMusic: createSoundAsset('music', 'music_clocking_in', 'music_clocking_in.mp3'),
+    corporateMusic: createSoundAsset('music', 'music_corporate', 'music_corporate.mp3'),
     workdayMusic: createSoundAsset('music', 'music_workday', 'music_workday.mp3'),
     cuttingItCloseMusic: createSoundAsset('music', 'music_cutting_it_close', 'music_cutting_it_close.mp3'),
     paydayMusic: createSoundAsset('music', 'music_payday', 'music_payday.mp3'),
@@ -111,6 +112,7 @@ export const SOUND_ASSETS = Object.freeze({
  */
 const SOUND_ASSETS_ON_DISK = new Set([
     'inspectionReveal',
+    'corporateMusic',
     'workdayMusic',
     'cuttingItCloseMusic',
     'paydayMusic',
@@ -293,7 +295,7 @@ export function getOpeningPhoneCallSequence(day = 1) {
 
 export const MACHINE_PRESENTATION = Object.freeze({
     conveyorEntryX: 1380,
-    conveyorTargetX: 660,
+    conveyorTargetX: 700,
     conveyorExitX: -210,
     conveyorSpeedPxPerSecond: 420,
     blueprintOriginX: 962,

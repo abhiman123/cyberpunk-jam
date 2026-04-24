@@ -103,8 +103,8 @@ export default class BriefingScene extends Phaser.Scene {
 
         this._music = null;
         const musicVolume = getMusicVolume();
-        if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.managerMusic.key)) {
-            this._music = this.sound.add(SOUND_ASSETS.managerMusic.key, { loop: true, volume: 0 });
+        if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.paydayMusic.key)) {
+            this._music = this.sound.add(SOUND_ASSETS.paydayMusic.key, { loop: true, volume: 0 });
             this._music.play();
             this.tweens.add({ targets: this._music, volume: SOUND_VOLUMES.music * musicVolume, duration: 800 });
         }
