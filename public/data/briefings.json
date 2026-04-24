@@ -1,15 +1,15 @@
 [
   {
     "period": 1, "day": 1, "managerType": "human",
-    "text": "Morning. Welcome to Unit Processing. Your job is simple — inspect what comes down the belt, follow the rulebook, make the right call. Three rules today. Read them. Clock starts when you hit Acknowledged."
+    "text": "Morning. Welcome to Unit Processing. Your job is simple: inspect what comes down the belt, follow the rulebook, and make the right call. Three rules today. Read them. The clock starts when you hit Acknowledged."
   },
   {
     "period": 1, "day": 2, "managerType": "human",
-    "text": "Good shift yesterday. No complaints from QC. Same three rules apply — nothing new today. Stay focused. The belt doesn't slow down for second-guessing."
+    "text": "Good shift yesterday. No complaints from QC. The same three rules apply — nothing new today. Stay focused. The belt doesn't slow down for second-guessing."
   },
   {
     "period": 2, "day": 1, "managerType": "human",
-    "text": "New directives. Rule 4: anything manufactured before 2087 goes to scrap. Doesn't matter if it looks fine. Rule 5: MODIFIED units need a supervisor override code in the log. No code? Scrap. Questions? Good."
+    "text": "New directives. Rule 4: Anything manufactured before 2087 goes to scrap. It doesn't matter if it looks fine. Rule 5: MODIFIED units need a supervisor override code in the log. No code? Scrap. Questions? Good."
   },
   {
     "period": 2, "day": 2, "managerType": "human",

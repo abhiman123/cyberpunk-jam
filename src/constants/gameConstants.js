@@ -205,11 +205,11 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             continueStatus: 'CALL COMPLETE // PRESS EITHER BUTTON',
             postVoiceBody: 'Day 1 loaded. Tap either button to continue.',
             intro: [
-                createIntroSequenceLine('line1', 'Heyyy, welcome back. Another day, another penny, am I right', SOUND_ASSETS.phoneIntroLine1),
-                createIntroSequenceLine('line2', '...you remember the job right? First day is simple. If a subsystem is obviously unsalvageable, you scrap it.', SOUND_ASSETS.phoneIntroLine2),
+                createIntroSequenceLine('line1', 'Hey, welcome back. Another day, another penny, am I right?', SOUND_ASSETS.phoneIntroLine1),
+                createIntroSequenceLine('line2', '...You remember the job, right? First day is simple. If a subsystem is obviously unsalvageable, you scrap it.', SOUND_ASSETS.phoneIntroLine2),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Alright sweety, cuz I do not.', SOUND_ASSETS.phoneIntroNoLine3),
+                createIntroSequenceLine('line3', 'Alright, sweetie, because I do not.', SOUND_ASSETS.phoneIntroNoLine3),
                 createIntroSequenceLine('line4', 'Day one is just repair versus obvious scrap. Do not invent extra paperwork for yourself.', SOUND_ASSETS.phoneIntroNoLine4),
             ],
             no: [
