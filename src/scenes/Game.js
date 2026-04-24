@@ -7458,7 +7458,7 @@ export default class GameScene extends Phaser.Scene {
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorTargetX,
             duration: tweenDurationMs,
-            ease: 'Cubic.Out',
+            ease: 'Linear',
             onComplete: () => {
                 this._unitMoveTween = null;
                 this._emitSequenceDebug('machine arrived', {
@@ -7532,19 +7532,19 @@ export default class GameScene extends Phaser.Scene {
             }
             : {
                 targets: this._unitContainer,
-                x: 1490,
+                x: MACHINE_PRESENTATION.conveyorExitX,
                 duration: 500,
-                ease: 'Cubic.In',
+                ease: 'Linear',
             };
 
         if (this._pendingExitAction !== 'scrap') {
-            const travelDistance = Math.abs(1490 - this._unitContainer.x);
+            const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorExitX - this._unitContainer.x);
             const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
             if (conveyorLayers.length > 0) {
                 this._conveyorAnimTween?.stop();
                 this._conveyorAnimTween = this.tweens.add({
                     targets: conveyorLayers,
-                    tilePositionX: `-=${travelDistance}`,
+                    tilePositionX: `+=${travelDistance}`,
                     duration: 500,
                     ease: 'Linear',
                 });

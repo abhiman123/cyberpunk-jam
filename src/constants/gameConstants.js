@@ -293,7 +293,8 @@ export function getOpeningPhoneCallSequence(day = 1) {
 
 export const MACHINE_PRESENTATION = Object.freeze({
     conveyorEntryX: 1380,
-    conveyorTargetX: 700,
+    conveyorTargetX: 660,
+    conveyorExitX: -210,
     conveyorSpeedPxPerSecond: 420,
     blueprintOriginX: 962,
     blueprintOriginY: 206,
