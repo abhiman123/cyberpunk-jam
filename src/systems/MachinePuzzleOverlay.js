@@ -1094,8 +1094,16 @@ export default class MachinePuzzleOverlay {
             fillColor = inspectionFault.kind === 'hazard' ? 0x5d241f : 0x4f341f;
             strokeColor = inspectionFault.kind === 'hazard' ? 0xff8e7f : 0xffd08a;
         } else if (baseValue === CELL_WALL) {
-            fillColor = 0x74614b;
-            strokeColor = 0xc6af8c;
+            // NYT-style: walls are the negative space around the board — hide
+            // the cell rectangle entirely so the shape's outline reads clearly.
+            cellView.baseRect.setFillStyle(0x000000, 0);
+            cellView.baseRect.setStrokeStyle(0, 0x000000, 0);
+            cellView.matchRect.setFillStyle(0x000000, 0);
+            cellView.matchRect.setStrokeStyle(0, 0x000000, 0);
+            cellView.previewRect.setFillStyle(0x000000, 0);
+            cellView.previewRect.setStrokeStyle(0, 0x000000, 0);
+            cellView.valueText.setText('');
+            return;
         } else if (chargeLevel > 0) {
             fillColor = isMatchedCharge ? 0x7e8832 : 0x4d5a2f;
             strokeColor = isMatchedCharge ? 0xfff0b5 : 0xe0dc92;
@@ -1260,48 +1268,77 @@ export default class MachinePuzzleOverlay {
     _refreshEqualLinkLines() {
         this._equalLinkGfx.clear();
 
+        const drawGoldRod = (start, end, isMatched, options = {}) => {
+            const haloColor = options.haloColor ?? (isMatched ? 0xfff7c8 : 0xffe39a);
+            const coreColor = options.coreColor ?? (isMatched ? 0xfff0a8 : 0xf2c34a);
+            const capColor = options.capColor ?? (isMatched ? 0xffffff : 0xffe9a8);
+            const haloAlpha = isMatched ? 0.55 : 0.28;
+            const coreAlpha = isMatched ? 1 : 0.92;
+            const haloWidth = isMatched ? 14 : 11;
+            const coreWidth = isMatched ? 8 : 6;
+
+            // outer halo
+            this._equalLinkGfx.lineStyle(haloWidth, haloColor, haloAlpha);
+            this._equalLinkGfx.lineBetween(start.x, start.y, end.x, end.y);
+
+            // solid gold core
+            this._equalLinkGfx.lineStyle(coreWidth, coreColor, coreAlpha);
+            this._equalLinkGfx.lineBetween(start.x, start.y, end.x, end.y);
+
+            // rod end-caps
+            const capRadius = Math.ceil(coreWidth / 2);
+            this._equalLinkGfx.fillStyle(capColor, coreAlpha);
+            this._equalLinkGfx.fillCircle(start.x, start.y, capRadius);
+            this._equalLinkGfx.fillCircle(end.x, end.y, capRadius);
+            this._equalLinkGfx.fillStyle(coreColor, coreAlpha);
+            this._equalLinkGfx.fillCircle(start.x, start.y, Math.max(1, capRadius - 1));
+            this._equalLinkGfx.fillCircle(end.x, end.y, Math.max(1, capRadius - 1));
+        };
+
         this._puzzleState.getEqualLinkPairs().forEach((pair) => {
             const isMatched = !this._powerEffectsSuspended && pair.matched;
             const start = this._getCellCenter(pair.a.row, pair.a.col);
             const end = this._getCellCenter(pair.b.row, pair.b.col);
-            const lineColor = isMatched ? 0xfff2b8 : 0xe4d06b;
-            const glowColor = isMatched ? 0xfff8cf : 0xf0db86;
+            drawGoldRod(start, end, isMatched);
 
-            this._equalLinkGfx.lineStyle(isMatched ? 4 : 2, glowColor, isMatched ? 0.65 : 0.24);
-            this._equalLinkGfx.beginPath();
-            this._equalLinkGfx.moveTo(start.x, start.y);
-            this._equalLinkGfx.lineTo(end.x, end.y);
-            this._equalLinkGfx.strokePath();
-
-            this._equalLinkGfx.lineStyle(isMatched ? 2 : 1, lineColor, isMatched ? 0.95 : 0.82);
-            this._equalLinkGfx.beginPath();
-            this._equalLinkGfx.moveTo(start.x, start.y);
-            this._equalLinkGfx.lineTo(end.x, end.y);
-            this._equalLinkGfx.strokePath();
+            // center "=" badge so players read the constraint as a constraint
+            const midX = (start.x + end.x) / 2;
+            const midY = (start.y + end.y) / 2;
+            const badgeR = isMatched ? 9 : 8;
+            const badgeColor = isMatched ? 0x332a12 : 0x2a2210;
+            const badgeStroke = isMatched ? 0xfff7c8 : 0xffdf85;
+            this._equalLinkGfx.fillStyle(badgeColor, 0.92);
+            this._equalLinkGfx.fillCircle(midX, midY, badgeR);
+            this._equalLinkGfx.lineStyle(2, badgeStroke, 1);
+            this._equalLinkGfx.strokeCircle(midX, midY, badgeR);
+            this._equalLinkGfx.lineStyle(2, badgeStroke, 1);
+            this._equalLinkGfx.lineBetween(midX - 4, midY - 2, midX + 4, midY - 2);
+            this._equalLinkGfx.lineBetween(midX - 4, midY + 2, midX + 4, midY + 2);
         });
 
         this._puzzleState.getNotEqualLinkPairs?.().forEach((pair) => {
             const isMatched = !this._powerEffectsSuspended && pair.matched;
             const start = this._getCellCenter(pair.a.row, pair.a.col);
             const end = this._getCellCenter(pair.b.row, pair.b.col);
-            const lineColor = isMatched ? 0xffc9b7 : 0xff8b76;
-            const glowColor = isMatched ? 0xffe6da : 0xffb19c;
             const midX = (start.x + end.x) / 2;
             const midY = (start.y + end.y) / 2;
+            drawGoldRod(start, end, isMatched, {
+                haloColor: isMatched ? 0xffe0d1 : 0xffb19c,
+                coreColor: isMatched ? 0xffc9b7 : 0xff8b76,
+                capColor: isMatched ? 0xffffff : 0xffd0c0,
+            });
 
-            this._equalLinkGfx.lineStyle(isMatched ? 4 : 2, glowColor, isMatched ? 0.65 : 0.24);
-            this._equalLinkGfx.beginPath();
-            this._equalLinkGfx.moveTo(start.x, start.y);
-            this._equalLinkGfx.lineTo(end.x, end.y);
-            this._equalLinkGfx.strokePath();
-
-            this._equalLinkGfx.lineStyle(isMatched ? 2 : 1, lineColor, isMatched ? 0.95 : 0.82);
-            this._equalLinkGfx.beginPath();
-            this._equalLinkGfx.moveTo(start.x, start.y);
-            this._equalLinkGfx.lineTo(end.x, end.y);
-            this._equalLinkGfx.strokePath();
-            this._equalLinkGfx.lineBetween(midX - 7, midY - 7, midX + 7, midY + 7);
-            this._equalLinkGfx.lineBetween(midX + 7, midY - 7, midX - 7, midY + 7);
+            // X badge for inequality
+            const badgeR = isMatched ? 9 : 8;
+            const badgeColor = isMatched ? 0x301810 : 0x241108;
+            const badgeStroke = isMatched ? 0xffe0d1 : 0xff8b76;
+            this._equalLinkGfx.fillStyle(badgeColor, 0.92);
+            this._equalLinkGfx.fillCircle(midX, midY, badgeR);
+            this._equalLinkGfx.lineStyle(2, badgeStroke, 1);
+            this._equalLinkGfx.strokeCircle(midX, midY, badgeR);
+            this._equalLinkGfx.lineStyle(2, badgeStroke, 1);
+            this._equalLinkGfx.lineBetween(midX - 4, midY - 4, midX + 4, midY + 4);
+            this._equalLinkGfx.lineBetween(midX + 4, midY - 4, midX - 4, midY + 4);
         });
 
         this._panel?.bringToTop(this._equalLinkGfx);

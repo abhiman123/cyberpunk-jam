@@ -272,28 +272,60 @@ function addFlowConnection(tiles, fromX, fromY, toX, toY) {
     tiles[toY][toX]._dirs.add(step.opposite);
 }
 
-function addStandardFlowServiceLoop(tiles) {
-    const loopPath = [
-        [1, 1],
-        [2, 1],
-        [3, 1],
-        [3, 2],
-        [3, 3],
-        [2, 3],
-        [1, 3],
-        [1, 2],
-        [1, 1],
-    ];
+// Adds a minimal 3-cell arch detour around a single path cell. The forbidden
+// cell is placed on the arched-over path segment; players must restore flow
+// by rotating tiles onto the detour. The detour creates exactly one
+// alternative route (vs. the old 3x3 service loop that created many). Returns
+// the bypassed cell (the natural forbidden-cell target) or null if no clean
+// detour fits anywhere on the current path.
+function addCompactFlowBypass(tiles, sourceRow, cols, rows, seededRandom) {
+    const isEmpty = (x, y) => {
+        if (x < 0 || y < 0 || x >= cols || y >= rows) return false;
+        return tiles[y][x]._dirs.size === 0;
+    };
+    const hasHorizontalThrough = (x, y) => {
+        const cell = tiles[y]?.[x];
+        if (!cell) return false;
+        return cell._dirs.has('E') && cell._dirs.has('W');
+    };
 
-    for (let index = 0; index < loopPath.length - 1; index += 1) {
-        addFlowConnection(
-            tiles,
-            loopPath[index][0],
-            loopPath[index][1],
-            loopPath[index + 1][0],
-            loopPath[index + 1][1],
-        );
+    // Look anywhere on the board for a cell that has horizontal flow and
+    // enough empty cells directly above or below to carve a 3-cell arch.
+    const candidates = [];
+    for (let y = 0; y < rows; y += 1) {
+        for (let x = 1; x <= cols - 2; x += 1) {
+            if (!hasHorizontalThrough(x, y)) continue;
+            if (!hasHorizontalThrough(x - 1, y) && !hasHorizontalThrough(x + 1, y)) continue;
+
+            const above = y - 1;
+            const below = y + 1;
+
+            if (above >= 0
+                && isEmpty(x - 1, above)
+                && isEmpty(x, above)
+                && isEmpty(x + 1, above)) {
+                candidates.push({ x, baseY: y, detourRow: above });
+            }
+            if (below < rows
+                && isEmpty(x - 1, below)
+                && isEmpty(x, below)
+                && isEmpty(x + 1, below)) {
+                candidates.push({ x, baseY: y, detourRow: below });
+            }
+        }
     }
+
+    if (candidates.length === 0) return null;
+    const pick = candidates[Math.floor(seededRandom() * candidates.length) % candidates.length];
+    const { x, baseY, detourRow } = pick;
+
+    // Carve the arch: (x-1,baseY) ↕ (x-1,detourRow) → (x,detourRow) → (x+1,detourRow) ↕ (x+1,baseY)
+    addFlowConnection(tiles, x - 1, baseY, x - 1, detourRow);
+    addFlowConnection(tiles, x - 1, detourRow, x, detourRow);
+    addFlowConnection(tiles, x, detourRow, x + 1, detourRow);
+    addFlowConnection(tiles, x + 1, detourRow, x + 1, baseY);
+
+    return { x, y: baseY };
 }
 
 function getFlowConnectedNeighbors(tiles, x, y) {
@@ -677,15 +709,30 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
     const outputRows = Object.keys(outputs || {}).map(Number).sort((left, right) => left - right);
     const seededRandom = createSeededRandom(`${previewTitle}:${sourceRow}:${outputRows.join(',')}`);
 
-    outputRows.forEach((outRow, index) => {
+    const nonTrunkOutputs = outputRows.filter((row) => row !== sourceRow);
+    const availableBranchCols = [];
+    for (let col = 1; col <= FLOW_TILE_COLS - 2; col += 1) availableBranchCols.push(col);
+    // Pick distinct, shuffled branch columns so boards look different and no
+    // two outputs share a vertical branch line.
+    const shuffledCols = [...availableBranchCols].sort(() => seededRandom() - 0.5);
+    const branchColByOutput = new Map();
+    nonTrunkOutputs.forEach((row, index) => {
+        branchColByOutput.set(row, shuffledCols[index % shuffledCols.length]);
+    });
+
+    outputRows.forEach((outRow) => {
         const branchCol = outRow === sourceRow
             ? FLOW_TILE_COLS - 1
-            : Math.min(1 + index, FLOW_TILE_COLS - 2);
+            : branchColByOutput.get(outRow);
         carveFlowPath(tiles, sourceRow, outRow, FLOW_TILE_COLS, branchCol);
     });
 
     if (forbiddenCount > 0) {
-        addStandardFlowServiceLoop(tiles);
+        // Up to two compact arch detours — one per forbidden cell — instead of
+        // the old 3x3 service loop that created multiple redundant routes.
+        for (let index = 0; index < forbiddenCount; index += 1) {
+            if (!addCompactFlowBypass(tiles, sourceRow, FLOW_TILE_COLS, FLOW_TILE_ROWS, seededRandom)) break;
+        }
     }
 
     const forbidden = buildSafeForbiddenCells(tiles, sourceRow, outputRows, forbiddenCount, seededRandom);
@@ -719,11 +766,33 @@ function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWE
     ));
     const seededRandom = createSeededRandom(`${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}`);
 
+    // Assign each non-trunk output a distinct, shuffled branch column so no
+    // two outputs share a vertical branch line.
+    const bySource = new Map();
+    outputSpecs.forEach((spec, index) => {
+        const source = sources.find((cand) => cand.key === spec.sourceKey) || sources[index % sources.length];
+        const key = source.key;
+        if (!bySource.has(key)) bySource.set(key, { source, specs: [] });
+        bySource.get(key).specs.push(spec);
+    });
+    const branchColBySpec = new Map();
+    bySource.forEach(({ source, specs }) => {
+        const cols = [];
+        for (let col = 1; col <= safeCols - 2; col += 1) cols.push(col);
+        const shuffled = cols.sort(() => seededRandom() - 0.5);
+        let nextCol = 0;
+        specs.forEach((spec) => {
+            if (spec.row === source.row) return;
+            branchColBySpec.set(spec, shuffled[nextCol % shuffled.length]);
+            nextCol += 1;
+        });
+    });
+
     outputSpecs.forEach((outputSpec, index) => {
         const source = sources.find((candidate) => candidate.key === outputSpec.sourceKey) || sources[index % sources.length];
         const branchCol = outputSpec.row === source.row
             ? safeCols - 1
-            : Math.min(1 + (index % Math.max(1, safeCols - 2)), safeCols - 2);
+            : (branchColBySpec.get(outputSpec) ?? Math.min(1 + index, safeCols - 2));
         carveFlowPath(tiles, source.row, outputSpec.row, safeCols, branchCol);
     });
 
@@ -5558,53 +5627,62 @@ function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePl
  * charge cell that must be covered by a domino spanning it).
  */
 function greedyTileGrid(grid, openKeys, randomFn) {
-    const used = new Set();
-    const pairs = [];
-
-    // Shuffle the candidate list so we get different tilings each run.
-    const candidates = [...openKeys].sort(() => randomFn() - 0.5);
-
-    for (const key of candidates) {
-        if (used.has(key)) continue;
+    // Proper domino tiling via bipartite perfect matching (Hopcroft-Karp-ish
+    // with randomized neighbor order). The grid is bipartite under the
+    // checkerboard coloring — a perfect matching is a perfect tiling. This
+    // replaces a purely greedy tiler that failed on most irregular shapes.
+    const nodes = [...openKeys];
+    if (nodes.length === 0) return [];
+    const indexByKey = new Map(nodes.map((key, idx) => [key, idx]));
+    const isWhite = nodes.map((key) => {
         const [r, c] = key.split(',').map(Number);
-
-        // Try to pair with a random neighbor: right, down, left, up.
-        const dirs = [
+        return (r + c) % 2 === 0;
+    });
+    const neighbors = nodes.map((key) => {
+        const [r, c] = key.split(',').map(Number);
+        const list = [
             [r, c + 1], [r + 1, c], [r, c - 1], [r - 1, c],
         ].sort(() => randomFn() - 0.5);
-
-        let paired = false;
-        for (const [nr, nc] of dirs) {
+        const result = [];
+        for (const [nr, nc] of list) {
             const nk = `${nr},${nc}`;
-            if (!openKeys.has(nk) || used.has(nk)) continue;
-            pairs.push([[r, c], [nr, nc]]);
-            used.add(key);
-            used.add(nk);
-            paired = true;
-            break;
+            if (indexByKey.has(nk)) result.push(indexByKey.get(nk));
         }
+        return result;
+    });
 
-        if (!paired) {
-            // Singleton — we will handle it by picking a neighbor on a second pass.
-            // Leave for now; the second-pass below cleans up.
+    const matchOf = new Array(nodes.length).fill(-1);
+    const tryAugment = (u, visited) => {
+        for (const v of neighbors[u]) {
+            if (visited.has(v)) continue;
+            visited.add(v);
+            if (matchOf[v] === -1 || tryAugment(matchOf[v], visited)) {
+                matchOf[v] = u;
+                matchOf[u] = v;
+                return true;
+            }
         }
+        return false;
+    };
+
+    const whiteOrder = [];
+    for (let i = 0; i < nodes.length; i += 1) if (isWhite[i]) whiteOrder.push(i);
+    whiteOrder.sort(() => randomFn() - 0.5);
+    for (const u of whiteOrder) {
+        if (matchOf[u] === -1) tryAugment(u, new Set());
     }
 
-    // Second pass: pair any remaining singletons with any free neighbour.
-    for (const key of candidates) {
-        if (used.has(key)) continue;
-        const [r, c] = key.split(',').map(Number);
-        const dirs = [[r, c + 1], [r + 1, c], [r, c - 1], [r - 1, c]];
-        for (const [nr, nc] of dirs) {
-            const nk = `${nr},${nc}`;
-            if (!openKeys.has(nk) || used.has(nk)) continue;
-            pairs.push([[r, c], [nr, nc]]);
-            used.add(key);
-            used.add(nk);
-            break;
-        }
+    const pairs = [];
+    const seen = new Set();
+    for (let i = 0; i < nodes.length; i += 1) {
+        if (matchOf[i] === -1 || seen.has(i)) continue;
+        const j = matchOf[i];
+        seen.add(i);
+        seen.add(j);
+        const [r1, c1] = nodes[i].split(',').map(Number);
+        const [r2, c2] = nodes[j].split(',').map(Number);
+        pairs.push([[r1, c1], [r2, c2]]);
     }
-
     return pairs;
 }
 
@@ -5659,6 +5737,161 @@ function deriveChargeGridFromTiling(baseGrid, pairs, chargeMap, randomFn) {
     return grid;
 }
 
+// ── NYT-style pip board shapes ──────────────────────────────────────────────
+// Irregular fully-filled polyominoes. Each is a 2D grid where 0 = open play
+// cell and 1 = wall. Every shape has an even number of open cells and is
+// domino-tileable. Shapes range from 10 to 16 cells across a mix of bounding
+// boxes and silhouettes (L, T, U, Z, staircase, cross, notch, peninsula,
+// pennant, etc.) so each unit gets a visibly distinct board.
+const NYT_PIP_SHAPES = Object.freeze([
+    // 1. Wide L (10)
+    [
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 1, 1, 1],
+        [0, 0, 0, 1, 1, 1],
+    ],
+    // 2. T-bar (10)
+    [
+        [0, 0, 0, 0, 0, 0],
+        [1, 1, 0, 0, 1, 1],
+        [1, 1, 0, 0, 1, 1],
+    ],
+    // 3. Staircase (16)
+    [
+        [0, 0, 0, 0, 1, 1],
+        [0, 0, 0, 0, 1, 1],
+        [1, 1, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0, 0],
+    ],
+    // 4. Cross (12)
+    [
+        [1, 1, 0, 0, 1, 1],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [1, 1, 0, 0, 1, 1],
+    ],
+    // 5. H-bar (10)
+    [
+        [0, 0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 1, 0, 0],
+    ],
+    // 6. U-dish (14)
+    [
+        [0, 0, 1, 1, 0, 0],
+        [0, 0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+    ],
+    // 7. Z-brick (12)
+    [
+        [0, 0, 0, 0, 1, 1],
+        [0, 0, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0, 0],
+    ],
+    // 8. Notched rectangle (14)
+    [
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+    ],
+    // 9. Pennant (12)
+    [
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0, 0],
+    ],
+    // 10. Step-down (14)
+    [
+        [0, 0, 0, 0, 1, 1, 1, 1],
+        [0, 0, 0, 0, 0, 0, 1, 1],
+        [1, 1, 0, 0, 0, 0, 0, 0],
+    ],
+    // 11. Tee-bar (12)
+    [
+        [1, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 1],
+        [0, 0, 1, 1, 0, 0],
+        [0, 0, 1, 1, 0, 0],
+    ],
+    // 12. Double-L (14)
+    [
+        [0, 0, 0, 0, 1, 1],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0, 0],
+    ],
+    // 13. Spiral (16)
+    [
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+    ],
+    // 14. Peninsula (12)
+    [
+        [1, 1, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 1],
+    ],
+    // 15. Goblet (12)
+    [
+        [0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 1],
+    ],
+    // 16. Diamond-ish (12)
+    [
+        [1, 1, 0, 0, 1, 1],
+        [1, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 1],
+        [1, 1, 0, 0, 1, 1],
+    ],
+]);
+
+function hashString(value) {
+    let hash = 0x811c9dc5;
+    const str = String(value);
+    for (let i = 0; i < str.length; i += 1) {
+        hash ^= str.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash >>> 0;
+}
+
+function gridFingerprint(grid) {
+    if (!Array.isArray(grid)) return 'empty';
+    return grid.map((row) => (Array.isArray(row) ? row.join(',') : '')).join(';');
+}
+
+function pickNytShapeForGrid(gridOption) {
+    const fp = gridFingerprint(gridOption?.grid);
+    const index = hashString(`nyt:${fp}`) % NYT_PIP_SHAPES.length;
+    return NYT_PIP_SHAPES[index];
+}
+
+function buildNytShapeBaseGrid(gridOption) {
+    const shape = pickNytShapeForGrid(gridOption);
+    return shape.map((row) => row.slice());
+}
+
+function canBeFullyTiled(grid) {
+    const open = new Set();
+    grid.forEach((row, r) => row.forEach((cell, c) => {
+        if (cell !== CELL_WALL) open.add(`${r},${c}`);
+    }));
+    if (open.size % 2 !== 0) return false;
+    const pairs = greedyTileGrid(grid, open, () => 0.5);
+    const covered = new Set();
+    pairs.forEach(([[r1, c1], [r2, c2]]) => {
+        covered.add(`${r1},${c1}`);
+        covered.add(`${r2},${c2}`);
+    });
+    return covered.size === open.size;
+}
+
 /**
  * Main forward-generation entry point. Replaces the old
  * generateProceduralDominos + iterative backtracking inside
@@ -5676,7 +5909,13 @@ function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
         return { dominos: gridOption.dominos || [], grid: gridOption.grid };
     }
 
-    const baseGrid = stripGridConstraintMarkers(gridOption.grid);
+    // Replace the authored grid shape with an NYT-style fully-filled polyomino
+    // drawn from the shape pool. Deterministic per-option (seeded off the
+    // original grid) so the same unit always produces the same layout.
+    const nytBase = buildNytShapeBaseGrid(gridOption);
+    const baseGrid = canBeFullyTiled(nytBase)
+        ? nytBase
+        : stripGridConstraintMarkers(gridOption.grid);
 
     // --- 1. Collect open cells ---
     const openKeys = new Set();
