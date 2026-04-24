@@ -6246,19 +6246,7 @@ export default class GameScene extends Phaser.Scene {
         this._refreshPhoneInfoBoard(this._currentMachineVariant);
 
         if (evidence?.completed) {
-            const gateState = this._getPuzzleGateState();
-            const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
-            this._showFeedback(
-                specialCompletionState?.feedbackText || (gateState.ready
-                    ? 'ALL PUZZLES CLEARED // FILE YOUR RULING'
-                    : gateState.mainReady
-                        ? (pendingLabels.length === 1
-                            ? `FLOW CLEAR // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'FLOW CLEAR // FINISH REMAINING PUZZLES')
-                        : 'FLOW PUZZLE CLEARED // FINISH MAIN PUZZLE'),
-                '#c7ff86'
-            );
             if (voiceRestoredNow) {
                 const repairMessage = repairedTargets.length > 0
                     ? `Voice box stabilized. Restored: ${repairedTargets.join(', ')}.`
@@ -6309,20 +6297,6 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (evidence?.scrapRequired) {
-            const gateState = this._getPuzzleGateState();
-            const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
-            this._showFeedback(
-                gateState.ready
-                    ? (gateState.scrapBonusEligible
-                        ? 'FLOW DIAGNOSTIC COMPLETE // FILE YOUR RULING'
-                        : 'FLOW DIAGNOSTIC COMPLETE // FILE YOUR RULING')
-                    : gateState.mainReady
-                        ? (pendingLabels.length === 1
-                            ? `FLOW DIAGNOSTIC COMPLETE // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'FLOW DIAGNOSTIC COMPLETE // FINISH REMAINING PUZZLES')
-                        : 'FLOW DIAGNOSTIC COMPLETE // FINISH MAIN PUZZLE',
-                evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
-            );
             this._setPhoneInfoNote(
                 evidence.scrapReason || 'Secondary routing diagnostic failed policy. Scrap the unit.',
                 evidence.scrapStatus || 'SCRAP REQUIRED'
@@ -6433,7 +6407,6 @@ export default class GameScene extends Phaser.Scene {
         this._currentMachineVariant._uiGearPuzzleSolved = Boolean(evidence?.completed);
 
         const gateState = this._getPuzzleGateState();
-        const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
 
         this._updateConveyorDecisionHint();
         this._refreshOtherPuzzleButton();
@@ -6442,16 +6415,6 @@ export default class GameScene extends Phaser.Scene {
 
         if (evidence?.completed) {
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
-            this._showFeedback(
-                gateState.ready
-                    ? 'ALL PUZZLES CLEARED // FILE YOUR RULING'
-                    : gateState.mainReady
-                        ? (pendingLabels.length === 1
-                            ? `GEAR CLEAR // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'GEAR CLEAR // FINISH REMAINING PUZZLES')
-                        : 'GEAR PUZZLE CLEARED // FINISH MAIN PUZZLE',
-                '#c7ff86'
-            );
             this._setPhoneInfoNote(
                 'Gear train synchronized. Output axle is spinning cleanly again.',
                 gateState.ready ? 'GEAR CLEAR' : 'GEAR LIVE'
@@ -6463,18 +6426,6 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (evidence?.scrapRequired) {
-            this._showFeedback(
-                gateState.ready
-                    ? (gateState.scrapBonusEligible
-                        ? 'GEAR DIAGNOSTIC COMPLETE // FILE YOUR RULING'
-                        : 'GEAR DIAGNOSTIC COMPLETE // FILE YOUR RULING')
-                    : gateState.mainReady
-                        ? (pendingLabels.length === 1
-                            ? `GEAR DIAGNOSTIC COMPLETE // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'GEAR DIAGNOSTIC COMPLETE // FINISH REMAINING PUZZLES')
-                        : 'GEAR DIAGNOSTIC COMPLETE // FINISH MAIN PUZZLE',
-                evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
-            );
             this._setPhoneInfoNote(
                 evidence.scrapReason || 'Drive train inspection failed. Scrap the unit.',
                 evidence.scrapStatus || 'SCRAP REQUIRED'
@@ -6541,9 +6492,6 @@ export default class GameScene extends Phaser.Scene {
         }
         this._currentMachineVariant._uiDebugPuzzleSolved = Boolean(evidence?.completed);
 
-        const gateState = this._getPuzzleGateState();
-        const pendingLabels = this._getPendingAuxiliaryLabels(this._currentMachineVariant);
-
         this._updateConveyorDecisionHint();
         this._refreshOtherPuzzleButton();
         this._refreshFactoryActionButtons();
@@ -6551,16 +6499,6 @@ export default class GameScene extends Phaser.Scene {
 
         if (evidence?.completed) {
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
-            this._showFeedback(
-                gateState.ready
-                    ? 'ALL PUZZLES CLEARED // FILE YOUR RULING'
-                    : gateState.mainReady
-                        ? (pendingLabels.length === 1
-                            ? `CODE CLEAR // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'CODE CLEAR // FINISH REMAINING PUZZLES')
-                        : 'CODE PUZZLE CLEARED // FINISH MAIN PUZZLE',
-                '#c7ff86'
-            );
             this._setPhoneInfoNote(
                 evidence.fixed
                     ? 'Software patch applied. Diagnostic output now matches the expected result.'
@@ -6574,18 +6512,6 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (evidence?.scrapRequired) {
-            this._showFeedback(
-                gateState.ready
-                    ? (gateState.scrapBonusEligible
-                        ? 'CODE DIAGNOSTIC COMPLETE // FILE YOUR RULING'
-                        : 'CODE DIAGNOSTIC COMPLETE // FILE YOUR RULING')
-                    : gateState.mainReady
-                        ? (pendingLabels.length === 1
-                            ? `CODE DIAGNOSTIC COMPLETE // FINISH ${pendingLabels[0]} PUZZLE`
-                            : 'CODE DIAGNOSTIC COMPLETE // FINISH REMAINING PUZZLES')
-                        : 'CODE DIAGNOSTIC COMPLETE // FINISH MAIN PUZZLE',
-                evidence.scrapKind === 'hazard' ? '#ff9d8f' : '#ffd685'
-            );
             this._setPhoneInfoNote(
                 evidence.scrapReason || 'Software diagnostic is outside floor repair policy. Scrap the unit.',
                 evidence.scrapStatus || 'SCRAP REQUIRED'
