@@ -1528,8 +1528,8 @@ export default class GameScene extends Phaser.Scene {
     _buildMiniMachinePanel() {
         const panelWidth = 446;
         const panelHeight = 232;
-        const hiddenX = -panelWidth - 48;
-        const hiddenY = 42;
+        const hiddenX = -panelWidth;
+        const hiddenY = 50;
         const screenLeft = 2;
         const screenTop = 5;
         const screenWidth = 406;
@@ -1539,7 +1539,7 @@ export default class GameScene extends Phaser.Scene {
         this._miniMachinePanelSize = { width: panelWidth, height: panelHeight };
         this._miniMachineScreenRect = { left: screenLeft, top: screenTop, width: screenWidth, height: screenHeight };
         this._miniMachinePanelHiddenPos = { x: hiddenX, y: hiddenY };
-        this._miniMachinePanelShownPos = { x: 22, y: 42 };
+        this._miniMachinePanelShownPos = { x: 0, y: 50 };
         this._miniMachinePanel = this.add.container(hiddenX, hiddenY)
             .setDepth(214)
             .setVisible(false)
