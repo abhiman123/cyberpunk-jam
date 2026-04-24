@@ -23,6 +23,10 @@ function pickRandomEntry(list) {
     return list[Math.floor(Math.random() * list.length)] ?? list[0];
 }
 
+function displayCommandChar(character) {
+    return character === ' ' ? '.' : character;
+}
+
 function getCorruptCharacter(expectedCharacter = '') {
     const pool = 'abcdefghijklmnopqrstuvwxyz0123456789_./-#$%';
     const expected = String(expectedCharacter || '').toLowerCase();
@@ -60,10 +64,15 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._specialCommandButtonBg = null;
         this._specialCommandButtonText = null;
         this._charWidth = 14;
+        this._commandVisualPadding = 18;
+        this._commandWindowStart = 0;
         this._commandTextStartX = -471;
         this._commandTextY = -100;
         this._commandZoneWidth = 520;
         this._commandZoneHeight = 48;
+        this._commandClipContainer = null;
+        this._commandMaskSource = null;
+        this._commandMaskFilter = null;
         this._closeButtonBg = null;
         this._closeButtonText = null;
         this._statusText = null;
@@ -175,6 +184,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
             .setStrokeStyle(1, 0x235018, 0.82);
         const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x060d08, 0.96)
             .setStrokeStyle(1, 0x1e6018, 0.85);
+        const actualOutputBack = this.scene.add.rectangle(286, -112, 324, 90, 0x000000, 1)
+            .setStrokeStyle(1, 0x12310f, 0.72);
+        const expectedOutputBack = this.scene.add.rectangle(286, 44, 324, 64, 0x000000, 1)
+            .setStrokeStyle(1, 0x12310f, 0.72);
         const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x060d08, 0.96)
             .setStrokeStyle(1, 0x1e3d18, 0.72);
 
@@ -278,8 +291,27 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._setSelectionRange(index, index);
         });
 
+        this._commandClipContainer = this.scene.add.container(0, 0);
+        this._commandClipContainer.enableFilters();
+        this._commandMaskSource = this.scene.make.graphics({
+            x: 640 - 231 - (this._commandZoneWidth / 2) + 4,
+            y: 360 - 96 - (this._commandZoneHeight / 2) + 4,
+            add: false,
+        });
+        this._commandMaskSource.fillStyle(0xffffff, 1);
+        this._commandMaskSource.fillRoundedRect(0, 0, this._commandZoneWidth - 8, this._commandZoneHeight - 8, 6);
+        this._commandMaskFilter = this._commandClipContainer.filters.external.addMask(
+            this._commandMaskSource,
+            false,
+            this.scene.cameras.main,
+            'world',
+        );
+        this._commandMaskFilter.autoUpdate = false;
+        this._commandMaskFilter.needsUpdate = true;
+
         // Amber block cursor with hard blink
         this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xFFB000, 1).setOrigin(0, 0.5);
+        this._commandClipContainer.add(this._caret);
         this._caretTween = this.scene.tweens.add({
             targets: this._caret,
             alpha: 0,
@@ -388,6 +420,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
             commandTopAccent,
             actualFrame,
             expectedFrame,
+            actualOutputBack,
+            expectedOutputBack,
             detailFrame,
             cornerGfx,
             cmdBracketGfx,
@@ -399,7 +433,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._specialCommandButtonBg,
             this._specialCommandButtonText,
             this._commandZone,
-            this._caret,
+            this._commandClipContainer,
             actualLabel,
             this._actualOutputText,
             expectedLabel,
@@ -429,6 +463,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._escKey?.on('down', this._escHandler);
 
         this._attachHiddenInput(this.evidence.inputValue || '');
+        this._setHiddenInputLocked(this.evidence.completed || this.evidence.phase === 'scrap');
         this._syncOutputPanels();
         this._syncCommandVisuals();
         if (this.evidence.resultType === 'spark-hazard') {
@@ -462,6 +497,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._selectionRects = [];
         this._charObjects.forEach((charObject) => charObject.destroy());
         this._charObjects = [];
+        this._commandMaskFilter?.destroy?.();
+        this._commandMaskSource?.destroy();
+        this._commandMaskFilter = null;
+        this._commandMaskSource = null;
         this.scene.tweens.killTweensOf(this._caret);
         this._caretTween?.stop();
         this._caretTween = null;
@@ -486,6 +525,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._bugCounterText = null;
         this._messageText = null;
         this._caret = null;
+        this._commandClipContainer = null;
         this._commandZone = null;
         this._specialCommandMode = false;
     }
@@ -538,9 +578,23 @@ export default class DebugConsolePuzzle extends MinigameBase {
         }
     }
 
+    _setHiddenInputLocked(locked) {
+        if (!this._hiddenInput) return;
+
+        this._hiddenInput.readOnly = Boolean(locked);
+        if (locked) {
+            this._hiddenInput.blur();
+        }
+    }
+
     _handleHiddenInput() {
         if (!this.active || !this._hiddenInput) return;
-        if (this.evidence.phase === 'scrap') return;
+        if (this.evidence.completed || this.evidence.phase === 'scrap') {
+            this._hiddenInput.value = String(this.evidence.inputValue || '');
+            this._setHiddenInputLocked(true);
+            this._queueVisualSync();
+            return;
+        }
 
         const previousValue = String(this.evidence.inputValue || '');
         const nextValue = this._hiddenInput.value;
@@ -794,7 +848,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 color: '#ffffff',
             }).setOrigin(0, 0.5);
             this._charObjects.push(text);
-            this._panel?.add(text);
+            (this._commandClipContainer || this._panel)?.add(text);
         }
 
         this._charObjects.forEach((charObject, index) => charObject.setVisible(index < total));
@@ -806,9 +860,25 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 .setOrigin(0, 0.5)
                 .setVisible(false);
             this._selectionRects.push(rect);
-            this._panel?.add(rect);
-            this._panel?.bringToTop(this._caret);
+            (this._commandClipContainer || this._panel)?.add(rect);
+            this._commandClipContainer?.bringToTop(this._caret);
         }
+    }
+
+    _getDebugStage() {
+        return Number(this.evidence?.dayStage || this._puzzle?.dayStage || 1);
+    }
+
+    _isCorruptionStage() {
+        return this._getDebugStage() >= 3;
+    }
+
+    _getVisibleCommandSlots() {
+        return Math.max(1, Math.floor((this._commandZoneWidth - (this._commandVisualPadding * 2)) / this._charWidth));
+    }
+
+    _getCommandXForIndex(index) {
+        return this._commandTextStartX + ((index - this._commandWindowStart) * this._charWidth);
     }
 
     _syncCommandVisuals() {
@@ -819,6 +889,15 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const totalSlots = Math.max(command.length, inputValue.length, 1);
         const selectionStart = this._hiddenInput?.selectionStart ?? inputValue.length;
         const selectionEnd = this._hiddenInput?.selectionEnd ?? inputValue.length;
+        const visibleSlots = this._getVisibleCommandSlots();
+        const maxWindowStart = Math.max(0, totalSlots - visibleSlots);
+        let windowStart = clampIndex(selectionEnd - visibleSlots + 1, 0, maxWindowStart);
+        if (selectionStart < windowStart) {
+            windowStart = clampIndex(selectionStart, 0, maxWindowStart);
+        }
+        const windowEnd = windowStart + visibleSlots;
+
+        this._commandWindowStart = windowStart;
 
         this._ensureCharObjects(totalSlots);
         this._ensureSelectionRects(totalSlots);
@@ -827,15 +906,15 @@ export default class DebugConsolePuzzle extends MinigameBase {
             const expectedCharacter = command[index] ?? '';
             const typedCharacter = inputValue[index];
             const extraCharacter = index >= command.length;
-            const x = this._commandTextStartX + (index * this._charWidth);
             const charObject = this._charObjects[index];
+            const inWindow = index >= windowStart && index < windowEnd;
 
-            let text = displayChar(expectedCharacter || ' ');
+            let text = displayCommandChar(expectedCharacter || ' ');
             let color = '#6e7b84';
             let alpha = 0.5;
 
             if (typedCharacter !== undefined) {
-                text = displayChar(typedCharacter);
+                text = displayCommandChar(typedCharacter);
                 alpha = 1;
                 if (extraCharacter) {
                     color = '#8f2f2f';
@@ -848,8 +927,14 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 alpha = 0.2;
             }
 
+            if (!inWindow) {
+                charObject.setVisible(false);
+                continue;
+            }
+
             charObject
-                .setPosition(x, this._commandTextY)
+                .setVisible(true)
+                .setPosition(this._getCommandXForIndex(index), this._commandTextY)
                 .setText(text)
                 .setColor(color)
                 .setAlpha(alpha);
@@ -858,14 +943,18 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const selectedCount = Math.max(0, selectionEnd - selectionStart);
         this._selectionRects.forEach((rect, index) => {
             const inSelection = index >= selectionStart && index < selectionEnd;
+            const inWindow = index >= windowStart && index < windowEnd;
             rect
-                .setPosition(this._commandTextStartX + (index * this._charWidth), this._commandTextY)
-                .setVisible(inSelection && selectedCount > 0);
+                .setPosition(this._getCommandXForIndex(index), this._commandTextY)
+                .setVisible(inSelection && inWindow && selectedCount > 0);
         });
 
         this._caret.setVisible(selectedCount === 0 && !this.evidence.completed);
-        this._caret.setPosition(this._commandTextStartX + (selectionEnd * this._charWidth), this._commandTextY);
-        this._panel.bringToTop(this._caret);
+        this._caret.setPosition(
+            this._commandTextStartX + (clampIndex(selectionEnd - windowStart, 0, visibleSlots) * this._charWidth),
+            this._commandTextY,
+        );
+        this._commandClipContainer?.bringToTop(this._caret);
 
         this._modeText?.setText(
             this._specialCommandMode && this._canUseSpecialCommand()
@@ -886,6 +975,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._specialCommandMode = false;
         }
 
+        const showBugCounter = this._getDebugStage() === 3;
+        const corruptionStage = this._isCorruptionStage();
         const hasTypedInput = this._hasStartedTyping();
         const showActualOutput = this.evidence.completed || this.evidence.phase === 'repair' || this.evidence.phase === 'scrap' || hasTypedInput;
         const outputMismatch = Boolean(
@@ -895,16 +986,21 @@ export default class DebugConsolePuzzle extends MinigameBase {
             && !this.evidence.completed
             && this.evidence.phase !== 'scrap'
         );
+        const actualOutputMatches = Boolean(
+            showActualOutput
+            && this.evidence.actualOutput
+            && this.evidence.actualOutput === this.evidence.expectedOutput
+        );
 
         this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
         this._actualOutputText?.setText(showActualOutput ? (this.evidence.actualOutput || '') : '');
         this._expectedOutputText?.setColor('#32CD32');
         this._actualOutputText?.setColor(
-            this.evidence.completed
-                ? '#7aff8a'
-                : (this.evidence.phase === 'scrap'
-                    ? '#ff7a5a'
-                    : (outputMismatch ? '#ff5f5f' : '#ffd6b0'))
+            this.evidence.phase === 'scrap' || outputMismatch
+                ? '#ff5f5f'
+                : (this.evidence.completed || actualOutputMatches
+                    ? '#7aff8a'
+                    : '#ffd6b0')
         );
 
         let statusColor = '#FFB000';
@@ -955,7 +1051,11 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._statusText.setText(this.evidence.lastStatus || 'TEST READY').setColor(statusColor);
         this._instructionText?.setText(detailText);
         this._messageText?.setText(message);
-        this._bugCounterText?.setText(`BUGS SQUASHED ${this.evidence.bugsSquashed || 0}  //  CORRUPTIONS ${this.evidence.corruptionCount || 0}`);
+        this._bugCounterText?.setText(
+            showBugCounter
+                ? `BUGS SQUASHED ${this.evidence.bugsSquashed || 0}`
+                : '',
+        );
         this._closeButtonText?.setText((this.evidence.completed || this.evidence.phase === 'scrap') ? 'RETURN TO BOOTH [ESC]' : 'CLOSE PANEL [ESC]');
         this._specialCommandButtonBg?.setVisible(Boolean(this._specialCommand?.command));
         this._specialCommandButtonText?.setVisible(Boolean(this._specialCommand?.command));
@@ -1004,6 +1104,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         }
 
         if (nextEvidence.completed || nextEvidence.phase === 'scrap') {
+            this._setHiddenInputLocked(true);
             this._stopBugSpawner();
             this._destroyAllBugs();
         }
@@ -1034,6 +1135,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
     }
 
     _runTestCommand() {
+        const submittedInput = this._hiddenInput?.value || this.evidence.prompt || '';
         const matched = this.evidence.actualOutput === this.evidence.expectedOutput;
 
         if (matched) {
@@ -1043,12 +1145,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 fixed: false,
                 repairRequired: false,
                 outputMatched: true,
-                inputValue: '',
+                inputValue: submittedInput,
                 lastStatus: 'TEST PASS // OUTPUT CLEAN',
                 flags: [],
                 symptoms: ['Diagnostic output matches the expected result.'],
             });
-            this._hiddenInput.value = '';
+            this._hiddenInput.value = submittedInput;
+            this._setHiddenInputLocked(true);
             this._playPuzzleFixed();
             this._stopBugSpawner();
             this._autoSquashAllBugs();
@@ -1069,6 +1172,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 scrapReason: this.evidence.scrapReason || 'Output format is compromised. Floor repair is forbidden.',
             });
             this._hiddenInput.value = '';
+            this._setHiddenInputLocked(true);
             this._stopBugSpawner();
             this._destroyAllBugs();
         } else {
@@ -1092,6 +1196,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
     }
 
     _completeRepair() {
+        const submittedInput = this._hiddenInput?.value || this.evidence.repairPrompt || '';
         this.emitEvidence({
             completed: true,
             phase: 'complete',
@@ -1100,14 +1205,15 @@ export default class DebugConsolePuzzle extends MinigameBase {
             scrapRequired: false,
             outputMatched: true,
             actualOutput: this.evidence.expectedOutput,
-            inputValue: '',
+            inputValue: submittedInput,
             lastStatus: 'PATCH APPLIED // AUTO RETEST PASS',
             flags: [],
             symptoms: ['Patch applied. Diagnostic output stabilized.'],
         });
         if (this._hiddenInput) {
-            this._hiddenInput.value = '';
+            this._hiddenInput.value = submittedInput;
         }
+        this._setHiddenInputLocked(true);
         this._playPuzzleFixed();
         this._stopBugSpawner();
         this._autoSquashAllBugs();
@@ -1123,7 +1229,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         if (!this._panel || this._bugViews.some((bugView) => bugView.hazard)) return;
 
         const targetIndex = Math.max(0, Math.floor(Math.max(1, this._getActiveCommand().length - 1) / 2));
-        const targetX = this._commandTextStartX + (targetIndex * this._charWidth) + (this._charWidth / 2);
+        const targetX = this._getCommandXForIndex(targetIndex) + (this._charWidth / 2);
         const targetY = this._commandTextY - 8;
         const sparks = this.scene.add.graphics();
         sparks.lineStyle(2, 0xff5f5f, 0.92);
@@ -1205,7 +1311,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         if (!this._panel) return;
 
         const targetIndex = this._getPreferredBugTargetIndex();
-        const targetX = this._commandTextStartX + (targetIndex * this._charWidth) + (this._charWidth / 2);
+        const targetX = this._getCommandXForIndex(targetIndex) + (this._charWidth / 2);
         const targetY = this._commandTextY;
         const edge = Phaser.Math.Between(0, 3);
         const startX = edge === 0 ? -520 : edge === 1 ? 520 : Phaser.Math.Between(-520, 520);
@@ -1398,7 +1504,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
             corruptionCount: (this.evidence.corruptionCount || 0) + 1,
         });
 
-        this._statusText?.setText('BUG IMPACT // CORRUPTION WRITTEN').setColor('#ff7e7e');
+        this._statusText
+            ?.setText(this._isCorruptionStage() ? 'BUG IMPACT // INPUT DAMAGED' : 'BUG IMPACT // LETTER FLIPPED')
+            .setColor('#ff7e7e');
         this._syncCommandVisuals();
         this._focusHiddenInput();
     }
@@ -1406,7 +1514,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
     _getCaretIndexFromPointer(pointer) {
         const localX = pointer.x - this._panel.x - this._commandTextStartX;
         const maxIndex = Math.max(this._getActiveCommand().length, this._hiddenInput?.value.length || 0);
-        return clampIndex(Math.round(localX / this._charWidth), 0, maxIndex);
+        const visibleIndex = clampIndex(Math.round(localX / this._charWidth), 0, this._getVisibleCommandSlots());
+        return clampIndex(this._commandWindowStart + visibleIndex, 0, maxIndex);
     }
 
     _handlePointerMove(pointer) {

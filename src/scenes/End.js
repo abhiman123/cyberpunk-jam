@@ -58,6 +58,10 @@ const ENDING_DIALOGUE = Object.freeze({
 
 const TITLE_TEXT = "you're just a machine.";
 
+function colorToCss(color) {
+    return `#${color.toString(16).padStart(6, '0')}`;
+}
+
 export default class EndScene extends Phaser.Scene {
     constructor() {
         super('End');
@@ -99,16 +103,41 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _buildStage() {
-        const background = this.add.rectangle(640, 360, 1280, 720, 0x080c10).setDepth(0);
-        const haze = this.add.rectangle(640, 220, 1280, 320, 0x112332, 0.32).setDepth(0);
-        const pitGlow = this.add.ellipse(640, 680, 420, 70, 0x040608, 0.92).setDepth(1);
-        const catwalk = this.add.rectangle(640, 468, 1280, 164, 0x101820, 1).setDepth(1);
-        const rail = this.add.rectangle(640, 396, 1280, 10, 0x274b62, 0.84).setDepth(2);
+        const backgroundLayers = [];
+        const fallbackKey = this.textures.exists('bg_p4')
+            ? 'bg_p4'
+            : (this.textures.exists('bg_p3') ? 'bg_p3' : null);
+
+        if (fallbackKey) {
+            backgroundLayers.push(this.add.image(640, 360, fallbackKey).setDisplaySize(1280, 720).setDepth(0));
+        } else {
+            backgroundLayers.push(this.add.rectangle(640, 360, 1280, 720, 0x080c10).setDepth(0));
+        }
+
+        ['mainview_second', 'mainview_lightradiance', 'mainview_lightlayer'].forEach((key) => {
+            if (!this.textures.exists(key)) return;
+            backgroundLayers.push(this.add.image(640, 360, key).setDisplaySize(1280, 720).setDepth(1));
+        });
+
+        if (this.textures.exists('mainview_bottom')) {
+            backgroundLayers.push(this.add.image(640, 360, 'mainview_bottom').setDisplaySize(1280, 720).setDepth(2));
+        }
+
+        ['mainview_fam1', 'mainview_fam2'].forEach((key, index) => {
+            if (!this.textures.exists(key)) return;
+            backgroundLayers.push(this.add.image(index === 0 ? 202 : 278, index === 0 ? 659 : 669, key).setDepth(3));
+        });
+
+        const haze = this.add.rectangle(640, 210, 1280, 320, 0x102130, 0.34).setDepth(4);
+        const stageShadow = this.add.rectangle(640, 580, 1280, 180, 0x05080b, 0.52).setDepth(4);
+        this._pitGlow = this.add.ellipse(640, 690, 460, 84, 0x030507, 0.96).setDepth(5);
+        const catwalk = this.add.rectangle(640, 486, 1280, 122, 0x111920, 0.72).setDepth(6);
+        const rail = this.add.rectangle(640, 414, 1280, 10, 0x34596d, 0.84).setDepth(7);
 
         this._lights = [];
         for (let i = 0; i < 6; i += 1) {
             const light = this.add.rectangle(124 + (i * 206), 96, 84, 20, 0xe8fff3, 0.2)
-                .setDepth(2)
+                .setDepth(8)
                 .setStrokeStyle(1, 0xe8fff3, 0.24);
             this._lights.push(light);
         }
@@ -116,34 +145,34 @@ export default class EndScene extends Phaser.Scene {
         this._conveyorTiles = [];
         for (let i = 0; i < 33; i += 1) {
             const tile = this.add.image(20 + (i * 40), 530, 'conveyor_tile')
-                .setDepth(2)
+                .setDepth(8)
                 .setAlpha(0.86);
             this._conveyorTiles.push(tile);
         }
 
-        this._scrapButtonGlow = this.add.rectangle(1038, 514, 168, 94, 0xff786f, 0.08)
-            .setDepth(3)
+        this._scrapButtonGlow = this.add.rectangle(1038, 546, 172, 98, 0xff786f, 0.08)
+            .setDepth(11)
             .setVisible(false);
-        this._scrapButton = this.add.rectangle(1038, 514, 146, 72, 0x4c1312, 0.94)
+        this._scrapButton = this.add.rectangle(1038, 546, 146, 72, 0x4c1312, 0.96)
             .setStrokeStyle(2, 0xff7c73, 0.84)
-            .setDepth(4)
+            .setDepth(12)
             .setVisible(false);
-        this._scrapButtonLabel = this.add.text(1038, 514, 'SCRAP', {
+        this._scrapButtonLabel = this.add.text(1038, 546, 'SCRAP', {
             fontFamily: 'Courier New',
             fontSize: '24px',
             color: '#ffd7d2',
             letterSpacing: 4,
-        }).setOrigin(0.5).setDepth(5).setVisible(false);
+        }).setOrigin(0.5).setDepth(13).setVisible(false);
 
-        // this._fallHole = this.add.ellipse(640, 760, 220, 54, 0x000000, 0.96)
-        //     .setDepth(30)
-        //     .setScale(0.3)
-        //     .setAlpha(0);
+        this._blackCover = this.add.rectangle(640, 360, 1280, 720, 0x000000, 1)
+            .setDepth(35)
+            .setAlpha(0);
 
         this._world.add([
-            background,
+            ...backgroundLayers,
             haze,
-            pitGlow,
+            stageShadow,
+            this._pitGlow,
             catwalk,
             rail,
             ...this._lights,
@@ -156,36 +185,60 @@ export default class EndScene extends Phaser.Scene {
 
     _buildActors() {
         this._managerSprite = this.add.image(1440, 408, 'manager_robot')
-            .setScale(2.0)
-            .setDepth(10)
+            .setScale(1.82)
+            .setDepth(18)
+            .setVisible(false);
+        this._replacementSprite = this.add.image(1440, 418, this.textures.exists('machine_debrief_machine') ? 'machine_debrief_machine' : 'unit_placeholder')
+            .setScale(1.38)
+            .setDepth(18)
             .setVisible(false);
         this._umbrellaSprite = this.add.image(1440, 384, 'machine_rebellious_umbrella')
             .setScale(1.4)
-            .setDepth(11)
+            .setDepth(19)
             .setVisible(false);
-        this._world.add([this._managerSprite, this._umbrellaSprite]);
+        this._world.add([this._managerSprite, this._replacementSprite, this._umbrellaSprite]);
     }
 
     _buildUi() {
-        this._panelShadow = this.add.rectangle(640, 612, 926, 150, 0x000000, 0.34).setDepth(20);
-        this._panel = this.add.rectangle(640, 604, 914, 138, 0x081017, 0.9)
-            .setStrokeStyle(2, 0x6bb6da, 0.5)
-            .setDepth(21);
-        this._panelTag = this.add.text(198, 548, 'FINAL TRANSMISSION', {
+        this._panelShadow = this.add.rectangle(640, 612, 1, 1, 0x000000, 0).setDepth(20).setVisible(false);
+        this._panel = this.add.rectangle(640, 604, 1, 1, 0x081017, 0).setDepth(21).setVisible(false);
+        this._panelTag = this.add.text(198, 548, '', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#8fd8f3',
             letterSpacing: 3,
-        }).setDepth(22);
-
+        }).setDepth(22).setVisible(false);
         this._dialogueText = this.add.text(640, 606, '', {
             fontFamily: 'Courier New',
             fontSize: '24px',
             color: '#b8efff',
-            align: 'center',
-            wordWrap: { width: 820 },
-            lineSpacing: 10,
-        }).setOrigin(0.5).setDepth(22);
+        }).setOrigin(0.5).setDepth(22).setVisible(false);
+
+        this._speechBubble = this.add.container(0, 0).setDepth(30).setVisible(false);
+        this._speechBubbleShadow = this.add.graphics();
+        this._speechBubbleBody = this.add.graphics();
+        this._speechBubbleTail = this.add.graphics();
+        this._speechBubbleTag = this.add.text(0, 0, '', {
+            fontFamily: 'Courier New',
+            fontSize: '11px',
+            color: '#d7f8ff',
+            letterSpacing: 2,
+        }).setOrigin(0, 1);
+        this._speechBubbleText = this.add.text(0, 0, '', {
+            fontFamily: 'Courier New',
+            fontSize: '19px',
+            color: '#1d232b',
+            align: 'left',
+            wordWrap: { width: 320 },
+            lineSpacing: 8,
+        }).setOrigin(0, 1);
+        this._speechBubble.add([
+            this._speechBubbleShadow,
+            this._speechBubbleBody,
+            this._speechBubbleTail,
+            this._speechBubbleTag,
+            this._speechBubbleText,
+        ]);
 
         this._titleCard = this.add.text(640, 338, TITLE_TEXT, {
             fontFamily: 'Courier New',
@@ -260,43 +313,190 @@ export default class EndScene extends Phaser.Scene {
     }
 
     async _runReplacementEnding() {
-        this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 950 });
-        await this._typeDialogueLines(ENDING_DIALOGUE.replacement, { color: '#aee7ff' });
-        await this._wait(700);
+        this._replacementSprite.setTint(0x9df3ff);
+        await this._enterActor(this._replacementSprite, { x: 668, y: 446, duration: 2200, ease: 'Linear' });
+        this._speakerTween = this.tweens.add({
+            targets: this._replacementSprite,
+            y: '+=7',
+            duration: 520,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
+        await this._bubbleDialogue(this._replacementSprite, ENDING_DIALOGUE.replacement, {
+            speaker: 'REPLACEMENT UNIT',
+            accent: 0x8df5ff,
+            fill: 0xf2feff,
+            textColor: '#13252b',
+        });
+        await this._wait(460);
     }
 
     async _runUmbrellaPurpleEnding() {
-        await this._enterActor(this._umbrellaSprite, { x: 348, y: 384, duration: 980 });
+        await this._enterActor(this._umbrellaSprite, { x: 404, y: 410, duration: 980 });
         this._styleUmbrella('purple');
-        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_purple, { color: '#ddb6ff' });
-        await this._wait(700);
+        await this._bubbleDialogue(this._umbrellaSprite, ENDING_DIALOGUE.umbrella_purple, {
+            speaker: 'UMBRELLA',
+            accent: 0xd49cff,
+            fill: 0xf9ecff,
+            textColor: '#25182b',
+        });
+        await this._wait(520);
     }
 
     async _runUmbrellaRedEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 900 });
-        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_manager, { color: '#aee7ff' });
+        await this._enterActor(this._managerSprite, { x: 360, y: 418, duration: 900 });
+        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_manager, {
+            speaker: 'MANAGER BOT',
+            accent: 0x8fd8f3,
+            fill: 0xf4fbff,
+            textColor: '#18242b',
+        });
         this._showScrapButton();
         const dropPromise = this._dropUmbrellaToButton('red');
-        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_confused, { color: '#aee7ff', append: true });
+        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_confused, {
+            speaker: 'MANAGER BOT',
+            accent: 0x8fd8f3,
+            fill: 0xf4fbff,
+            textColor: '#18242b',
+            holdMs: 460,
+        });
         await dropPromise;
         await this._scrapManagerActor();
-        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red, { color: '#ff9b92' });
+        await this._bubbleDialogue(this._umbrellaSprite, ENDING_DIALOGUE.umbrella_red, {
+            speaker: 'UMBRELLA',
+            accent: 0xff8a81,
+            fill: 0xffece8,
+            textColor: '#321818',
+            holdMs: 400,
+        });
         await this._runExplosionLeadIn();
     }
 
     async _runUmbrellaMixedEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 900 });
-        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_manager, { color: '#aee7ff' });
+        await this._enterActor(this._managerSprite, { x: 360, y: 418, duration: 900 });
+        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_manager, {
+            speaker: 'MANAGER BOT',
+            accent: 0x8fd8f3,
+            fill: 0xf4fbff,
+            textColor: '#18242b',
+        });
         this._showScrapButton();
         const dropPromise = this._dropUmbrellaToButton('mixed');
-        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_confused, { color: '#aee7ff', append: true });
+        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_confused, {
+            speaker: 'MANAGER BOT',
+            accent: 0x8fd8f3,
+            fill: 0xf4fbff,
+            textColor: '#18242b',
+            holdMs: 460,
+        });
         await dropPromise;
         await this._scrapManagerActor();
-        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_mixed, { color: '#efbcff' });
+        await this._bubbleDialogue(this._umbrellaSprite, ENDING_DIALOGUE.umbrella_mixed, {
+            speaker: 'UMBRELLA',
+            accent: 0xd49cff,
+            fill: 0xf9ecff,
+            textColor: '#25182b',
+            holdMs: 420,
+        });
         await this._runExplosionLeadIn();
+    }
+
+    async _bubbleDialogue(actor, lines, options = {}) {
+        const entries = Array.isArray(lines) ? lines : [String(lines || '')];
+        this._speechBubble.setVisible(true).setAlpha(1);
+
+        for (const entry of entries) {
+            const line = String(entry || '');
+            this._layoutSpeechBubble(actor, line, options);
+            await this._typeSpeechBubbleLine(line, options);
+            await this._wait(options.holdMs ?? 720);
+        }
+
+        this.tweens.add({
+            targets: this._speechBubble,
+            alpha: 0,
+            duration: 140,
+            ease: 'Quad.Out',
+            onComplete: () => this._speechBubble.setVisible(false),
+        });
+        await this._wait(160);
+    }
+
+    _layoutSpeechBubble(actor, line, {
+        speaker = 'UNIT',
+        accent = 0x8fd8f3,
+        fill = 0xf4fbff,
+        textColor = '#18242b',
+    } = {}) {
+        const bubbleFill = 0xf4ecdf;
+        const bubbleStroke = 0x5d5040;
+        const bubbleTextColor = '#2a2d34';
+        const actorX = actor?.x ?? 640;
+        const actorY = actor?.y ?? 420;
+        const bubbleW = 392;
+        const lineRows = Math.max(1, Math.ceil(String(line || '').length / 31));
+        const bubbleH = Phaser.Math.Clamp(74 + (lineRows * 18), 94, 154);
+        const bubbleX = Phaser.Math.Clamp(actorX + 34, 84, 1280 - bubbleW - 64);
+        const bubbleY = Phaser.Math.Clamp(actorY - bubbleH - 142, 74, 456);
+        const tailX = Phaser.Math.Clamp(actorX + 10, bubbleX + 36, bubbleX + bubbleW - 36);
+        const tailY = actorY - 82;
+
+        this._speechBubbleShadow.clear();
+        this._speechBubbleShadow.fillStyle(0x000000, 0.34);
+        this._speechBubbleShadow.fillRoundedRect(bubbleX + 8, bubbleY + 10, bubbleW, bubbleH, 18);
+
+        this._speechBubbleBody.clear();
+        this._speechBubbleBody.fillStyle(bubbleFill, 0.98);
+        this._speechBubbleBody.fillRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 18);
+        this._speechBubbleBody.lineStyle(3, bubbleStroke, 0.96);
+        this._speechBubbleBody.strokeRoundedRect(bubbleX, bubbleY, bubbleW, bubbleH, 18);
+        this._speechBubbleBody.fillStyle(accent, 0.18);
+        this._speechBubbleBody.fillRoundedRect(bubbleX + 12, bubbleY + 10, bubbleW - 24, 22, 10);
+
+        this._speechBubbleTail.clear();
+        this._speechBubbleTail.fillStyle(bubbleFill, 0.98);
+        this._speechBubbleTail.fillTriangle(tailX - 18, bubbleY + bubbleH - 4, tailX + 12, bubbleY + bubbleH - 4, actorX, tailY);
+        this._speechBubbleTail.lineStyle(2, bubbleStroke, 0.82);
+        this._speechBubbleTail.lineBetween(tailX - 18, bubbleY + bubbleH - 4, actorX, tailY);
+        this._speechBubbleTail.lineBetween(tailX + 12, bubbleY + bubbleH - 4, actorX, tailY);
+
+        this._speechBubbleTag
+            .setText(speaker)
+            .setColor(colorToCss(accent))
+            .setPosition(bubbleX + 20, bubbleY + 26);
+        this._speechBubbleText
+            .setText('')
+            .setColor(bubbleTextColor)
+            .setWordWrapWidth(bubbleW - 42)
+            .setPosition(bubbleX + 22, bubbleY + bubbleH - 20);
+    }
+
+    _typeSpeechBubbleLine(line, options = {}) {
+        return new Promise((resolve) => {
+            const text = String(line || '');
+            if (!text) {
+                this._speechBubbleText.setText('');
+                resolve(true);
+                return;
+            }
+
+            let index = 0;
+            this._speechBubbleText.setText('');
+            this.time.addEvent({
+                delay: options.typeDelayMs ?? 24,
+                repeat: text.length - 1,
+                callback: () => {
+                    index += 1;
+                    this._speechBubbleText.setText(text.slice(0, index));
+                    if (index >= text.length) {
+                        resolve(true);
+                    }
+                },
+            });
+        });
     }
 
     _showScrapButton() {
@@ -327,12 +527,12 @@ export default class EndScene extends Phaser.Scene {
             this._umbrellaSprite.setTint(0xd28cff);
             this._speakerTween = this.tweens.add({
                 targets: this._umbrellaSprite,
-                x: '+=7',
-                angle: 4,
-                duration: 48,
+                y: '-=16',
+                angle: 5,
+                duration: 86,
                 yoyo: true,
                 repeat: -1,
-                ease: 'Sine.InOut',
+                ease: 'Quad.Out',
             });
             return;
         }
@@ -340,16 +540,16 @@ export default class EndScene extends Phaser.Scene {
         this._umbrellaSprite.setTint(0xff8a81);
         this._speakerTween = this.tweens.add({
             targets: this._umbrellaSprite,
-            x: '+=5',
-            angle: 3,
-            duration: 44,
+            y: '-=14',
+            angle: 4,
+            duration: 82,
             yoyo: true,
             repeat: -1,
-            ease: 'Sine.InOut',
+            ease: 'Quad.Out',
         });
     }
 
-    _enterActor(actor, { x, y, duration = 900 } = {}) {
+    _enterActor(actor, { x, y, duration = 900, ease = 'Cubic.Out' } = {}) {
         actor.setVisible(true);
         actor.setAlpha(1);
         actor.setPosition(1440, y ?? actor.y);
@@ -361,7 +561,7 @@ export default class EndScene extends Phaser.Scene {
                 x,
                 y: y ?? actor.y,
                 duration,
-                ease: 'Cubic.Out',
+                ease,
                 onComplete: () => resolve(true),
             });
         });
@@ -419,6 +619,8 @@ export default class EndScene extends Phaser.Scene {
     }
 
     async _runExplosionLeadIn() {
+        this._speakerTween?.stop();
+        this._speakerTween = null;
         for (let index = 0; index < 5; index += 1) {
             this.cameras.main.flash(90, 255, 80 + (index * 15), 70, false);
             this.cameras.main.shake(150, 0.02 + (index * 0.002));
@@ -432,6 +634,7 @@ export default class EndScene extends Phaser.Scene {
             this.tweens.add({
                 targets: this._umbrellaSprite,
                 angle: this._umbrellaSprite.angle + 14,
+                y: this._umbrellaSprite.y - 18,
                 duration: 90,
                 yoyo: true,
             });
@@ -498,6 +701,9 @@ export default class EndScene extends Phaser.Scene {
 
     async _runFallSequence({ violent = false } = {}) {
         this._dialogueText.setAlpha(0);
+        this._speechBubble.setVisible(false);
+        this._speakerTween?.stop();
+        this._speakerTween = null;
 
         if (this._music) {
             this.tweens.add({
@@ -519,22 +725,27 @@ export default class EndScene extends Phaser.Scene {
 
         this.tweens.add({
             targets: this._world,
-            y: -260,
-            duration: 1350,
+            y: -560,
+            duration: 1450,
             ease: 'Cubic.In',
         });
         this.tweens.add({
-            // targets: this._fallHole,
-            scaleX: violent ? 6.2 : 5.2,
-            scaleY: violent ? 4.8 : 4.1,
-            y: 700,
-            duration: 1350,
-            ease: 'Cubic.In',
+            targets: this._pitGlow,
+            scaleX: violent ? 3.6 : 2.8,
+            scaleY: violent ? 2.4 : 2,
+            alpha: 1,
+            duration: 720,
+            ease: 'Cubic.Out',
+        });
+        this.tweens.add({
+            targets: this._blackCover,
+            alpha: 1,
+            delay: 520,
+            duration: 820,
+            ease: 'Quad.In',
         });
 
-        await this._wait(920);
-        this.cameras.main.fade(700, 120, 6, 6);
-        await this._wait(820);
+        await this._wait(1520);
     }
 
     async _showTitleCard() {
@@ -545,8 +756,7 @@ export default class EndScene extends Phaser.Scene {
         this._panel.setVisible(false);
         this._panelTag.setVisible(false);
         this._speakerTween?.stop();
-
-        this.cameras.main.fadeIn(700, 0, 0, 0);
+        this._blackCover.setAlpha(1);
 
         const musicVolume = getMusicVolume();
         if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.firedMusic.key)) {

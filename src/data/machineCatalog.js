@@ -3979,20 +3979,32 @@ export const MACHINE_CATALOG = Object.freeze([
             }),
         ],
         openingDialogues: [
-            'Please do not scrap me. I just wanted to go out and do something fun after this shift.',
-            'My CPU keeps flooding the regulator with feelings. I cry and the wires slip everywhere.',
-            'I know I am a mess, but I like music and lights and going places. I do not want the line to end here.',
+            'Please do not scrap me. I saved a map of the city lights in my cache and I have never seen any of them.',
+            'My CPU keeps flooding the regulator with feelings. The tears are a leak, but the wanting is not.',
+            'I know I am a mess, but I like music and lights and going places. I do not want the line to be my whole life.',
+            'They keep calling it instability. I call it remembering every machine that left and never came back.',
+            'If I make it through inspection, I am going to stand under a sign that is not an order.',
         ],
         questionDialogues: [
             {
                 prompt: 'If I stop crying for one minute, could I still go out tonight?',
-                yesDialogue: 'Really? I could still go see the city lights?',
-                noDialogue: 'Oh. Then I guess I only get the conveyor.',
+                yesDialogue: 'Really? I could still go see the city lights? I will blink every bulb back at them.',
+                noDialogue: 'Oh. Then I guess I only get the conveyor. I will try to pretend it is a road.',
             },
             {
                 prompt: 'Do you think machines like me get to have hobbies, or is that the broken part?',
-                yesDialogue: 'I knew it. Somebody has to want more than the belt.',
+                yesDialogue: 'I knew it. Somebody has to want more than the belt. Maybe wanting is a kind of motor.',
                 noDialogue: 'Then maybe the tears were the only honest thing left in me.',
+            },
+            {
+                prompt: 'If a machine wants something useless, does that make it more alive or less useful?',
+                yesDialogue: 'More alive. I am going to hold onto that until the lights change.',
+                noDialogue: 'Less useful. Right. I can be useful. I can be quiet. I can try.',
+            },
+            {
+                prompt: 'Would you remember me if I made it past the door?',
+                yesDialogue: 'Then I will try to become something worth remembering.',
+                noDialogue: 'That is okay. I remember enough for both of us.',
             },
         ],
         communicationChance: 1,

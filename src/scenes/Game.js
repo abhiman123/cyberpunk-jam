@@ -96,6 +96,15 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent = null;
         this._commSequenceEvent = null;
         this._unitMoveTween = null;
+        this._conveyorBottomLayers = [];
+        this._conveyorBottomFrontLayers = [];
+        this._conveyorBottomLayerWidth = 0;
+        this._conveyorBottomLayerTop = 0;
+        this._conveyorBottomScrollOffset = 0;
+        this._conveyorBottomScrollDirection = 1;
+        this._conveyorBottomScrollActive = false;
+        this._factoryLightRadianceLayer = null;
+        this._factoryLightRadianceFlickerEvent = null;
         this._activeMusicKey = null;
         this._pendingExitAction = null;
         this._pendingUnsafeAcceptConfirmation = false;
@@ -148,8 +157,41 @@ export default class GameScene extends Phaser.Scene {
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
-        this._konamiSequence = ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'];
-        this._konamiProgress = 0;
+        this._conveyorBeltSoundNodes = null;
+        this._factoryLightHum = null;
+        this._konamiRoutes = [
+            {
+                id: 'ending-default',
+                sequence: ['UP', 'UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
+                label: 'KONAMI OVERRIDE // ENDING ROUTE',
+                finishUmbrellaQuest: false,
+            },
+            {
+                id: 'ending-umbrella',
+                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
+                label: 'KONAMI OVERRIDE // UMBRELLA ENDING',
+                finishUmbrellaQuest: true,
+                deliveredPurpleCircuit: true,
+                deliveredClownCircuit: false,
+            },
+            {
+                id: 'ending-red-circuit',
+                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
+                label: 'KONAMI OVERRIDE // RED CIRCUIT',
+                finishUmbrellaQuest: true,
+                deliveredPurpleCircuit: false,
+                deliveredClownCircuit: true,
+            },
+            {
+                id: 'ending-both-circuits',
+                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'RIGHT', 'LEFT', 'RIGHT'],
+                label: 'KONAMI OVERRIDE // BOTH CIRCUITS',
+                finishUmbrellaQuest: true,
+                deliveredPurpleCircuit: true,
+                deliveredClownCircuit: true,
+            },
+        ];
+        this._konamiProgressByRoute = this._konamiRoutes.map(() => 0);
         this._konamiFinaleTriggered = false;
         this._initializeMachineShiftQueue();
 
@@ -178,7 +220,7 @@ export default class GameScene extends Phaser.Scene {
         const newRuleIds = GameState.day <= 3
             ? allRules.filter((rule) => rule.period === GameState.day).map((rule) => rule.id)
             : [];
-        this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds, {
+        this._rulebook = new RulebookOverlay(this, allRules, GameState.activeRules, {
             canToggle: () => this._canOpenRulebookOverlay(),
         });
         this._settingsOverlay = new FactorySettingsOverlay(this, {
@@ -223,11 +265,13 @@ export default class GameScene extends Phaser.Scene {
         this.cameras.main.fadeIn(400, 0, 0, 0);
 
         if (FIRST_SHIFT_INTRO.enabled) {
-            if (this._shouldUseAutomatedTextBrief()) {
-                this._startAutomatedTextBrief();
-            } else {
-                this._startOpeningPhoneCall();
-            }
+            this.time.delayedCall(1200, () => {
+                if (this._shouldUseAutomatedTextBrief()) {
+                    this._startAutomatedTextBrief();
+                } else {
+                    this._startOpeningPhoneCall();
+                }
+            });
         } else {
             this.time.delayedCall(300, () => this._beginShift());
         }
@@ -383,6 +427,22 @@ export default class GameScene extends Phaser.Scene {
             width: 128,
             height: 84,
         });
+        this._createDeskPhoto('desk_photo_family', 'mainview_fam1', {
+            x: 212,
+            y: 124,
+            angle: -7,
+            width: 72,
+            height: 54,
+            portraitScale: 0.55,
+        });
+        this._createDeskPhoto('desk_photo_family_2', 'mainview_fam2', {
+            x: 286,
+            y: 122,
+            angle: 6,
+            width: 58,
+            height: 70,
+            portraitScale: 0.68,
+        });
         // Y values are in deskContainer-local space (deskContainer.y = scale.height - 172 = 548).
         // To appear at screen y≈624-626, subtract 548 → container-local y≈76-78.
         this._createJesterDeskTokenItem({
@@ -446,6 +506,20 @@ export default class GameScene extends Phaser.Scene {
                 const focusGlow = this.add.rectangle(0, 0, width + 16, height + 16, 0xfff8db, 0)
                     .setStrokeStyle(2, 0xfffbe7, 0);
                 const shadow = this.add.rectangle(4, 5, width, height, 0x000000, 0.2);
+                const ghostBackFar = this.add.image(-4, -4, textureKey)
+                    .setScale(portraitScale * 1.04)
+                    .setTint(0xffffff)
+                    .setTintMode(Phaser.TintModes.FILL)
+                    .setAlpha(0)
+                    .setBlendMode(Phaser.BlendModes.ADD)
+                    .setData('baseScale', portraitScale * 1.04);
+                const ghostBackNear = this.add.image(4, 4, textureKey)
+                    .setScale(portraitScale * 1.09)
+                    .setTint(0xffffff)
+                    .setTintMode(Phaser.TintModes.FILL)
+                    .setAlpha(0)
+                    .setBlendMode(Phaser.BlendModes.ADD)
+                    .setData('baseScale', portraitScale * 1.09);
                 const frame = this.add.rectangle(0, 0, width, height, 0xf0e8db, 1)
                     .setStrokeStyle(1, 0x5d5247, 0.68);
                 const matte = this.add.rectangle(0, -4, width - 12, height - 16, 0x7b7368, 1)
@@ -1891,7 +1965,27 @@ export default class GameScene extends Phaser.Scene {
         });
         this._settingsButtonBg.on('pointerdown', () => this._toggleSettingsOverlay());
 
-        const accept = this._createPhoneButton(366, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
+        this._phoneQuestionPromptGlow = null;
+        this._phoneQuestionPromptFrameGlow = null;
+        this._phoneQuestionPromptFrame = null;
+        this._phoneQuestionPromptScanTop = null;
+        this._phoneQuestionPromptScanBottom = null;
+        this._phoneQuestionPrompt = this.add.text(146, 204, 'AWAITING ANSWER // PRESS YES OR X', {
+            fontFamily: 'Arial',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#15313a',
+            align: 'center',
+            letterSpacing: 1,
+            wordWrap: { width: 220 },
+        }).setOrigin(0.5).setVisible(false);
+
+        this._phoneQuestionFooterBg = null;
+        this._phoneQuestionFooterText = null;
+
+        this._phoneBodyTranscriptVisible = true;
+
+            const accept = this._createPhoneButton(350, 116, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
             width: 44,
             height: 48,
             fontSize: '26px',
@@ -2201,8 +2295,8 @@ export default class GameScene extends Phaser.Scene {
         let fill = button.inactiveFill;
         let stroke = 0x2b2417;
         let textColor = button.inactiveText;
-        let alpha = 0.82;
-        let glowAlpha = 0;
+        let alpha = 0.94;
+        let glowAlpha = 0.08;
 
         if (button.selected) {
             fill = button.activeFill;
@@ -2369,7 +2463,7 @@ export default class GameScene extends Phaser.Scene {
                     ? (debugState?.fixed ? 'PATCH APPLIED' : 'CODE STABLE')
                     : (debugState?.phase === 'repair'
                         ? 'PATCH REQUIRED'
-                        : ((debugState?.corruptionCount || 0) > 0 ? 'CODE CORRUPT' : 'TEST READY'))))
+                        : ((Number(debugState?.dayStage || 1) === 3 && (debugState?.corruptionCount || 0) > 0) ? 'CODE CORRUPT' : 'TEST READY'))))
                 : 'NO CODE MODULE';
             const commsLine = !machineVariant.hasCommunication
                 ? 'NO SIGNAL'
@@ -4032,6 +4126,7 @@ export default class GameScene extends Phaser.Scene {
             GameState.paycheckTotal -= 10;
             this._paycheckDelta -= 10;
             this._hudPayText.setText(this._fmtPay());
+            this._animateHudPayDelta(-10);
             GameState.addSpecialItem({ id: 'purple_circuit', label: 'Purple Circuit' });
             this._syncPurpleCircuitDeskTokenVisibility();
             machineVariant.questionDialogue = {
@@ -4260,7 +4355,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _syncRulebookState(newRuleIds = null) {
-        this._rulebook?.setRuleState(GameState.activeRules, newRuleIds);
+        const allRules = this.cache.json.get('rules') || [];
+        this._rulebook?.setRuleState(allRules, GameState.activeRules, newRuleIds);
     }
 
     _unlockUmbrellaRebellionRule() {
@@ -5476,6 +5572,44 @@ export default class GameScene extends Phaser.Scene {
         this._refreshFactoryActionButtons();
     }
 
+    _syncConveyorBottomLayerPositions() {
+        if (!Array.isArray(this._conveyorBottomLayers) || this._conveyorBottomLayers.length === 0 || !this._conveyorBottomLayerWidth) {
+            return;
+        }
+
+        const startX = -this._conveyorBottomScrollOffset;
+        this._conveyorBottomLayers.forEach((layer, index) => {
+            layer.setPosition(startX + (index * this._conveyorBottomLayerWidth), this._conveyorBottomLayerTop);
+        });
+        this._conveyorBottomFrontLayers?.forEach((layer, index) => {
+            layer.setPosition(startX + (index * this._conveyorBottomLayerWidth), this._conveyorBottomLayerTop);
+        });
+    }
+
+    _setConveyorBottomScrollActive(active, direction = 1) {
+        if (active) {
+            this._conveyorBottomScrollDirection = direction < 0 ? -1 : 1;
+        }
+        this._conveyorBottomScrollActive = Boolean(active)
+            && Array.isArray(this._conveyorBottomLayers)
+            && this._conveyorBottomLayers.length > 1
+            && this._conveyorBottomLayerWidth > 0;
+        this._syncConveyorBeltSoundState();
+    }
+
+    _updateConveyorBottomLayers(delta) {
+        if (!this._conveyorBottomScrollActive || this._gameplayPaused || this._shiftEnding || !this._conveyorBottomLayerWidth) {
+            return;
+        }
+
+        const distance = MACHINE_PRESENTATION.conveyorSpeedPxPerSecond * (delta / 1000) * (this._conveyorBottomScrollDirection || 1);
+        this._conveyorBottomScrollOffset = (
+            (this._conveyorBottomScrollOffset + distance) % this._conveyorBottomLayerWidth
+            + this._conveyorBottomLayerWidth
+        ) % this._conveyorBottomLayerWidth;
+        this._syncConveyorBottomLayerPositions();
+    }
+
     _openMachinePuzzle() {
         if (!this._currentMachineVariant) return;
         if (this._otherPuzzleOverlay?.active) return;
@@ -5672,6 +5806,64 @@ export default class GameScene extends Phaser.Scene {
         this._hudCasesText.setText(`CASES: ${GameState.casesProcessedThisShift}`);
         this._hudPayText.setText(this._fmtPay());
         this._hudViolText.setText(`Violations: ${this._shiftMistakes}`);
+        this._animateHudPayDelta(payDelta);
+    }
+
+    _animateHudPayDelta(payDelta = 0) {
+        if (!payDelta || !this._hudPayText || !this._hudContainer) return;
+
+        this.tweens.killTweensOf(this._hudPayText);
+        this._hudPayText.setScale(1).clearTint();
+        this._hudPayText.setTint(payDelta > 0 ? 0xbaff97 : 0xffa89b);
+
+        this.tweens.add({
+            targets: this._hudPayText,
+            scaleX: 1.14,
+            scaleY: 1.14,
+            duration: 120,
+            yoyo: true,
+            ease: 'Sine.Out',
+            onComplete: () => {
+                this._hudPayText?.setScale(1).clearTint();
+            },
+        });
+
+        const deltaText = this.add.text(1268, 46, `${payDelta > 0 ? '+' : '-'}$${Math.abs(payDelta).toFixed(2)}`, {
+            fontFamily: 'Courier New',
+            fontSize: '16px',
+            fontStyle: 'bold',
+            color: payDelta > 0 ? '#baff97' : '#ff9c90',
+        }).setOrigin(1, 0.5).setAlpha(0.96);
+        this._hudContainer.add(deltaText);
+
+        let payGlint = null;
+        if (payDelta > 0) {
+            payGlint = this.add.rectangle(this._hudPayText.x - 52, this._hudPayText.y, 116, 28, 0xbaff97, 0.18)
+                .setStrokeStyle(1, 0xeaffd6, 0.5)
+                .setOrigin(0.5);
+            this._hudContainer.add(payGlint);
+            this._hudContainer.bringToTop(this._hudPayText);
+            this.tweens.add({
+                targets: payGlint,
+                scaleX: 1.18,
+                scaleY: 1.28,
+                alpha: 0,
+                duration: 420,
+                ease: 'Quad.Out',
+                onComplete: () => payGlint.destroy(),
+            });
+        }
+
+        this.tweens.add({
+            targets: deltaText,
+            y: 24,
+            alpha: 0,
+            duration: 620,
+            ease: 'Quad.Out',
+            onComplete: () => {
+                deltaText.destroy();
+            },
+        });
     }
 
     _recordTrackedMachineOutcome(action, gateState) {
@@ -6128,7 +6320,7 @@ export default class GameScene extends Phaser.Scene {
             };
         }
 
-        if ((debugState?.corruptionCount || 0) > 0) {
+        if (Number(debugState?.dayStage || 1) === 3 && (debugState?.corruptionCount || 0) > 0) {
             return {
                 subtitle: 'CORRUPT',
                 fillColor: 0x5b1815,
@@ -7143,6 +7335,32 @@ export default class GameScene extends Phaser.Scene {
         return finalCase ? { ...finalCase } : null;
     }
 
+    _primeKonamiEndingState(route = null) {
+        GameState.day = GameState.totalDays;
+        GameState.recomputeActiveRules();
+
+        if (!route?.finishUmbrellaQuest) {
+            GameState.umbrellaQuest = null;
+            return;
+        }
+
+        GameState.umbrellaQuest = {
+            active: true,
+            failed: false,
+            stage: 'pending-day4',
+            specialRequest: false,
+            stealingEnabled: false,
+            dealerResolved: true,
+            dealerOutcome: 'override-finished',
+            requiredParts: this._createUmbrellaPartCounts(1),
+            collectedParts: this._createUmbrellaPartCounts(1),
+            appliedParts: this._createUmbrellaPartCounts(1),
+            specialCircuitDelivered: true,
+            deliveredPurpleCircuit: Boolean(route?.deliveredPurpleCircuit),
+            deliveredClownCircuit: Boolean(route?.deliveredClownCircuit),
+        };
+    }
+
     _handleKonamiKey(event) {
         if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
             console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
@@ -7486,9 +7704,18 @@ export default class GameScene extends Phaser.Scene {
             }
         }
 
+        if (this._pendingExitAction !== 'scrap') {
+            this._setConveyorBottomScrollActive(true, -1);
+        }
+
         this.tweens.add({
             ...exitTween,
-            onComplete,
+            onComplete: () => {
+                if (this._pendingExitAction !== 'scrap') {
+                    this._setConveyorBottomScrollActive(false);
+                }
+                onComplete?.();
+            },
         });
     }
 
@@ -8068,6 +8295,24 @@ export default class GameScene extends Phaser.Scene {
         const flowHovered = this._miniMachinePanelHoverPort === 'flow';
         const codeHovered = this._miniMachinePanelHoverPort === 'code';
         const gearHovered = this._miniMachinePanelHoverPort === 'gear';
+
+        if (!hasMachine) {
+            [
+                this._miniGridPort,
+                this._miniFlowPort,
+                this._miniCodePort,
+                this._miniGearPort,
+            ].forEach((port) => {
+                port?.frame
+                    ?.setFillStyle(0x091116, 0.08)
+                    .setStrokeStyle(2, 0x8bb8ff, 0.42)
+                    .setAlpha(alpha);
+                port?.label
+                    ?.setColor('#8fa9b8')
+                    .setAlpha(alpha);
+            });
+            return;
+        }
 
         let gridStroke = 0x8bb8ff;
         let gridFill = 0x243041;
@@ -8913,7 +9158,7 @@ export default class GameScene extends Phaser.Scene {
         const actualOutput = debugState?.actualOutput || expectedOutput;
         const solved = Boolean(debugState?.completed);
         const patchMode = debugState?.phase === 'repair' && !solved;
-        const corrupt = !solved && (debugState?.corruptionCount || 0) > 0;
+        const corrupt = !solved && Number(debugState?.dayStage || 1) === 3 && (debugState?.corruptionCount || 0) > 0;
         const hasMismatch = !solved && Boolean(actualOutput) && actualOutput !== expectedOutput;
         const accentColor = solved
             ? 0x75ffaf

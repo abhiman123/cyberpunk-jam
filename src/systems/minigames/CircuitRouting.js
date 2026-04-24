@@ -153,6 +153,7 @@ function finalizeTile(cell) {
         }
         return;
     }
+    // count === 1: dead-end stub - use a straight that covers the direction
     // count === 1: dead-end stub — use a straight that covers the direction
     cell.type = 'straight';
     cell.rotation = (bits[0] || bits[2]) ? 0 : 1;
@@ -163,8 +164,8 @@ function generateCircuit(spec, rows, cols) {
         Array.from({ length: cols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     );
     const sr = spec.sourceRow ?? spec.sources?.[0]?.row ?? Math.floor(rows / 2) ?? 2;
-    const outputRows = spec.outputSpecs 
-        ? spec.outputSpecs.map(s => Number(s.row)) 
+    const outputRows = spec.outputSpecs
+        ? spec.outputSpecs.map(s => Number(s.row))
         : Object.keys(spec.outputs || {}).map(Number);
 
     outputRows.forEach((outRow, i) => {
@@ -1070,6 +1071,7 @@ export default class CircuitRouting extends MinigameBase {
         // Always rotate forward one quarter-turn per click for clear turn feedback.
         const tweenTargetAngle = tileView.container.angle + 90;
         const finalAngle = targetRotation * 90;
+        // Snap to the previous clean step so the tween always covers exactly 90 degrees,
         // Snap to the previous clean step so the tween always covers exactly 90°,
         // preventing a jump when a rapid click interrupts a mid-animation tween.
         tileView.container.angle = ((targetRotation - 1 + 4) % 4) * 90;
