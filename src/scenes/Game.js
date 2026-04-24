@@ -5355,48 +5355,27 @@ export default class GameScene extends Phaser.Scene {
 
         const controlsCenterX = 804;
         const buttonBaseScale = 0.76;
-        const buttonY = 650;
+        const buttonY = 665;
         const rulingDefs = [
-            { action: 'scrap', x: 465, textureKey: 'btn_scrap' },
-            { action: 'approve', x: 520, textureKey: 'btn_accept' },
+            { action: 'scrap', x: 495, textureKey: 'btn_scrap' },
+            { action: 'approve', x: 492, textureKey: 'btn_accept' },
         ];
 
         this._conveyorRulingButtons = {};
         rulingDefs.forEach((def) => {
             const buttonImage = this.add.image(def.x, buttonY, def.textureKey)
-                .setScale(buttonBaseScale)
-                .setInteractive({ useHandCursor: true });
-
-            buttonImage.setData('baseScale', buttonBaseScale);
-
-            const setScaleTween = (targetScale, duration) => {
-                this.tweens.killTweensOf(buttonImage);
-                this.tweens.add({
-                    targets: buttonImage,
-                    scale: targetScale,
-                    duration,
-                    ease: 'Quad.Out',
-                });
-            };
+                .setInteractive(this.input.makePixelPerfect(0));
 
             buttonImage.on('pointerover', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                setScaleTween(buttonBaseScale * 1.08, 90);
+                buttonImage.setTint(0xffffff);
             });
             buttonImage.on('pointerout', () => {
-                setScaleTween(buttonBaseScale, 120);
+                if (!this._canUseFactoryDecisionButtons()) return;
+                buttonImage.setTint(0x7f7f7f);
             });
             buttonImage.on('pointerdown', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                this.tweens.killTweensOf(buttonImage);
-                this.tweens.add({
-                    targets: buttonImage,
-                    scale: buttonBaseScale * 0.82,
-                    duration: 60,
-                    ease: 'Quad.Out',
-                    yoyo: true,
-                    onComplete: () => buttonImage.setScale(buttonBaseScale),
-                });
                 this._submitRuling(def.action);
             });
 
