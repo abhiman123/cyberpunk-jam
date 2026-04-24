@@ -71,8 +71,8 @@ export default class BootScene extends Phaser.Scene {
         this._createNearestUpscaledTexture('mainview_second_source', 'mainview_second', 4);
         this._createNearestUpscaledTexture('mainview_lightradiance_source', 'mainview_lightradiance', 4);
         this._createNearestUpscaledTexture('mainview_lightlayer_source', 'mainview_lightlayer', 4);
-        this._createNearestUpscaledTexture('mainview_fam2_source', 'mainview_fam2', 4);
-        this._createNearestUpscaledTexture('mainview_fam1_source', 'mainview_fam1', 4);
+        this._createCroppedUpscaledTexture('mainview_fam2_source', 'mainview_fam2', 4, { sx: 60, sy: 173, sw: 20, sh: 17 });
+        this._createCroppedUpscaledTexture('mainview_fam1_source', 'mainview_fam1', 4, { sx: 38, sy: 172, sw: 26, sh: 14 });
         this._createCroppedUpscaledTexture('btn_scrap_source', 'btn_scrap', 4, { sx: 96, sy: 169, sw: 54, sh: 20 });
         this._createCroppedUpscaledTexture('btn_accept_source', 'btn_accept', 4, { sx: 96, sy: 169, sw: 54, sh: 20 });
     }

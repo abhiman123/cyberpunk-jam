@@ -3139,7 +3139,7 @@ export default class GameScene extends Phaser.Scene {
 
     _getMachineLinkHeader(machineVariant = this._currentMachineVariant) {
         if (!machineVariant) return 'FACTORY LINK';
-        return `${machineVariant.name.toUpperCase()} LINK`;
+        return machineVariant.name.toUpperCase();
     }
 
     _garbleMachineText(text) {
@@ -5217,10 +5217,35 @@ export default class GameScene extends Phaser.Scene {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
         }
+        // Fam images are cropped tight sprites; game coords = source_center * (1280/320, 720/195)
+        const famPositions = {
+            mainview_fam1: { x: 202, y: 659 },
+            mainview_fam2: { x: 278, y: 669 },
+        };
+
+        this._mainViewLayers = {};
         mainViewLayerKeys.forEach((key) => {
             if (!this.textures.exists(key)) return;
-            const layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
+
+            let layer;
+            if (key === 'mainview_bottom' || key === 'mainview_second') {
+                const texFrame = this.textures.getFrame(key);
+                layer = this.add.tileSprite(640, 360, texFrame.width, texFrame.height, key).setDisplaySize(1280, 720);
+            } else if (famPositions[key]) {
+                const pos = famPositions[key];
+                layer = this.add.image(pos.x, pos.y, key).setScale(1);
+                layer.setInteractive({ useHandCursor: true, draggable: true });
+                this.input.setDraggable(layer);
+                layer.on('drag', (pointer, dragX, dragY) => {
+                    layer.x = dragX;
+                    layer.y = dragY;
+                });
+            } else {
+                layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
+            }
+
             this._conveyorContainer.add(layer);
+            this._mainViewLayers[key] = layer;
         });
 
         this._monitorText = this.add.text(130, 375,
@@ -5452,15 +5477,20 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _setConveyorRulingButtonsVisible(visible) {
-        const isVisible = Boolean(visible) && this._screen === 'conveyor';
+        const isActive = Boolean(visible) && this._screen === 'conveyor';
         Object.values(this._conveyorRulingButtons).forEach((button) => {
-            button.bgRect.setVisible(isVisible);
             const baseScale = button.bgRect.getData('baseScale') || 1;
             button.bgRect.setScale(baseScale);
+            button.bgRect.setAlpha(isActive ? 1 : 0.85);
+            if (isActive) {
+                button.bgRect.setInteractive({ useHandCursor: true });
+            } else {
+                button.bgRect.disableInteractive();
+            }
         });
 
         if (this._factoryControlsContainer) this._factoryControlsContainer.setVisible(this._screen === 'conveyor');
-        if (this._conveyorDecisionHint) this._conveyorDecisionHint.setVisible(isVisible);
+        if (this._conveyorDecisionHint) this._conveyorDecisionHint.setVisible(isActive);
         this._refreshOtherPuzzleButton();
         this._refreshFactoryActionButtons();
     }
@@ -6104,15 +6134,20 @@ export default class GameScene extends Phaser.Scene {
         const canInteract = this._canUseFactoryDecisionButtons();
         const gateState = this._getPuzzleGateState();
         const hasUnit = Boolean(this._currentCase) && this._screen === 'conveyor';
-        const readyAlpha = canInteract ? 1 : (hasUnit ? 0.68 : 0.38);
-        const gatedAlpha = canInteract ? 0.62 : (hasUnit ? 0.52 : 0.38);
+        const readyAlpha = canInteract ? 1 : (hasUnit ? 0.95 : 0.85);
+        const gatedAlpha = canInteract ? 0.9 : (hasUnit ? 0.85 : 0.75);
         const acceptOverrideReady = Boolean(this._pendingUnsafeAcceptConfirmation) && hasUnit;
 
         Object.entries(this._conveyorRulingButtons).forEach(([action, button]) => {
-            const alpha = action === 'scrap'
-                ? readyAlpha
-                : ((gateState.ready || acceptOverrideReady) ? readyAlpha : gatedAlpha);
+            const isReady = (action === 'scrap') || gateState.ready || acceptOverrideReady;
+            const alpha = isReady ? readyAlpha : gatedAlpha;
             button.bgRect.setAlpha(alpha);
+            
+            if (isReady && canInteract) {
+                button.bgRect.clearTint();
+            } else {
+                button.bgRect.setTint(0x778899);
+            }
         });
 
         this._refreshOtherPuzzleButton();
@@ -6574,7 +6609,7 @@ export default class GameScene extends Phaser.Scene {
 
     _promptUnsafeAcceptConfirmation() {
         const header = this._currentMachineVariant
-            ? `${this._currentMachineVariant.name.toUpperCase()} LINK`
+            ? this._currentMachineVariant.name.toUpperCase()
             : 'FACTORY LINK';
 
         this._pendingUnsafeAcceptConfirmation = true;
@@ -6848,7 +6883,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (this._currentMachineVariant) {
             this._showPhonePanel(
-                `${this._currentMachineVariant.name.toUpperCase()} LINK`,
+                this._currentMachineVariant.name.toUpperCase(),
                 this._getPhoneViewState('chat').body,
                 `PROCESSING ${action.toUpperCase()}`,
                 'chat'
@@ -7394,6 +7429,18 @@ export default class GameScene extends Phaser.Scene {
 
         this._unitMoveTween?.stop();
         this._unitMoveTween = null;
+        this._conveyorAnimTween?.stop();
+        this._conveyorAnimTween = null;
+
+        const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
+        if (conveyorLayers.length > 0) {
+            this._conveyorAnimTween = this.tweens.add({
+                targets: conveyorLayers,
+                tilePositionX: `+=${travelDistance}`,
+                duration: tweenDurationMs,
+                ease: 'Linear',
+            });
+        }
 
         this._unitMoveTween = this.tweens.add({
             targets: this._unitContainer,
@@ -7473,6 +7520,20 @@ export default class GameScene extends Phaser.Scene {
                 duration: 500,
                 ease: 'Cubic.In',
             };
+
+        if (this._pendingExitAction !== 'scrap') {
+            const travelDistance = Math.abs(1490 - this._unitContainer.x);
+            const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
+            if (conveyorLayers.length > 0) {
+                this._conveyorAnimTween?.stop();
+                this._conveyorAnimTween = this.tweens.add({
+                    targets: conveyorLayers,
+                    tilePositionX: `-=${travelDistance}`,
+                    duration: 500,
+                    ease: 'Linear',
+                });
+            }
+        }
 
         this.tweens.add({
             ...exitTween,

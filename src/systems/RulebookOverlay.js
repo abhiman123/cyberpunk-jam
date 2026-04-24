@@ -2,33 +2,35 @@ import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
-const DEPTH        = 430;
-const CX           = 640;   // panel center X
-const CY           = 360;   // panel center Y
-const PANEL_W      = 900;
-const PANEL_H      = 520;
+const DEPTH     = 430;
+const CX        = 640;
+const CY        = 360;
+const PANEL_W   = 900;
+const PANEL_H   = 520;
+const HEADER_H  = 50;
+const TAB_BAR_H = 38;
 
-// Subsystem tag colors
+// Tag colors for details
 const TAG_COLORS = {
-    GRID:  '#62e8a4',
-    FLOW:  '#62b4ff',
-    GEAR:  '#ffcc55',
-    CODE:  '#ff8fdb',
-    NOTE:  '#aaaaaa',
+    GRID: '#62e8a4',
+    FLOW: '#62b4ff',
+    GEAR: '#ffcc55',
+    CODE: '#ff8fdb',
+    NOTE: '#aaaaaa',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default class RulebookOverlay {
     constructor(scene, activeRuleIds, allRules, newRuleIds = [], callbacks = {}) {
-        this.scene          = scene;
-        this.activeRuleIds  = Array.isArray(activeRuleIds) ? [...activeRuleIds] : [];
-        this.allRules       = Array.isArray(allRules) ? allRules : [];
-        this.newRuleIds     = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
-        this._callbacks     = callbacks;
-        this._visible       = false;
-        this._contentNodes  = [];
-        this._selectedDay   = 1;  // Track the currently selected day
+        this.scene         = scene;
+        this.activeRuleIds = Array.isArray(activeRuleIds) ? [...activeRuleIds] : [];
+        this.allRules      = Array.isArray(allRules) ? allRules : [];
+        this.newRuleIds    = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
+        this._callbacks    = callbacks;
+        this._visible      = false;
+        this._contentNodes = [];
+        this._selectedDay  = 1;
 
         this._handleEscape = this._handleEscape.bind(this);
         this._handleToggle = this._handleToggle.bind(this);
@@ -95,26 +97,24 @@ export default class RulebookOverlay {
     _build() {
         this._root = this.scene.add.container(0, 0).setDepth(DEPTH).setVisible(false);
 
-        // ── Backdrop ──────────────────────────────────────────────────────────
+        // Backdrop
         this._backdrop = this.scene.add.rectangle(CX, CY, 1280, 720, 0x000000, 0.88)
             .setInteractive({ useHandCursor: false });
         this._backdrop.on('pointerdown', () => this.hide());
 
-        // ── Panel shell ───────────────────────────────────────────────────────
+        // Panel shell
         this._panel = this.scene.add.container(CX, CY);
 
         const shadow = this.scene.add.rectangle(6, 8, PANEL_W + 16, PANEL_H + 16, 0x000000, 0.36);
-        const shell  = this.scene.add.rectangle(0, 0, PANEL_W,       PANEL_H,      0x0e1419, 1)
+        const shell  = this.scene.add.rectangle(0, 0, PANEL_W,      PANEL_H,      0x0e1419, 1)
             .setStrokeStyle(2, 0x3a4a55, 0.96);
-        const inner  = this.scene.add.rectangle(0, 0, PANEL_W - 12,  PANEL_H - 12, 0x111820, 1)
+        const inner  = this.scene.add.rectangle(0, 0, PANEL_W - 12, PANEL_H - 12, 0x111820, 1)
             .setStrokeStyle(1, 0x2a3840, 0.72);
 
         // ── Header bar ────────────────────────────────────────────────────────
-        const headerH  = 50;
-        const headerY  = -(PANEL_H / 2) + (headerH / 2);
-        const headerBg = this.scene.add.rectangle(0, headerY, PANEL_W, headerH, 0x131d25, 1)
+        const headerY  = -(PANEL_H / 2) + HEADER_H / 2;
+        const headerBg = this.scene.add.rectangle(0, headerY, PANEL_W, HEADER_H, 0x131d25, 1)
             .setStrokeStyle(1, 0x304050, 0.8);
-        const accentLine = this.scene.add.rectangle(0, headerY + headerH / 2, PANEL_W, 1, 0x3ea8c0, 0.55);
 
         this._headerTitle = this.scene.add.text(-(PANEL_W / 2) + 24, headerY, 'RULEBOOK', {
             fontFamily: 'Courier New', fontSize: '17px', color: '#c8e8f4', letterSpacing: 4,
@@ -134,194 +134,209 @@ export default class RulebookOverlay {
         closeBg.on('pointerout',  () => { closeBg.setFillStyle(0x1c2a34, 1); closeLabel.setColor('#8ab4c4'); });
         closeBg.on('pointerdown', () => this.hide());
 
-        // ── Day buttons container (positioned relative to content) ────────────
+        // ── Tab bar ───────────────────────────────────────────────────────────
+        const tabBarY  = -(PANEL_H / 2) + HEADER_H + TAB_BAR_H / 2;
+        const tabBarBg = this.scene.add.rectangle(0, tabBarY, PANEL_W, TAB_BAR_H, 0x0d1318, 1);
+        const tabBarSep = this.scene.add.rectangle(0, tabBarY + TAB_BAR_H / 2, PANEL_W, 1, 0x253038, 1);
+
+        // Directive count (right side of tab bar)
+        this._directiveCount = this.scene.add.text((PANEL_W / 2) - 20, tabBarY, '', {
+            fontFamily: 'Courier New', fontSize: '12px', color: '#4e6a7a', letterSpacing: 2,
+        }).setOrigin(1, 0.5);
+
+        // Day buttons container (left side of tab bar)
         this._dayButtonsContainer = this.scene.add.container(0, 0);
         this._dayButtons = [];
 
-        // ── Content container (rebuilt on every show/refresh) ─────────────────
-        this._contentContainer = this.scene.add.container(-(PANEL_W / 2) + 28, headerY + headerH / 2 + 45);
+        // ── Content container ─────────────────────────────────────────────────
+        const contentStartY = -(PANEL_H / 2) + HEADER_H + TAB_BAR_H + 18;
+        this._contentContainer = this.scene.add.container(-(PANEL_W / 2) + 28, contentStartY);
 
         this._panel.add([
             shadow, shell, inner,
-            headerBg, accentLine,
+            headerBg,
             this._headerTitle, this._headerDay,
             closeBg, closeLabel,
-            this._contentContainer,
+            tabBarBg, tabBarSep,
+            this._directiveCount,
             this._dayButtonsContainer,
+            this._contentContainer,
         ]);
 
         this._root.add([this._backdrop, this._panel]);
     }
 
-    // ── Build day buttons ─────────────────────────────────────────────────────
+    // ── Build day tabs ────────────────────────────────────────────────────────
 
     _buildDayButtons() {
-        // Clear previous buttons
         this._dayButtons.forEach((btn) => btn.destroy(true));
         this._dayButtons = [];
         this._dayButtonsContainer.removeAll(true);
 
-        const maxDay = GameState.day;  // Only show buttons up to current day
-        const buttonW = 40;
-        const buttonH = 32;
-        const gap = 8;
-        let x = 0;
+        const maxDay  = GameState.day;
+        const tabBarY = -(PANEL_H / 2) + HEADER_H + TAB_BAR_H / 2;
+        const tabW    = 40;
+        const tabH    = 26;
+        const gap     = 6;
+        const startX  = -(PANEL_W / 2) + 20;
+
+        this._dayButtonsContainer.setPosition(0, 0);
 
         for (let day = 1; day <= maxDay; day++) {
             const isSelected = day === this._selectedDay;
-            
-            // Color based on day number for consistency with text coloring
-            let btnColor, btnStroke, textColor;
-            if (isSelected) {
-                btnColor = 0x3ea8c0;
-                btnStroke = 0x62e8a4;
-                textColor = '#f0f8fc';
-            } else {
-                // Match the color progression used in the rule badges
-                btnColor = 0x1c2a34;
-                btnStroke = 0x4a6070;
-                textColor = '#8ab4c4';
-            }
+            const x = startX + (day - 1) * (tabW + gap) + tabW / 2;
 
-            const btnBg = this.scene.add.rectangle(x + buttonW / 2, 0, buttonW, buttonH, 
-                btnColor, 1)
-                .setOrigin(0.5, 0).setStrokeStyle(1, btnStroke, 0.82)
+            const bgColor   = isSelected ? 0x1e3040 : 0x0d1318;
+            const stroke    = isSelected ? 0x3ea8c0 : 0x2a3840;
+            const textColor = isSelected ? '#c8e8f4' : '#4e7080';
+
+            const tabBg = this.scene.add.rectangle(x, tabBarY, tabW, tabH, bgColor, 1)
+                .setOrigin(0.5).setStrokeStyle(1, stroke, 1)
                 .setInteractive({ useHandCursor: true });
 
-            const btnText = this.scene.add.text(x + buttonW / 2, buttonH / 2, `D${day}`, {
+            const tabText = this.scene.add.text(x, tabBarY, `D${day}`, {
                 fontFamily: 'Courier New', fontSize: '12px',
-                color: textColor,
-                letterSpacing: 1,
+                color: textColor, letterSpacing: 1,
             }).setOrigin(0.5);
 
-            // Hover effects
-            btnBg.on('pointerover', () => {
+            tabBg.on('pointerover', () => {
                 if (day !== this._selectedDay) {
-                    btnBg.setFillStyle(0x243644, 1);
-                    btnText.setColor('#c8e8f4');
+                    tabBg.setFillStyle(0x162430, 1);
+                    tabText.setColor('#8ab4c4');
                 }
             });
-
-            btnBg.on('pointerout', () => {
+            tabBg.on('pointerout', () => {
                 if (day !== this._selectedDay) {
-                    btnBg.setFillStyle(0x1c2a34, 1);
-                    btnText.setColor('#8ab4c4');
+                    tabBg.setFillStyle(0x0d1318, 1);
+                    tabText.setColor('#4e7080');
                 }
             });
-
-            btnBg.on('pointerdown', () => {
+            tabBg.on('pointerdown', () => {
                 this._selectedDay = day;
                 this._buildDayButtons();
                 this._refresh();
             });
 
-            this._dayButtons.push(btnBg);
-            this._dayButtons.push(btnText);
-            this._dayButtonsContainer.add([btnBg, btnText]);
-
-            x += buttonW + gap;
+            this._dayButtons.push(tabBg, tabText);
+            this._dayButtonsContainer.add([tabBg, tabText]);
         }
     }
 
     // ── Content (rebuilt on every show/refresh) ───────────────────────────────
 
     _refresh() {
-        // Destroy previous content
         this._contentNodes.forEach((n) => n.destroy());
         this._contentNodes = [];
         this._contentContainer.removeAll(false);
 
-        // Build day buttons
         this._buildDayButtons();
-
-        // Position day buttons right above the content (moved 8 pixels lower: +5 original +3 new)
-        this._dayButtonsContainer.setPosition(-(PANEL_W / 2) + 28, -(PANEL_H / 2) + 50 + 45 - 50 + 8);
-
-        // Update header day chip
         this._headerDay.setText(`DAY ${this._selectedDay}  ·  ACTIVE DIRECTIVES`);
 
-        // Filter rules: only show rules that match the selected day AND are in activeRuleIds
-        const activeRules = this.allRules.filter((r) => 
+        const activeRules = this.allRules.filter((r) =>
             this.activeRuleIds.includes(r.id) && r.period === this._selectedDay
         );
-        const contentW    = PANEL_W - 48;  // available width inside container
-        const bodyW       = contentW - 24;
+
+        // Directive count in tab bar
+        const count = activeRules.length;
+        this._directiveCount.setText(`${count} DIRECTIVE${count !== 1 ? 'S' : ''}`);
+
+        const contentW = PANEL_W - 56;
         let y = 0;
 
         if (activeRules.length === 0) {
             y = this._addNote('No directives loaded for this shift.', y, contentW);
         }
 
-        activeRules.forEach((rule, ruleIndex) => {
-            const isNew = this.newRuleIds.has(rule.id);
-
-            // ── Rule header row ───────────────────────────────────────────────
-            if (ruleIndex > 0) {
-                const sep = this.scene.add.rectangle(contentW / 2, y + 6, contentW, 1, 0x253038, 0.8).setOrigin(0.5, 0);
+        activeRules.forEach((rule, idx) => {
+            if (idx > 0) {
+                const sep = this.scene.add.rectangle(contentW / 2, y + 8, contentW, 1, 0x1e2c38, 1).setOrigin(0.5, 0);
                 this._push(sep);
-                y += 20;
+                y += 22;
             }
 
-            // Day badge + rule headline
-            const badgeColor = rule.id === 101 ? '#7c4fc7' : isNew ? '#d4a841' : '#2a5a6a';
-            const badgeStroke = rule.id === 101 ? 0x9b6de8 : isNew ? 0xe6c060 : 0x3d7a8a;
-            const badgeBg = this.scene.add.rectangle(24, y + 10, 46, 22, Phaser.Display.Color.HexStringToColor(badgeColor).color, 0.9)
-                .setOrigin(0.5, 0).setStrokeStyle(1, badgeStroke, 0.8);
-            const badgeText = this.scene.add.text(24, y + 10, rule.id === 101 ? 'NET' : `D${rule.period}`, {
-                fontFamily: 'Courier New', fontSize: '11px',
-                color: rule.id === 101 ? '#e2c8ff' : isNew ? '#fff8d4' : '#8fd4e8',
-                letterSpacing: 1,
-            }).setOrigin(0.5, 0);
+            const isNew     = this.newRuleIds.has(rule.id);
+            const isUmbrella = rule.id === 101;
 
-            const headline = this.scene.add.text(58, y + 10, rule.text, {
-                fontFamily: 'Courier New', fontSize: '16px',
-                color: isNew ? '#f0d98a' : '#c8dce8',
-                wordWrap: { width: bodyW - 58 }, lineSpacing: 5,
+            // ── Badge row ─────────────────────────────────────────────────────
+            const BADGE_W = 36;
+            const BADGE_H = 22;
+            const NEW_W   = 44;
+            const GAP     = 6;
+
+            // Day / type badge
+            const dBadgeColor  = isUmbrella ? 0x3d1f6e : isNew ? 0x3a2e08 : 0x0e2030;
+            const dBadgeStroke = isUmbrella ? 0x9b6de8 : isNew ? 0xe6c060 : 0x3d7a8a;
+            const dBadgeFg     = isUmbrella ? '#e2c8ff' : isNew ? '#f5d86a' : '#8fd4e8';
+            const dBadgeLabel  = isUmbrella ? 'NET' : `D${rule.period}`;
+
+            const dBg = this.scene.add.rectangle(BADGE_W / 2, y + BADGE_H / 2, BADGE_W, BADGE_H, dBadgeColor, 1)
+                .setOrigin(0.5).setStrokeStyle(1, dBadgeStroke, 0.9);
+            const dTx = this.scene.add.text(BADGE_W / 2, y + BADGE_H / 2, dBadgeLabel, {
+                fontFamily: 'Courier New', fontSize: '11px', color: dBadgeFg, letterSpacing: 1,
+            }).setOrigin(0.5);
+            this._push(dBg, dTx);
+
+            let textX = BADGE_W + GAP;
+
+            // NEW badge
+            if (isNew) {
+                const nBg = this.scene.add.rectangle(textX + NEW_W / 2, y + BADGE_H / 2, NEW_W, BADGE_H, 0x3a2e08, 1)
+                    .setOrigin(0.5).setStrokeStyle(1, 0xe6c060, 0.85);
+                const nTx = this.scene.add.text(textX + NEW_W / 2, y + BADGE_H / 2, 'NEW', {
+                    fontFamily: 'Courier New', fontSize: '11px', color: '#f5d86a', letterSpacing: 2,
+                }).setOrigin(0.5);
+                this._push(nBg, nTx);
+                textX += NEW_W + GAP;
+            }
+
+            // ── Main rule text ────────────────────────────────────────────────
+            const textColor = isUmbrella ? '#d4b8ff' : isNew ? '#f0d98a' : '#c8dce8';
+            const ruleText  = this.scene.add.text(textX, y, rule.text, {
+                fontFamily: 'Courier New', fontSize: '15px', color: textColor,
+                wordWrap: { width: contentW - textX }, lineSpacing: 5,
             }).setOrigin(0, 0);
+            this._push(ruleText);
 
-            this._push(badgeBg, badgeText, headline);
-            y += headline.height + 28;
+            y += Math.max(BADGE_H, ruleText.height) + 14;
 
-            // ── Subsystem details ─────────────────────────────────────────────
+            // ── Details ───────────────────────────────────────────────────────
             if (Array.isArray(rule.details) && rule.details.length > 0) {
                 rule.details.forEach((detail) => {
                     const tagMatch = detail.match(/^\[([A-Z]+)\]\s*/);
                     const tag      = tagMatch ? tagMatch[1] : null;
-                    const bodyStr  = tag ? detail.slice(tagMatch[0].length) : detail;
+                    const body     = tag ? detail.slice(tagMatch[0].length) : detail;
                     const tagColor = tag ? (TAG_COLORS[tag] || '#aaaaaa') : TAG_COLORS.NOTE;
 
                     let lineX = 8;
 
                     if (tag) {
-                        const pillBg = this.scene.add.rectangle(lineX + 24, y + 5, 54, 19, 0x0e1a20, 1)
+                        const pBg = this.scene.add.rectangle(lineX + 26, y + 4, 54, 19, 0x0e1a20, 1)
                             .setOrigin(0.5, 0).setStrokeStyle(1, Phaser.Display.Color.HexStringToColor(tagColor).color, 0.7);
-                        const pillText = this.scene.add.text(lineX + 24, y + 5, tag, {
-                            fontFamily: 'Courier New', fontSize: '12px', color: tagColor, letterSpacing: 1,
+                        const pTx = this.scene.add.text(lineX + 26, y + 4, tag, {
+                            fontFamily: 'Courier New', fontSize: '11px', color: tagColor, letterSpacing: 1,
                         }).setOrigin(0.5, 0);
-                        this._push(pillBg, pillText);
-                        lineX += 60;
+                        this._push(pBg, pTx);
+                        lineX += 62;
                     }
 
-                    const bodyText = this.scene.add.text(lineX, y + 4, bodyStr, {
-                        fontFamily: 'Courier New', fontSize: '14px', color: '#9ab4c2',
-                        wordWrap: { width: bodyW - lineX }, lineSpacing: 4,
+                    const bodyTx = this.scene.add.text(lineX, y + 3, body, {
+                        fontFamily: 'Courier New', fontSize: '13px', color: '#6a8fa2',
+                        wordWrap: { width: contentW - lineX }, lineSpacing: 4,
                     }).setOrigin(0, 0);
-                    this._push(bodyText);
-
-                    y += Math.max(bodyText.height, 18) + 12;
+                    this._push(bodyTx);
+                    y += Math.max(bodyTx.height, 18) + 10;
                 });
 
-                y += 6;
+                y += 4;
             }
         });
+
         this._contentContainer.add(this._contentNodes);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    _push(...nodes) {
-        nodes.forEach((n) => this._contentNodes.push(n));
-    }
+    _push(...nodes) { nodes.forEach((n) => this._contentNodes.push(n)); }
 
     _addNote(text, y, contentW) {
         const t = this.scene.add.text(0, y, text, {
