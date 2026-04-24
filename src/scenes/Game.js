@@ -5439,10 +5439,10 @@ export default class GameScene extends Phaser.Scene {
             repeat: -1,
         });
 
-        this._feedbackText = this.add.text(controlsCenterX, 562, '', {
-            fontFamily: 'Courier New', fontSize: '12px', color: '#ff4444',
+        this._feedbackText = this.add.text(640, 360, '', {
+            fontFamily: 'Courier New', fontSize: '25px', fontStyle: 'bold', color: '#e71313',
             stroke: '#000000', strokeThickness: 2, align: 'center',
-            wordWrap: { width: 460 },
+            wordWrap: { width: 700 },
         }).setOrigin(0.5).setAlpha(0);
         this._factoryControlsContainer.add(this._feedbackText);
 
