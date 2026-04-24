@@ -1839,7 +1839,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this._phoneHeaderText = this.add.text(34, 30, 'FACTORY LINK', {
-            fontFamily: 'Arial Black', fontSize: '16px', color: '#0c171b',
+            fontFamily: 'Arial Black', fontSize: '13px', color: '#0c171b',
             wordWrap: { width: 258 },
         });
         this._phoneBodyText = this.add.text(36, 60, '', {
@@ -2322,7 +2322,7 @@ export default class GameScene extends Phaser.Scene {
         const view = this._getPhoneViewState('info');
 
         if (!machineVariant) {
-            view.header = 'UNIT DOSSIER';
+            view.header = 'UNIT INFO';
             view.body = [
                 `DAY ${GameState.day}`,
                 '',
@@ -2394,7 +2394,7 @@ export default class GameScene extends Phaser.Scene {
                 ]
                 : [];
 
-            view.header = `${machineVariant.name.toUpperCase()} DOSSIER`;
+            view.header = machineVariant.name.toUpperCase();
             view.body = [
                 `UNIT: ${this._currentCase?.id || 'UNKNOWN'}`,
                 `MODEL: ${machineVariant.name}`,
@@ -2712,6 +2712,7 @@ export default class GameScene extends Phaser.Scene {
             );
             this._setPhoneButtonSelection(null);
             this._setPhoneButtonsActive(true);
+            this._phoneRingingSound = this._playOneShot(SOUND_ASSETS.phoneRinging, { volume: SOUND_VOLUMES.phoneRinging, loop: true });
         });
     }
 
@@ -4666,14 +4667,23 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, callConfig.incomingBody, 'PRESS ✓ OR X', 'chat');
             this._setPhoneButtonSelection(null);
             this._setPhoneButtonsActive(true);
-            this._playOneShot(SOUND_ASSETS.phoneRing, { volume: SOUND_VOLUMES.phoneRing });
+            this._phoneRingingSound = this._playOneShot(SOUND_ASSETS.phoneRinging, { volume: SOUND_VOLUMES.phoneRinging, loop: true });
         });
+    }
+
+    _stopPhoneRinging() {
+        if (this._phoneRingingSound) {
+            this._phoneRingingSound.stop();
+            this._phoneRingingSound.destroy();
+            this._phoneRingingSound = null;
+        }
     }
 
     _onPhoneChoice(choice) {
         if (!this._phoneButtonsActive) return;
 
         if (this._phoneChoicePhase === 'incoming') {
+            this._stopPhoneRinging();
             if (choice === 'accept') {
                 this._setPhoneButtonSelection('accept');
                 this._setPhoneButtonsActive(false);
@@ -4686,6 +4696,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (this._phoneChoicePhase === 'incoming-brief') {
+            this._stopPhoneRinging();
             this._setPhoneButtonSelection(choice);
             this._setPhoneButtonsActive(false);
             this._dismissPhoneGate();
@@ -5342,6 +5353,7 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorUnitSprite.on('pointerdown', () => {
             if (this._screen !== 'conveyor' || this._actionLocked || this._settingsOpen) return;
             if (!this._currentMachineVariant) return;
+            if (this._tutorialArrow?.visible) this._tutorialArrow.setVisible(false);
             if (this._miniMachinePanelVisible && !this._machinePuzzleOverlay?.isVisible() && !this._otherPuzzleOverlay?.active && !this._gearPuzzleOverlay?.active && !this._debugPuzzleOverlay?.active) {
                 this._hideMiniMachinePanel();
                 return;
@@ -5365,7 +5377,8 @@ export default class GameScene extends Phaser.Scene {
         rulingDefs.forEach((def) => {
             const buttonImage = this.add.image(def.x, buttonY, def.textureKey)
                 .setScale(buttonBaseScale)
-                .setInteractive({ useHandCursor: true });
+                .setInteractive(this.input.makePixelPerfect(200));
+            buttonImage.input.cursor = 'pointer';
 
             buttonImage.setData('baseScale', buttonBaseScale);
 
@@ -5414,6 +5427,19 @@ export default class GameScene extends Phaser.Scene {
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5).setVisible(false);
         this._factoryControlsContainer.add(this._conveyorDecisionHint);
+
+        this._tutorialArrow = this.add.text(MACHINE_PRESENTATION.conveyorTargetX, 610, '▼ CLICK ROBOT ▼', {
+            fontFamily: 'Arial Black', fontSize: '14px', color: '#ffdd55',
+            stroke: '#000000', strokeThickness: 3,
+        }).setOrigin(0.5).setVisible(false).setDepth(20);
+        this.tweens.add({
+            targets: this._tutorialArrow,
+            y: 622,
+            duration: 520,
+            ease: 'Sine.InOut',
+            yoyo: true,
+            repeat: -1,
+        });
 
         this._feedbackText = this.add.text(controlsCenterX, 562, '', {
             fontFamily: 'Courier New', fontSize: '12px', color: '#ff4444',
@@ -5490,7 +5516,7 @@ export default class GameScene extends Phaser.Scene {
         });
 
         if (this._factoryControlsContainer) this._factoryControlsContainer.setVisible(this._screen === 'conveyor');
-        if (this._conveyorDecisionHint) this._conveyorDecisionHint.setVisible(isActive);
+        if (this._conveyorDecisionHint) this._conveyorDecisionHint.setVisible(false);
         this._refreshOtherPuzzleButton();
         this._refreshFactoryActionButtons();
     }
@@ -7455,6 +7481,10 @@ export default class GameScene extends Phaser.Scene {
                     hasCommunication: Boolean(arrivingMachineVariant?.hasCommunication),
                 });
                 if (this._currentMachineVariant !== arrivingMachineVariant || this._currentCase !== arrivingCase) return;
+                if (GameState.casesProcessedThisShift === 0 && GameState.day === 1 && !this._tutorialArrowShown) {
+                    this._tutorialArrowShown = true;
+                    if (this._tutorialArrow) this._tutorialArrow.setVisible(true);
+                }
                 try {
                     this._playMachineConversation(arrivingMachineVariant);
                     this._refreshMachineSpeechBubbles();
@@ -7867,7 +7897,7 @@ export default class GameScene extends Phaser.Scene {
         if (!soundAsset || !this.cache.audio.has(soundAsset.key)) return null;
 
         const sound = this.sound.add(soundAsset.key, config);
-        sound.once('complete', () => sound.destroy());
+        if (!config.loop) sound.once('complete', () => sound.destroy());
         sound.play();
         return sound;
     }

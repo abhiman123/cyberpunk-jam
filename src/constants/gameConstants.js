@@ -88,6 +88,7 @@ export const SOUND_ASSETS = Object.freeze({
 
     titlePlay: createSoundAsset('ui', 'ui_title_play', 'ui_title_play.wav'),
     phoneRing: createSoundAsset('voice', 'phone_ring', 'phone_ring.wav'),
+    phoneRinging: createSoundAsset('voice', 'phoneringing', 'phoneringing.mp3'),
     phoneVoiceIntro: createSoundAsset('voice', 'phone_voice_intro', 'phone_voice_intro.wav'),
     phoneIntroLine1: createSoundAsset('voice', 'phone_intro_line_1', 'phone_intro_line_1.wav'),
     phoneIntroLine2: createSoundAsset('voice', 'phone_intro_line_2', 'phone_intro_line_2.wav'),
@@ -115,6 +116,7 @@ const SOUND_ASSETS_ON_DISK = new Set([
     'paydayMusic',
     'titlePlay',
     'phoneRing',
+    'phoneRinging',
     'phoneVoiceIntro',
     'phoneIntroLine1',
     'phoneIntroLine2',
@@ -144,6 +146,7 @@ export const SOUND_VOLUMES = Object.freeze({
     puzzlePower: 0.82,
     ui: 0.75,
     phoneRing: 0.8,
+    phoneRinging: 0.6,
     voice: 0.9,
     music: 0.7,
 });
