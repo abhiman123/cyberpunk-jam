@@ -1404,6 +1404,29 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
         }
     }
 
+    if (stage === 2) {
+        const decoyCell = findFirstOpenGearCell(stagedOption.board, stagedOption.pieces);
+        if (decoyCell) {
+            stagedOption.pieces.push(createGearPiece(GEAR_CODES.FULL, decoyCell.row, decoyCell.col, {
+                role: 'decoy',
+                label: 'IDLER',
+            }));
+        }
+    }
+
+    if (stage >= 3) {
+        const clampCount = stagedOption.pieces.filter((p) => p.role === 'deadlock-clamp').length;
+        if (clampCount < 2) {
+            const clampCell = findFirstOpenGearCell(stagedOption.board, stagedOption.pieces);
+            if (clampCell) {
+                stagedOption.pieces.push(createGearPiece(GEAR_CODES.MOVABLE_WALL, clampCell.row, clampCell.col, {
+                    role: 'deadlock-clamp',
+                    label: 'CLAMP',
+                }));
+            }
+        }
+    }
+
     if (stage === 1 && randomFn() < 0.28) {
         stagedOption.inspectionFault = createCrackedDriveFault(stagedOption, randomFn);
     } else if (stage === 2 && randomFn() < 0.34) {
@@ -1788,6 +1811,155 @@ const SHARED_GEAR_OPTIONS = Object.freeze([
     }),
 ]);
 
+const SHARED_GEAR_OPTIONS_DAY2 = Object.freeze([
+    // "GEAR CASCADE" — 6×6, 7 pieces, long L-chain with wall divider and rusted decoy
+    // Solution: SOURCE(1,1)→VERT(2,1)→CURVE_NE(3,1)[fixed]→HORIZ(3,2)→HORIZ(3,3)→CURVE_SW(3,4)→CURVE_NW(4,4)→SINK(4,3)
+    createGearPuzzleOption({
+        previewTitle: 'GEAR CASCADE',
+        description: 'Thread the gear train through the divided housing — avoid the corroded idler before the output shaft jams.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 3),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 4, 2),
+            createGearPiece(GEAR_CODES.CURVE_SW, 1, 4),
+            createGearPiece(GEAR_CODES.CURVE_NW, 4, 1),
+            createGearPiece(GEAR_CODES.RUSTED, 2, 4),
+        ],
+    }),
+    // "SPLIT BUS" — 6×6, 6 pieces, maze walls force routing through FULL junction
+    // Solution: SOURCE(1,1)→CURVE_SW(1,2)→FULL(2,2)→CURVE_NE(3,2)[fixed]→HORIZ(3,3)→CURVE_SW(3,4)→SINK(4,4)
+    createGearPuzzleOption({
+        previewTitle: 'SPLIT BUS',
+        description: 'Find the only route through the blocked housing — the junction gear must bridge the two isolated lanes.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.CURVE_SW, 1, 4),
+            createGearPiece(GEAR_CODES.FULL, 4, 1),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 2, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 2, 1),
+            createGearPiece(GEAR_CODES.CURVE_SW, 4, 3),
+            createGearPiece(GEAR_CODES.RUSTED, 2, 4),
+        ],
+    }),
+    // "COUNTER SHAFT" — 6×6, 5 movable pieces, power flows right-to-left then straight down
+    // Solution: SOURCE(1,4)→HORIZ(1,3)→HORIZ(1,2)→FULL(1,1)→VERT(2,1)→VERT(3,1)→SINK(4,1)
+    // Fixed FULL at (2,4) below SOURCE creates a dead-end trap
+    createGearPuzzleOption({
+        previewTitle: 'COUNTER SHAFT',
+        description: 'Reverse the drive direction — route torque from the far input back along the top rail before dropping to the output.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SOURCE, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.FULL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SINK, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.HORIZONTAL, 3, 2),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 4, 2),
+            createGearPiece(GEAR_CODES.FULL, 4, 3),
+            createGearPiece(GEAR_CODES.VERTICAL, 4, 4),
+            createGearPiece(GEAR_CODES.VERTICAL, 3, 3),
+        ],
+    }),
+]);
+
+const SHARED_GEAR_OPTIONS_DAY3 = Object.freeze([
+    // "COMPOUND DRIVE" — 7×6, 8 pieces, tall vertical chain + horizontal run, two wall obstacles
+    // Solution: SOURCE(1,1)→VERT(2,1)→VERT(3,1)→VERT(4,1)→CURVE_NE(5,1)[fixed]→HORIZ(5,2)→HORIZ(5,3)→SINK(5,4)
+    // Fixed FULL at (3,4) tempts players toward the right side
+    createGearPuzzleOption({
+        previewTitle: 'COMPOUND DRIVE',
+        description: 'Build the full drive stack down the left column before routing the output across to the sink — two blocked shafts force a single path.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.FULL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 2),
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 4),
+            createGearPiece(GEAR_CODES.CURVE_NE, 5, 1, { movable: false }),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 3, 2),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 4, 3),
+            createGearPiece(GEAR_CODES.RUSTED, 2, 4),
+            createGearPiece(GEAR_CODES.RUSTED, 3, 3),
+        ],
+    }),
+    // "TWIN FORK" — 7×6, 7 pieces, fixed FULL in board creates false junction; RUSTED decoys on Day 3 are traversable
+    // Solution: SOURCE(1,1)→VERT(2,1)→VERT(3,1)→VERT(4,1)→CURVE_NE(5,1)→HORIZ(5,2)→SINK(5,3)
+    // Fixed FULL at (2,3) tempts players to route across the middle
+    createGearPuzzleOption({
+        previewTitle: 'TWIN FORK',
+        description: 'The junction gear in the middle housing looks like a shortcut — but only the straight drop feeds the output shaft.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SOURCE, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.FULL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SINK, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 2),
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 4),
+            createGearPiece(GEAR_CODES.CURVE_NE, 3, 4),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 4, 3),
+            createGearPiece(GEAR_CODES.RUSTED, 4, 2),
+            createGearPiece(GEAR_CODES.RUSTED, 5, 4),
+        ],
+    }),
+    // "REVERSE DRIVE" — 7×6, 7 pieces, SOURCE top-right, SINK bottom-left; mirror of COMPOUND DRIVE
+    // Solution: SOURCE(1,4)→VERT(2,4)→VERT(3,4)→VERT(4,4)→CURVE_NW(5,4)→HORIZ(5,3)→HORIZ(5,2)→SINK(5,1)
+    // Fixed FULL at (3,1) creates a left-side temptation
+    createGearPuzzleOption({
+        previewTitle: 'REVERSE DRIVE',
+        description: 'The input is on the wrong side — drop down the right column and sweep the output back across to reach the sink.',
+        board: [
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.SOURCE, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.FULL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.SINK, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.EMPTY, GEAR_CODES.WALL],
+            [GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL, GEAR_CODES.WALL],
+        ],
+        pieces: [
+            createGearPiece(GEAR_CODES.VERTICAL, 2, 1),
+            createGearPiece(GEAR_CODES.VERTICAL, 2, 2),
+            createGearPiece(GEAR_CODES.VERTICAL, 1, 3),
+            createGearPiece(GEAR_CODES.CURVE_NW, 1, 2),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 4, 1),
+            createGearPiece(GEAR_CODES.HORIZONTAL, 4, 2),
+            createGearPiece(GEAR_CODES.RUSTED, 3, 2),
+        ],
+    }),
+]);
+
 const SHARED_FLOW_OPTIONS = Object.freeze([
     createFlowPuzzleOption({ sourceRow: 2, outputs: { 1: 'POWER', 3: 'CPU' }, forbiddenCount: 0, previewTitle: 'MAIN BUS' }),
     createFlowPuzzleOption({ sourceRow: 1, outputs: { 0: 'POWER', 2: 'MEMORY', 4: 'MOTOR' }, forbiddenCount: 1, previewTitle: 'SYS LOOP' }),
@@ -1972,6 +2144,19 @@ const MACHINE_GEAR_CATALOG = Object.freeze({
     workforce_quality_control_supervisor: SUPERVISOR_GEAR_OPTIONS,
     future_lounge_chair: SHARED_GEAR_OPTIONS,
 });
+
+const SHARED_GEAR_MACHINES = Object.freeze([
+    'assembler_alpha', 'audit_drone', 'courier_shell', 'sentry_frame',
+    'breakroom_brewer', 'mechanic_broom', 'future_lounge_chair',
+]);
+
+const MACHINE_GEAR_CATALOG_DAY2 = Object.freeze(
+    Object.fromEntries(SHARED_GEAR_MACHINES.map((id) => [id, SHARED_GEAR_OPTIONS_DAY2]))
+);
+
+const MACHINE_GEAR_CATALOG_DAY3 = Object.freeze(
+    Object.fromEntries(SHARED_GEAR_MACHINES.map((id) => [id, SHARED_GEAR_OPTIONS_DAY3]))
+);
 
 const MACHINE_DEBUG_CATALOG = Object.freeze({
     assembler_alpha: Object.freeze([
@@ -2426,6 +2611,8 @@ const createMachineDefinition = ({
     possibleGrids,
     possibleCircuits = MACHINE_FLOW_CATALOG[id] || [],
     possibleGears = MACHINE_GEAR_CATALOG[id] || [],
+    possibleGearsDay2 = MACHINE_GEAR_CATALOG_DAY2[id] || [],
+    possibleGearsDay3 = MACHINE_GEAR_CATALOG_DAY3[id] || [],
     possibleDebugs = MACHINE_DEBUG_CATALOG[id] || [],
     miniDisplay = MACHINE_MINI_DISPLAY_CATALOG[id] || null,
     availableDays = DEFAULT_MACHINE_DAYS,
@@ -2448,6 +2635,8 @@ const createMachineDefinition = ({
     possibleGrids,
     possibleCircuits,
     possibleGears,
+    possibleGearsDay2,
+    possibleGearsDay3,
     possibleDebugs,
     miniDisplay,
     availableDays,
@@ -6663,9 +6852,18 @@ export function createMachineVariant(options = {}) {
         randomFn,
     );
     const gearPool = (() => {
+        const period = targetPeriod ?? 1;
         const possibleGears = Array.isArray(definition.possibleGears) ? definition.possibleGears : [];
-        if ((targetPeriod ?? 1) > 1) return possibleGears;
 
+        if (period >= 3) {
+            const day3Pool = Array.isArray(definition.possibleGearsDay3) ? definition.possibleGearsDay3 : [];
+            if (day3Pool.length > 0) return day3Pool;
+        }
+        if (period >= 2) {
+            const day2Pool = Array.isArray(definition.possibleGearsDay2) ? definition.possibleGearsDay2 : [];
+            if (day2Pool.length > 0) return day2Pool;
+            return possibleGears;
+        }
         const rustFreePool = possibleGears.filter((gearOption) => !gearOptionHasRustedContent(gearOption));
         return rustFreePool.length > 0 ? rustFreePool : possibleGears;
     })();
