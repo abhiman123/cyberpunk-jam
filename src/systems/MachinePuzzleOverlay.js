@@ -87,10 +87,12 @@ export default class MachinePuzzleOverlay {
         this._gridBoardGfx = this.scene.add.graphics();
         this._groupOutlineGfx = this.scene.add.graphics();
         this._equalLinkGfx = this.scene.add.graphics();
+        this._comparatorGfx = this.scene.add.graphics();
         this._tableGfx = this.scene.add.graphics();
         this._currentPulseGfx = this.scene.add.graphics();
         this._gridLayer = this.scene.add.container(0, 0);
         this._groupLabelLayer = this.scene.add.container(0, 0);
+        this._comparatorLabelLayer = this.scene.add.container(0, 0);
         this._dominoLayer = this.scene.add.container(0, 0);
 
         this._messageText = this.scene.add.text(0, (panelHeight / 2) - 126, '', {
@@ -149,6 +151,8 @@ export default class MachinePuzzleOverlay {
             this._currentPulseGfx,
             this._gridLayer,
             this._groupLabelLayer,
+            this._comparatorGfx,
+            this._comparatorLabelLayer,
             this._dominoLayer,
             this._equalLinkGfx,
             this._messageText,
@@ -228,6 +232,8 @@ export default class MachinePuzzleOverlay {
         this._gridBoardGfx.clear();
         this._groupOutlineGfx.clear();
         this._equalLinkGfx.clear();
+        this._comparatorGfx.clear();
+        this._comparatorLabelLayer?.removeAll(true);
         this._tableGfx.clear();
         this.scene.tweens.killTweensOf(this._currentPulseGfx);
         if (this._currentPulseTween) {
@@ -564,34 +570,62 @@ export default class MachinePuzzleOverlay {
     _drawPips(graphics, count, isTopHalf, shouldGlow, glowColor = 0xfff2a3, pipColor = 0xf4d850) {
         if (!count || count <= 0) return;
 
-        const localPositions = [
-            { x: 0, y: 0 },
-            { x: -15, y: -18 },
-            { x: 15, y: 18 },
-            { x: 15, y: -18 },
-            { x: -15, y: 18 },
-            { x: -15, y: 0 },
-            { x: 15, y: 0 },
-            { x: 0, y: -18 },
-            { x: 0, y: 18 },
-        ];
+        // Traditional NYT-style domino pip arrangements.
+        // Coordinates are offsets within a single half-tile (approximately
+        // 56×56 px) centered on the section center.
+        const dx = 14;
+        const dy = 14;
+        const pipLayouts = {
+            1: [{ x: 0, y: 0 }],
+            2: [{ x: -dx, y: -dy }, { x: dx, y: dy }],
+            3: [{ x: -dx, y: -dy }, { x: 0, y: 0 }, { x: dx, y: dy }],
+            4: [
+                { x: -dx, y: -dy }, { x: dx, y: -dy },
+                { x: -dx, y: dy }, { x: dx, y: dy },
+            ],
+            5: [
+                { x: -dx, y: -dy }, { x: dx, y: -dy },
+                { x: 0, y: 0 },
+                { x: -dx, y: dy }, { x: dx, y: dy },
+            ],
+            6: [
+                { x: -dx, y: -dy }, { x: dx, y: -dy },
+                { x: -dx, y: 0 }, { x: dx, y: 0 },
+                { x: -dx, y: dy }, { x: dx, y: dy },
+            ],
+        };
+
+        const positions = pipLayouts[Math.min(6, Math.max(1, Math.floor(count)))] || [];
+        if (positions.length === 0) return;
 
         const sectionOffsetY = isTopHalf ? -(MACHINE_PUZZLE.dominoHeight / 4) : (MACHINE_PUZZLE.dominoHeight / 4);
-        const pipCount = Math.min(count, localPositions.length);
+        const pipRadius = 5.5;
+        const outerRadius = pipRadius + 1.5;
 
         if (shouldGlow) {
-            graphics.fillStyle(glowColor, 0.32);
-            for (let index = 0; index < pipCount; index++) {
-                const pip = localPositions[index];
-                graphics.fillCircle(pip.x, sectionOffsetY + pip.y, 9);
-            }
+            graphics.fillStyle(glowColor, 0.4);
+            positions.forEach((pip) => {
+                graphics.fillCircle(pip.x, sectionOffsetY + pip.y, pipRadius + 4);
+            });
         }
 
+        // Outer ring for a crisp NYT-style edge.
+        graphics.fillStyle(0x000000, 0.35);
+        positions.forEach((pip) => {
+            graphics.fillCircle(pip.x, sectionOffsetY + pip.y + 1, outerRadius);
+        });
+
+        // Pip core.
         graphics.fillStyle(pipColor, 1);
-        for (let index = 0; index < pipCount; index++) {
-            const pip = localPositions[index];
-            graphics.fillCircle(pip.x, sectionOffsetY + pip.y, 5);
-        }
+        positions.forEach((pip) => {
+            graphics.fillCircle(pip.x, sectionOffsetY + pip.y, pipRadius);
+        });
+
+        // Highlight for depth.
+        graphics.fillStyle(0xffffff, 0.35);
+        positions.forEach((pip) => {
+            graphics.fillCircle(pip.x - 1.4, sectionOffsetY + pip.y - 1.4, pipRadius / 3);
+        });
     }
 
     _getDominoGlowState(dominoView) {
@@ -1059,6 +1093,7 @@ export default class MachinePuzzleOverlay {
         this._cellViews.forEach((cellView) => this._refreshCell(cellView));
         this._refreshChargeGroupOutlines();
         this._refreshEqualLinkLines();
+        this._refreshComparatorBadges();
     }
 
     _refreshAllDominoViews() {
@@ -1074,6 +1109,8 @@ export default class MachinePuzzleOverlay {
         const isMatchedEqualLink = !this._powerEffectsSuspended && this._puzzleState.isEqualMatched(cellView.row, cellView.col);
         const hasNotEqualLink = this._puzzleState.isNotEqualLinkCell?.(cellView.row, cellView.col);
         const isMatchedNotEqualLink = !this._powerEffectsSuspended && Boolean(this._puzzleState.isNotEqualMatched?.(cellView.row, cellView.col));
+        const hasComparator = Boolean(this._puzzleState.isComparatorCell?.(cellView.row, cellView.col));
+        const isMatchedComparator = !this._powerEffectsSuspended && Boolean(this._puzzleState.isComparatorMatched?.(cellView.row, cellView.col));
         const chargeGroup = this._puzzleState.getChargeGroupAt(cellView.row, cellView.col);
         const chargeGroupSummary = chargeGroup ? this._chargeGroupSummaryMap?.get(chargeGroup.key) : null;
         const isMatchedGroup = !this._powerEffectsSuspended && Boolean(chargeGroupSummary?.matched);
@@ -1128,6 +1165,19 @@ export default class MachinePuzzleOverlay {
                     ? 0x683128
                     : 0x3c2725;
             strokeColor = isMatchedNotEqualLink ? 0xffc7b0 : 0xff9b86;
+        } else if (hasComparator) {
+            const cmp = this._puzzleState.getComparator(cellView.row, cellView.col);
+            const isLessThan = cmp?.op === '<';
+            if (isMatchedComparator) {
+                fillColor = isLessThan ? 0x2f5a78 : 0x6a3f72;
+            } else if (isPlaced) {
+                fillColor = isLessThan ? 0x1d3d55 : 0x452451;
+            } else {
+                fillColor = isLessThan ? 0x1b2a38 : 0x2d1f36;
+            }
+            strokeColor = isMatchedComparator
+                ? (isLessThan ? 0xbfe3ff : 0xf4c0ff)
+                : (isLessThan ? 0x7ea9c6 : 0xb27ec7);
         } else if (isPlaced) {
             fillColor = 0x39af67;
             strokeColor = 0xe8f9b9;
@@ -1146,7 +1196,7 @@ export default class MachinePuzzleOverlay {
             cellView.matchTween = null;
         }
 
-        if (isMatchedCharge || isMatchedEqualLink || isMatchedNotEqualLink || isMatchedGroup) {
+        if (isMatchedCharge || isMatchedEqualLink || isMatchedNotEqualLink || isMatchedGroup || isMatchedComparator) {
             cellView.matchRect.setFillStyle(0xfff1a3, 0.18).setStrokeStyle(2, 0xfff7c7, 0.75).setAlpha(0.45);
             cellView.matchTween = this.scene.tweens.add({
                 targets: cellView.matchRect,
@@ -1180,6 +1230,11 @@ export default class MachinePuzzleOverlay {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText('!=');
             cellView.valueText.setColor(isMatchedNotEqualLink ? '#ffd9c9' : '#ffab92');
+        } else if (hasComparator) {
+            // Per-cell <N / >N badges are drawn by _refreshComparatorBadges
+            // as diamond overlays; keep the base valueText hidden.
+            cellView.valueText.setVisible(false);
+            cellView.valueText.setText('');
         } else if (shouldShowDebug) {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText(String(value));
@@ -1342,6 +1397,75 @@ export default class MachinePuzzleOverlay {
         });
 
         this._panel?.bringToTop(this._equalLinkGfx);
+    }
+
+    _refreshComparatorBadges() {
+        this._comparatorGfx.clear();
+        this._comparatorLabelLayer?.removeAll(true);
+
+        const comparators = this._puzzleState.getComparatorCells?.() || [];
+        if (comparators.length === 0) return;
+
+        const cellSize = MACHINE_PUZZLE.overlayCellSize;
+        const badgeRadius = Math.max(10, Math.floor(cellSize * 0.34));
+
+        comparators.forEach((entry) => {
+            const center = this._getCellCenter(entry.row, entry.col);
+            const isLessThan = entry.op === '<';
+            const isMatched = !this._powerEffectsSuspended && entry.matched;
+
+            const fillColor = isMatched
+                ? (isLessThan ? 0x64a9d9 : 0xc789dd)
+                : (isLessThan ? 0x214566 : 0x4a2a55);
+            const strokeColor = isMatched
+                ? (isLessThan ? 0xe9f5ff : 0xfbe7ff)
+                : (isLessThan ? 0x9bc5e0 : 0xc89fd6);
+            const glowColor = isLessThan ? 0x4a8fbe : 0x9d66b4;
+            const glowAlpha = isMatched ? 0.42 : 0.22;
+
+            // soft diamond halo
+            this._comparatorGfx.fillStyle(glowColor, glowAlpha);
+            this._comparatorGfx.beginPath();
+            this._comparatorGfx.moveTo(center.x, center.y - badgeRadius - 3);
+            this._comparatorGfx.lineTo(center.x + badgeRadius + 3, center.y);
+            this._comparatorGfx.lineTo(center.x, center.y + badgeRadius + 3);
+            this._comparatorGfx.lineTo(center.x - badgeRadius - 3, center.y);
+            this._comparatorGfx.closePath();
+            this._comparatorGfx.fillPath();
+
+            // solid diamond core
+            this._comparatorGfx.fillStyle(fillColor, 0.95);
+            this._comparatorGfx.beginPath();
+            this._comparatorGfx.moveTo(center.x, center.y - badgeRadius);
+            this._comparatorGfx.lineTo(center.x + badgeRadius, center.y);
+            this._comparatorGfx.lineTo(center.x, center.y + badgeRadius);
+            this._comparatorGfx.lineTo(center.x - badgeRadius, center.y);
+            this._comparatorGfx.closePath();
+            this._comparatorGfx.fillPath();
+
+            // diamond stroke
+            this._comparatorGfx.lineStyle(2, strokeColor, isMatched ? 1 : 0.9);
+            this._comparatorGfx.beginPath();
+            this._comparatorGfx.moveTo(center.x, center.y - badgeRadius);
+            this._comparatorGfx.lineTo(center.x + badgeRadius, center.y);
+            this._comparatorGfx.lineTo(center.x, center.y + badgeRadius);
+            this._comparatorGfx.lineTo(center.x - badgeRadius, center.y);
+            this._comparatorGfx.closePath();
+            this._comparatorGfx.strokePath();
+
+            const label = this.scene.add.text(center.x, center.y, `${entry.op}${entry.threshold}`, {
+                fontFamily: 'Courier New',
+                fontSize: '15px',
+                fontStyle: 'bold',
+                color: isMatched ? '#ffffff' : (isLessThan ? '#e9f5ff' : '#fbe7ff'),
+                stroke: '#000000',
+                strokeThickness: 2,
+            }).setOrigin(0.5);
+            this._comparatorLabelLayer.add(label);
+        });
+
+        this._panel?.bringToTop(this._comparatorGfx);
+        this._panel?.bringToTop(this._comparatorLabelLayer);
     }
 
     _getCellCenter(row, col) {
