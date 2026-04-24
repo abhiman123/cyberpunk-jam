@@ -61,6 +61,7 @@ export default class TitleScene extends Phaser.Scene {
 
         btnBg.on('pointerup', () => {
             if (!ready) return;
+            btnBg.disableInteractive();
             if (this.cache.audio.has(SOUND_ASSETS.titlePlay.key)) {
                 this.sound.play(SOUND_ASSETS.titlePlay.key, { volume: SOUND_VOLUMES.ui });
             }
