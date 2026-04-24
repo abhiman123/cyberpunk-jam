@@ -5384,50 +5384,30 @@ export default class GameScene extends Phaser.Scene {
         this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID, FLOW, GEAR, OR CODE');
 
         const controlsCenterX = 804;
-        const buttonBaseScale = 0.76;
         const buttonY = 650;
         const rulingDefs = [
-            { action: 'scrap', x: 465, textureKey: 'btn_scrap' },
-            { action: 'approve', x: 520, textureKey: 'btn_accept' },
+            { action: 'scrap', x: 465, textureKey: 'btn_scrap_source' },
+            { action: 'approve', x: 520, textureKey: 'btn_accept_source' },
         ];
 
         this._conveyorRulingButtons = {};
         rulingDefs.forEach((def) => {
-            const buttonImage = this.add.image(def.x, buttonY, def.textureKey)
-                .setScale(buttonBaseScale)
-                .setInteractive(this.input.makePixelPerfect(200));
-            buttonImage.input.cursor = 'pointer';
-
-            buttonImage.setData('baseScale', buttonBaseScale);
-
-            const setScaleTween = (targetScale, duration) => {
-                this.tweens.killTweensOf(buttonImage);
-                this.tweens.add({
-                    targets: buttonImage,
-                    scale: targetScale,
-                    duration,
-                    ease: 'Quad.Out',
-                });
-            };
+            const buttonImage = this.add.image(0,0, def.textureKey)
+                .setOrigin(0)
+                .setScale(4, 4 * 180 / 195)
+                .setInteractive(this.input.makePixelPerfect(0));
 
             buttonImage.on('pointerover', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                setScaleTween(buttonBaseScale * 1.08, 90);
+                buttonImage.setTint(0xffffff);
             });
             buttonImage.on('pointerout', () => {
-                setScaleTween(buttonBaseScale, 120);
+                if (!this._canUseFactoryDecisionButtons()) return;
+                buttonImage.setTint(0x7f7f7f);
             });
+
             buttonImage.on('pointerdown', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                this.tweens.killTweensOf(buttonImage);
-                this.tweens.add({
-                    targets: buttonImage,
-                    scale: buttonBaseScale * 0.82,
-                    duration: 60,
-                    ease: 'Quad.Out',
-                    yoyo: true,
-                    onComplete: () => buttonImage.setScale(buttonBaseScale),
-                });
                 this._submitRuling(def.action);
             });
 
@@ -5523,9 +5503,6 @@ export default class GameScene extends Phaser.Scene {
     _setConveyorRulingButtonsVisible(visible) {
         const isActive = Boolean(visible) && this._screen === 'conveyor';
         Object.values(this._conveyorRulingButtons).forEach((button) => {
-            const baseScale = button.bgRect.getData('baseScale') || 1;
-            button.bgRect.setScale(baseScale);
-            button.bgRect.setAlpha(isActive ? 1 : 0.85);
             if (isActive) {
                 button.bgRect.setInteractive({ useHandCursor: true });
             } else {
@@ -6178,20 +6155,11 @@ export default class GameScene extends Phaser.Scene {
         const canInteract = this._canUseFactoryDecisionButtons();
         const gateState = this._getPuzzleGateState();
         const hasUnit = Boolean(this._currentCase) && this._screen === 'conveyor';
-        const readyAlpha = canInteract ? 1 : (hasUnit ? 0.95 : 0.85);
-        const gatedAlpha = canInteract ? 0.9 : (hasUnit ? 0.85 : 0.75);
         const acceptOverrideReady = Boolean(this._pendingUnsafeAcceptConfirmation) && hasUnit;
 
         Object.entries(this._conveyorRulingButtons).forEach(([action, button]) => {
-            const isReady = (action === 'scrap') || gateState.ready || acceptOverrideReady;
-            const alpha = isReady ? readyAlpha : gatedAlpha;
-            button.bgRect.setAlpha(alpha);
-            
-            if (isReady && canInteract) {
-                button.bgRect.clearTint();
-            } else {
-                button.bgRect.setTint(0x778899);
-            }
+            if (!canInteract)
+                button.bgRect.setTint(0x7f7f7f);
         });
 
         this._refreshOtherPuzzleButton();
