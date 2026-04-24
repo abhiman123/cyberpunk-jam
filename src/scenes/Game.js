@@ -1558,7 +1558,7 @@ export default class GameScene extends Phaser.Scene {
         const screwBottomLeft = this.add.circle(20, panelHeight - 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
         const screwBottomRight = this.add.circle(panelWidth - 20, panelHeight - 22, 6, 0x6f685a, 1).setStrokeStyle(1, 0x2e2a23, 0.9);
 
-        this._miniMachinePanelTitle = this.add.text(22, 16, 'MACHINE PORTS', {
+        this._miniMachinePanelTitle = this.add.text(28, 20, 'MACHINE PORTS', {
             fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#d6cfaa',
@@ -1570,12 +1570,12 @@ export default class GameScene extends Phaser.Scene {
             color: '#9ab894',
             wordWrap: { width: 360 },
         });
-        this._miniMachineHintText = this.add.text(22, panelHeight - 16, 'CLICK GRID, FLOW, GEAR, OR CODE PORT', {
+        this._miniMachineHintText = this.add.text(panelWidth / 2, panelHeight - 10, 'CLICK GRID, FLOW, GEAR, OR CODE PORT', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#c8cf9f',
             letterSpacing: 1,
-        });
+        }).setOrigin(0.5);
 
         this._miniMachineImage = this.add.image(204, 132, 'unit_placeholder').setOrigin(0.5);
         this._miniMachineImage.setAlpha(0.98);
