@@ -220,10 +220,9 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             ],
             no: [
                 createIntroSequenceLine('line3', 'Alright, see this? The rulebook is the job.', SOUND_ASSETS.phoneIntroYesLine3, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line4', 'Green means send it through when the fixes are clean.', SOUND_ASSETS.phoneIntroYesLine4, { tutorialTarget: 'accept' }),
-                createIntroSequenceLine('line5', 'Red means scrap it when the unit is clearly done for.', SOUND_ASSETS.phoneIntroYesLine5, { tutorialTarget: 'scrap' }),
-                createIntroSequenceLine('line6', 'If you make a mistake, Quality Control docks you. Check INFO for their note.', SOUND_ASSETS.phoneIntroYesLine6, { tutorialTarget: 'info' }),
-                createIntroSequenceLine('line7', 'Good luck, shift ends at 12.', null, { tutorialTarget: 'clock' }),
+                createIntroSequenceLine('line4', 'Repair what can be repaired. Scrap what is clearly done for.', SOUND_ASSETS.phoneIntroYesLine4, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line5', 'Today is just solve it or scrap it. Easy enough.', SOUND_ASSETS.phoneIntroYesLine5, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line6', 'Good luck, shift ends at 12.', SOUND_ASSETS.phoneIntroYesLine6, { tutorialTarget: 'clock' }),
             ],
         }),
         '2-1': createIntroSequence({

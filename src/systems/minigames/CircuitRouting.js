@@ -204,12 +204,6 @@ function generateCircuit(spec, rows, cols) {
 export default class CircuitRouting extends MinigameBase {
     constructor(scene, config = {}) {
         super(scene, { depth: 180, ...config });
-        this._handleGlobalPointerMove = this._handleGlobalPointerMove.bind(this);
-        this._handleGlobalPointerUp = this._handleGlobalPointerUp.bind(this);
-        this.scene.input.on('pointermove', this._handleGlobalPointerMove);
-        this.scene.input.on('pointerup', this._handleGlobalPointerUp);
-        this.scene.input.on('gameout', this._handleGlobalPointerUp);
-
         this.cellSize = 64;
         this.rows = 5;
         this.cols = 5;
@@ -240,13 +234,7 @@ export default class CircuitRouting extends MinigameBase {
         this._inventoryViews = {};
         this._inventoryPanelGfx = null;
         this._inventoryGhostGfx = null;
-        this._dragGhostGfx = null;
         this._hoveredInventoryCell = null;
-        this._dragSnappedCell = null;
-        this._pendingCellPointer = null;
-        this._pendingInventoryPointer = null;
-        this._draggedPiece = null;
-        this._inventoryPanelBounds = null;
         this._voltageHudText = null;
     }
 
@@ -322,12 +310,6 @@ export default class CircuitRouting extends MinigameBase {
         this._inventoryViews = {};
         this._inventoryGhostGfx = null;
         this._hoveredInventoryCell = null;
-        this._dragGhostGfx = null;
-        this._dragSnappedCell = null;
-        this._pendingCellPointer = null;
-        this._pendingInventoryPointer = null;
-        this._draggedPiece = null;
-        this._inventoryPanelBounds = null;
         this._repairTargets = this._resolveRepairTargets(circuit);
         this._repairTargetViews = [];
         if (this.evidence.scrapRequired && !this.evidence.reviewed) {
@@ -460,7 +442,7 @@ export default class CircuitRouting extends MinigameBase {
         this._outputDots = {};
         this._outputSpecs.forEach((outputSpec) => {
             const y = outputSpec.row;
-            const ox = this.boardX + this.cols * this.cellSize + 10;
+            const ox = this.boardX + this.cols * this.cellSize + 26;
             const oy = this.boardY + y * this.cellSize + this.cellSize / 2;
             const requiredPalette = getFlowPowerPalette(outputSpec.powerClass);
             const glow = this.scene.add.circle(ox, oy, 19, 0xaaffee, 0).setDepth(depth + 1);
@@ -474,7 +456,7 @@ export default class CircuitRouting extends MinigameBase {
             const req = this.scene.add.text(ox + 16, oy + 8, outputSpec.powerClass === 'red'
                 ? 'RED // SCRAP'
                 : String(outputSpec.powerClass || 'neutral').toUpperCase(), {
-                fontFamily: 'monospace', fontSize: '8px', color: requiredPalette.idle,
+                fontFamily: 'monospace', fontSize: '8px', color: requiredPalette.label,
             }).setOrigin(0, 0.5).setDepth(depth + 2);
             this.container.add([glow, ring, dot, lbl, req]);
             this._outputDots[outputSpec.key] = { outputSpec, glow, ring, dot, lbl, req };
@@ -495,8 +477,6 @@ export default class CircuitRouting extends MinigameBase {
         }
         this._inventoryGhostGfx = this.scene.add.graphics().setDepth(depth + 7).setVisible(false);
         this.container.add(this._inventoryGhostGfx);
-        this._dragGhostGfx = this.scene.add.graphics().setDepth(depth + 9).setVisible(false);
-        this.container.add(this._dragGhostGfx);
         this._drawInspectionFault();
 
         // Spider-Man-style HUD additions: voltage meter at top, inventory
@@ -603,6 +583,7 @@ export default class CircuitRouting extends MinigameBase {
 
         this._repairTargetViews = this._repairTargets.map((target, index) => {
             const y = -(panelHeight / 2) + 48 + (index * 42);
+            const requirementPalette = getFlowPowerPalette(target.powerClass || 'neutral');
             const dot = this.scene.add.circle(-88, y, 7, 0x2f4a57, 1)
                 .setStrokeStyle(1, 0x7aa8b7, 0.8);
             const nameText = this.scene.add.text(-72, y - 8, target.displayName || target.label, {
@@ -613,7 +594,7 @@ export default class CircuitRouting extends MinigameBase {
                 : (target.powerClass && target.powerClass !== 'neutral'
                     ? String(target.powerClass).toUpperCase()
                     : 'BROKEN'), {
-                fontFamily: 'Courier New', fontSize: '9px', color: target.powerClass && target.powerClass !== 'neutral' ? '#6d8588' : '#ffb695',
+                fontFamily: 'Courier New', fontSize: '9px', color: target.powerClass && target.powerClass !== 'neutral' ? requirementPalette.label : '#ffb695',
             }).setOrigin(0, 0.5);
 
             panel.add([dot, nameText, statusText]);
@@ -789,11 +770,22 @@ export default class CircuitRouting extends MinigameBase {
 
         bg.on('pointerdown', (pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
-            this._beginCellPointerIntent(x, y, pointer);
+            if (this._handleInventoryClick?.(x, y, pointer)) return;
+            // Re-resolve the tile each click — pickup/placement swaps the
+            // object reference at this grid slot, so the closure-captured
+            // `tile` from build time would be stale.
+            const liveTile = this._tiles[y]?.[x];
+            const isForbiddenNow = this._forbidden.has(`${x},${y}`);
+            const isLockedNow = isForbiddenNow || liveTile?.locked === true;
+            if (!liveTile || isLockedNow || liveTile.type === 'empty') return;
+
+            liveTile.rotation = (liveTile.rotation + 1) % 4;
+            this._animateTileRotation(tileView, liveTile.rotation);
+            this._playWireTurnSound();
+            this._updateAll();
         });
         bg.on('pointerup', (_pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
-            this._handleGlobalPointerUp(_pointer);
         });
         bg.on('pointerover', () => {
             const liveTile = this._tiles[y]?.[x];
@@ -904,12 +896,6 @@ export default class CircuitRouting extends MinigameBase {
         const panelY = this.boardY;
         const panelH = Math.max(220, this.rows * this.cellSize);
         const panelW = 108;
-        this._inventoryPanelBounds = {
-            left: panelX - (panelW / 2),
-            right: panelX + (panelW / 2),
-            top: panelY,
-            bottom: panelY + panelH,
-        };
 
         const panelBg = this.scene.add.rectangle(panelX, panelY + panelH / 2, panelW, panelH, 0x001a20, 0.9)
             .setStrokeStyle(1, 0x00cccc, 0.75)
@@ -945,13 +931,9 @@ export default class CircuitRouting extends MinigameBase {
             const hitArea = this.scene.add.rectangle(sx, sy, slotSize, slotSize, 0x000000, 0)
                 .setInteractive({ useHandCursor: true })
                 .setDepth(depth + 4);
-            hitArea.on('pointerdown', (pointer, _lx, _ly, event) => {
+            hitArea.on('pointerdown', (_p, _lx, _ly, event) => {
                 event?.stopPropagation?.();
-                this._beginInventoryPointerIntent(type, pointer);
-            });
-            hitArea.on('pointerup', (pointer, _lx, _ly, event) => {
-                event?.stopPropagation?.();
-                this._handleGlobalPointerUp(pointer);
+                this._toggleInventorySelection(type);
             });
             this.container.add([slotGfx, pipeGfx, labelText, countText, hitArea]);
             this._inventoryViews[type] = { type, sx, sy, slotSize, slotGfx, pipeGfx, countText, hitArea };
@@ -984,10 +966,10 @@ export default class CircuitRouting extends MinigameBase {
         });
     }
 
-    _drawInventoryPieceIcon(gfx, cx, cy, type, color, rotation = 0, radius = 14, width = 3) {
-        const r = radius;
-        gfx.lineStyle(width, color, 1);
-        const conns = rotatedConnections(type, rotation);
+    _drawInventoryPieceIcon(gfx, cx, cy, type, color) {
+        const r = 14; // icon radius
+        gfx.lineStyle(3, color, 1);
+        const conns = TILE_BASE[type] || [0, 0, 0, 0];
         // simple tile icon: render the base orientation connections as lines
         // from center to each open edge. Cross/tee look different enough.
         if (conns[0]) gfx.lineBetween(cx, cy, cx, cy - r);
@@ -1055,323 +1037,11 @@ export default class CircuitRouting extends MinigameBase {
         this._refreshInventoryPanel();
     }
 
-    _beginCellPointerIntent(x, y, pointer) {
-        if (!this.active || !pointer) return;
-        this._pendingInventoryPointer = null;
-        this._pendingCellPointer = {
-            pointerId: pointer.id,
-            x,
-            y,
-            startWorldX: pointer.worldX,
-            startWorldY: pointer.worldY,
-            dragging: false,
-            rightClick: pointer?.rightButtonDown?.() === true || pointer?.buttons === 2 || pointer?.button === 2,
-        };
-    }
-
-    _beginInventoryPointerIntent(type, pointer) {
-        if (!this.active || !pointer) return;
-        this._pendingCellPointer = null;
-        this._pendingInventoryPointer = {
-            pointerId: pointer.id,
-            type,
-            startWorldX: pointer.worldX,
-            startWorldY: pointer.worldY,
-            dragging: false,
-        };
-    }
-
-    _handleGlobalPointerMove(pointer) {
-        if (!this.active || !pointer) return;
-
-        const cellIntent = this._pendingCellPointer;
-        if (cellIntent?.pointerId === pointer.id) {
-            if (!cellIntent.dragging && this._getIntentDistance(cellIntent, pointer) >= 8) {
-                this._startCellDrag(cellIntent, pointer);
-            }
-            if (cellIntent.dragging) {
-                this._updateDraggedPiecePreview(pointer);
-            }
-            return;
-        }
-
-        const inventoryIntent = this._pendingInventoryPointer;
-        if (inventoryIntent?.pointerId === pointer.id) {
-            if (!inventoryIntent.dragging && this._getIntentDistance(inventoryIntent, pointer) >= 8) {
-                this._startInventoryDrag(inventoryIntent, pointer);
-            }
-            if (inventoryIntent.dragging) {
-                this._updateDraggedPiecePreview(pointer);
-            }
-        }
-    }
-
-    _handleGlobalPointerUp(pointer) {
-        if (!pointer) {
-            this._cancelDraggedPiece();
-            return;
-        }
-
-        const cellIntent = this._pendingCellPointer;
-        if (cellIntent?.pointerId === pointer.id) {
-            this._pendingCellPointer = null;
-            if (cellIntent.dragging) {
-                this._dropDraggedPiece(pointer);
-            } else {
-                this._finishCellClick(cellIntent.x, cellIntent.y, pointer, cellIntent.rightClick);
-            }
-            return;
-        }
-
-        const inventoryIntent = this._pendingInventoryPointer;
-        if (inventoryIntent?.pointerId === pointer.id) {
-            this._pendingInventoryPointer = null;
-            if (inventoryIntent.dragging) {
-                this._dropDraggedPiece(pointer);
-            } else {
-                this._toggleInventorySelection(inventoryIntent.type);
-            }
-        }
-    }
-
-    _getIntentDistance(intent, pointer) {
-        return Math.hypot(pointer.worldX - intent.startWorldX, pointer.worldY - intent.startWorldY);
-    }
-
-    _finishCellClick(x, y, pointer, forceRightClick = false) {
-        if (this._handleInventoryClick?.(x, y, pointer, forceRightClick)) return;
-
-        const liveTile = this._tiles[y]?.[x];
-        const isForbiddenNow = this._forbidden.has(`${x},${y}`);
-        const isLockedNow = isForbiddenNow || liveTile?.locked === true;
-        if (!liveTile || isLockedNow || liveTile.type === 'empty') return;
-
-        liveTile.rotation = (liveTile.rotation + 1) % 4;
-        this._animateTileRotation(this._tileGfx[y]?.[x], liveTile.rotation);
-        this._playWireTurnSound();
-        this._updateAll();
-    }
-
-    _startCellDrag(intent, pointer) {
-        const tile = this._tiles?.[intent.y]?.[intent.x];
-        const isForbidden = this._forbidden.has(`${intent.x},${intent.y}`);
-        if (!tile || isForbidden || tile.locked || tile.type === 'empty') return false;
-
-        intent.dragging = true;
-        this._draggedPiece = {
-            origin: 'board',
-            type: tile.type,
-            rotation: tile.rotation || 0,
-            fromX: intent.x,
-            fromY: intent.y,
-            tile: { ...tile },
-        };
-        this._tiles[intent.y][intent.x] = { type: 'empty', rotation: 0 };
-        this._selectedInventoryType = null;
-        this._dragSnappedCell = null;
-        this._hideInventoryGhost();
-        this._refreshInventoryPanel();
-        this._updateAll();
-        this._updateDraggedPiecePreview(pointer);
-        return true;
-    }
-
-    _startInventoryDrag(intent, pointer) {
-        if ((this._inventory[intent.type] || 0) <= 0) return false;
-
-        intent.dragging = true;
-        this._selectedInventoryType = intent.type;
-        this._draggedPiece = {
-            origin: 'inventory',
-            type: intent.type,
-            rotation: 0,
-        };
-        this._dragSnappedCell = null;
-        this._hideInventoryGhost();
-        this._refreshInventoryPanel();
-        this._updateDraggedPiecePreview(pointer);
-        return true;
-    }
-
-    _updateDraggedPiecePreview(pointer) {
-        const dragged = this._draggedPiece;
-        if (!dragged || !this._dragGhostGfx) return;
-
-        const snappedCell = this._getSnappedCellFromPointer(pointer);
-        const validSnappedCell = snappedCell && this._canPlacePieceAt(snappedCell.x, snappedCell.y)
-            ? snappedCell
-            : null;
-        this._dragSnappedCell = validSnappedCell;
-
-        const previewX = validSnappedCell
-            ? this.boardX + (validSnappedCell.x * this.cellSize) + (this.cellSize / 2)
-            : pointer.worldX;
-        const previewY = validSnappedCell
-            ? this.boardY + (validSnappedCell.y * this.cellSize) + (this.cellSize / 2)
-            : pointer.worldY;
-
-        this.container?.bringToTop?.(this._dragGhostGfx);
-        this._dragGhostGfx
-            .clear()
-            .setVisible(true)
-            .setAlpha(0.58);
-        this._drawInventoryPieceIcon(
-            this._dragGhostGfx,
-            previewX,
-            previewY,
-            dragged.type,
-            0x9ffff0,
-            dragged.rotation,
-            24,
-            5,
-        );
-
-        if (validSnappedCell) {
-            this._showPlacementGhost(validSnappedCell.x, validSnappedCell.y, dragged.type, dragged.rotation);
-        } else {
-            this._hideInventoryGhost();
-        }
-    }
-
-    _showPlacementGhost(x, y, type, rotation = 0) {
-        if (!this._inventoryGhostGfx || !this._canPlacePieceAt(x, y)) {
-            this._hideInventoryGhost();
-            return;
-        }
-
-        const cx = this.boardX + x * this.cellSize + this.cellSize / 2;
-        const cy = this.boardY + y * this.cellSize + this.cellSize / 2;
-        this._hoveredInventoryCell = { x, y };
-        this._inventoryGhostGfx
-            .clear()
-            .setVisible(true)
-            .setAlpha(0.9);
-        this._drawOctagonFrame(this._inventoryGhostGfx, cx, cy, this.cellSize - 10, {
-            fill: 0x00ffcc,
-            fillAlpha: 0.15,
-            stroke: 0x9ffff0,
-            strokeAlpha: 0.96,
-            strokeWidth: 2.4,
-            chamferRatio: 0.28,
-        });
-        this._drawInventoryPieceIcon(this._inventoryGhostGfx, cx, cy, type, 0x9ffff0, rotation, 17, 4);
-    }
-
-    _dropDraggedPiece(pointer) {
-        const dragged = this._draggedPiece;
-        if (!dragged) return;
-
-        const cell = this._dragSnappedCell || this._getSnappedCellFromPointer(pointer);
-        let placed = false;
-
-        if (cell && this._canPlacePieceAt(cell.x, cell.y)) {
-            if (dragged.origin !== 'inventory' || (this._inventory[dragged.type] || 0) > 0) {
-                if (dragged.origin === 'inventory') {
-                    this._inventory[dragged.type] = Math.max(0, (this._inventory[dragged.type] || 0) - 1);
-                }
-                this._tiles[cell.y][cell.x] = dragged.tile
-                    ? { ...dragged.tile }
-                    : { type: dragged.type, rotation: dragged.rotation || 0 };
-                placed = true;
-            }
-        } else if (dragged.origin === 'board' && this._isPointerInInventoryPanel(pointer)) {
-            this._inventory[dragged.type] = (this._inventory[dragged.type] || 0) + 1;
-            placed = true;
-        }
-
-        if (!placed && dragged.origin === 'board') {
-            this._tiles[dragged.fromY][dragged.fromX] = { ...dragged.tile };
-        }
-
-        this._clearDragState();
-        this._refreshInventoryPanel();
-        this._updateAll();
-        this._playWireTurnSound?.();
-    }
-
-    _cancelDraggedPiece() {
-        const dragged = this._draggedPiece;
-        if (!dragged) {
-            this._pendingCellPointer = null;
-            this._pendingInventoryPointer = null;
-            return;
-        }
-
-        if (dragged.origin === 'board') {
-            this._tiles[dragged.fromY][dragged.fromX] = { ...dragged.tile };
-        }
-
-        this._clearDragState();
-        this._refreshInventoryPanel();
-        this._updateAll();
-    }
-
-    _clearDragState() {
-        this._dragSnappedCell = null;
-        this._draggedPiece = null;
-        this._pendingCellPointer = null;
-        this._pendingInventoryPointer = null;
-        this._dragGhostGfx?.clear().setVisible(false).setAlpha(1);
-        this._hideInventoryGhost();
-    }
-
-    _getCellFromPointer(pointer) {
-        const x = Math.floor((pointer.worldX - this.boardX) / this.cellSize);
-        const y = Math.floor((pointer.worldY - this.boardY) / this.cellSize);
-        if (x < 0 || y < 0 || x >= this.cols || y >= this.rows) return null;
-        return { x, y };
-    }
-
-    _getSnappedCellFromPointer(pointer) {
-        if (!pointer) return null;
-
-        const boardRight = this.boardX + (this.cols * this.cellSize);
-        const boardBottom = this.boardY + (this.rows * this.cellSize);
-        const boundsPadding = this.cellSize * 0.24;
-        if (
-            pointer.worldX < (this.boardX - boundsPadding)
-            || pointer.worldX > (boardRight + boundsPadding)
-            || pointer.worldY < (this.boardY - boundsPadding)
-            || pointer.worldY > (boardBottom + boundsPadding)
-        ) {
-            return null;
-        }
-
-        const halfCell = this.cellSize / 2;
-        const minCenterX = this.boardX + halfCell;
-        const maxCenterX = boardRight - halfCell;
-        const minCenterY = this.boardY + halfCell;
-        const maxCenterY = boardBottom - halfCell;
-
-        const snappedX = Phaser.Math.Clamp(pointer.worldX, minCenterX, maxCenterX);
-        const snappedY = Phaser.Math.Clamp(pointer.worldY, minCenterY, maxCenterY);
-        const x = Math.round((snappedX - minCenterX) / this.cellSize);
-        const y = Math.round((snappedY - minCenterY) / this.cellSize);
-
-        return { x, y };
-    }
-
-    _canPlacePieceAt(x, y) {
-        const tile = this._tiles?.[y]?.[x];
-        if (!tile || this._forbidden.has(`${x},${y}`) || tile.locked) return false;
-        return tile.type === 'empty';
-    }
-
-    _isPointerInInventoryPanel(pointer) {
-        const bounds = this._inventoryPanelBounds;
-        if (!bounds) return false;
-        return pointer.worldX >= bounds.left
-            && pointer.worldX <= bounds.right
-            && pointer.worldY >= bounds.top
-            && pointer.worldY <= bounds.bottom;
-    }
-
-    _handleInventoryClick(x, y, pointer, forceRightClick = false) {
+    _handleInventoryClick(x, y, pointer) {
         const tile = this._tiles?.[y]?.[x];
         if (!tile) return false;
         const isForbidden = this._forbidden.has(`${x},${y}`);
-        const rightClick = forceRightClick
-            || pointer?.rightButtonDown?.() === true
+        const rightClick = pointer?.rightButtonDown?.() === true
             || pointer?.buttons === 2
             || pointer?.button === 2;
 
@@ -1643,7 +1313,7 @@ export default class CircuitRouting extends MinigameBase {
             const invalidSignal = Boolean(state.feedCount > 0 && state.issueCode);
             const actualPalette = getFlowPowerPalette(state.actualPowerClass || target.powerClass || 'neutral');
             const idleStatusColor = target.powerClass && target.powerClass !== 'neutral'
-                ? '#6d8588'
+                ? actualPalette.label
                 : '#ffb695';
             dot.setFillStyle(repaired ? actualPalette.tint : (invalidSignal ? actualPalette.tint : 0x2f4a57), 1);
             dot.setStrokeStyle(1, repaired ? 0xe8fff1 : (invalidSignal ? 0xffd4cf : 0x7aa8b7), 0.88);
@@ -1686,19 +1356,13 @@ export default class CircuitRouting extends MinigameBase {
 
         if (wireFilter && modifierGfx && modifierText) {
             const filterPalette = getFlowPowerPalette(wireFilter.powerClass);
-            const activeFilterTint = wireFilter.powerClass === 'red' && !reached
-                ? 0x335055
-                : filterPalette.tint;
-            const activeFilterLabel = wireFilter.powerClass === 'red' && !reached
-                ? '#667d80'
-                : filterPalette.label;
-            modifierGfx.fillStyle(activeFilterTint, reached ? 0.18 : 0.11);
-            modifierGfx.lineStyle(1, activeFilterTint, reached ? 0.92 : 0.62);
+            modifierGfx.fillStyle(filterPalette.tint, 0.18);
+            modifierGfx.lineStyle(1, filterPalette.tint, 0.92);
             modifierGfx.fillRoundedRect(-16, -(this.cellSize / 2) + 4, 32, 12, 5);
             modifierGfx.strokeRoundedRect(-16, -(this.cellSize / 2) + 4, 32, 12, 5);
             modifierText
                 .setText(wireFilter.label || String(wireFilter.powerClass || '').slice(0, 3).toUpperCase())
-                .setColor(activeFilterLabel)
+                .setColor(filterPalette.label)
                 .setVisible(true);
         }
 
@@ -1903,7 +1567,7 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         if (node.x === this.cols) {
-            return { x: this.boardX + this.cols * this.cellSize, y };
+            return { x: this.boardX + this.cols * this.cellSize + 26 - endpointRadius, y };
         }
 
         return {
@@ -1971,14 +1635,16 @@ export default class CircuitRouting extends MinigameBase {
             const requiredClass = view.outputSpec.powerClass || 'neutral';
             const displayClass = actualPowerClass || 'neutral';
             const palette = getFlowPowerPalette(displayClass || 'neutral');
+            const requirementPalette = getFlowPowerPalette(requiredClass);
             const pulse = 0.18 + (Math.sin((this._energyPhase * Math.PI * 2) + (Number(view.outputSpec.row) * 0.65)) * 0.08);
             const active = feeds.length > 0;
+            const hazardous = actualPowerClass === 'red';
 
-            view.glow?.setFillStyle(palette.tint, 1).setAlpha(active ? pulse : 0);
-            view.ring?.setStrokeStyle(2, palette.tint, active ? 0.42 + pulse : 0);
-            view.dot?.setFillStyle(active ? palette.tint : 0x225533, 1).setScale(active ? 1.02 + (pulse * 0.08) : 1);
-            view.lbl?.setColor(active ? palette.label : '#66aaaa');
-            view.req?.setColor(active ? palette.label : (requiredClass === 'neutral' ? '#66aaaa' : '#6d8588'));
+            view.glow?.setFillStyle(palette.tint, 1).setAlpha(active || hazardous ? pulse : 0);
+            view.ring?.setStrokeStyle(2, palette.tint, active || hazardous ? 0.42 + pulse : 0);
+            view.dot?.setFillStyle(active || hazardous ? palette.tint : 0x225533, 1).setScale(active ? 1.02 + (pulse * 0.08) : 1);
+            view.lbl?.setColor(active ? palette.label : requirementPalette.idle);
+            view.req?.setColor(active ? palette.label : requirementPalette.label);
         });
 
         Object.values(this._sourceViews).forEach((view) => {
@@ -2080,7 +1746,6 @@ export default class CircuitRouting extends MinigameBase {
 
     hide() {
         this._stopCircuitAnimationLoop();
-        this._clearDragState();
         this._hideInventoryGhost();
         this._tileGfx?.forEach((row) => {
             row?.forEach((tileView) => {
@@ -2100,9 +1765,7 @@ export default class CircuitRouting extends MinigameBase {
         this._wireFilterMap = new Map();
         this._inspectionFaultGfx = null;
         this._inventoryGhostGfx = null;
-        this._dragGhostGfx = null;
         this._hoveredInventoryCell = null;
-        this._inventoryPanelBounds = null;
         this._inspectionFault = null;
         this._specialAction = null;
         this._specialActionButton = null;
@@ -2124,9 +1787,6 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     destroy() {
-        this.scene.input.off('pointermove', this._handleGlobalPointerMove);
-        this.scene.input.off('pointerup', this._handleGlobalPointerUp);
-        this.scene.input.off('gameout', this._handleGlobalPointerUp);
         if (this._escKeyDown) {
             window.removeEventListener('keydown', this._escKeyDown);
             this._escKeyDown = null;

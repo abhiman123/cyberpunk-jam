@@ -1457,7 +1457,7 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
         board: cloneGearBoard(baseOption.board),
         pieces: cloneGearPieces(baseOption.pieces),
         dayStage: stage,
-        allowRustedGears: stage === 2,
+        allowRustedGears: stage >= 2,
         useDeadlockClamp: stage >= 3,
         inspectionFault: null,
     };
@@ -1467,7 +1467,7 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
         if (clampCell) {
             stagedOption.pieces.push(createGearPiece(GEAR_CODES.MOVABLE_WALL, clampCell.row, clampCell.col, {
                 role: 'deadlock-clamp',
-                label: 'COVER',
+                label: 'CLAMP',
             }));
         }
     }
@@ -1489,7 +1489,7 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
             if (clampCell) {
                 stagedOption.pieces.push(createGearPiece(GEAR_CODES.MOVABLE_WALL, clampCell.row, clampCell.col, {
                     role: 'deadlock-clamp',
-                    label: 'COVER',
+                    label: 'CLAMP',
                 }));
             }
         }
@@ -2037,8 +2037,8 @@ const SHARED_FLOW_OPTIONS = Object.freeze([
 
 const SHARED_DEBUG_OPTIONS = Object.freeze([
     createDebugPuzzleOption({
-        prompt: 'test boot routine',
-        repairPrompt: 'fix boot routine',
+        prompt: 'System-Boot-Start()',
+        repairPrompt: 'System-Boot-ResetSequence()',
         expectedOutput: 'Boot Success: all systems nominal',
         actualOutputs: [
             'Boot Failure: init sequence stalled',
@@ -2049,8 +2049,8 @@ const SHARED_DEBUG_OPTIONS = Object.freeze([
         ],
     }),
     createDebugPuzzleOption({
-        prompt: 'test relay check',
-        repairPrompt: 'fix relay check',
+        prompt: 'System-Power-CheckRelays()',
+        repairPrompt: 'System-Power-VoltageSync()',
         expectedOutput: 'Relay Okay: voltage stable',
         actualOutputs: [
             'Relay Failure: voltage spike detected',
@@ -2061,8 +2061,8 @@ const SHARED_DEBUG_OPTIONS = Object.freeze([
         ],
     }),
     createDebugPuzzleOption({
-        prompt: 'test sensor scan',
-        repairPrompt: 'fix sensor scan',
+        prompt: 'System-IO-SensorArray-Calibrate()',
+        repairPrompt: 'System-IO-SensorArray-Restore()',
         expectedOutput: 'Sensor Array Okay: calibrated',
         actualOutputs: [
             'Sensor Array Failure: proximity drift',
@@ -3924,7 +3924,7 @@ export const MACHINE_CATALOG = Object.freeze([
         name: 'Mechanical Mop',
         spriteFileName: null,
         availablePeriods: [1],
-        guaranteedTimeframe: { startHour: 6, endHour: 8 },
+        guaranteedTimeframe: { startHour: 1, endHour: 2 },
         trackOutcome: true,
         possibleGrids: [
             createGridOption({
@@ -4163,7 +4163,7 @@ export const MACHINE_CATALOG = Object.freeze([
         name: 'Jester in the Box',
         spriteFileName: null,
         availablePeriods: [2],
-        guaranteedTimeframe: { startHour: 8, endHour: 10 },
+        guaranteedTimeframe: { startHour: 7, endHour: 9 },
         specialBehavior: 'jesterInBox',
         possibleCircuits: [],
         possibleDebugs: [],
@@ -4228,7 +4228,7 @@ export const MACHINE_CATALOG = Object.freeze([
         name: 'Rebellious Umbrella',
         spriteFileName: null,
         availablePeriods: [1, 2, 3],
-        guaranteedTimeframe: { startHour: 2, endHour: 4 },
+        guaranteedTimeframe: { startHour: 4, endHour: 7 },
         specialBehavior: 'rebelliousUmbrella',
         scrapExitAnimation: 'umbrellaDrift',
         possibleGrids: [
@@ -6194,27 +6194,6 @@ const NYT_PIP_SHAPES = Object.freeze([
     ],
 ]);
 
-const DAY_ONE_PIP_SHAPES = Object.freeze([
-    [
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-    ],
-    [
-        [0, 0, 0],
-        [0, 0, 0],
-    ],
-    [
-        [0, 0, 0, 1],
-        [0, 0, 0, 1],
-        [1, 1, 0, 0],
-    ],
-    [
-        [1, 0, 0, 1],
-        [0, 0, 0, 0],
-        [1, 0, 0, 1],
-    ],
-]);
-
 function hashString(value) {
     let hash = 0x811c9dc5;
     const str = String(value);
@@ -6230,15 +6209,14 @@ function gridFingerprint(grid) {
     return grid.map((row) => (Array.isArray(row) ? row.join(',') : '')).join(';');
 }
 
-function pickNytShapeForGrid(gridOption, stage = 1) {
+function pickNytShapeForGrid(gridOption) {
     const fp = gridFingerprint(gridOption?.grid);
-    const shapePool = Number(stage) <= 1 ? DAY_ONE_PIP_SHAPES : NYT_PIP_SHAPES;
-    const index = hashString(`nyt:${stage}:${fp}`) % shapePool.length;
-    return shapePool[index];
+    const index = hashString(`nyt:${fp}`) % NYT_PIP_SHAPES.length;
+    return NYT_PIP_SHAPES[index];
 }
 
-function buildNytShapeBaseGrid(gridOption, stage = 1) {
-    const shape = pickNytShapeForGrid(gridOption, stage);
+function buildNytShapeBaseGrid(gridOption) {
+    const shape = pickNytShapeForGrid(gridOption);
     return shape.map((row) => row.slice());
 }
 
@@ -6277,7 +6255,7 @@ function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
     // Replace the authored grid shape with an NYT-style fully-filled polyomino
     // drawn from the shape pool. Deterministic per-option (seeded off the
     // original grid) so the same unit always produces the same layout.
-    const nytBase = buildNytShapeBaseGrid(gridOption, stage);
+    const nytBase = buildNytShapeBaseGrid(gridOption);
     const baseGrid = canBeFullyTiled(nytBase)
         ? nytBase
         : stripGridConstraintMarkers(gridOption.grid);
@@ -6311,7 +6289,7 @@ function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
     // --- 3. Choose which cells become charge constraints ---
     // We want a mix: 40-70% of pairs have at least one charge half.
     // Day 1: fewer, Day 3+: more.
-    const chargeRatio = stage === 1 ? 0.3 : stage === 2 ? 0.55 : 0.7;
+    const chargeRatio = stage === 1 ? 0.4 : stage === 2 ? 0.55 : 0.7;
     const chargeMap = new Map(existingChargeMap); // start from any pre-existing charges
 
     // Shuffle pairs for random charge selection.
@@ -6658,7 +6636,7 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
 
     // -- Equality links (Day 1+) FIRST so their usedCells set is populated --
     // Denser on later stages so the board feels fuller.
-    const equalityCount = normalizedStage >= 3 ? 3 : normalizedStage === 2 ? 2 : 0;
+    const equalityCount = normalizedStage >= 3 ? 3 : normalizedStage === 2 ? 2 : 1;
     let resultGrid = injectDerivedEqualityLinks(derivedGrid, pairs, chargeMap, randomFn, equalityCount);
 
     // -- Not-equal links (Day 2+) SECOND --
@@ -6669,15 +6647,11 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
 
     // -- Charge groups SECOND-TO-LAST so they can see which cells are already link cells --
     // and avoid overwriting them (which would corrupt the anchor chain).
-    if (normalizedStage >= 2) {
-        resultGrid = injectDerivedChargeGroups(resultGrid, pairs, chargeMap, randomFn, normalizedStage);
-    }
+    resultGrid = injectDerivedChargeGroups(resultGrid, pairs, chargeMap, randomFn, normalizedStage);
 
     // -- Per-cell comparators (<N / >N) LAST so they only land on cells that
     // are still CELL_EMPTY — never clobbers other constraints.
-    if (normalizedStage >= 2) {
-        resultGrid = injectPerCellComparators(resultGrid, solutionPipMap, randomFn, normalizedStage);
-    }
+    resultGrid = injectPerCellComparators(resultGrid, solutionPipMap, randomFn, normalizedStage);
 
     return { ...baseOption, grid: resultGrid };
 }

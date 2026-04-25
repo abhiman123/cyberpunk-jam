@@ -129,15 +129,7 @@ export default class GameScene extends Phaser.Scene {
         this._openingCallChoiceResolver = null;
         this._managerCallThemeAudio = null;
         this._managerCallThemeToken = 0;
-        this._managerCoughEvent = null;
         this._managerTutorialArrowTarget = null;
-        this._janitorBackgroundLayer = null;
-        this._janitorBackgroundSprites = null;
-        this._janitorBackgroundMode = 'hidden';
-        this._janitorBackgroundFade = 0;
-        this._janitorBackgroundSwapElapsed = Math.random() * 3000;
-        this._pendingQualityControlNotice = null;
-        this._qualityControlNoticeEvent = null;
         this._sequenceDebugCounter = 0;
         this._phoneViews = {
             info: {
@@ -148,8 +140,8 @@ export default class GameScene extends Phaser.Scene {
                 stickToBottom: false,
             },
             notifications: {
-                header: 'FEED',
-                body: 'Feed is idle.',
+                header: 'WORLD FEED',
+                body: 'Shift feed is idle.',
                 status: 'NO ALERTS',
                 scrollOffset: 0,
                 stickToBottom: false,
@@ -167,10 +159,6 @@ export default class GameScene extends Phaser.Scene {
         this._deskItemIntent = null;
         this._jesterDeskTokenItem = null;
         this._currentUnitJitterTween = null;
-        this._currentUnitJitterPulseTween = null;
-        this._currentUnitJitterTintEvent = null;
-        this._currentUnitJitterBaseScale = null;
-        this._puzzleTimingSerial = 0;
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
@@ -264,12 +252,9 @@ export default class GameScene extends Phaser.Scene {
             this._setManagerTutorialArrowTarget(null);
             this._openingCallSequenceId += 1;
             this._openingCallChoiceResolver = null;
-            this._stopCurrentUnitJitter();
             this._nextCaseEvent?.remove(false);
             this._advanceCaseEvent?.remove(false);
-            this._factoryLightRadianceFlickerEvent?.remove(false);
             this._machineWorklightFlickerEvent?.remove(false);
-            this._qualityControlNoticeEvent?.remove(false);
             this.input.off('wheel', this._handlePhoneWheel, this);
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
@@ -313,7 +298,6 @@ export default class GameScene extends Phaser.Scene {
         this._updateMiniGearPreview(delta);
         this._syncRulebookTutorialArrow();
         this._updateConveyorBottomLayers(delta);
-        this._updateJanitorBackground(delta);
         if (this._machineSpeechBubbleLayer?.visible) {
             this._layoutMachineSpeechBubbleSlots();
         }
@@ -742,24 +726,6 @@ export default class GameScene extends Phaser.Scene {
                 targetX = this._deskContainer.x + this._rulebookDeskItem.container.x;
                 targetY = this._deskContainer.y + this._rulebookDeskItem.container.y;
                 labelText = 'RULEBOOK';
-            }
-        } else if (targetKey === 'accept' || targetKey === 'scrap') {
-            const targetButton = this._conveyorRulingButtons?.[targetKey === 'accept' ? 'approve' : 'scrap']?.bgRect;
-            const bounds = targetButton?.getBounds?.();
-            shouldShow = Boolean(canShowOverlayArrow && targetButton?.visible && bounds);
-            if (shouldShow) {
-                targetX = bounds.centerX;
-                targetY = bounds.top + 12;
-                labelText = targetKey === 'accept' ? 'ACCEPT' : 'SCRAP';
-            }
-        } else if (targetKey === 'info') {
-            const infoButton = this._phoneViewButtons?.info?.bg;
-            const bounds = infoButton?.getBounds?.();
-            shouldShow = Boolean(canShowOverlayArrow && this._phonePanel?.visible && infoButton?.visible && bounds);
-            if (shouldShow) {
-                targetX = bounds.centerX;
-                targetY = bounds.centerY;
-                labelText = 'INFO';
             }
         } else if (targetKey === 'clock') {
             shouldShow = Boolean(canShowOverlayArrow && this._clockText?.visible);
@@ -2068,7 +2034,7 @@ export default class GameScene extends Phaser.Scene {
         });
         const infoButton = this._createPhoneChannelButton(214, 160, 'INFO', 30);
         const chatButton = this._createPhoneChannelButton(249, 160, 'CHAT', 30);
-        const alertButton = this._createPhoneChannelButton(272, 160, '!', 16);
+        const alertButton = this._createPhoneChannelButton(284, 160, '!', 18);
 
         accept.bg.on('pointerover', () => this._setPhoneButtonHover(accept, true));
         accept.bg.on('pointerout', () => this._setPhoneButtonHover(accept, false));
@@ -2192,62 +2158,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneStatusText?.setVisible(!visible || useStatusLine);
     }
 
-    _getPhonePanelPalette() {
-        const isQualityControlAlert = this._phoneViewMode === 'info' && this._phoneInfoNote?.tone === 'qc-alert';
-
-        if (isQualityControlAlert) {
-            return {
-                headerColor: '#5f0f14',
-                bodyColor: '#34090c',
-                statusColor: '#7a1a21',
-                boardFill: 0x4c1318,
-                boardFillAlpha: 0.36,
-                boardStroke: 0x9d3942,
-                boardStrokeAlpha: 0.62,
-                shadowFill: 0x24080a,
-                shadowFillAlpha: 0.22,
-                shadowStroke: 0x4d1519,
-                shadowStrokeAlpha: 0.34,
-            };
-        }
-
-        return {
-            headerColor: '#0c171b',
-            bodyColor: '#101010',
-            statusColor: '#15313a',
-            boardFill: 0xf3ffff,
-            boardFillAlpha: 0.22,
-            boardStroke: 0x17363d,
-            boardStrokeAlpha: 0.28,
-            shadowFill: 0x000000,
-            shadowFillAlpha: 0.12,
-            shadowStroke: 0x163136,
-            shadowStrokeAlpha: 0.16,
-        };
-    }
-
-    _applyPhonePanelPalette() {
-        const palette = this._getPhonePanelPalette();
-
-        this._phoneHeaderText?.setColor(palette.headerColor);
-        this._phoneBodyText?.setColor(palette.bodyColor);
-        this._phoneStatusText?.setColor(palette.statusColor);
-        this._phoneQuestionPrompt?.setColor(palette.statusColor);
-        this._phoneQuestionFooterText?.setColor(palette.statusColor);
-
-        if (this._phoneMessageBoard) {
-            this._phoneMessageBoard
-                .setFillStyle(palette.boardFill, palette.boardFillAlpha)
-                .setStrokeStyle(1, palette.boardStroke, palette.boardStrokeAlpha);
-        }
-
-        if (this._phoneMessageBoardShadow) {
-            this._phoneMessageBoardShadow
-                .setFillStyle(palette.shadowFill, palette.shadowFillAlpha)
-                .setStrokeStyle(1, palette.shadowStroke, palette.shadowStrokeAlpha);
-        }
-    }
-
     _refreshPhonePanelDisplay() {
         const view = this._getPhoneViewState();
         if (!view || !this._phoneHeaderText || !this._phoneBodyText || !this._phoneStatusText) return;
@@ -2255,7 +2165,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneHeaderText.setText(view.header || '');
         this._phoneBodyText.setText(view.body || '');
         this._phoneStatusText.setText(view.status || '');
-        this._applyPhonePanelPalette();
         this._refreshPhoneQuestionPrompt();
         this._restorePhoneViewScroll();
         this._syncPhoneBodyLayout();
@@ -2585,13 +2494,9 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _setPhoneInfoNote(message = '', status = 'UNIT NOTE', options = {}) {
+    _setPhoneInfoNote(message = '', status = 'UNIT NOTE') {
         this._phoneInfoNote = message
-            ? {
-                message,
-                status,
-                tone: options.tone || 'default',
-            }
+            ? { message, status }
             : null;
         this._refreshPhoneInfoBoard();
     }
@@ -2608,9 +2513,8 @@ export default class GameScene extends Phaser.Scene {
                 'No robot is currently latched to the inspection bay.',
                 '',
                 'INFO shows the active unit.',
-                'Quality Control logs payroll deductions here.',
                 'CHAT is only for live robot dialogue.',
-                'FEED stores world events and broadcast alerts.',
+                '! stores world events and broadcast alerts.',
             ].join('\n');
             view.status = this._shiftRunning ? 'LINE ACTIVE' : 'LINE STANDBY';
         } else {
@@ -2725,7 +2629,7 @@ export default class GameScene extends Phaser.Scene {
         const separatorIndex = text.indexOf(':');
         if (separatorIndex <= 0) {
             return {
-                title: 'FEED',
+                title: 'WORLD FEED',
                 message: text,
             };
         }
@@ -2740,20 +2644,19 @@ export default class GameScene extends Phaser.Scene {
         const view = this._getPhoneViewState('notifications');
         const total = this._phoneNotifications.length;
 
-        view.header = 'FEED';
+        view.header = 'WORLD FEED';
         view.body = total > 0
             ? this._phoneNotifications.map((entry) => {
-                const footerStatus = entry.status === 'WORLD FEED' ? 'FEED' : entry.status;
-                const footer = footerStatus ? `STATUS: ${footerStatus}` : null;
+                const footer = entry.status ? `STATUS: ${entry.status}` : null;
                 return [
                     `${entry.title} // ${entry.stamp}`,
                     entry.message,
                     footer,
                 ].filter(Boolean).join('\n');
             }).join('\n\n')
-            : 'Feed is idle.';
+            : 'Shift feed is idle.';
         view.status = total === 0
-            ? 'NO FEED'
+            ? 'NO ALERTS'
             : (this._phoneUnreadNotifications > 0
                 ? `${this._phoneUnreadNotifications} NEW // ${total} LOGGED`
                 : `${total} LOGGED // DAY ${GameState.day}`);
@@ -3033,8 +2936,10 @@ export default class GameScene extends Phaser.Scene {
             yoyo: true,
             repeat: 1,
             onComplete: () => {
-                this._phoneMessageBoard?.setAlpha(1);
-                this._applyPhonePanelPalette();
+                this._phoneMessageBoard
+                    .setAlpha(1)
+                    .setFillStyle(0xf3ffff, 0.22)
+                    .setStrokeStyle(1, 0x17363d, 0.28);
             },
         });
         this.tweens.add({
@@ -3044,34 +2949,11 @@ export default class GameScene extends Phaser.Scene {
             yoyo: true,
             repeat: 1,
             onComplete: () => {
-                this._phoneMessageBoardShadow?.setAlpha(1);
-                this._applyPhonePanelPalette();
+                this._phoneMessageBoardShadow
+                    .setAlpha(1)
+                    .setFillStyle(0x000000, 0.12)
+                    .setStrokeStyle(1, 0x163136, 0.16);
             },
-        });
-    }
-
-    _queuePendingQualityControlNotice(message = '', status = 'QUALITY CONTROL') {
-        if (!message) return;
-
-        this._pendingQualityControlNotice = { message, status };
-    }
-
-    _schedulePendingQualityControlNotice(delayMs = 8000) {
-        if (!this._pendingQualityControlNotice) return;
-
-        this._qualityControlNoticeEvent?.remove(false);
-        this._qualityControlNoticeEvent = this.time.delayedCall(delayMs, () => {
-            const notice = this._pendingQualityControlNotice;
-            this._qualityControlNoticeEvent = null;
-            if (!notice || !this._shiftRunning || this._shiftEnding) return;
-
-            this._playNotificationSound(SOUND_ASSETS.notificationAlert, {
-                volume: SOUND_VOLUMES.notification,
-            });
-            this._setPhoneInfoNote(notice.message, notice.status, { tone: 'qc-alert' });
-            this._setPhoneView('info');
-            this._pulsePhoneInfoBoard(0x6b1319);
-            this._pendingQualityControlNotice = null;
         });
     }
 
@@ -3144,7 +3026,6 @@ export default class GameScene extends Phaser.Scene {
 
     _stopManagerCallTheme() {
         this._managerCallThemeToken += 1;
-        this._stopManagerCoughLoop();
 
         const audio = this._managerCallThemeAudio;
         if (!audio) return;
@@ -3158,95 +3039,6 @@ export default class GameScene extends Phaser.Scene {
         audio.removeAttribute('src');
         audio.load();
         this._managerCallThemeAudio = null;
-    }
-
-    _startManagerCoughLoop() {
-        this._stopManagerCoughLoop();
-
-        const scheduleNext = () => {
-            const delayMs = Phaser.Math.Between(650, 2300);
-            this._managerCoughEvent = this.time.delayedCall(delayMs, () => {
-                this._managerCoughEvent = null;
-                if (this._openingCallSequenceId <= 0) return;
-
-                this._playSyntheticManagerCough();
-                scheduleNext();
-            });
-        };
-
-        scheduleNext();
-    }
-
-    _stopManagerCoughLoop() {
-        this._managerCoughEvent?.remove(false);
-        this._managerCoughEvent = null;
-    }
-
-    _playSyntheticManagerCough(volume = SOUND_VOLUMES.voice * 0.38) {
-        const audioContext = this.sound?.context;
-        if (!audioContext?.createBuffer || !audioContext?.createBufferSource || !audioContext?.createGain || !audioContext?.createBiquadFilter) {
-            return;
-        }
-
-        audioContext.resume?.().catch(() => {});
-
-        const sampleRate = audioContext.sampleRate || 44100;
-        const duration = 0.28;
-        const frameCount = Math.max(1, Math.floor(sampleRate * duration));
-        const buffer = audioContext.createBuffer(1, frameCount, sampleRate);
-        const channel = buffer.getChannelData(0);
-
-        for (let i = 0; i < frameCount; i += 1) {
-            const t = i / frameCount;
-            const burstA = Math.exp(-Math.pow((t - 0.18) * 9.5, 2));
-            const burstB = Math.exp(-Math.pow((t - 0.58) * 10.5, 2)) * 0.72;
-            const rasp = (Math.random() * 2) - 1;
-            channel[i] = rasp * (burstA + burstB) * (1 - (t * 0.58));
-        }
-
-        const now = audioContext.currentTime;
-        const noise = audioContext.createBufferSource();
-        const filter = audioContext.createBiquadFilter();
-        const gainNode = audioContext.createGain();
-        const throat = audioContext.createOscillator();
-        const throatGain = audioContext.createGain();
-
-        noise.buffer = buffer;
-        filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(520 + Phaser.Math.Between(-80, 60), now);
-        filter.Q.setValueAtTime(0.78, now);
-
-        gainNode.gain.setValueAtTime(0.0001, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.038 * Math.max(0.15, volume), now + 0.035);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-        throat.type = 'sawtooth';
-        throat.frequency.setValueAtTime(96 + Phaser.Math.Between(-8, 10), now);
-        throat.frequency.exponentialRampToValueAtTime(72, now + duration);
-        throatGain.gain.setValueAtTime(0.0001, now);
-        throatGain.gain.exponentialRampToValueAtTime(0.008 * Math.max(0.15, volume), now + 0.04);
-        throatGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-        noise.connect(filter);
-        filter.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        throat.connect(throatGain);
-        throatGain.connect(audioContext.destination);
-
-        noise.start(now);
-        noise.stop(now + duration);
-        throat.start(now);
-        throat.stop(now + duration);
-
-        noise.addEventListener('ended', () => {
-            noise.disconnect();
-            filter.disconnect();
-            gainNode.disconnect();
-        }, { once: true });
-        throat.addEventListener('ended', () => {
-            throat.disconnect();
-            throatGain.disconnect();
-        }, { once: true });
     }
 
     _playOpeningCallLine(line, { append = true } = {}) {
@@ -3335,7 +3127,6 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneButtonsActive(false);
         this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, '', 'VOICE CONNECTED', 'chat');
         this._playManagerCallTheme();
-        this._startManagerCoughLoop();
 
         try {
             for (const line of callConfig.script.intro) {
@@ -4690,43 +4481,17 @@ export default class GameScene extends Phaser.Scene {
     _startCurrentUnitJitter() {
         if (!this._conveyorUnitSprite || this._currentUnitJitterTween) return;
 
-        this._currentUnitJitterBaseScale = {
-            x: this._conveyorUnitSprite.scaleX || 1,
-            y: this._conveyorUnitSprite.scaleY || 1,
-        };
         this._conveyorUnitSprite.clearTint();
-        this._conveyorUnitSprite.setTint(0xff7474);
+        this._conveyorUnitSprite.setTint(0xffa3a3);
         this._currentUnitJitterTween = this.tweens.add({
             targets: this._conveyorUnitSprite,
-            x: { from: -7, to: 7 },
-            y: { from: -3, to: 3 },
-            angle: { from: -5, to: 5 },
-            duration: 34,
+            x: 4,
+            angle: 2,
+            duration: 42,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.InOut',
         });
-        this._currentUnitJitterPulseTween = this.tweens.add({
-            targets: this._conveyorUnitSprite,
-            scaleX: this._currentUnitJitterBaseScale.x * 1.045,
-            scaleY: this._currentUnitJitterBaseScale.y * 0.955,
-            duration: 86,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Quad.InOut',
-        });
-        const tintCycle = [0xff7474, 0xfff09f, 0x9ffcff, 0xffffff];
-        let tintIndex = 0;
-        this._currentUnitJitterTintEvent = this.time.addEvent({
-            delay: 110,
-            loop: true,
-            callback: () => {
-                if (!this._conveyorUnitSprite) return;
-                tintIndex = (tintIndex + 1) % tintCycle.length;
-                this._conveyorUnitSprite.setTint(tintCycle[tintIndex]);
-            },
-        });
-        this.cameras.main.shake(220, 0.006);
     }
 
     _stopCurrentUnitJitter() {
@@ -4734,24 +4499,10 @@ export default class GameScene extends Phaser.Scene {
             this._currentUnitJitterTween.stop();
             this._currentUnitJitterTween = null;
         }
-        if (this._currentUnitJitterPulseTween) {
-            this._currentUnitJitterPulseTween.stop();
-            this._currentUnitJitterPulseTween = null;
-        }
-        if (this._currentUnitJitterTintEvent) {
-            this._currentUnitJitterTintEvent.remove(false);
-            this._currentUnitJitterTintEvent = null;
-        }
 
         if (this._conveyorUnitSprite) {
-            const baseScale = this._currentUnitJitterBaseScale;
-            this._conveyorUnitSprite
-                .setPosition(0, 0)
-                .setAngle(0)
-                .setScale(baseScale?.x || this._conveyorUnitSprite.scaleX || 1, baseScale?.y || this._conveyorUnitSprite.scaleY || 1)
-                .clearTint();
+            this._conveyorUnitSprite.setPosition(0, 0).setAngle(0).clearTint();
         }
-        this._currentUnitJitterBaseScale = null;
     }
 
     _syncCurrentUnitClownEffects(machineVariant = this._currentMachineVariant) {
@@ -5368,7 +5119,6 @@ export default class GameScene extends Phaser.Scene {
         this._startMusic();
         this._seedShiftNotifications();
         this._flushQueuedWorldFeedNotifications();
-        this._queueJanitorOutcomeWorldFeed();
         this._maybeShowJesterFailureTaunt();
         this._syncJesterDeskTokenVisibility();
         this._syncPurpleCircuitDeskTokenVisibility();
@@ -5502,102 +5252,6 @@ export default class GameScene extends Phaser.Scene {
         return typeof performance !== 'undefined' && typeof performance.now === 'function'
             ? performance.now()
             : Date.now();
-    }
-
-    _getPuzzleTimingBaseId(machineVariant = this._currentMachineVariant) {
-        if (!machineVariant) return null;
-
-        if (!machineVariant._puzzleTimingBaseId) {
-            this._puzzleTimingSerial += 1;
-            const day = GameState.day || 1;
-            const caseId = this._currentCase?.id || 'case';
-            const machineId = machineVariant.machineId || 'machine';
-            machineVariant._puzzleTimingBaseId = `${day}:${caseId}:${machineId}:${this._puzzleTimingSerial}`;
-        }
-
-        return machineVariant._puzzleTimingBaseId;
-    }
-
-    _getPuzzleTimingId(puzzleType, machineVariant = this._currentMachineVariant) {
-        const baseId = this._getPuzzleTimingBaseId(machineVariant);
-        return baseId ? `${baseId}:${puzzleType}` : null;
-    }
-
-    _isCustomPuzzleTimingRun(machineVariant = this._currentMachineVariant, options = {}) {
-        if (!machineVariant) return true;
-        if (options.specialAction || options.specialCommand) return true;
-        if (machineVariant._jesterTokenInjected || machineVariant._purpleCircuitInjected || machineVariant._clownCorrupted) return true;
-
-        const repairState = this._getUmbrellaRepairState(machineVariant);
-        if (repairState?.assemblyActive || repairState?.specialCircuitMode || repairState?.businessConcluded) return true;
-
-        const specialBehaviors = new Set([
-            'circuitDealer',
-            'debriefMachine',
-            'jesterInBox',
-            'rebelliousUmbrella',
-            'richMf',
-        ]);
-        return specialBehaviors.has(machineVariant.specialBehavior);
-    }
-
-    _isPuzzleTimingEligible(puzzleType, machineVariant = this._currentMachineVariant, options = {}) {
-        if (!machineVariant || this._isCustomPuzzleTimingRun(machineVariant, options)) return false;
-
-        if (puzzleType === 'grid') {
-            const evaluation = machineVariant.puzzleState?.getEvaluation?.() || {};
-            return Boolean(machineVariant.puzzleState)
-                && !evaluation.solved
-                && !evaluation.scrapRequired
-                && !evaluation.impossible
-                && !this._getUmbrellaGridSpecialAction(machineVariant);
-        }
-
-        const byType = {
-            flow: {
-                required: Boolean(machineVariant._uiOtherPuzzleRequired || machineVariant.flowPuzzle),
-                state: this._getMachineFlowState(machineVariant),
-            },
-            gear: {
-                required: Boolean(machineVariant._uiGearPuzzleRequired || machineVariant.gearPuzzle),
-                state: this._getMachineGearState(machineVariant),
-            },
-            code: {
-                required: Boolean(machineVariant._uiDebugPuzzleRequired || machineVariant.debugPuzzle),
-                state: this._getMachineDebugState(machineVariant),
-            },
-        };
-        const entry = byType[puzzleType];
-        if (!entry?.required) return false;
-        return !entry.state?.completed && !entry.state?.scrapRequired;
-    }
-
-    _beginPuzzleTiming(puzzleType, machineVariant = this._currentMachineVariant, options = {}) {
-        if (!this._isPuzzleTimingEligible(puzzleType, machineVariant, options)) return null;
-
-        const timerId = this._getPuzzleTimingId(puzzleType, machineVariant);
-        if (!timerId) return null;
-
-        return GameState.beginPuzzleTimer({
-            type: puzzleType,
-            timerId,
-            startedAtMs: this._getPerfNow(),
-        });
-    }
-
-    _finishPuzzleTiming(puzzleType, machineVariant = this._currentMachineVariant, result = {}) {
-        if (!machineVariant || this._isCustomPuzzleTimingRun(machineVariant)) return null;
-
-        const timerId = this._getPuzzleTimingId(puzzleType, machineVariant);
-        if (!timerId) return null;
-
-        return GameState.finishPuzzleTimer({
-            type: puzzleType,
-            timerId,
-            endedAtMs: this._getPerfNow(),
-            completed: Boolean(result.completed),
-            resolved: Boolean(result.resolved || result.completed || result.scrapRequired),
-        });
     }
 
     _emitSequenceDebug(label, details = null) {
@@ -5859,23 +5513,20 @@ export default class GameScene extends Phaser.Scene {
     _buildConveyorScreen() {
         this._conveyorContainer = this.add.container(0, 0).setDepth(10);
 
-        const mainViewBackgroundLayerKeys = [
+        const mainViewLayerKeys = [
             'mainview_bottom',
             'mainview_second',
-        ];
-        const mainViewLightLayerKeys = [
             'mainview_lightradiance',
             'mainview_lightlayer',
         ];
-        const mainViewLayerKeys = [...mainViewBackgroundLayerKeys, ...mainViewLightLayerKeys];
-        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key));
+        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
         if (!hasMainViewLayers) {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
         }
 
         this._mainViewLayers = {};
-        const addMainViewLayer = (key) => {
+        mainViewLayerKeys.forEach((key) => {
             if (!this.textures.exists(key)) return;
 
             let layer;
@@ -5888,13 +5539,7 @@ export default class GameScene extends Phaser.Scene {
 
             this._conveyorContainer.add(layer);
             this._mainViewLayers[key] = layer;
-        };
-
-        this._buildJanitorBackgroundLayer();
-        mainViewBackgroundLayerKeys.forEach(addMainViewLayer);
-        mainViewLightLayerKeys.forEach(addMainViewLayer);
-        this._setFactoryBackgroundLightVisible(true);
-        this._queueFactoryBackgroundLightFlicker();
+        });
 
         this._machineDialogueText = this.add.text(966, 460, '', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#bceef8',
@@ -6065,183 +5710,6 @@ export default class GameScene extends Phaser.Scene {
         this._setConveyorRulingButtonsVisible(false);
     }
 
-    _getJanitorStory() {
-        return GameState.janitorStory || null;
-    }
-
-    _getJanitorBackgroundMode() {
-        const janitorStory = this._getJanitorStory();
-        if (GameState.day >= 2) {
-            if (janitorStory?.outcome === 'accepted') return 'replacement';
-            return 'hidden';
-        }
-
-        return 'original';
-    }
-
-    _buildJanitorBackgroundLayer() {
-        const createJanitorSprite = (textureKey, tint) => {
-            if (!this.textures.exists(textureKey)) return null;
-
-            const sprite = this.add.image(224, 602, textureKey)
-                .setOrigin(0.5, 1)
-                .setScale(0.082)
-                .setAlpha(0)
-                .setVisible(false);
-
-            sprite.setTint(tint);
-            if (typeof sprite.setTintMode === 'function') {
-                sprite.setTintMode(Phaser.TintModes.FILL);
-            }
-
-            return sprite;
-        };
-
-        const originalPair = [
-            createJanitorSprite('janitor_bg_original_a', 0x324750),
-            createJanitorSprite('janitor_bg_original_b', 0x324750),
-        ].filter(Boolean);
-        const replacementPair = [
-            createJanitorSprite('janitor_bg_replacement_a', 0x48636f),
-            createJanitorSprite('janitor_bg_replacement_b', 0x48636f),
-        ].filter(Boolean);
-        const allSprites = [...originalPair, ...replacementPair];
-
-        if (allSprites.length === 0) return;
-
-        this._janitorBackgroundLayer = this.add.container(0, 0).setVisible(false);
-        this._janitorBackgroundLayer.add(allSprites);
-        this._conveyorContainer.add(this._janitorBackgroundLayer);
-        this._janitorBackgroundSprites = {
-            original: originalPair,
-            replacement: replacementPair,
-        };
-        this._janitorBackgroundMode = this._getJanitorBackgroundMode();
-    }
-
-    _getFactoryBackgroundLightLayers() {
-        return [
-            this._mainViewLayers?.mainview_lightradiance,
-            this._mainViewLayers?.mainview_lightlayer,
-        ].filter(Boolean);
-    }
-
-    _setFactoryBackgroundLightVisible(visible = true) {
-        this._getFactoryBackgroundLightLayers().forEach((layer) => {
-            layer.setVisible(true);
-            layer.setAlpha(visible ? 1 : 0);
-        });
-    }
-
-    _playFactoryBackgroundLightFlicker(pattern = 'single') {
-        const layers = this._getFactoryBackgroundLightLayers();
-        if (layers.length === 0) return;
-
-        const steps = pattern === 'double'
-            ? [
-                { visible: false, delay: 0 },
-                { visible: true, delay: 70 },
-                { visible: false, delay: 130 },
-                { visible: true, delay: 205 },
-            ]
-            : [
-                { visible: false, delay: 0 },
-                { visible: true, delay: 95 },
-            ];
-        const lastStepDelay = steps.length > 0 ? steps[steps.length - 1].delay : 0;
-
-        steps.forEach(({ visible, delay }) => {
-            this.time.delayedCall(delay, () => {
-                this._setFactoryBackgroundLightVisible(visible);
-            });
-        });
-
-        this.time.delayedCall(lastStepDelay + 60, () => {
-            this._setFactoryBackgroundLightVisible(true);
-            this._queueFactoryBackgroundLightFlicker();
-        });
-    }
-
-    _queueFactoryBackgroundLightFlicker() {
-        this._factoryLightRadianceFlickerEvent?.remove(false);
-        this._factoryLightRadianceFlickerEvent = this.time.delayedCall(Phaser.Math.Between(45000, 90000), () => {
-            this._factoryLightRadianceFlickerEvent = null;
-            this._playFactoryBackgroundLightFlicker(Phaser.Math.Between(0, 1) === 0 ? 'single' : 'double');
-        });
-    }
-
-    _updateJanitorBackground(delta) {
-        if (!this._janitorBackgroundLayer || !this._janitorBackgroundSprites) return;
-
-        const nextMode = this._getJanitorBackgroundMode();
-        const hasReplacementPair = (this._janitorBackgroundSprites.replacement?.length || 0) > 0;
-        this._janitorBackgroundMode = nextMode === 'replacement' && !hasReplacementPair ? 'original' : nextMode;
-
-        const allSprites = [
-            ...(this._janitorBackgroundSprites.original || []),
-            ...(this._janitorBackgroundSprites.replacement || []),
-        ];
-        const activePair = this._janitorBackgroundMode === 'replacement'
-            ? this._janitorBackgroundSprites.replacement
-            : this._janitorBackgroundSprites.original;
-        const targetFade = this._janitorBackgroundMode === 'hidden' ? 0 : 1;
-        const fadeStep = Math.min(1, delta * 0.0024);
-
-        this._janitorBackgroundFade = Phaser.Math.Linear(this._janitorBackgroundFade, targetFade, fadeStep);
-        this._janitorBackgroundLayer.setVisible(this._janitorBackgroundFade > 0.01);
-
-        if (this._janitorBackgroundFade <= 0.01 || !activePair || activePair.length === 0) {
-            allSprites.forEach((sprite) => sprite.setVisible(false).setAlpha(0));
-            return;
-        }
-
-        const pairDurationMs = Math.max(1, activePair.length) * 3000;
-        this._janitorBackgroundSwapElapsed = (this._janitorBackgroundSwapElapsed + delta) % pairDurationMs;
-        const activeIndex = activePair.length <= 1
-            ? 0
-            : Math.floor(this._janitorBackgroundSwapElapsed / 3000) % activePair.length;
-        const baseAlpha = this._janitorBackgroundMode === 'replacement' ? 0.46 : 0.4;
-
-        allSprites.forEach((sprite) => {
-            const isActive = activePair.includes(sprite);
-            if (!isActive) {
-                sprite.setVisible(false).setAlpha(0);
-                return;
-            }
-
-            sprite.setVisible(true).setAlpha(0);
-        });
-
-        activePair[activeIndex]?.setVisible(true).setAlpha(baseAlpha * this._janitorBackgroundFade);
-    }
-
-    _queueJanitorOutcomeWorldFeed() {
-        if (GameState.day !== 2) return;
-
-        const janitorStory = this._getJanitorStory();
-        if (!janitorStory || janitorStory.newsDay2Shown) return;
-
-        let message = null;
-        if (janitorStory.outcome === 'scrapped') {
-            message = 'Local janitor died because his mop sucked.';
-        } else if (janitorStory.outcome === 'accepted') {
-            message = 'Local janitor replaced by mechanical broom. Machines are getting better and better.';
-        }
-
-        if (!message) return;
-
-        this._pushPhoneNotification('LOCAL NEWS', message, 'WORLD FEED', {
-            activate: false,
-            unread: this._phoneViewMode !== 'notifications',
-            soundAsset: SOUND_ASSETS.notificationAlert,
-        });
-
-        GameState.janitorStory = {
-            ...janitorStory,
-            newsDay2Shown: true,
-        };
-    }
-
     _setFactoryIdleState(message, commMessage = 'Awaiting next unit.', commStatus = 'CHANNEL IDLE') {
         this._clearUnsafeAcceptConfirmation();
         this._shiftAwaitingFinalRuling = false;
@@ -6395,7 +5863,6 @@ export default class GameScene extends Phaser.Scene {
         if (this._debugPuzzleOverlay?.active) return;
 
         this._clearUnsafeAcceptConfirmation();
-        this._beginPuzzleTiming('grid', this._currentMachineVariant);
         this._currentMachineVariant._uiPuzzleOpened = true;
         this._updateConveyorDecisionHint();
         this._refreshFactoryActionButtons();
@@ -6457,7 +5924,6 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (isSolved && !wasSolved && !this._actionLocked) {
-            this._finishPuzzleTiming('grid', machineVariant, { completed: true, resolved: true });
             this._playOneShot(SOUND_ASSETS.puzzleFixed, { volume: SOUND_VOLUMES.puzzleFixed });
             const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
             const followUpNeeded = auxiliaryState.pendingCount > 0;
@@ -6568,14 +6034,6 @@ export default class GameScene extends Phaser.Scene {
         if (repairState?.specialCircuitMode && !repairState.insertedSpecialCircuits?.any) {
             this._beginUmbrellaSpecialCircuitCheck();
             return;
-        }
-
-        if (evaluation.solved || evaluation.scrapRequired || evaluation.impossible) {
-            this._finishPuzzleTiming('grid', machineVariant, {
-                completed: Boolean(evaluation.solved),
-                resolved: true,
-                scrapRequired: Boolean(evaluation.scrapRequired || evaluation.impossible),
-            });
         }
 
         this._maybePromptUmbrellaPartShortage('circuit', { completed: Boolean(evaluation.solved) });
@@ -6697,11 +6155,6 @@ export default class GameScene extends Phaser.Scene {
             .filter(([, result]) => result.required && result.resolved)
             .map(([key]) => key);
 
-        Object.entries(puzzleResults).forEach(([key, result]) => {
-            if (!result.required || !result.resolved) return;
-            this._finishPuzzleTiming(key, this._currentMachineVariant, result);
-        });
-
         GameState.recordTrackedMachineOutcome({
             machineId: this._currentMachineVariant.machineId,
             machineName: this._currentMachineVariant.name,
@@ -6717,13 +6170,6 @@ export default class GameScene extends Phaser.Scene {
             resolvedPuzzleParts,
             puzzleResults,
         });
-
-        if (GameState.day === 1 && this._currentMachineVariant.machineId === 'mechanic_broom') {
-            GameState.janitorStory = {
-                outcome: action === 'approve' ? 'accepted' : 'scrapped',
-                newsDay2Shown: false,
-            };
-        }
     }
 
     _queueAdvanceCase(delayMs) {
@@ -7179,12 +6625,10 @@ export default class GameScene extends Phaser.Scene {
         this._debugPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
-        const specialAction = this._getUmbrellaFlowSpecialAction(this._currentMachineVariant);
-        this._beginPuzzleTiming('flow', this._currentMachineVariant, { specialAction });
         this._otherPuzzleOverlay.show({
             circuit: this._currentMachineVariant.flowPuzzle,
             evidence: this._getMachineFlowState(this._currentMachineVariant),
-            specialAction,
+            specialAction: this._getUmbrellaFlowSpecialAction(this._currentMachineVariant),
         });
         this._refreshFactoryActionButtons();
     }
@@ -7203,13 +6647,6 @@ export default class GameScene extends Phaser.Scene {
             this._currentMachineVariant.flowPuzzle.progress = evidence;
         }
         this._currentMachineVariant._uiOtherPuzzleSolved = Boolean(evidence?.completed);
-        if (evidence?.completed || evidence?.scrapRequired) {
-            this._finishPuzzleTiming('flow', this._currentMachineVariant, {
-                completed: Boolean(evidence?.completed),
-                resolved: true,
-                scrapRequired: Boolean(evidence?.scrapRequired),
-            });
-        }
 
         const header = this._getMachineLinkHeader(this._currentMachineVariant);
         const repairedTargets = this._getRepairedRepairTargetDisplayNames(this._currentMachineVariant, evidence);
@@ -7385,12 +6822,10 @@ export default class GameScene extends Phaser.Scene {
         this._debugPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
-        const specialAction = this._getUmbrellaGearSpecialAction(this._currentMachineVariant);
-        this._beginPuzzleTiming('gear', this._currentMachineVariant, { specialAction });
         this._gearPuzzleOverlay.show({
             gearPuzzle: this._currentMachineVariant.gearPuzzle,
             evidence: this._getMachineGearState(this._currentMachineVariant),
-            specialAction,
+            specialAction: this._getUmbrellaGearSpecialAction(this._currentMachineVariant),
         });
         this._refreshFactoryActionButtons();
     }
@@ -7407,13 +6842,6 @@ export default class GameScene extends Phaser.Scene {
             this._currentMachineVariant.gearPuzzle.progress = evidence;
         }
         this._currentMachineVariant._uiGearPuzzleSolved = Boolean(evidence?.completed);
-        if (evidence?.completed || evidence?.scrapRequired) {
-            this._finishPuzzleTiming('gear', this._currentMachineVariant, {
-                completed: Boolean(evidence?.completed),
-                resolved: true,
-                scrapRequired: Boolean(evidence?.scrapRequired),
-            });
-        }
 
         const gateState = this._getPuzzleGateState();
 
@@ -7479,13 +6907,11 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
-        const specialCommand = this._getUmbrellaDebugSpecialCommand(this._currentMachineVariant);
-        this._beginPuzzleTiming('code', this._currentMachineVariant, { specialCommand });
         this._debugPuzzleOverlay.show({
             machineName: this._currentMachineVariant.name,
             debugPuzzle: this._currentMachineVariant.debugPuzzle,
             evidence: this._getMachineDebugState(this._currentMachineVariant),
-            specialCommand,
+            specialCommand: this._getUmbrellaDebugSpecialCommand(this._currentMachineVariant),
         });
         this._refreshFactoryActionButtons();
     }
@@ -7502,13 +6928,6 @@ export default class GameScene extends Phaser.Scene {
             this._currentMachineVariant.debugPuzzle.progress = evidence;
         }
         this._currentMachineVariant._uiDebugPuzzleSolved = Boolean(evidence?.completed);
-        if (evidence?.completed || evidence?.scrapRequired) {
-            this._finishPuzzleTiming('code', this._currentMachineVariant, {
-                completed: Boolean(evidence?.completed),
-                resolved: true,
-                scrapRequired: Boolean(evidence?.scrapRequired),
-            });
-        }
 
         this._updateConveyorDecisionHint();
         this._refreshOtherPuzzleButton();
@@ -7857,6 +7276,7 @@ export default class GameScene extends Phaser.Scene {
         let feedbackColor = '#00cc66';
         let panelStatus = '';
         let notificationMessage = '';
+        let notificationStatus = panelStatus;
 
         if (action === 'scrap') {
             if (gateState.scrapRequired && gateState.ready) {
@@ -7869,17 +7289,19 @@ export default class GameScene extends Phaser.Scene {
             } else if (gateState.scrapRequired) {
                 payDelta = -PAYCHECK_DELTA;
                 wasPenalty = true;
-                feedbackText = 'MISTAKE MADE // DEDUCTION APPLIED';
+                feedbackText = 'UNCONFIRMED SCRAP // CLICK RED TEXT IN PORT RECORD TO CONFIRM';
                 feedbackColor = '#ff7f73';
                 panelStatus = 'SCRAP PENALTY';
-                notificationMessage = 'Quality Control logged a bad scrap call. Confirm the red fault text before scrapping. Deduction applied.';
+                notificationMessage = 'DOC NOTE: Hardware anomalies must be confirmed (click red text) before clicking SCRAP. Payroll deduction applied.';
+                notificationStatus = 'DOC NOTICE';
             } else {
                 payDelta = -PAYCHECK_DELTA;
                 wasPenalty = true;
-                feedbackText = 'MISTAKE MADE // DEDUCTION APPLIED';
+                feedbackText = 'REPAIRABLE UNIT SCRAPPED // DEDUCTION APPLIED';
                 feedbackColor = '#ff7f73';
                 panelStatus = 'SCRAP PENALTY';
-                notificationMessage = 'Quality Control logged a bad scrap call. This unit was still repairable. Deduction applied.';
+                notificationMessage = 'DOC NOTE: This unit was still repairable. Payroll deduction applied.';
+                notificationStatus = 'DOC NOTICE';
             }
         } else if (gateState.ready && !gateState.scrapRequired) {
             payDelta = PAYCHECK_DELTA;
@@ -7891,12 +7313,15 @@ export default class GameScene extends Phaser.Scene {
         } else {
             payDelta = -PAYCHECK_DELTA;
             wasPenalty = true;
-            feedbackText = 'MISTAKE MADE // DEDUCTION APPLIED';
+            feedbackText = gateState.scrapRequired
+                ? 'DISQUALIFIED UNIT ACCEPTED // DEDUCTION APPLIED'
+                : 'UNFIXED UNIT ACCEPTED // DEDUCTION APPLIED';
             feedbackColor = '#ff7f73';
             panelStatus = 'ACCEPT PENALTY';
             notificationMessage = gateState.scrapRequired
-                ? 'Quality Control logged a bad accept call. A disqualifying subsystem signal was ignored. Deduction applied.'
-                : 'Quality Control logged a bad accept call. Not all required puzzles were fixed. Deduction applied.';
+                ? 'DOC NOTE: A disqualifying subsystem signal was ignored. Payroll deduction applied.'
+                : 'DOC NOTE: Not all required puzzles were fixed. Payroll deduction applied.';
+            notificationStatus = 'DOC NOTICE';
         }
 
         if (action === 'approve' && this._isDebriefMachine(this._currentMachineVariant)) {
@@ -7913,7 +7338,7 @@ export default class GameScene extends Phaser.Scene {
             this.cameras.main.flash(260, 50, 0, 0, false);
             this.cameras.main.shake(300, 0.01);
             glitchBurst(this, this._cmFilter, 420);
-            this._queuePendingQualityControlNotice(notificationMessage, 'QUALITY CONTROL');
+            this._showFactoryNotification(notificationMessage, notificationStatus);
         } else {
             const flashColor = action === 'scrap'
                 ? { red: 60, green: 30, blue: 0 }
@@ -8531,9 +7956,6 @@ export default class GameScene extends Phaser.Scene {
                     hasCommunication: Boolean(arrivingMachineVariant?.hasCommunication),
                 });
                 if (this._currentMachineVariant !== arrivingMachineVariant || this._currentCase !== arrivingCase) return;
-                if (this._pendingQualityControlNotice) {
-                    this._schedulePendingQualityControlNotice(8000);
-                }
                 if (GameState.casesProcessedThisShift === 0 && GameState.day === 1 && !this._tutorialArrowShown) {
                     this._tutorialArrowShown = true;
                     if (this._tutorialArrow) this._tutorialArrow.setVisible(true);

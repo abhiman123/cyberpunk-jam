@@ -49,10 +49,6 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('btn_accept_source', 'Green.png');
         this.load.image('track_and_discus_robot_source', 'Tennis.png');
         this.load.image('track_and_discus_robot_close_source', 'TennisClose.png');
-        this.load.image('janitor_bg_original_a_source', 'COPYRIGHTEDIMAGREMOVE1.png');
-        this.load.image('janitor_bg_original_b_source', 'COPYRIGHTEDIMAGREMOVE2.png');
-        this.load.image('janitor_bg_replacement_a_source', 'OTHERCOPYRIGHTEDIMAGREMOVE1.png');
-        this.load.image('janitor_bg_replacement_b_source', 'OTHERCOPYRIGHTEDIMAGREMOVE2.png');
 
         // Pixel art backgrounds
         this.load.image('bg_inspectview', 'inspectview.jpeg');
@@ -64,7 +60,6 @@ export default class BootScene extends Phaser.Scene {
         this._createTrackAndDiscusRobotCloseFromSource();
         this._createFutureLoungeChairFromSource();
         this._createFamilyPhotoFromSource();
-        this._createJanitorBackgroundsFromSource();
         this._createManagerHumanFromSource();
         this._createManagerRobotFromSource();
         this._generatePlaceholders();
@@ -96,13 +91,6 @@ export default class BootScene extends Phaser.Scene {
 
     _createFamilyPhotoFromSource() {
         this._createNearestUpscaledTexture('family_photo_source', 'family_photo', 5);
-    }
-
-    _createJanitorBackgroundsFromSource() {
-        this._createNearestUpscaledTexture('janitor_bg_original_a_source', 'janitor_bg_original_a', 4);
-        this._createNearestUpscaledTexture('janitor_bg_original_b_source', 'janitor_bg_original_b', 4);
-        this._createNearestUpscaledTexture('janitor_bg_replacement_a_source', 'janitor_bg_replacement_a', 4);
-        this._createNearestUpscaledTexture('janitor_bg_replacement_b_source', 'janitor_bg_replacement_b', 4);
     }
 
     _createManagerHumanFromSource() {

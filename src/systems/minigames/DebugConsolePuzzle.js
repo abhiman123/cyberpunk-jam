@@ -171,25 +171,25 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._panel = this.scene.add.container(640, 360).setDepth(depth);
 
         // --- Frames ---
-        const outer = this.scene.add.rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x050a0c, 0.98)
-            .setStrokeStyle(2, 0x0086b8, 0.95);
-        const inner = this.scene.add.rectangle(0, 0, PANEL_WIDTH - 34, PANEL_HEIGHT - 34, 0x07090f, 0.96)
-            .setStrokeStyle(1, 0x163d58, 0.72);
-        const headerRule = this.scene.add.rectangle(0, -252, PANEL_WIDTH - 90, 2, 0x008ac0, 0.82);
-        // Command frame: purple diagnostic focal point.
-        const commandFrame = this.scene.add.rectangle(-231, -112, 572, 118, 0x03080a, 0.97)
-            .setStrokeStyle(2, 0xC05CDC, 0.9);
-        const commandTopAccent = this.scene.add.rectangle(-231, -171, 572, 2, 0xF684F7, 0.6);
-        const actualFrame = this.scene.add.rectangle(286, -126, 352, 146, 0x03070c, 0.96)
-            .setStrokeStyle(1, 0x0c5b8c, 0.82);
-        const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x03070c, 0.96)
-            .setStrokeStyle(1, 0x0c5b8c, 0.85);
+        const outer = this.scene.add.rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x050c07, 0.98)
+            .setStrokeStyle(2, 0x3a6b28, 0.95);
+        const inner = this.scene.add.rectangle(0, 0, PANEL_WIDTH - 34, PANEL_HEIGHT - 34, 0x070f09, 0.96)
+            .setStrokeStyle(1, 0x1e3d18, 0.72);
+        const headerRule = this.scene.add.rectangle(0, -252, PANEL_WIDTH - 90, 2, 0x3a6b28, 0.82);
+        // Command frame — amber-accented focal point
+        const commandFrame = this.scene.add.rectangle(-231, -112, 572, 118, 0x060e07, 0.97)
+            .setStrokeStyle(2, 0xb87200, 0.88);
+        const commandTopAccent = this.scene.add.rectangle(-231, -171, 572, 2, 0xFFB000, 0.55);
+        const actualFrame = this.scene.add.rectangle(286, -126, 352, 146, 0x060d08, 0.96)
+            .setStrokeStyle(1, 0x235018, 0.82);
+        const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x060d08, 0.96)
+            .setStrokeStyle(1, 0x1e6018, 0.85);
         const actualOutputBack = this.scene.add.rectangle(286, -112, 324, 90, 0x000000, 1)
             .setStrokeStyle(1, 0x12310f, 0.72);
         const expectedOutputBack = this.scene.add.rectangle(286, 44, 324, 64, 0x000000, 1)
             .setStrokeStyle(1, 0x12310f, 0.72);
-        const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x03070c, 0.96)
-            .setStrokeStyle(1, 0x0c5b8c, 0.72);
+        const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x060d08, 0.96)
+            .setStrokeStyle(1, 0x1e3d18, 0.72);
         // --- Corner bracket decorations (outer panel) ---
         const cornerGfx = this.scene.add.graphics();
         cornerGfx.lineStyle(3, 0xF684F7, 0.82);
@@ -308,7 +308,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._commandMaskFilter.autoUpdate = false;
         this._commandMaskFilter.needsUpdate = true;
 
-        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xF684F7, 1).setOrigin(0, 0.5);
+        // Amber block cursor with hard blink
+        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xFFB000, 1).setOrigin(0, 0.5);
         this._commandClipContainer.add(this._caret);
         this._caretTween = this.scene.tweens.add({
             targets: this._caret,
@@ -323,7 +324,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const actualLabel = this.scene.add.text(115, -188, 'ACTUAL OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#0070ad',
+            color: '#486aaa',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._actualOutputText = this.scene.add.text(115, -164, '', {
@@ -337,13 +338,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const expectedLabel = this.scene.add.text(115, -28, 'EXPECTED OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#00c8f0',
+            color: '#32AAFF',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._expectedOutputText = this.scene.add.text(115, -8, '', {
             fontFamily: 'Courier New',
             fontSize: '16px',
-            color: '#00c8f0',
+            color: '#32AAFF',
             wordWrap: { width: 320 },
             lineSpacing: 7,
         }).setOrigin(0, 0);
@@ -351,13 +352,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const detailLabel = this.scene.add.text(-488, 124, 'PATCH NOTES', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#0070ad',
+            color: '#38609a',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._instructionText = this.scene.add.text(-488, 150, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#2f75a2',
+            color: '#50709a',
             wordWrap: { width: 596 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
@@ -370,29 +371,29 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._messageText = this.scene.add.text(148, 152, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#2f75a2',
+            color: '#486aaa',
             wordWrap: { width: 332 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
 
         // --- Mechanical close button ---
         const closeBaseY = 284;
-        this._closeButtonBg = this.scene.add.rectangle(0, closeBaseY, 286, 44, 0x08111c, 0.97)
-            .setStrokeStyle(2, 0x008ac0, 0.9)
+        this._closeButtonBg = this.scene.add.rectangle(0, closeBaseY, 286, 44, 0x0a0f1e, 0.97)
+            .setStrokeStyle(2, 0x285a9a, 0.9)
             .setInteractive({ useHandCursor: true });
-        this._closeButtonText = this.scene.add.text(0, closeBaseY, 'CLOSE PANEL [ESC]', {
+        this._closeButtonText = this.scene.add.text(0, closeBaseY, 'RETURN TO BOOTH [ESC]', {
             fontFamily: 'Courier New',
             fontSize: '15px',
-            color: '#00c8f0',
+            color: '#5ab8f0',
             letterSpacing: 2,
         }).setOrigin(0.5);
         this._closeButtonBg.on('pointerover', () => {
-            this._closeButtonBg?.setFillStyle(0x0f163a, 0.99).setStrokeStyle(2, 0x00c8f0, 0.95);
+            this._closeButtonBg?.setFillStyle(0x0f163a, 0.99).setStrokeStyle(2, 0x5ab8f0, 0.95);
             this._closeButtonText?.setColor('#94d8ff');
         });
         this._closeButtonBg.on('pointerout', () => {
-            this._closeButtonBg?.setFillStyle(0x08111c, 0.97).setStrokeStyle(2, 0x008ac0, 0.9);
-            this._closeButtonText?.setColor('#00c8f0');
+            this._closeButtonBg?.setFillStyle(0x0a0f1e, 0.97).setStrokeStyle(2, 0x285a9a, 0.9);
+            this._closeButtonText?.setColor('#5ab8f0');
             this.scene.tweens.add({
                 targets: [this._closeButtonBg, this._closeButtonText],
                 y: closeBaseY,
@@ -993,7 +994,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
         this._actualOutputText?.setText(showActualOutput ? (this.evidence.actualOutput || '') : '');
-        this._expectedOutputText?.setColor('#00c8f0');
+        this._expectedOutputText?.setColor('#32AAFF');
         this._actualOutputText?.setColor(
             this.evidence.phase === 'scrap' || outputMismatch
                 ? '#ff5f5f'
@@ -1007,7 +1008,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         let message = 'Tap the console to focus. Start typing to surface the live output.';
 
         if (this.evidence.completed) {
-            statusColor = '#00c8f0';
+            statusColor = '#32AAFF';
             detailText = this.evidence.fixed
                 ? ['Patch command applied.', 'AUTO RETEST PASS.', '', 'Repair prompt:', this.evidence.repairPrompt].join('\n')
                 : ['Primary test passed.', 'No patch required.', '', 'Prompt:', this.evidence.prompt].join('\n');

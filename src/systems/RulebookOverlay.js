@@ -92,7 +92,7 @@ const RULEBOOK_COPY = Object.freeze({
         gear: {
             eyebrow: 'GEAR',
             rule: 'Sparks or lockup = scrap.',
-            caption: 'Covers can stop one slot. Rust or lockup is unsafe.',
+            caption: 'Rust is allowed. Unsafe motion is not.',
         },
         code: {
             eyebrow: 'CODE',
@@ -119,7 +119,7 @@ const RULEBOOK_COPY = Object.freeze({
         gear: {
             eyebrow: 'GEAR',
             rule: 'Sparks or lockup = scrap.',
-            caption: 'Covers can stop one slot. Rust or lockup is unsafe.',
+            caption: 'Rust is allowed. Unsafe motion is not.',
         },
         code: {
             eyebrow: 'CODE',
@@ -132,97 +132,82 @@ const RULEBOOK_COPY = Object.freeze({
 const RULEBOOK_GUIDES = Object.freeze({
     1: {
         overview: {
-            solve: 'Open a repair panel, fix the visible fault, then accept only when the test clears.',
+            solve: 'Repair what clears.',
             scrap: 'Impossible fault.',
-            rules: ['Impossible puzzle = scrap.', 'Accept after all required repairs are clean.', 'Scrap if the final test still fails.'],
-            photo: 'BASE LOOP',
+            photo: 'UNREPAIRABLE',
         },
         grid: {
-            solve: 'Place legal tiles so every charge is satisfied.',
+            solve: 'Fill legal pieces.',
             scrap: 'Charge is boxed in.',
-            rules: ['If a charge is boxed in by squares, scrap it.', 'If no legal placement can satisfy the board, scrap it.'],
             photo: 'BOXED CHARGE',
         },
         flow: {
-            solve: 'Drag pipe pieces to connect IN to OUT.',
+            solve: 'Connect the route.',
             scrap: 'Lead is snapped.',
-            rules: ['Scrap if a snapped lead leaves no route.', 'Accept only when the route is continuous.'],
             photo: 'BROKEN LEAD',
         },
         gear: {
-            solve: 'Build a clean gear train from motor to output.',
+            solve: 'Mesh the train.',
             scrap: 'Axle is cracked.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap cracked axles or boards that cannot mesh.', 'Accept only when the train spins.'],
             photo: 'CRACKED AXLE',
         },
         code: {
-            solve: 'Run the command and patch until actual output matches expected.',
+            solve: 'Match output.',
             scrap: 'Test still fails.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap if the test still fails after the available patch.', 'Accept only exact output matches.'],
             photo: 'FAILED TEST',
         },
     },
     2: {
         overview: {
-            solve: 'Run the repair test first, then check compliance before accepting.',
+            solve: 'Repair, then check.',
             scrap: 'Bad compliance.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap if compliance reveals a broken mark, wrong output, virus gear, or denied policy.', 'Do not judge before the test reveals it.'],
             photo: 'POLICY FAIL',
         },
         grid: {
-            solve: 'Solve readable marks first; cracked markers fail compliance.',
+            solve: 'Solve readable marks.',
             scrap: 'Marker is broken.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap a broken marker after it is revealed.', 'Accept only if every charge resolves clean.'],
             photo: 'BROKEN MARK',
         },
         flow: {
-            solve: 'Complete the route, then check the output color.',
+            solve: 'Match colors.',
             scrap: 'Wrong output color.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap if the finished output color is wrong.', 'Do not scrap before the flow reaches OUT.'],
             photo: 'WRONG COLOR',
         },
         gear: {
-            solve: 'Use clean gears and complete the train.',
+            solve: 'Use clean gears.',
             scrap: 'Virus gear.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap when a virus gear is required or appears in the train.', 'Clean optional pieces are safe.'],
             photo: 'VIRUS GEAR',
         },
         code: {
-            solve: 'Run the repair, then read the compliance result.',
+            solve: 'Pass policy.',
             scrap: 'Policy denied.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap when policy denies the output.', 'Accept when repair and policy both pass.'],
             photo: 'POLICY DENIED',
         },
     },
     3: {
         overview: {
-            solve: 'Solve enough to expose hidden hazards, then only keep safe repairs.',
+            solve: 'Only safe repairs.',
             scrap: 'Any hazard.',
-            rules: ['Impossible puzzle = scrap.', 'Day 3 hazards are revealed by testing.', 'Scrap red current, rust, sparks, lockups, or contaminated output.'],
             photo: 'HAZARD SIGNAL',
         },
         grid: {
-            solve: 'Route power into a charge and watch its color.',
+            solve: 'Clean grids only.',
             scrap: 'Red corruption.',
-            rules: ['Impossible puzzle = scrap.', 'If a powered charge turns red, scrap it.', 'Unpowered red ports do not count until energized.'],
             photo: 'RED CORRUPTION',
         },
         flow: {
-            solve: 'Complete the route and watch for red current.',
+            solve: 'Safe current only.',
             scrap: 'Red current.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap when the live route carries red current.', 'Unsafe current is revealed after connection.'],
             photo: 'RED CURRENT',
         },
         gear: {
-            solve: 'Use gear covers to isolate danger, then test the train.',
-            scrap: 'Rust, sparks, lockup.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap rusted gears, sparks, or lockups.', 'A cover is safe only when it prevents the fault.'],
+            solve: 'No deadlock.',
+            scrap: 'Sparks or lockup.',
             photo: 'SPARK HAZARD',
         },
         code: {
-            solve: 'Run the output and watch for contaminated bugs.',
+            solve: 'Clean output.',
             scrap: 'Contaminated.',
-            rules: ['Impossible puzzle = scrap.', 'Scrap if the revealed bug contaminates the output.', 'A normal crawling bug is only bad when the rule says scrap.'],
             photo: 'CONTAMINATED',
         },
     },
@@ -580,7 +565,7 @@ export class RulebookOverlay {
 
         const sectionInfo = SECTION_INFO[this._selectedSection];
         const copy = RULEBOOK_COPY[this._selectedDay]?.[this._selectedSection] || RULEBOOK_COPY[1].overview;
-        this._headerSubtitle.setText('HOW TO SOLVE // SCRAP RULES // LIVE EXAMPLE');
+        this._headerSubtitle.setText('LEFT NOTE // RIGHT EXAMPLE // DRAG OR SCROLL');
 
         const contentHeight = this._renderContent(copy, sectionInfo, getPreviewDay(this._selectedDay));
         this._scrollMax = Math.max(0, contentHeight - (this._viewportH - (CONTENT_INSET * 2)));
@@ -590,14 +575,14 @@ export class RulebookOverlay {
     _renderContent(copy, sectionInfo, previewDay) {
         const guide = getRulebookGuide(this._selectedSection, previewDay);
         const contentWidth = this._viewportW - 52;
-        const leftWidth = 304;
-        const columnGap = 22;
+        const leftWidth = 236;
+        const columnGap = 24;
         const rightWidth = contentWidth - leftWidth - columnGap;
         let y = 0;
 
-        const topBadge = this._addContentNode(this.scene.add.rectangle(122, 14, 244, 28, 0x102934, 1)
+        const topBadge = this._addContentNode(this.scene.add.rectangle(104, 14, 208, 28, 0x102934, 1)
             .setStrokeStyle(1, sectionInfo.accent, 0.78));
-        const topBadgeLabel = this._addContentNode(this.scene.add.text(122, 14, `${sectionInfo.label} FIELD RULES`, {
+        const topBadgeLabel = this._addContentNode(this.scene.add.text(104, 14, `${sectionInfo.label} QUICK RULE`, {
             fontFamily: 'Courier New',
             fontSize: '11px',
             color: sectionInfo.text,
@@ -606,10 +591,7 @@ export class RulebookOverlay {
 
         const topStrip = this._addContentNode(this.scene.add.rectangle((contentWidth / 2), 48, contentWidth, 34, 0x0d151a, 1)
             .setStrokeStyle(1, 0x264550, 0.72));
-        const stripText = previewDay >= 3
-            ? 'TEST TO REVEAL HIDDEN HAZARDS // THEN DECIDE'
-            : (previewDay === 2 ? 'REPAIR TEST FIRST // COMPLIANCE CHECK SECOND' : 'REPAIR TEST // SCRAP ONLY WHEN THE RULE MATCHES');
-        const topStripText = this._addContentNode(this.scene.add.text(18, 38, stripText, {
+        const topStripText = this._addContentNode(this.scene.add.text(18, 38, 'SOLVE // SCRAP // PHOTO', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#b5dce5',
@@ -620,64 +602,69 @@ export class RulebookOverlay {
         y += 68;
         const columnTop = y;
         const previewHeight = 344;
-        const ruleCardHeight = previewHeight;
+        const ruleCardHeight = 172;
         const ruleCard = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, columnTop + (ruleCardHeight / 2), leftWidth, ruleCardHeight, 0x0e171d, 1)
             .setStrokeStyle(2, sectionInfo.accent, 0.72));
-        const ruleLabel = this._addContentNode(this.scene.add.text(18, columnTop + 16, 'HOW TO SOLVE', {
+        const ruleLabel = this._addContentNode(this.scene.add.text(18, columnTop + 16, copy.eyebrow || sectionInfo.label, {
             fontFamily: 'Courier New',
             fontSize: '11px',
             color: colorToCss(sectionInfo.accent),
             letterSpacing: 2,
         }).setOrigin(0, 0));
-        const solveText = this._addContentNode(this.scene.add.text(18, columnTop + 38, guide.solve, {
+        const ruleText = this._addContentNode(this.scene.add.text(18, columnTop + 38, copy.rule, {
             fontFamily: 'Courier New',
-            fontSize: '12px',
+            fontSize: '13px',
             color: '#effcff',
-            wordWrap: { width: leftWidth - 36 },
-            lineSpacing: 3,
-        }).setOrigin(0, 0));
-
-        const divider = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, columnTop + 98, leftWidth - 32, 1, sectionInfo.accent, 0.38));
-        const captionLabel = this._addContentNode(this.scene.add.text(18, columnTop + 114, 'SCRAP RULES', {
-            fontFamily: 'Courier New',
-            fontSize: '11px',
-            color: '#86c7d8',
-            letterSpacing: 2,
-        }).setOrigin(0, 0));
-
-        const defaultRule = this._selectedSection === 'overview'
-            ? 'Repair, test, then choose accept or scrap.'
-            : 'If a puzzle is impossible, scrap it.';
-        const genericRule = this._addContentNode(this.scene.add.text(18, columnTop + 138, defaultRule, {
-            fontFamily: 'Courier New',
-            fontSize: '11px',
-            color: '#7c98a2',
             wordWrap: { width: leftWidth - 36 },
             lineSpacing: 2,
         }).setOrigin(0, 0));
 
-        const rules = Array.isArray(guide.rules) && guide.rules.length > 0
-            ? guide.rules
-            : [guide.scrap || copy.caption].filter(Boolean);
-        rules.slice(0, 3).forEach((rule, index) => {
-            const ruleY = columnTop + 182 + (index * 48);
-            const badge = this._addContentNode(this.scene.add.rectangle(35, ruleY + 8, 34, 20, 0x132832, 1)
-                .setStrokeStyle(1, sectionInfo.accent, 0.62));
-            const badgeText = this._addContentNode(this.scene.add.text(35, ruleY + 8, `${index + 1}`, {
-                fontFamily: 'Courier New',
-                fontSize: '10px',
-                color: sectionInfo.text,
-                letterSpacing: 1,
-            }).setOrigin(0.5));
-            const ruleText = this._addContentNode(this.scene.add.text(58, ruleY - 2, rule, {
-                fontFamily: 'Courier New',
-                fontSize: '11px',
-                color: '#d0ecf3',
-                wordWrap: { width: leftWidth - 80 },
-                lineSpacing: 2,
-            }).setOrigin(0, 0));
-            return { badge, badgeText, ruleText };
-        });
+        const solveLabel = this._addContentNode(this.scene.add.text(18, columnTop + 78, 'SOLVE', {
+            fontFamily: 'Courier New',
+            fontSize: '10px',
+            color: colorToCss(sectionInfo.accent),
+            letterSpacing: 2,
+        }).setOrigin(0, 0));
+        const solveText = this._addContentNode(this.scene.add.text(18, columnTop + 96, guide.solve, {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#d0ecf3',
+            wordWrap: { width: leftWidth - 36 },
+            lineSpacing: 2,
+        }).setOrigin(0, 0));
+
+        const divider = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, columnTop + 124, leftWidth - 28, 1, sectionInfo.accent, 0.38));
+        const captionLabel = this._addContentNode(this.scene.add.text(18, columnTop + 134, 'SCRAP', {
+            fontFamily: 'Courier New',
+            fontSize: '10px',
+            color: '#86c7d8',
+            letterSpacing: 2,
+        }).setOrigin(0, 0));
+        const captionText = this._addContentNode(this.scene.add.text(18, columnTop + 150, guide.scrap || copy.caption, {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#d0ecf3',
+            wordWrap: { width: leftWidth - 36 },
+            lineSpacing: 2,
+        }).setOrigin(0, 0));
+
+        const helperTop = columnTop + ruleCardHeight + 16;
+        const helperCardHeight = previewHeight - ruleCardHeight - 16;
+        const helperCard = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, helperTop + (helperCardHeight / 2), leftWidth, helperCardHeight, 0x0b1217, 1)
+            .setStrokeStyle(1, 0x294652, 0.72));
+        const helperLabel = this._addContentNode(this.scene.add.text(18, helperTop + 14, 'PHOTO FLAG', {
+            fontFamily: 'Courier New',
+            fontSize: '10px',
+            color: '#86c7d8',
+            letterSpacing: 2,
+        }).setOrigin(0, 0));
+        const helperText = this._addContentNode(this.scene.add.text(18, helperTop + 38, guide.photo, {
+            fontFamily: 'Courier New',
+            fontSize: '16px',
+            color: '#d0ecf3',
+            wordWrap: { width: leftWidth - 36 },
+            lineSpacing: 2,
+        }).setOrigin(0, 0));
 
         this._createPreviewCard(leftWidth + columnGap, columnTop, rightWidth, previewHeight, sectionInfo, previewDay);
 
@@ -698,7 +685,7 @@ export class RulebookOverlay {
             .setStrokeStyle(2, sectionInfo.accent, 0.7));
         const inset = this._addContentNode(this.scene.add.rectangle(x + (width / 2), y + (height / 2), width - 20, height - 20, 0x101b21, 1)
             .setStrokeStyle(1, 0x223741, 0.86));
-        const label = this._addContentNode(this.scene.add.text(x + 20, y + 14, this._selectedSection === 'overview' ? 'BASE LOOP EXAMPLE' : 'SCRAP EXAMPLE', {
+        const label = this._addContentNode(this.scene.add.text(x + 20, y + 14, 'SCRAP EXAMPLE', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: sectionInfo.text,
@@ -706,7 +693,7 @@ export class RulebookOverlay {
         }).setOrigin(0, 0));
         const actionChip = this._addContentNode(this.scene.add.rectangle(x + width - 74, y + 18, 104, 20, 0x173038, 1)
             .setStrokeStyle(1, sectionInfo.accent, 0.52));
-        const actionChipText = this._addContentNode(this.scene.add.text(x + width - 74, y + 18, previewDay >= 3 ? 'REVEAL' : 'DRAG', {
+        const actionChipText = this._addContentNode(this.scene.add.text(x + width - 74, y + 18, 'PHOTO', {
             fontFamily: 'Courier New',
             fontSize: '9px',
             color: '#e9fbff',
@@ -830,10 +817,6 @@ export class RulebookOverlay {
             break;
         }
 
-        if (!monochrome && previewDay >= 3 && this._selectedSection !== 'overview') {
-            this._addRevealedFaultAnimation(container, size, sectionInfo);
-        }
-
         const photoLabel = getRulebookGuide(this._selectedSection, previewDay).photo;
         const labelBg = this.scene.add.rectangle(0, (size.height / 2) - 22, Math.min(size.width - 72, 164), 24, monochrome ? 0xffffff : 0x111a20, monochrome ? 0.16 : 0.9)
             .setStrokeStyle(1, accent, monochrome ? 0.68 : 0.78);
@@ -850,56 +833,6 @@ export class RulebookOverlay {
         return container;
     }
 
-    _addRevealedFaultAnimation(container, size, sectionInfo) {
-        const targets = {
-            grid: { x: 0, y: -18, w: 84, h: 52 },
-            flow: { x: 74, y: -20, w: 84, h: 52 },
-            gear: { x: 74, y: 2, w: 104, h: 50 },
-            code: { x: 70, y: -20, w: 94, h: 52 },
-        };
-        const target = targets[this._selectedSection] || targets.grid;
-        const hot = 0xff6f82;
-
-        const scan = this.scene.add.rectangle(0, -(size.height / 2) + 36, size.width - 72, 3, sectionInfo.accent, 0.62);
-        const ring = this.scene.add.ellipse(target.x, target.y, target.w, target.h, hot, 0.08)
-            .setStrokeStyle(3, hot, 0.92);
-        const chip = this.scene.add.rectangle(target.x, target.y - 38, 118, 22, 0x2b0710, 0.9)
-            .setStrokeStyle(1, hot, 0.94);
-        const chipText = this.scene.add.text(target.x, target.y - 38, 'REVEALED FAULT', {
-            fontFamily: 'Courier New',
-            fontSize: '8px',
-            color: '#ffdce3',
-            letterSpacing: 1,
-        }).setOrigin(0.5);
-
-        container.add([scan, ring, chip, chipText]);
-
-        const scanTween = this.scene.tweens.add({
-            targets: scan,
-            y: (size.height / 2) - 54,
-            alpha: { from: 0.18, to: 0.78 },
-            duration: 980,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut',
-        });
-        const pulseTween = this.scene.tweens.add({
-            targets: [ring, chip, chipText],
-            alpha: { from: 0.48, to: 1 },
-            scaleX: { from: 0.96, to: 1.04 },
-            scaleY: { from: 0.96, to: 1.04 },
-            duration: 540,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut',
-        });
-
-        container.once('destroy', () => {
-            scanTween.stop();
-            pulseTween.stop();
-        });
-    }
-
     _drawOverviewPreview(container, size, palette) {
         const graphics = this.scene.add.graphics();
         graphics.fillStyle(palette.deepPanel, palette.monochrome ? 0.2 : 1);
@@ -908,10 +841,10 @@ export class RulebookOverlay {
         graphics.strokeRoundedRect(-(size.width / 2) + 18, -(size.height / 2) + 20, size.width - 36, size.height - 40, 18);
 
         const cards = [
-            { x: -94, y: -34, label: 'OPEN', sub: 'PANEL', color: 0x71ef93 },
-            { x: 88, y: -34, label: 'FIX', sub: 'FAULT', color: 0x6fd8ff },
-            { x: -94, y: 48, label: 'CHECK', sub: 'RULE', color: 0xffc66f },
-            { x: 88, y: 48, label: 'DECIDE', sub: 'ACCEPT/SCRAP', color: 0xff88c2 },
+            { x: -94, y: -34, label: 'GRID', color: 0x71ef93 },
+            { x: 88, y: -34, label: 'FLOW', color: 0x6fd8ff },
+            { x: -94, y: 48, label: 'GEAR', color: 0xffc66f },
+            { x: 88, y: 48, label: 'CODE', color: 0xff88c2 },
         ];
         cards.forEach((card) => {
             graphics.fillStyle(palette.monochrome ? 0xffffff : 0x13232b, palette.monochrome ? 0.16 : 1);
@@ -922,7 +855,7 @@ export class RulebookOverlay {
 
         const strip = this.scene.add.rectangle(0, -112, size.width - 94, 20, palette.monochrome ? 0xffffff : 0x17313b, palette.monochrome ? 0.16 : 1)
             .setStrokeStyle(1, palette.accent, palette.monochrome ? 0.72 : 0.5);
-        const stripText = this.scene.add.text(0, -112, 'REPAIR -> TEST -> DECIDE', {
+        const stripText = this.scene.add.text(0, -112, 'PICK A TAB.', {
             fontFamily: 'Courier New',
             fontSize: '11px',
             color: palette.accentText,
@@ -937,7 +870,7 @@ export class RulebookOverlay {
                 color: palette.monochrome ? '#ffffff' : colorToCss(card.color),
                 letterSpacing: 1,
             }).setOrigin(0.5);
-            const sub = this.scene.add.text(card.x, card.y + 10, card.sub, {
+            const sub = this.scene.add.text(card.x, card.y + 10, 'ONE IMAGE', {
                 fontFamily: 'Courier New',
                 fontSize: '8px',
                 color: palette.accentText,
@@ -1216,16 +1149,15 @@ export class RulebookOverlay {
         }
 
         if (previewDay >= 3) {
-            const cover = this.scene.add.rectangle(left + 294, top + 92, 54, 38, palette.monochrome ? 0xffffff : 0xb8c5ce, palette.monochrome ? 0.18 : 1)
+            const clamp = this.scene.add.rectangle(left + 294, top + 92, 26, 52, palette.monochrome ? 0xffffff : 0x7f8d97, palette.monochrome ? 0.18 : 1)
                 .setStrokeStyle(2, palette.hot, 0.92);
-            const coverFold = this.scene.add.rectangle(left + 294, top + 80, 42, 6, palette.monochrome ? 0xffffff : 0x7f8d97, palette.monochrome ? 0.22 : 0.72);
             const sparks = this.scene.add.graphics();
             sparks.lineStyle(3, palette.hot, palette.monochrome ? 0.84 : 0.96);
             sparks.lineBetween(left + 214, top + 56, left + 228, top + 40);
             sparks.lineBetween(left + 226, top + 62, left + 244, top + 48);
             sparks.lineBetween(left + 250, top + 92, left + 276, top + 92);
             sparks.lineBetween(left + 263, top + 78, left + 263, top + 106);
-            container.add([cover, coverFold, sparks]);
+            container.add([clamp, sparks]);
         }
 
         container.add(arrows);

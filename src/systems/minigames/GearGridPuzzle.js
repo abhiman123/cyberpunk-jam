@@ -33,7 +33,7 @@ function getCellCenter(left, top, cellSize, row, col) {
 }
 
 function getPieceLabel(type) {
-    if (type === GEAR_CODES.MOVABLE_WALL) return 'CVR';
+    if (type === GEAR_CODES.MOVABLE_WALL) return 'CLP';
     if (type === GEAR_CODES.RUSTED) return 'RST';
     if (type === GEAR_CODES.HORIZONTAL) return 'EW';
     if (type === GEAR_CODES.VERTICAL) return 'NS';
@@ -351,12 +351,6 @@ export default class GearGridPuzzle extends MinigameBase {
         });
     }
 
-    _raiseGearCovers() {
-        this._pieceViews
-            .filter((pieceView) => pieceView.piece.role === 'deadlock-clamp')
-            .forEach((pieceView) => this._panel?.bringToTop(pieceView.container));
-    }
-
     _buildPieces(pieces) {
         pieces.forEach((piece) => {
             const position = getCellCenter(this._boardLeft, this._boardTop, this._cellSize, piece.row, piece.col);
@@ -404,12 +398,12 @@ export default class GearGridPuzzle extends MinigameBase {
                 : ' Rusted gears lock the train on contact.')
             : '';
         const clampNote = this._puzzle?.useDeadlockClamp
-            ? ' Gear Covers blanket a slot and shut off whatever sits under them.'
+            ? ' Deadlock Clamp parts grey out any slot they occupy, turning it into dead space.'
             : '';
         this._statusHintText?.setText(
             fixedCount > 0
-            ? `Drag the ${movableCount} loose part${movableCount === 1 ? '' : 's'} with cyan corner marks onto empty cells or cover cells. ${fixedCount} train part${fixedCount === 1 ? ' stays' : 's stay'} fixed.${rustNote}${clampNote}`
-            : `Drag the cyan-marked parts onto empty cells or cover cells. Walls block power and cannot connect.${rustNote}${clampNote}`
+            ? `Drag the ${movableCount} loose part${movableCount === 1 ? '' : 's'} with cyan corner marks onto empty cells. ${fixedCount} train part${fixedCount === 1 ? ' stays' : 's stay'} fixed.${rustNote}${clampNote}`
+            : `Drag the cyan-marked parts onto empty cells. Walls block power and cannot connect.${rustNote}${clampNote}`
         );
     }
 
@@ -446,12 +440,12 @@ export default class GearGridPuzzle extends MinigameBase {
                 color: '#dbeff4',
                 letterSpacing: 1,
             }).setOrigin(0, 0.5);
-            const label = this.scene.add.text(246, y + 9, pieceView.piece.role === 'deadlock-clamp' ? 'GEAR COVER' : (getPieceLabel(pieceView.piece.type) || 'GEAR'), {
+            const label = this.scene.add.text(246, y + 9, pieceView.piece.role === 'deadlock-clamp' ? 'CLAMP' : (getPieceLabel(pieceView.piece.type) || 'GEAR'), {
                 fontFamily: 'Courier New',
                 fontSize: '10px',
                 color: '#8db2bf',
             }).setOrigin(0, 0.5);
-            const hint = this.scene.add.text(246, y + 23, pieceView.piece.role === 'deadlock-clamp' ? 'BLANKETS A SLOT' : 'DRAGGABLE', {
+            const hint = this.scene.add.text(246, y + 23, pieceView.piece.role === 'deadlock-clamp' ? 'DEAD SPACE TOOL' : 'DRAGGABLE', {
                 fontFamily: 'Courier New',
                 fontSize: '9px',
                 color: '#a6eef3',
@@ -740,16 +734,15 @@ export default class GearGridPuzzle extends MinigameBase {
         visual.spinMode = isPairedPiece ? 'paired' : 'single';
 
         if (isClamp) {
-            const blanketW = Math.max(34, Math.floor(this._cellSize * 0.58));
-            const blanketH = Math.max(30, Math.floor(this._cellSize * 0.50));
-            visual.connectorGfx.fillStyle(0xd7e0e7, 0.96);
-            visual.connectorGfx.fillRoundedRect(-(blanketW / 2), -(blanketH / 2), blanketW, blanketH, 8);
-            visual.connectorGfx.fillStyle(0x8e9aa4, 0.62);
-            visual.connectorGfx.fillRoundedRect(-(blanketW / 2) + 5, -(blanketH / 2) + 5, blanketW - 10, 7, 4);
-            visual.connectorGfx.lineStyle(2, 0x62707a, 0.72);
-            visual.connectorGfx.lineBetween(-(blanketW / 2) + 8, 0, (blanketW / 2) - 8, 0);
-            visual.connectorGfx.lineBetween(-(blanketW / 2) + 10, (blanketH / 2) - 9, (blanketW / 2) - 10, (blanketH / 2) - 9);
-            visual.badgeText.setText('COVER').setColor('#eff6fb').setVisible(true);
+            const jawWidth = Math.max(14, Math.floor(this._cellSize * 0.22));
+            const jawHeight = Math.max(22, Math.floor(this._cellSize * 0.44));
+            visual.connectorGfx.fillStyle(0xc2c9d0, 0.94);
+            visual.connectorGfx.fillRoundedRect(-(jawWidth + 10), -(jawHeight / 2), jawWidth, jawHeight, 6);
+            visual.connectorGfx.fillRoundedRect(10, -(jawHeight / 2), jawWidth, jawHeight, 6);
+            visual.connectorGfx.fillStyle(0x7b848b, 0.98);
+            visual.connectorGfx.fillCircle(0, 0, 8);
+            visual.connectorGfx.fillRoundedRect(-8, -4, 16, 8, 4);
+            visual.badgeText.setText('CLAMP').setColor('#eff6fb').setVisible(true);
             if (movable) {
                 this._drawMovableIndicator(visual.moveHintGfx, hovered, true);
             }
@@ -1067,7 +1060,6 @@ export default class GearGridPuzzle extends MinigameBase {
 
         return !this._pieceViews.some((otherPiece) => (
             otherPiece !== pieceView
-            && otherPiece.piece.role !== 'deadlock-clamp'
             && otherPiece.piece.row === row
             && otherPiece.piece.col === col
         ));
@@ -1172,9 +1164,6 @@ export default class GearGridPuzzle extends MinigameBase {
                 clamped,
             });
         });
-        if (!this._dragState?.dragging) {
-            this._raiseGearCovers();
-        }
         this._drawInspectionFault();
 
         const activeGearCount = Array.from(evaluation.powered).reduce((count, key) => {
