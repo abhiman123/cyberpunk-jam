@@ -13,7 +13,7 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "vite": "^8.0.8"
+    "vite": "^8.0.10"
   },
   "dependencies": {
     "phaser": "^4.0.0",
