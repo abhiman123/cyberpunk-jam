@@ -5144,6 +5144,9 @@ export default class GameScene extends Phaser.Scene {
 
         this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID, FLOW, GEAR, OR CODE');
 
+        this.textures.get('btn_scrap_source').setFilter(Phaser.Textures.FilterMode.NEAREST);
+        this.textures.get('btn_accept_source').setFilter(Phaser.Textures.FilterMode.NEAREST);
+
         const controlsCenterX = 804;
         const buttonY = 650;
         const rulingDefs = [
