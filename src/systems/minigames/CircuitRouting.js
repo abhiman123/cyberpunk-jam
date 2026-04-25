@@ -1035,7 +1035,11 @@ export default class CircuitRouting extends MinigameBase {
     _refreshVoltageHud() {
         if (!this._voltageActualText) return;
         const targetCount = this._outputSpecs.length;
-        const powered = this.evidence?.repairedTargets?.length || 0;
+        // Read from the live snapshot built each _updateAll, falling back to
+        // the persisted evidence on first paint before any flow recompute.
+        const powered = this._latestSnapshot?.repairedTargets?.length
+            ?? this.evidence?.repairedTargets?.length
+            ?? 0;
         this._voltageActualText.setText(`${powered} / ${targetCount}`);
         this._voltageTargetText.setText(String(targetCount));
 
@@ -1583,7 +1587,11 @@ export default class CircuitRouting extends MinigameBase {
 
         this._refreshAnimatedCircuitEffects();
 
-        this._syncCircuitProgress(this._lastResult);
+        // Build the live snapshot once and feed it both to circuit.progress
+        // (used by Game.js) and to the voltage HUD. Previously the HUD read
+        // from `this.evidence`, which is only mutated on close, so the meter
+        // stayed stuck at its initial value during play.
+        this._latestSnapshot = this._syncCircuitProgress(this._lastResult);
         this._refreshVoltageHud?.();
     }
 
