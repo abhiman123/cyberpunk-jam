@@ -361,7 +361,14 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
         this._tiles = tiles;
-        this._forbidden = new Set(forbiddenList.map(([x, y]) => `${x},${y}`));
+        // Forbidden cells were the amber-tinted "obstacle" tiles. They no
+        // longer ship as a player-facing mechanic — the puzzle was always
+        // solvable around them, so they read as decorative dead weight.
+        // Force the set empty regardless of what the data layer or saved
+        // progress provides; that keeps every legacy field a no-op without
+        // having to scrub case definitions.
+        forbiddenList = [];
+        this._forbidden = new Set();
         this._tileGfx = [];
 
         // Full-screen input blocker so clicks don't leak to UI below
