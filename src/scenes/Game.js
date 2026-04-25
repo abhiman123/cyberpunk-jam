@@ -15,7 +15,7 @@ import {
     getOpeningPhoneCallSequence,
     getShiftClockStepMs,
 } from '../constants/gameConstants.js';
-import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections, isGearType } from '../core/gearPuzzleLogic.js';
+import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections } from '../core/gearPuzzleLogic.js';
 import { createMachineVariant, getEligibleMachineDefinitions, resolveMachineTexture } from '../data/machineCatalog.js';
 import { getMusicVolume } from '../state/gameSettings.js';
 
@@ -26,9 +26,6 @@ import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
 
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
-const UMBRELLA_REBELLION_RULE_ID = 101;
-const MACHINE_PHONE_TRANSCRIPT_ENABLED = false;
-const MANAGER_CALL_THEME_PATH = '/ManagerCallTheme.mp3';
 const UMBRELLA_PART_PORTS = Object.freeze({
     circuit: 'grid',
     wire: 'flow',
@@ -69,8 +66,6 @@ export default class GameScene extends Phaser.Scene {
         this._lastTypeBeepAt = 0;
         this._miniMachinePanelVisible = false;
         this._miniMachinePanelHoverPort = null;
-        this._machineSpeechBubbleHistory = [];
-        this._activeMachineSpeechBubbleIndex = -1;
         this._pendingKonamiFinalCase = null;
         this._purpleCircuitDeskItem = null;
         this._umbrellaDeskItemMap = new Map();
@@ -98,15 +93,6 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent = null;
         this._commSequenceEvent = null;
         this._unitMoveTween = null;
-        this._conveyorBottomLayers = [];
-        this._conveyorBottomFrontLayers = [];
-        this._conveyorBottomLayerWidth = 0;
-        this._conveyorBottomLayerTop = 0;
-        this._conveyorBottomScrollOffset = 0;
-        this._conveyorBottomScrollDirection = 1;
-        this._conveyorBottomScrollActive = false;
-        this._factoryLightRadianceLayer = null;
-        this._factoryLightRadianceFlickerEvent = null;
         this._activeMusicKey = null;
         this._pendingExitAction = null;
         this._pendingUnsafeAcceptConfirmation = false;
@@ -116,7 +102,6 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleReturnPhoneState = null;
         this._debugPuzzleReturnPhoneState = null;
         this._otherPuzzleReturnVoiceBroken = false;
-        this._machineWorklightFlickerEvent = null;
         this._phoneBodyScrollOffset = 0;
         this._phoneStickToBottom = true;
         this._phoneScrollHover = false;
@@ -127,9 +112,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneNotifications = [];
         this._openingCallSequenceId = 0;
         this._openingCallChoiceResolver = null;
-        this._managerCallThemeAudio = null;
-        this._managerCallThemeToken = 0;
-        this._managerTutorialArrowTarget = null;
         this._sequenceDebugCounter = 0;
         this._phoneViews = {
             info: {
@@ -162,51 +144,8 @@ export default class GameScene extends Phaser.Scene {
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
-        this._conveyorBeltSoundNodes = null;
-        this._factoryLightHum = null;
-        this._konamiRoutes = [
-            {
-                id: 'skip-day',
-                action: 'skip-day',
-                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // SKIP DAY',
-            },
-            {
-                id: 'ending-default',
-                action: 'end-scene',
-                sequence: ['UP', 'UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // END SCENE',
-                finishUmbrellaQuest: false,
-            },
-            {
-                id: 'ending-umbrella',
-                action: 'end-scene',
-                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // UMBRELLA SCENE',
-                finishUmbrellaQuest: true,
-                deliveredPurpleCircuit: true,
-                deliveredClownCircuit: false,
-            },
-            {
-                id: 'ending-red-circuit',
-                action: 'end-scene',
-                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // RED UMBRELLA SCENE',
-                finishUmbrellaQuest: true,
-                deliveredPurpleCircuit: false,
-                deliveredClownCircuit: true,
-            },
-            {
-                id: 'ending-both-circuits',
-                action: 'end-scene',
-                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // RED AND PURPLE UMBRELLA SCENE',
-                finishUmbrellaQuest: true,
-                deliveredPurpleCircuit: true,
-                deliveredClownCircuit: true,
-            },
-        ];
-        this._konamiProgressByRoute = this._konamiRoutes.map(() => 0);
+        this._konamiSequence = ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'];
+        this._konamiProgress = 0;
         this._konamiFinaleTriggered = false;
         this._initializeMachineShiftQueue();
 
@@ -235,7 +174,7 @@ export default class GameScene extends Phaser.Scene {
         const newRuleIds = GameState.day <= 3
             ? allRules.filter((rule) => rule.period === GameState.day).map((rule) => rule.id)
             : [];
-        this._rulebook = new RulebookOverlay(this, allRules, GameState.activeRules, {
+        this._rulebook = new RulebookOverlay(this, GameState.activeRules, allRules, newRuleIds, {
             canToggle: () => this._canOpenRulebookOverlay(),
         });
         this._settingsOverlay = new FactorySettingsOverlay(this, {
@@ -248,13 +187,10 @@ export default class GameScene extends Phaser.Scene {
 
         this.events.on('shutdown', () => {
             this._clearPhoneTyping();
-            this._stopManagerCallTheme();
-            this._setManagerTutorialArrowTarget(null);
             this._openingCallSequenceId += 1;
             this._openingCallChoiceResolver = null;
             this._nextCaseEvent?.remove(false);
             this._advanceCaseEvent?.remove(false);
-            this._machineWorklightFlickerEvent?.remove(false);
             this.input.off('wheel', this._handlePhoneWheel, this);
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
@@ -282,13 +218,11 @@ export default class GameScene extends Phaser.Scene {
         this.cameras.main.fadeIn(400, 0, 0, 0);
 
         if (FIRST_SHIFT_INTRO.enabled) {
-            this.time.delayedCall(1200, () => {
-                if (this._shouldUseAutomatedTextBrief()) {
-                    this._startAutomatedTextBrief();
-                } else {
-                    this._startOpeningPhoneCall();
-                }
-            });
+            if (this._shouldUseAutomatedTextBrief()) {
+                this._startAutomatedTextBrief();
+            } else {
+                this._startOpeningPhoneCall();
+            }
         } else {
             this.time.delayedCall(300, () => this._beginShift());
         }
@@ -297,10 +231,6 @@ export default class GameScene extends Phaser.Scene {
     update(_time, delta) {
         this._updateMiniGearPreview(delta);
         this._syncRulebookTutorialArrow();
-        this._updateConveyorBottomLayers(delta);
-        if (this._machineSpeechBubbleLayer?.visible) {
-            this._layoutMachineSpeechBubbleSlots();
-        }
 
         if (!this._shiftRunning || this._gameplayPaused || this._shiftEnding) return;
 
@@ -448,16 +378,6 @@ export default class GameScene extends Phaser.Scene {
             width: 128,
             height: 84,
         });
-        this._createDeskPhoto('desk_photo_family', 'mainview_fam1', {
-            x: 212,
-            y: 124,
-            angle: -7,
-        });
-        this._createDeskPhoto('desk_photo_family_2', 'mainview_fam2', {
-            x: 286,
-            y: 122,
-            angle: 6,
-        });
         // Y values are in deskContainer-local space (deskContainer.y = scale.height - 172 = 548).
         // To appear at screen y≈624-626, subtract 548 → container-local y≈76-78.
         this._createJesterDeskTokenItem({
@@ -506,26 +426,6 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer.add(this._deskContainer);
     }
 
-    _createDeskPhoto(photoId, textureKey, options = {}) {
-        const textureFrame = this.textures.exists(textureKey) ? this.textures.getFrame(textureKey) : null;
-        const width = options.width || textureFrame?.width || 62;
-        const height = options.height || textureFrame?.height || 48;
-
-        return this._createDeskItem(photoId, {
-            ...options,
-            width,
-            height,
-            rotationStep: 12,
-            buildVisual: () => {
-                const portrait = this.add.image(0, 0, textureKey).setScale(1);
-                if (options.tint) portrait.setTint(options.tint);
-
-                return {
-                    nodes: [portrait],
-                };
-            },
-        });
-    }
 
     _createDeskTablet(itemId, options = {}) {
         const width = options.width || 128;
@@ -697,74 +597,40 @@ export default class GameScene extends Phaser.Scene {
         container.add([halo, plate, label, beam, arrow]);
         this._hudContainer.add(container);
 
-        this._rulebookTutorialArrow = { container, halo, label };
-    }
-
-    _setManagerTutorialArrowTarget(targetKey = null) {
-        this._managerTutorialArrowTarget = targetKey || null;
-        this._syncRulebookTutorialArrow();
+        this._rulebookTutorialArrow = { container, halo };
     }
 
     _syncRulebookTutorialArrow() {
         const arrow = this._rulebookTutorialArrow;
         if (!arrow) return;
 
-        const targetKey = this._managerTutorialArrowTarget || (this._rulebookTutorialLineActive ? 'rulebook' : null);
-        const canShowOverlayArrow = !this._rulebook?.isVisible()
+        const shouldShow = Boolean(
+            this._rulebookTutorialLineActive
+            && !this._rulebook?.isVisible()
             && !this._settingsOpen
             && !this._overlayModalOpen
-            && this._screen === 'conveyor';
-
-        let shouldShow = false;
-        let targetX = 0;
-        let targetY = 0;
-        let labelText = 'SEE THIS';
-
-        if (targetKey === 'rulebook') {
-            shouldShow = Boolean(canShowOverlayArrow && this._rulebookDeskItem?.container?.visible);
-            if (shouldShow) {
-                targetX = this._deskContainer.x + this._rulebookDeskItem.container.x;
-                targetY = this._deskContainer.y + this._rulebookDeskItem.container.y;
-                labelText = 'RULEBOOK';
-            }
-        } else if (targetKey === 'clock') {
-            shouldShow = Boolean(canShowOverlayArrow && this._clockText?.visible);
-            if (shouldShow) {
-                targetX = this._clockText.x;
-                targetY = this._clockText.y;
-                labelText = 'CLOCK';
-            }
-        } else if (targetKey === 'phone-choice') {
-            shouldShow = Boolean(canShowOverlayArrow && this._phonePanel?.visible && this._phoneButtonsActive);
-            if (shouldShow) {
-                const acceptBg = this._phoneButtons?.accept?.bg;
-                const rejectBg = this._phoneButtons?.reject?.bg;
-                targetX = this._phonePanel.x + (acceptBg?.x ?? 366);
-                targetY = this._phonePanel.y + (((acceptBg?.y ?? 96) + (rejectBg?.y ?? 155)) / 2);
-                labelText = 'YES / NO';
-            }
-        }
+            && this._screen === 'conveyor'
+            && this._rulebookDeskItem?.container?.visible
+        );
 
         if (!shouldShow) {
             arrow.container.setVisible(false).setAlpha(0);
             return;
         }
 
+        const targetX = this._deskContainer.x + this._rulebookDeskItem.container.x;
+        const targetY = this._deskContainer.y + this._rulebookDeskItem.container.y;
         const bobOffset = Math.sin(this.time.now * 0.006) * 8;
-        arrow.label.setText(labelText);
         arrow.container
             .setVisible(true)
             .setAlpha(0.96)
-            .setPosition(
-                targetKey === 'rulebook' ? targetX + 10 : (targetKey === 'phone-choice' ? targetX + 8 : targetX),
-                (targetKey === 'rulebook' ? targetY - 112 : (targetKey === 'phone-choice' ? targetY - 94 : targetY - 78)) + bobOffset,
-            );
+            .setPosition(targetX + 10, targetY - 112 + bobOffset);
         arrow.halo.setAlpha(0.08 + ((Math.sin(this.time.now * 0.008) + 1) * 0.05));
     }
 
     _setRulebookTutorialLineActive(active) {
         this._rulebookTutorialLineActive = Boolean(active);
-        this._setManagerTutorialArrowTarget(active ? 'rulebook' : null);
+        this._syncRulebookTutorialArrow();
     }
 
     _createJesterDeskTokenItem(options = {}) {
@@ -1605,10 +1471,6 @@ export default class GameScene extends Phaser.Scene {
         this._returnDeskItemToHome(item, { shake: true });
     }
 
-    _updateDeskDateText() {
-        if (!this._deskDateText) return;
-        this._deskDateText.setText(GameState.formatCurrentShiftDate());
-    }
 
     _buildDisabledInspectionContainer() {
         this._inspectionContainer = this.add.container(0, 0).setVisible(false);
@@ -1988,38 +1850,6 @@ export default class GameScene extends Phaser.Scene {
         });
         this._settingsButtonBg.on('pointerdown', () => this._toggleSettingsOverlay());
 
-        this._phoneQuestionPromptGlow = null;
-        this._phoneQuestionPromptFrameGlow = null;
-        this._phoneQuestionPromptFrame = null;
-        this._phoneQuestionPromptScanTop = null;
-        this._phoneQuestionPromptScanBottom = null;
-        this._phoneQuestionPrompt = this.add.text(146, 100, 'AWAITING QUESTION\nINPUT', {
-            fontFamily: 'Arial',
-            fontSize: '13px',
-            fontStyle: 'bold',
-            color: '#15313a',
-            align: 'center',
-            letterSpacing: 1,
-            lineSpacing: -2,
-            wordWrap: { width: 178 },
-        }).setOrigin(0.5).setVisible(false);
-
-        this._phoneQuestionFooterBg = this.add.rectangle(118, 154, 172, 28, 0x6bd5c8, 0.82)
-            .setOrigin(0.5)
-            .setStrokeStyle(1, 0x10343a, 0.26)
-            .setVisible(false);
-        this._phoneQuestionFooterText = this.add.text(118, 154, 'AWAITING QUESTION INPUT', {
-            fontFamily: 'Arial',
-            fontSize: '9px',
-            fontStyle: 'bold',
-            color: '#15313a',
-            align: 'center',
-            letterSpacing: 1,
-            wordWrap: { width: 160 },
-        }).setOrigin(0.5).setVisible(false);
-
-        this._phoneBodyTranscriptVisible = true;
-
         const accept = this._createPhoneButton(366, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
             width: 44,
             height: 48,
@@ -2073,9 +1903,6 @@ export default class GameScene extends Phaser.Scene {
             this._phoneBodyScrollZone,
             this._phoneScrollTrack,
             this._phoneScrollThumb,
-            this._phoneQuestionPrompt,
-            this._phoneQuestionFooterBg,
-            this._phoneQuestionFooterText,
             // header, status, and buttons rendered after body so they paint on top
             this._phoneHeaderText,
             this._phoneStatusText,
@@ -2127,37 +1954,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneStickToBottom = view.stickToBottom !== false;
     }
 
-    _setPhoneBodyTranscriptVisible(visible = true) {
-        this._phoneBodyTranscriptVisible = visible !== false;
-    }
-
-    _shouldShowMachinePhoneTranscript(machineVariant = null) {
-        if (!machineVariant) return true;
-        return MACHINE_PHONE_TRANSCRIPT_ENABLED || this._isDebriefMachine(machineVariant);
-    }
-
-    _shouldShowPhoneQuestionPrompt() {
-        return this._phoneViewMode === 'chat'
-            && (this._phoneChoicePhase === 'machine-question' || this._phoneChoicePhase === 'opening-call-question');
-    }
-
-    _refreshPhoneQuestionPrompt() {
-        const visible = this._shouldShowPhoneQuestionPrompt();
-        const useStatusLine = visible && this._phoneChoicePhase === 'opening-call-question';
-        const useFooter = visible && !useStatusLine && this._phoneBodyTranscriptVisible !== false;
-        const useCenterPrompt = visible && !useFooter && !useStatusLine;
-
-        this._phoneQuestionPromptGlow?.setVisible(useCenterPrompt);
-        this._phoneQuestionPromptFrameGlow?.setVisible(useCenterPrompt);
-        this._phoneQuestionPromptFrame?.setVisible(useCenterPrompt);
-        this._phoneQuestionPromptScanTop?.setVisible(useCenterPrompt);
-        this._phoneQuestionPromptScanBottom?.setVisible(useCenterPrompt);
-        this._phoneQuestionPrompt?.setVisible(useCenterPrompt);
-        this._phoneQuestionFooterBg?.setVisible(useFooter);
-        this._phoneQuestionFooterText?.setVisible(useFooter);
-        this._phoneStatusText?.setVisible(!visible || useStatusLine);
-    }
-
     _refreshPhonePanelDisplay() {
         const view = this._getPhoneViewState();
         if (!view || !this._phoneHeaderText || !this._phoneBodyText || !this._phoneStatusText) return;
@@ -2165,7 +1961,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneHeaderText.setText(view.header || '');
         this._phoneBodyText.setText(view.body || '');
         this._phoneStatusText.setText(view.status || '');
-        this._refreshPhoneQuestionPrompt();
         this._restorePhoneViewScroll();
         this._syncPhoneBodyLayout();
         this._refreshPhoneChannelButtons();
@@ -2187,17 +1982,6 @@ export default class GameScene extends Phaser.Scene {
 
     _syncPhoneBodyLayout() {
         if (!this._phoneBodyText || !this._phoneBodyViewport) return;
-
-        const showTranscript = this._phoneViewMode !== 'chat' || this._phoneBodyTranscriptVisible !== false;
-        this._phoneBodyText.setVisible(showTranscript);
-        if (!showTranscript) {
-            this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y);
-            this._phoneBodyText.setCrop(0, 0, 0, 0);
-            this._phoneScrollTrack?.setVisible(false);
-            this._phoneScrollThumb?.setVisible(false);
-            this._persistPhoneViewScroll();
-            return;
-        }
 
         const overflow = Math.max(0, this._phoneBodyText.height - this._phoneBodyViewport.height);
         if (this._phoneStickToBottom || this._phoneBodyScrollOffset > overflow) {
@@ -2376,8 +2160,8 @@ export default class GameScene extends Phaser.Scene {
         let fill = button.inactiveFill;
         let stroke = 0x2b2417;
         let textColor = button.inactiveText;
-        let alpha = 0.94;
-        let glowAlpha = 0.08;
+        let alpha = 0.82;
+        let glowAlpha = 0;
 
         if (button.selected) {
             fill = button.activeFill;
@@ -2445,10 +2229,6 @@ export default class GameScene extends Phaser.Scene {
         const activate = options.activate !== false;
         const clearUnread = options.clearUnread === true;
 
-        if (Object.prototype.hasOwnProperty.call(options, 'showBodyTranscript')) {
-            this._setPhoneBodyTranscriptVisible(options.showBodyTranscript);
-        }
-
         this._setPhoneMessage(header, body, status, mode, options);
         this._phonePanel?.setVisible(true);
         this._phonePanel?.setAlpha(1);
@@ -2477,21 +2257,13 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _hidePhonePanel() {
-        this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE', 'chat', {
-            showBodyTranscript: true,
-        });
-    }
 
     _setCommStandbyState(message = 'Awaiting next unit.', status = 'CHANNEL IDLE') {
         this._clearPhoneTyping();
         this._phoneChoicePhase = 'inactive';
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', message, status, 'chat', {
-            showBodyTranscript: true,
-        });
+        this._showPhonePanel('FACTORY LINK', message, status, 'chat');
     }
 
     _setPhoneInfoNote(message = '', status = 'UNIT NOTE') {
@@ -2552,7 +2324,7 @@ export default class GameScene extends Phaser.Scene {
                     ? (debugState?.fixed ? 'PATCH APPLIED' : 'CODE STABLE')
                     : (debugState?.phase === 'repair'
                         ? 'PATCH REQUIRED'
-                        : ((Number(debugState?.dayStage || 1) === 3 && (debugState?.corruptionCount || 0) > 0) ? 'CODE CORRUPT' : 'TEST READY'))))
+                        : ((debugState?.corruptionCount || 0) > 0 ? 'CODE CORRUPT' : 'TEST READY'))))
                 : 'NO CODE MODULE';
             const commsLine = !machineVariant.hasCommunication
                 ? 'NO SIGNAL'
@@ -2705,7 +2477,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (soundAsset) {
-            this._playNotificationSound(soundAsset, {
+            this._playOneShot(soundAsset, {
                 volume: soundAsset === SOUND_ASSETS.puzzleFixed ? SOUND_VOLUMES.puzzleFixed : SOUND_VOLUMES.notification,
             });
         }
@@ -2722,6 +2494,7 @@ export default class GameScene extends Phaser.Scene {
             const parsed = this._parseNotificationFeedText(entry.text);
             this._pushPhoneNotification(parsed.title, parsed.message, 'WORLD FEED', {
                 activate: false,
+                soundAsset: null,
                 unread: this._phoneViewMode !== 'notifications',
             });
         });
@@ -2768,26 +2541,12 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent?.remove(false);
         this._commTypingEvent = null;
 
-        const finalBody = typingState.showPhoneTranscript
-            ? `${typingState.prefix}${typingState.text}`
-            : '';
+        const finalBody = `${typingState.prefix}${typingState.text}`;
         typingState.view.body = finalBody;
         if (this._phoneViewMode === 'chat') {
             this._phoneBodyText.setText(finalBody);
             this._phoneStickToBottom = true;
             this._syncPhoneBodyLayout();
-        }
-
-        if (typingState.bubbleText && typingState.bubbleMachineVariant === this._currentMachineVariant) {
-            this._finalizeMachineSpeechBubble(typingState.bubbleText);
-        }
-
-        if (typingState.bubbleMachineVariant && typingState.showPhoneTranscript) {
-            const chatView = this._getPhoneViewState('chat');
-            this._cacheMachineConversationSnapshot(
-                typingState.bubbleMachineVariant,
-                chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
-            );
         }
 
         this._activePhoneTypingState = null;
@@ -2966,91 +2725,18 @@ export default class GameScene extends Phaser.Scene {
         return Math.max(FIRST_SHIFT_INTRO.fallbackVoiceMs, Math.round(textLength * 32));
     }
 
-    _getManagerCallThemeVolume() {
-        const musicVolume = getMusicVolume();
-        if (musicVolume <= 0) return 0;
-
-        const baseVolume = SOUND_VOLUMES.voice * 0.22;
-        return Phaser.Math.Clamp(baseVolume * Math.max(0.45, musicVolume), 0, baseVolume);
-    }
-
-    _playManagerCallTheme() {
-        this._stopManagerCallTheme();
-        if (typeof Audio === 'undefined') return;
-
-        const token = ++this._managerCallThemeToken;
-        const audio = new Audio(MANAGER_CALL_THEME_PATH);
-        audio.loop = true;
-        audio.preload = 'auto';
-        audio.volume = this._getManagerCallThemeVolume();
-        let started = false;
-
-        const startPlayback = () => {
-            if (started) return;
-            started = true;
-            if (token !== this._managerCallThemeToken || this._managerCallThemeAudio !== audio) return;
-
-            const duration = Number(audio.duration || 0);
-            const maxStart = Number.isFinite(duration) && duration > 1
-                ? Math.min(120, Math.max(0, duration - 0.5))
-                : 120;
-            if (Number.isFinite(duration) && duration > 1) {
-                try {
-                    audio.currentTime = Math.random() * maxStart;
-                } catch (error) {
-                    // Some browsers reject seeks until playback is ready; keep the default start in that case.
-                }
-            }
-
-            audio.volume = this._getManagerCallThemeVolume();
-            audio.play().catch(() => {
-                if (token === this._managerCallThemeToken && this._managerCallThemeAudio === audio) {
-                    this._managerCallThemeAudio = null;
-                }
-            });
-        };
-
-        audio.addEventListener('loadedmetadata', startPlayback, { once: true });
-        audio.addEventListener('canplay', startPlayback, { once: true });
-
-        audio.addEventListener('error', () => {
-            if (token === this._managerCallThemeToken && this._managerCallThemeAudio === audio) {
-                this._managerCallThemeAudio = null;
-            }
-        }, { once: true });
-
-        this._managerCallThemeAudio = audio;
-        audio.load();
-        this.time.delayedCall(350, startPlayback);
-    }
-
-    _stopManagerCallTheme() {
-        this._managerCallThemeToken += 1;
-
-        const audio = this._managerCallThemeAudio;
-        if (!audio) return;
-
-        audio.pause();
-        try {
-            audio.currentTime = 0;
-        } catch (error) {
-            // Ignore reset failures from partially loaded media.
-        }
-        audio.removeAttribute('src');
-        audio.load();
-        this._managerCallThemeAudio = null;
-    }
-
     _playOpeningCallLine(line, { append = true } = {}) {
         return new Promise((resolve) => {
             let typingDone = false;
             let voiceDone = false;
-            const tutorialTarget = line?.tutorialTarget || null;
+            const shouldPointAtRulebook = GameState.day === 1
+                && String(line?.id || '').toLowerCase() === 'line3'
+                && /see this\?/i.test(String(line?.text || ''));
 
             const finishLine = () => {
                 if (!typingDone || !voiceDone) return;
 
-                this._setManagerTutorialArrowTarget(null);
+                this._setRulebookTutorialLineActive(false);
 
                 this._commSequenceEvent?.remove(false);
                 this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.lineGapMs, () => {
@@ -3059,7 +2745,7 @@ export default class GameScene extends Phaser.Scene {
                 });
             };
 
-            this._setManagerTutorialArrowTarget(tutorialTarget);
+            this._setRulebookTutorialLineActive(shouldPointAtRulebook);
 
             this._showPhonePanel(
                 FIRST_SHIFT_INTRO.incomingHeader,
@@ -3096,7 +2782,6 @@ export default class GameScene extends Phaser.Scene {
         return new Promise((resolve) => {
             const callConfig = this._getOpeningCallConfig();
             this._openingCallChoiceResolver = (choice) => {
-                this._setManagerTutorialArrowTarget(null);
                 if (sequenceId !== this._openingCallSequenceId) {
                     resolve(null);
                     return;
@@ -3108,7 +2793,6 @@ export default class GameScene extends Phaser.Scene {
             this._phoneChoicePhase = 'opening-call-question';
             this._setPhoneButtonSelection(null);
             this._setPhoneButtonsActive(true);
-            this._setManagerTutorialArrowTarget('phone-choice');
             this._showPhonePanel(
                 FIRST_SHIFT_INTRO.incomingHeader,
                 this._getPhoneViewState('chat').body,
@@ -3126,82 +2810,51 @@ export default class GameScene extends Phaser.Scene {
         this._phoneChoicePhase = 'voice';
         this._setPhoneButtonsActive(false);
         this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, '', 'VOICE CONNECTED', 'chat');
-        this._playManagerCallTheme();
 
-        try {
-            for (const line of callConfig.script.intro) {
-                if (sequenceId !== this._openingCallSequenceId) return;
-                await this._playOpeningCallLine(line, { append });
-                append = true;
-            }
-
-            const choice = await this._awaitOpeningCallAnswer(sequenceId);
-            if (sequenceId !== this._openingCallSequenceId || !choice) return;
-
-            this._setPhoneButtonsActive(false);
-            this._setPhoneButtonSelection(choice);
-
-            const branchLines = choice === 'accept'
-                ? callConfig.script.yes
-                : callConfig.script.no;
-
-            for (const line of branchLines) {
-                if (sequenceId !== this._openingCallSequenceId) return;
-                await this._playOpeningCallLine(line, { append: true });
-            }
-
+        for (const line of callConfig.script.intro) {
             if (sequenceId !== this._openingCallSequenceId) return;
-            this._phoneChoicePhase = 'voice';
-            this._awaitPhoneDismiss(true);
-        } finally {
-            this._stopManagerCallTheme();
-            this._setManagerTutorialArrowTarget(null);
+            await this._playOpeningCallLine(line, { append });
+            append = true;
         }
+
+        const choice = await this._awaitOpeningCallAnswer(sequenceId);
+        if (sequenceId !== this._openingCallSequenceId || !choice) return;
+
+        this._setPhoneButtonsActive(false);
+        this._setPhoneButtonSelection(choice);
+
+        const branchLines = choice === 'accept'
+            ? callConfig.script.yes
+            : callConfig.script.no;
+
+        for (const line of branchLines) {
+            if (sequenceId !== this._openingCallSequenceId) return;
+            await this._playOpeningCallLine(line, { append: true });
+        }
+
+        if (sequenceId !== this._openingCallSequenceId) return;
+        this._phoneChoicePhase = 'voice';
+        this._awaitPhoneDismiss(true);
     }
 
     _typePhoneMessage(text, {
         append = false,
         onComplete = null,
-        showMachineBubble = false,
-        speechBubbleText = null,
-        bubbleFooter = '',
-        bubbleMachineVariant = null,
     } = {}) {
         this._clearPhoneTyping();
 
         const view = this._getPhoneViewState('chat');
-        const showPhoneTranscript = this._shouldShowMachinePhoneTranscript(bubbleMachineVariant);
-        const prefix = append && showPhoneTranscript ? view.body : '';
-        const bubbleText = (showMachineBubble || speechBubbleText !== null)
-            ? String(speechBubbleText ?? text ?? '').replace(/\s+/g, ' ').trim()
-            : '';
-        const shouldRenderMachineBubble = Boolean(bubbleText)
-            && Boolean(bubbleMachineVariant)
-            && bubbleMachineVariant === this._currentMachineVariant;
+        const prefix = append ? view.body : '';
 
-        this._setPhoneBodyTranscriptVisible(showPhoneTranscript);
-
-        if (!append || !showPhoneTranscript) view.body = '';
+        if (!append) view.body = '';
         view.stickToBottom = true;
         view.scrollOffset = 0;
         if (this._phoneViewMode === 'chat') {
             this._refreshPhonePanelDisplay();
         }
 
-        if (shouldRenderMachineBubble) {
-            if (!this._hasBrokenVoiceBox(bubbleMachineVariant)) {
-                this._playOneShot(this._getMachineDialogueSoundAsset(bubbleMachineVariant), {
-                    volume: SOUND_VOLUMES.voice * 0.58,
-                });
-            }
-            this._beginMachineSpeechBubble({ footer: bubbleFooter });
-        }
-
         if (!text) {
             this._activePhoneTypingState = null;
-            if (shouldRenderMachineBubble) {
-                this._finalizeMachineSpeechBubble(bubbleText);
-            }
             onComplete?.();
             return;
         }
@@ -3211,10 +2864,6 @@ export default class GameScene extends Phaser.Scene {
             view,
             prefix,
             text: String(text || ''),
-            bubbleText,
-            showPhoneTranscript,
-            showMachineBubble: false,
-            bubbleMachineVariant,
             onComplete,
             charIndex: 0,
         };
@@ -3226,30 +2875,17 @@ export default class GameScene extends Phaser.Scene {
                 const nextChar = text[charIndex];
                 charIndex += 1;
                 typingState.charIndex = charIndex;
-                if (showPhoneTranscript) {
-                    view.body = prefix + text.slice(0, charIndex);
-                    if (this._phoneViewMode === 'chat') {
-                        this._phoneBodyText.setText(view.body);
-                        this._phoneStickToBottom = true;
-                        this._syncPhoneBodyLayout();
-                    }
-                } else if (this._phoneViewMode === 'chat') {
+                view.body = prefix + text.slice(0, charIndex);
+                if (this._phoneViewMode === 'chat') {
+                    this._phoneBodyText.setText(view.body);
                     this._phoneStickToBottom = true;
                     this._syncPhoneBodyLayout();
-                }
-                if (shouldRenderMachineBubble && bubbleMachineVariant === this._currentMachineVariant) {
-                    const progressRatio = text.length > 0 ? (charIndex / text.length) : 1;
-                    const bubbleCharCount = Math.max(0, Math.min(bubbleText.length, Math.round(progressRatio * bubbleText.length)));
-                    this._updateActiveMachineSpeechBubbleText(bubbleText.slice(0, bubbleCharCount));
                 }
                 if (nextChar && nextChar.trim()) this._playTypeBeep();
 
                 if (charIndex >= text.length) {
                     this._commTypingEvent = null;
                     this._activePhoneTypingState = null;
-                    if (shouldRenderMachineBubble && bubbleMachineVariant === this._currentMachineVariant) {
-                        this._finalizeMachineSpeechBubble(bubbleText);
-                    }
                     onComplete?.();
                 }
             },
@@ -3283,10 +2919,6 @@ export default class GameScene extends Phaser.Scene {
         };
     }
 
-    _getMachineDialogueSoundAsset(machineVariant = this._currentMachineVariant) {
-        const assetKey = machineVariant?.dialogueSoundAssetKey;
-        return SOUND_ASSETS[assetKey] || SOUND_ASSETS.phoneVoiceIntro;
-    }
 
     _getMachineFlowState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.flowPuzzle) return null;
@@ -3520,38 +3152,6 @@ export default class GameScene extends Phaser.Scene {
         return segments.join('');
     }
 
-    _buildMachineSpeechBubbleEntries(machineVariant = this._currentMachineVariant) {
-        if (!machineVariant?.hasCommunication) return [];
-
-        const stage = machineVariant._uiConversationStage || 'opening';
-        const prompt = machineVariant.questionDialogue?.prompt || '';
-        const entries = [];
-        const pushEntry = (textValue, footer = '') => {
-            const normalizedText = String(textValue || '').replace(/\s+/g, ' ').trim();
-            if (!normalizedText) return;
-            entries.push({ text: normalizedText, footer: String(footer || '').trim() });
-        };
-
-        if (machineVariant.openingDialogue) {
-            pushEntry(this._formatMachineSpeech(machineVariant.openingDialogue, machineVariant));
-        }
-
-        if ((stage === 'question' || stage === 'answered') && prompt) {
-            pushEntry(this._formatMachineSpeech(prompt, machineVariant), 'YES / NO');
-        }
-
-        if (stage === 'answered') {
-            const choice = machineVariant._uiConversationChoice;
-            const responseText = choice === 'accept'
-                ? machineVariant.questionDialogue?.yesDialogue
-                : machineVariant.questionDialogue?.noDialogue;
-            if (responseText) {
-                pushEntry(this._formatMachineSpeech(responseText, machineVariant), choice === 'accept' ? 'YES' : 'NO');
-            }
-        }
-
-        return entries.slice(-2);
-    }
 
     _refreshMachineConversationPanel(machineVariant = this._currentMachineVariant, status = null, options = {}) {
         if (!machineVariant) return false;
@@ -3572,11 +3172,6 @@ export default class GameScene extends Phaser.Scene {
             'chat',
             options,
         );
-        if (machineVariant === this._currentMachineVariant && !this._commTypingEvent) {
-            this._machineSpeechBubbleHistory = this._buildMachineSpeechBubbleEntries(machineVariant);
-            this._activeMachineSpeechBubbleIndex = -1;
-            this._refreshMachineSpeechBubbles();
-        }
         return true;
     }
 
@@ -3600,9 +3195,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(speechText, machineVariant)}`, {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: speechText,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
                 this._cacheMachineConversationSnapshot(machineVariant, status);
@@ -4306,7 +3898,6 @@ export default class GameScene extends Phaser.Scene {
             GameState.paycheckTotal -= 10;
             this._paycheckDelta -= 10;
             this._hudPayText.setText(this._fmtPay());
-            this._animateHudPayDelta(-10);
             GameState.addSpecialItem({ id: 'purple_circuit', label: 'Purple Circuit' });
             this._syncPurpleCircuitDeskTokenVisibility();
             machineVariant.questionDialogue = {
@@ -4468,9 +4059,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'SIGNAL SPIKE', 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(panicText, machineVariant)}`, {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: panicText,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
                 this._cacheMachineConversationSnapshot(machineVariant, 'CLOWN SIGNAL');
@@ -4535,27 +4123,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _syncRulebookState(newRuleIds = null) {
-        const allRules = this.cache.json.get('rules') || [];
-        this._rulebook?.setRuleState(allRules, GameState.activeRules, newRuleIds);
+        this._rulebook?.setRuleState(GameState.activeRules, newRuleIds);
     }
 
-    _unlockUmbrellaRebellionRule() {
-        const added = GameState.addBonusRule(UMBRELLA_REBELLION_RULE_ID);
-        this._syncRulebookState(added ? [UMBRELLA_REBELLION_RULE_ID] : []);
-        if (!added) return false;
-
-        this._pushPhoneNotification(
-            'QUEST LOGGED',
-            'The Rebellious Umbrella slipped a rebellion note into your rulebook.',
-            'NEW QUEST',
-            {
-                activate: false,
-                unread: this._phoneViewMode !== 'notifications',
-                soundAsset: SOUND_ASSETS.notificationAlert,
-            }
-        );
-        return true;
-    }
 
     _beginRebelliousUmbrellaProposal() {
         const machineVariant = this._currentMachineVariant;
@@ -4578,9 +4148,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'PROPOSITION INCOMING', 'chat');
         this._typePhoneMessage('\n\nWait. Keep it quiet. I need a little supply run.\n\nQ> Want to hear it?', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'Wait. Keep it quiet. I need a little supply run. Want to hear it?',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4615,9 +4182,6 @@ export default class GameScene extends Phaser.Scene {
                 this._showPhonePanel(header, currentBody, 'PROPOSITION CLOSED', 'chat');
                 this._typePhoneMessage('\n\nX Alright, whatever, bro.', {
                     append: true,
-                    showMachineBubble: false,
-                    speechBubbleText: 'Alright, whatever, bro.',
-                    bubbleMachineVariant: machineVariant,
                     onComplete: () => {
                         if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4634,9 +4198,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'HEAR ME OUT', 'chat');
             this._typePhoneMessage('\n\n✓ Alright. Here it is.\n\nQ> I need you to lift gears, circuits, wire, and data for me. Keep it on your desk until I come back tomorrow. You down?', {
                 append: true,
-                showMachineBubble: true,
-                speechBubbleText: 'Alright. Here it is. I need you to lift gears, circuits, wire, and data for me. Keep it on your desk until I come back tomorrow. You down?',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4657,9 +4218,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'REBELLION REFUSED', 'chat');
             this._typePhoneMessage('\n\nX Whatever. You missed out.', {
                 append: true,
-                showMachineBubble: true,
-                speechBubbleText: 'Whatever. You missed out.',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4680,9 +4238,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'QUEST ACCEPTED', 'chat');
         this._typePhoneMessage(`\n\n✓ Good. Keep it quiet. I need ${requirementText}. Lift it from the floor jobs, stash it on your desk, and keep it clean until I get back.`, {
             append: true,
-            showMachineBubble: true,
-            speechBubbleText: `Good. Keep it quiet. I need ${requirementText}. Lift it from the floor jobs, stash it on your desk, and keep it clean until I get back.`,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4726,9 +4281,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'PART CHECK', 'chat');
         this._typePhoneMessage(`\n\nQ> You got all the ${label} or what?`, {
             append: true,
-            showMachineBubble: true,
-            speechBubbleText: `You got all the ${label} or what?`,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4758,9 +4310,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'DEAL TERMINATED', 'chat');
             this._typePhoneMessage('\n\nX Then give me the rest of your parts. Our business here is concluded.', {
                 append: true,
-                showMachineBubble: true,
-                speechBubbleText: 'Then give me the rest of your parts. Our business here is concluded.',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4777,9 +4326,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL TRUSTING YOU', 'chat');
         this._typePhoneMessage('\n\n✓ Alright. Then keep loading me up.', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'Alright. Then keep loading me up.',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4807,9 +4353,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'DIDN\'T FEEL A THING', 'chat');
         this._typePhoneMessage('\n\nQ> r u sure u have the part? i didnt feel anything', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'r u sure u have the part? i didnt feel anything',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4839,9 +4382,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'DEAL CLOSED', 'chat');
             this._typePhoneMessage('\n\nX our business here is done.', {
                 append: true,
-                showMachineBubble: false,
-                speechBubbleText: 'our business here is done.',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4867,9 +4407,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL WAITING', 'chat');
         this._typePhoneMessage('\n\n✓ im waiting.', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'im waiting.',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4888,7 +4425,6 @@ export default class GameScene extends Phaser.Scene {
         const promptSpeech = this._formatMachineSpeech(prompt, machineVariant);
 
         machineVariant._uiConversationChoice = null;
-        this._clearMachineSpeechBubbles();
 
         if (!machineVariant?.hasCommunication) {
             machineVariant._uiConversationStage = 'no-signal';
@@ -4906,9 +4442,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE', 'chat');
 
         this._typePhoneMessage(openingSpeech, {
-            showMachineBubble: false,
-            speechBubbleText: openingSpeech,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (!prompt) {
                     this._phoneChoicePhase = 'inactive';
@@ -4930,10 +4463,6 @@ export default class GameScene extends Phaser.Scene {
                     );
                     this._typePhoneMessage(`\n\nQ> ${promptSpeech}`, {
                         append: true,
-                        showMachineBubble: false,
-                        speechBubbleText: promptSpeech,
-                        bubbleFooter: 'YES / NO',
-                        bubbleMachineVariant: machineVariant,
                         onComplete: () => {
                             machineVariant._uiConversationStage = 'question';
                             this._phoneChoicePhase = 'machine-question';
@@ -4955,8 +4484,6 @@ export default class GameScene extends Phaser.Scene {
         const callConfig = this._getOpeningCallConfig();
         this._openingCallSequenceId += 1;
         this._openingCallChoiceResolver = null;
-        this._stopManagerCallTheme();
-        this._setManagerTutorialArrowTarget(null);
         this._setCommStandbyState('Factory monitor online.', 'LISTENING');
         this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.silenceBeforePhoneMs, () => {
             this._phoneChoicePhase = 'incoming';
@@ -5058,10 +4585,6 @@ export default class GameScene extends Phaser.Scene {
             this._commSequenceEvent = this.time.delayedCall(90, () => {
                 this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
                     append: true,
-                    showMachineBubble: false,
-                    speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
-                    bubbleFooter: choice === 'accept' ? 'YES' : 'NO',
-                    bubbleMachineVariant: machineVariant,
                     onComplete: () => {
                         if (specialChoiceResult.autoApprove && this._currentMachineVariant === machineVariant) {
                             this._pendingUnsafeAcceptConfirmation = true;
@@ -5099,8 +4622,6 @@ export default class GameScene extends Phaser.Scene {
         const wasTextBrief = this._phoneChoicePhase === 'incoming-brief';
         this._openingCallSequenceId += 1;
         this._openingCallChoiceResolver = null;
-        this._stopManagerCallTheme();
-        this._setManagerTutorialArrowTarget(null);
         this._setRulebookTutorialLineActive(false);
         this._setCommStandbyState(
             wasTextBrief ? 'Brief complete. Conveyor standing by.' : 'Call complete. Conveyor standing by.',
@@ -5518,12 +5039,19 @@ export default class GameScene extends Phaser.Scene {
             'mainview_second',
             'mainview_lightradiance',
             'mainview_lightlayer',
+            'mainview_fam2',
+            'mainview_fam1',
         ];
         const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
         if (!hasMainViewLayers) {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
         }
+        // Fam images are cropped tight sprites; game coords = source_center * (1280/320, 720/195)
+        const famPositions = {
+            mainview_fam1: { x: 202, y: 659 },
+            mainview_fam2: { x: 278, y: 669 },
+        };
 
         this._mainViewLayers = {};
         mainViewLayerKeys.forEach((key) => {
@@ -5533,6 +5061,15 @@ export default class GameScene extends Phaser.Scene {
             if (key === 'mainview_bottom' || key === 'mainview_second') {
                 const texFrame = this.textures.getFrame(key);
                 layer = this.add.tileSprite(640, 360, texFrame.width, texFrame.height, key).setDisplaySize(1280, 720);
+            } else if (famPositions[key]) {
+                const pos = famPositions[key];
+                layer = this.add.image(pos.x, pos.y, key).setScale(1);
+                layer.setInteractive({ useHandCursor: true, draggable: true });
+                this.input.setDraggable(layer);
+                layer.on('drag', (pointer, dragX, dragY) => {
+                    layer.x = dragX;
+                    layer.y = dragY;
+                });
             } else {
                 layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
             }
@@ -5541,20 +5078,13 @@ export default class GameScene extends Phaser.Scene {
             this._mainViewLayers[key] = layer;
         });
 
+
         this._machineDialogueText = this.add.text(966, 460, '', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#bceef8',
             align: 'left', wordWrap: { width: 260 }, lineSpacing: 6,
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._machineDialogueText);
-
-        this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(22).setVisible(false);
-        this._machineSpeechBubbleSlots = [
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 304, 398, 230),
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 304, 473, 230, true),
-        ];
-        this._machineSpeechBubbleSlots.forEach((slot) => this._machineSpeechBubbleLayer.add(slot.container));
-        this._conveyorContainer.add(this._machineSpeechBubbleLayer);
 
         this._shapeTitleText = this.add.text(964, 126, 'CHASSIS GRID', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
@@ -5581,25 +5111,6 @@ export default class GameScene extends Phaser.Scene {
         this._machineBlueprintLabelContainer = this.add.container(0, 0).setVisible(false);
         this._conveyorContainer.add(this._machineBlueprintLabelContainer);
 
-        // this._machineBayLightContainer = this.add.container(MACHINE_PRESENTATION.conveyorTargetX, 420).setDepth(14);
-        // this._unitWorklightCone = this.add.graphics();
-        // this._unitWorklightCone.fillStyle(0xffe4aa, 0.13);
-        // this._unitWorklightCone.fillTriangle(-170, -146, 170, -146, 0, 62);
-        // this._unitWorklightGlow = this.add.ellipse(0, -26, 248, 132, 0xffdc96, 0.14);
-        // this._unitWorklightHalo = this.add.ellipse(0, -172, 84, 30, 0xffefc7, 0.16);
-        // this._unitWorklightHousing = this.add.rectangle(0, -190, 126, 16, 0x2e3439, 1)
-        //     .setStrokeStyle(2, 0x707a82, 0.82);
-        // this._unitWorklightBulb = this.add.rectangle(0, -178, 52, 14, 0xfff0c6, 0.96)
-        //     .setStrokeStyle(1, 0xfffed9, 0.64);
-        // this._machineBayLightContainer.add([
-        //     this._unitWorklightCone,
-        //     this._unitWorklightGlow,
-        //     this._unitWorklightHalo,
-        //     this._unitWorklightHousing,
-        //     this._unitWorklightBulb,
-        // ]);
-        // this._conveyorContainer.add(this._machineBayLightContainer);
-
         this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 490).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText = this.add.text(0, 115, '', {
@@ -5616,7 +5127,6 @@ export default class GameScene extends Phaser.Scene {
             this._unitIdText,
         ]);
         this._unitContainer.setVisible(false);
-        this._setMachineWorklightVisible(false);
 
         this._conveyorUnitSprite.setInteractive({ useHandCursor: true });
         this._conveyorUnitSprite.on('pointerover', () => {
@@ -5655,21 +5165,17 @@ export default class GameScene extends Phaser.Scene {
                 .setInteractive(this.input.makePixelPerfect(0));
 
             buttonImage.on('pointerover', () => {
-                if (this._canUseFactoryDecisionButtons()) {
-                    buttonImage.setTint(0xffffff);
-                }
+                if (!this._canUseFactoryDecisionButtons()) return;
+                buttonImage.setTint(0xffffff);
             });
-
             buttonImage.on('pointerout', () => {
-                if (this._canUseFactoryDecisionButtons()) {
-                    buttonImage.setTint(0x7f7f7f);
-                }
+                if (!this._canUseFactoryDecisionButtons()) return;
+                buttonImage.setTint(0x7f7f7f);
             });
 
             buttonImage.on('pointerdown', () => {
-                if (this._canUseFactoryDecisionButtons()) {
-                    this._submitRuling(def.action);
-                }
+                if (!this._canUseFactoryDecisionButtons()) return;
+                this._submitRuling(def.action);
             });
 
             this._factoryControlsContainer.add(buttonImage);
@@ -5717,7 +5223,6 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleReturnPhoneState = null;
         this._debugPuzzleReturnPhoneState = null;
         if (this._unitContainer) this._unitContainer.setVisible(false);
-        this._setMachineWorklightVisible(false);
         if (this._machineDialogueText) this._machineDialogueText.setText('');
         this._clearMachineGridDisplays();
         if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
@@ -5734,126 +5239,6 @@ export default class GameScene extends Phaser.Scene {
         this._phoneInfoNote = null;
         this._refreshPhoneInfoBoard();
         this._refreshFactoryActionButtons();
-    }
-
-    _syncConveyorBottomLayerPositions() {
-        if (!Array.isArray(this._conveyorBottomLayers) || this._conveyorBottomLayers.length === 0 || !this._conveyorBottomLayerWidth) {
-            return;
-        }
-
-        const startX = -this._conveyorBottomScrollOffset;
-        this._conveyorBottomLayers.forEach((layer, index) => {
-            layer.setPosition(startX + (index * this._conveyorBottomLayerWidth), this._conveyorBottomLayerTop);
-        });
-        this._conveyorBottomFrontLayers?.forEach((layer, index) => {
-            layer.setPosition(startX + (index * this._conveyorBottomLayerWidth), this._conveyorBottomLayerTop);
-        });
-    }
-
-    _syncConveyorBeltSoundState() {
-        const shouldPlay = Boolean(this._conveyorBottomScrollActive) && !this._gameplayPaused && !this._shiftEnding;
-
-        if (shouldPlay) {
-            this._startConveyorBeltSound();
-            return;
-        }
-
-        this._stopConveyorBeltSound();
-    }
-
-    _startConveyorBeltSound() {
-        if (this._conveyorBeltSoundNodes) return;
-
-        const audioContext = this.sound?.context;
-        if (!audioContext?.createOscillator || !audioContext?.createGain || !audioContext?.createBiquadFilter) {
-            return;
-        }
-
-        audioContext.resume?.().catch(() => {});
-
-        const now = audioContext.currentTime;
-        const drive = audioContext.createOscillator();
-        const chatter = audioContext.createOscillator();
-        const wobble = audioContext.createOscillator();
-        const wobbleGain = audioContext.createGain();
-        const filter = audioContext.createBiquadFilter();
-        const gainNode = audioContext.createGain();
-
-        drive.type = 'triangle';
-        drive.frequency.setValueAtTime(44, now);
-        chatter.type = 'sawtooth';
-        chatter.frequency.setValueAtTime(92, now);
-        wobble.type = 'sine';
-        wobble.frequency.setValueAtTime(1.4, now);
-
-        wobbleGain.gain.setValueAtTime(3.8, now);
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(240, now);
-        filter.Q.setValueAtTime(0.7, now);
-        gainNode.gain.setValueAtTime(0.008, now);
-
-        wobble.connect(wobbleGain);
-        wobbleGain.connect(chatter.frequency);
-        drive.connect(filter);
-        chatter.connect(filter);
-        filter.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-
-        drive.start(now);
-        chatter.start(now);
-        wobble.start(now);
-
-        this._conveyorBeltSoundNodes = {
-            drive,
-            chatter,
-            wobble,
-            wobbleGain,
-            filter,
-            gainNode,
-        };
-    }
-
-    _stopConveyorBeltSound() {
-        const nodes = this._conveyorBeltSoundNodes;
-        if (!nodes) return;
-
-        [nodes.drive, nodes.chatter, nodes.wobble].forEach((oscillator) => {
-            try {
-                oscillator.stop();
-            } catch (error) {
-                // Oscillators may already be stopping during scene shutdown.
-            }
-            oscillator.disconnect();
-        });
-
-        nodes.wobbleGain.disconnect();
-        nodes.filter.disconnect();
-        nodes.gainNode.disconnect();
-        this._conveyorBeltSoundNodes = null;
-    }
-
-    _setConveyorBottomScrollActive(active, direction = 1) {
-        if (active) {
-            this._conveyorBottomScrollDirection = direction < 0 ? -1 : 1;
-        }
-        this._conveyorBottomScrollActive = Boolean(active)
-            && Array.isArray(this._conveyorBottomLayers)
-            && this._conveyorBottomLayers.length > 1
-            && this._conveyorBottomLayerWidth > 0;
-        this._syncConveyorBeltSoundState();
-    }
-
-    _updateConveyorBottomLayers(delta) {
-        if (!this._conveyorBottomScrollActive || this._gameplayPaused || this._shiftEnding || !this._conveyorBottomLayerWidth) {
-            return;
-        }
-
-        const distance = MACHINE_PRESENTATION.conveyorSpeedPxPerSecond * (delta / 1000) * (this._conveyorBottomScrollDirection || 1);
-        this._conveyorBottomScrollOffset = (
-            (this._conveyorBottomScrollOffset + distance) % this._conveyorBottomLayerWidth
-            + this._conveyorBottomLayerWidth
-        ) % this._conveyorBottomLayerWidth;
-        this._syncConveyorBottomLayerPositions();
     }
 
     _openMachinePuzzle() {
@@ -6019,7 +5404,7 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneInfoNote(message, status);
 
         if (soundAsset) {
-            this._playNotificationSound(soundAsset, {
+            this._playOneShot(soundAsset, {
                 volume: soundAsset === SOUND_ASSETS.puzzleFixed ? SOUND_VOLUMES.puzzleFixed : SOUND_VOLUMES.notification,
             });
         }
@@ -6052,64 +5437,6 @@ export default class GameScene extends Phaser.Scene {
         this._hudCasesText.setText(`CASES: ${GameState.casesProcessedThisShift}`);
         this._hudPayText.setText(this._fmtPay());
         this._hudViolText.setText(`Violations: ${this._shiftMistakes}`);
-        this._animateHudPayDelta(payDelta);
-    }
-
-    _animateHudPayDelta(payDelta = 0) {
-        if (!payDelta || !this._hudPayText || !this._hudContainer) return;
-
-        this.tweens.killTweensOf(this._hudPayText);
-        this._hudPayText.setScale(1).clearTint();
-        this._hudPayText.setTint(payDelta > 0 ? 0xbaff97 : 0xffa89b);
-
-        this.tweens.add({
-            targets: this._hudPayText,
-            scaleX: 1.14,
-            scaleY: 1.14,
-            duration: 120,
-            yoyo: true,
-            ease: 'Sine.Out',
-            onComplete: () => {
-                this._hudPayText?.setScale(1).clearTint();
-            },
-        });
-
-        const deltaText = this.add.text(1268, 46, `${payDelta > 0 ? '+' : '-'}$${Math.abs(payDelta).toFixed(2)}`, {
-            fontFamily: 'Courier New',
-            fontSize: '16px',
-            fontStyle: 'bold',
-            color: payDelta > 0 ? '#baff97' : '#ff9c90',
-        }).setOrigin(1, 0.5).setAlpha(0.96);
-        this._hudContainer.add(deltaText);
-
-        let payGlint = null;
-        if (payDelta > 0) {
-            payGlint = this.add.rectangle(this._hudPayText.x - 52, this._hudPayText.y, 116, 28, 0xbaff97, 0.18)
-                .setStrokeStyle(1, 0xeaffd6, 0.5)
-                .setOrigin(0.5);
-            this._hudContainer.add(payGlint);
-            this._hudContainer.bringToTop(this._hudPayText);
-            this.tweens.add({
-                targets: payGlint,
-                scaleX: 1.18,
-                scaleY: 1.28,
-                alpha: 0,
-                duration: 420,
-                ease: 'Quad.Out',
-                onComplete: () => payGlint.destroy(),
-            });
-        }
-
-        this.tweens.add({
-            targets: deltaText,
-            y: 24,
-            alpha: 0,
-            duration: 620,
-            ease: 'Quad.Out',
-            onComplete: () => {
-                deltaText.destroy();
-            },
-        });
     }
 
     _recordTrackedMachineOutcome(action, gateState) {
@@ -6180,13 +5507,7 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _scrollBelt(_delta) {
-        // Belt animation handled by pixel art background.
-    }
 
-    _buildInspectionScreen() {
-        this._buildDisabledInspectionContainer();
-    }
 
     _setScreen(name) {
         this._screen = name;
@@ -6566,7 +5887,7 @@ export default class GameScene extends Phaser.Scene {
             };
         }
 
-        if (Number(debugState?.dayStage || 1) === 3 && (debugState?.corruptionCount || 0) > 0) {
+        if ((debugState?.corruptionCount || 0) > 0) {
             return {
                 subtitle: 'CORRUPT',
                 fillColor: 0x5b1815,
@@ -6596,7 +5917,8 @@ export default class GameScene extends Phaser.Scene {
         const acceptOverrideReady = Boolean(this._pendingUnsafeAcceptConfirmation) && hasUnit;
 
         Object.entries(this._conveyorRulingButtons).forEach(([action, button]) => {
-            button.bgRect.setTint(0x7f7f7f)
+            if (!canInteract)
+                button.bgRect.setTint(0x7f7f7f);
         });
 
         this._refreshOtherPuzzleButton();
@@ -6998,6 +6320,7 @@ export default class GameScene extends Phaser.Scene {
         });
         this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.45 });
         this._showFeedback('ACCEPT AGAIN TO OVERRIDE', '#ffd685');
+        this._refreshFactoryActionButtons();
     }
 
     _prepareSpecialMachineRuling(action, gateState) {
@@ -7217,9 +6540,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n${action === 'approve' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -7236,9 +6556,6 @@ export default class GameScene extends Phaser.Scene {
         if (this._actionLocked) return;
 
         this._completePhoneTyping();
-        if (this._tutorialArrow?.visible) {
-            this._tutorialArrow.setVisible(false);
-        }
 
         const gateState = this._getPuzzleGateState();
         if (action === 'approve' && !gateState.ready && !gateState.mainScrapRequired && !this._pendingUnsafeAcceptConfirmation) {
@@ -7381,247 +6698,14 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _createMachineSpeechBubbleSlot(x, y, maxWidth, withTail = false) {
-        const container = this.add.container(x, y).setVisible(false);
-        const shadow = this.add.graphics();
-        const bubble = this.add.graphics();
-        const tailShadow = this.add.graphics();
-        const tail = this.add.graphics();
-        const text = this.add.text(0, 0, '', {
-            fontFamily: 'Courier New',
-            fontSize: '14px',
-            color: '#2a2d34',
-            align: 'left',
-            wordWrap: { width: maxWidth - 28 },
-            lineSpacing: 4,
-        }).setOrigin(0, 1);
-        const footerText = this.add.text(0, 0, '', {
-            fontFamily: 'Courier New',
-            fontSize: '10px',
-            color: '#6f5b45',
-            letterSpacing: 1,
-        }).setOrigin(1, 1).setVisible(false);
-        container.add([shadow, bubble, tailShadow, tail, text, footerText]);
 
-        return {
-            container,
-            shadow,
-            bubble,
-            tailShadow,
-            tail,
-            text,
-            footerText,
-            maxWidth,
-            withTail,
-            baseX: x,
-            baseY: y,
-            anchorOffsetX: x - (MACHINE_PRESENTATION.conveyorTargetX - 18),
-            anchorOffsetY: y - 498,
-            baseScale: withTail ? 0.94 : 0.98,
-            currentHeight: 0,
-        };
-    }
 
-    _normalizeMachineSpeechBubbleEntry(entryValue = '') {
-        if (typeof entryValue === 'string') {
-            return {
-                text: String(entryValue || '').trim(),
-                footer: '',
-            };
-        }
 
-        return {
-            text: String(entryValue?.text || '').trim(),
-            footer: String(entryValue?.footer || '').trim(),
-        };
-    }
 
-    _drawMachineSpeechBubbleSlot(slot, entryValue = '') {
-        if (!slot) return;
 
-        const entry = this._normalizeMachineSpeechBubbleEntry(entryValue);
-        const content = entry.text;
-        const footer = entry.footer;
-        if (!content) {
-            slot.container.setVisible(false);
-            slot.shadow.clear();
-            slot.bubble.clear();
-            slot.tailShadow.clear();
-            slot.tail.clear();
-            slot.text.setText('');
-            slot.footerText?.setText('');
-            slot.footerText?.setVisible(false);
-            slot.currentHeight = 0;
-            return;
-        }
 
-        slot.text.setWordWrapWidth(slot.maxWidth - 24, true);
-        slot.text.setText(content);
-        slot.footerText?.setText(footer);
-        slot.footerText?.setVisible(Boolean(footer));
 
-        const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 24, 104, slot.maxWidth);
-        const bubbleHeight = Math.max(44, slot.text.height + 20 + (footer ? 14 : 0));
-        const left = 0;
-        const top = -bubbleHeight;
-        slot.currentHeight = bubbleHeight;
 
-        slot.text.setPosition(12, footer ? -26 : -10);
-        slot.footerText?.setPosition(bubbleWidth - 10, -7);
-
-        slot.shadow.clear();
-        slot.shadow.fillStyle(0x000000, 0.18);
-        slot.shadow.fillRoundedRect(left + 4, top + 4, bubbleWidth, bubbleHeight, 12);
-
-        slot.bubble.clear();
-        slot.bubble.fillStyle(0xf4ecdf, 0.98);
-        slot.bubble.fillRoundedRect(left, top, bubbleWidth, bubbleHeight, 12);
-        slot.bubble.lineStyle(2, 0x5d5040, 0.96);
-        slot.bubble.strokeRoundedRect(left, top, bubbleWidth, bubbleHeight, 12);
-
-        slot.tailShadow.clear();
-        slot.tail.clear();
-        if (slot.withTail) {
-            const tailPoints = [
-                bubbleWidth - 4, -24,
-                bubbleWidth + 48, -12,
-                bubbleWidth - 4, -4,
-            ];
-            slot.tailShadow.fillStyle(0x000000, 0.18);
-            slot.tailShadow.fillPoints([
-                { x: tailPoints[0] + 4, y: tailPoints[1] + 4 },
-                { x: tailPoints[2] + 4, y: tailPoints[3] + 4 },
-                { x: tailPoints[4] + 4, y: tailPoints[5] + 4 },
-            ], true);
-            slot.tail.fillStyle(0xf4ecdf, 0.98);
-            slot.tail.fillPoints([
-                { x: tailPoints[0], y: tailPoints[1] },
-                { x: tailPoints[2], y: tailPoints[3] },
-                { x: tailPoints[4], y: tailPoints[5] },
-            ], true);
-            slot.tail.lineStyle(2, 0x5d5040, 0.96);
-            slot.tail.strokePoints([
-                { x: tailPoints[0], y: tailPoints[1] },
-                { x: tailPoints[2], y: tailPoints[3] },
-                { x: tailPoints[4], y: tailPoints[5] },
-            ], true);
-        }
-
-        slot.container.setVisible(true);
-    }
-
-    _canShowMachineSpeechBubbles() {
-        return Boolean(
-            this._currentCase
-            && this._currentMachineVariant?.hasCommunication
-            && this._unitContainer?.visible
-            && !this._unitMoveTween
-        );
-    }
-
-    _refreshMachineSpeechBubbles() {
-        if (!Array.isArray(this._machineSpeechBubbleSlots) || this._machineSpeechBubbleSlots.length === 0) return;
-
-        const visibleEntries = this._machineSpeechBubbleHistory
-            .map((entry) => this._normalizeMachineSpeechBubbleEntry(entry))
-            .filter((entry) => entry.text.length > 0)
-            .slice(-2);
-        const hasEntries = visibleEntries.length > 0 && this._canShowMachineSpeechBubbles();
-
-        this._machineSpeechBubbleLayer?.setVisible(hasEntries);
-        this._machineSpeechBubbleSlots.forEach((slot, index) => {
-            const slotText = visibleEntries.length === 1
-                ? (index === this._machineSpeechBubbleSlots.length - 1 ? visibleEntries[0] : null)
-                : (visibleEntries[index] || null);
-            this._drawMachineSpeechBubbleSlot(slot, slotText);
-        });
-        this._layoutMachineSpeechBubbleSlots();
-    }
-
-    _layoutMachineSpeechBubbleSlots() {
-        if (!Array.isArray(this._machineSpeechBubbleSlots) || this._machineSpeechBubbleSlots.length === 0) return;
-
-        const visibleSlots = this._machineSpeechBubbleSlots.filter((slot) => slot.container.visible);
-        const machineVariant = this._currentMachineVariant;
-        const richMfActive = this._isRichMf(machineVariant) && Boolean(this._unitContainer?.visible);
-        const verticalGap = richMfActive ? 12 : 14;
-        const anchorX = this._unitContainer?.visible ? this._unitContainer.x : null;
-        const anchorY = this._unitContainer?.visible ? this._unitContainer.y : null;
-        let lowerSlot = null;
-
-        for (let index = visibleSlots.length - 1; index >= 0; index -= 1) {
-            const slot = visibleSlots[index];
-            const slotScale = richMfActive ? 0.82 : slot.baseScale;
-            let targetX = slot.baseX;
-            let targetY = slot.baseY;
-
-            slot.container.setScale(slotScale);
-
-            if (anchorX !== null && anchorY !== null) {
-                targetX = anchorX + slot.anchorOffsetX;
-                targetY = anchorY + slot.anchorOffsetY - (richMfActive ? 12 : 0);
-            }
-
-            if (lowerSlot) {
-                const lowerHeight = lowerSlot.currentHeight * (lowerSlot.container.scaleY || 1);
-                targetY = Math.min(targetY, lowerSlot.container.y - lowerHeight - verticalGap);
-            }
-
-            slot.container.setPosition(targetX, targetY);
-            lowerSlot = slot;
-        }
-
-        this._machineSpeechBubbleSlots
-            .filter((slot) => !slot.container.visible)
-            .forEach((slot) => {
-                slot.container.setScale(slot.baseScale || 1);
-                slot.container.setPosition(slot.baseX, slot.baseY);
-            });
-    }
-
-    _clearMachineSpeechBubbles() {
-        this._machineSpeechBubbleHistory = [];
-        this._activeMachineSpeechBubbleIndex = -1;
-        this._refreshMachineSpeechBubbles();
-    }
-
-    _beginMachineSpeechBubble({ footer = '' } = {}) {
-        this._machineSpeechBubbleHistory.push({ text: '', footer: String(footer || '').trim() });
-        if (this._machineSpeechBubbleHistory.length > 2) {
-            this._machineSpeechBubbleHistory.shift();
-        }
-        this._activeMachineSpeechBubbleIndex = this._machineSpeechBubbleHistory.length - 1;
-        this._refreshMachineSpeechBubbles();
-    }
-
-    _updateActiveMachineSpeechBubbleText(textValue = '') {
-        if (this._activeMachineSpeechBubbleIndex < 0) return;
-
-        const currentEntry = this._normalizeMachineSpeechBubbleEntry(this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex]);
-        this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex] = {
-            ...currentEntry,
-            text: String(textValue || ''),
-        };
-        this._refreshMachineSpeechBubbles();
-    }
-
-    _finalizeMachineSpeechBubble(textValue = '') {
-        if (this._activeMachineSpeechBubbleIndex >= 0) {
-            const currentEntry = this._normalizeMachineSpeechBubbleEntry(this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex]);
-            this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex] = {
-                ...currentEntry,
-                text: String(textValue || ''),
-            };
-        } else if (textValue) {
-            this._machineSpeechBubbleHistory.push({ text: String(textValue), footer: '' });
-            if (this._machineSpeechBubbleHistory.length > 2) {
-                this._machineSpeechBubbleHistory.shift();
-            }
-        }
-
-        this._activeMachineSpeechBubbleIndex = -1;
-        this._refreshMachineSpeechBubbles();
-    }
 
     _appendLog(text) {
         this._logLines.push(text);
@@ -7636,52 +6720,8 @@ export default class GameScene extends Phaser.Scene {
         return null;
     }
 
-    _isFactoryLightFlickerKey(event) {
-        const key = String(event?.key || '');
-        const code = String(event?.code || '');
-        return key === '0' || code === 'Digit0' || code === 'Numpad0';
-    }
-
-    _findFinalCaseDefinition() {
-        const allCases = this.cache.json.get('cases') || [];
-        const finalCase = allCases.find((item) => item?.isFinalCase);
-        return finalCase ? { ...finalCase } : null;
-    }
-
-    _primeKonamiEndingState(route = null) {
-        GameState.day = GameState.totalDays;
-        GameState.recomputeActiveRules();
-
-        if (!route?.finishUmbrellaQuest) {
-            GameState.umbrellaQuest = null;
-            return;
-        }
-
-        GameState.umbrellaQuest = {
-            active: true,
-            failed: false,
-            stage: 'pending-day4',
-            specialRequest: false,
-            stealingEnabled: false,
-            dealerResolved: true,
-            dealerOutcome: 'override-finished',
-            requiredParts: this._createUmbrellaPartCounts(1),
-            collectedParts: this._createUmbrellaPartCounts(1),
-            appliedParts: this._createUmbrellaPartCounts(1),
-            specialCircuitDelivered: true,
-            deliveredPurpleCircuit: Boolean(route?.deliveredPurpleCircuit),
-            deliveredClownCircuit: Boolean(route?.deliveredClownCircuit),
-        };
-    }
 
     _handleKonamiKey(event) {
-        if (event?.repeat) return;
-
-        if (this._isFactoryLightFlickerKey(event)) {
-            this._triggerFactoryLightRadianceFlicker(Phaser.Math.Between(1, 2));
-            return;
-        }
-
         if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
             console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
             return;
@@ -7690,34 +6730,29 @@ export default class GameScene extends Phaser.Scene {
             console.log('[KONAMI] blocked by overlay: overlayModalOpen=%s rulebook=%s settings=%s machinePuzzle=%s', this._overlayModalOpen, this._rulebook?.isVisible(), this._settingsOverlay?.isVisible(), this._machinePuzzleOverlay?.isVisible());
             return;
         }
+        if (event?.repeat) return;
 
         const key = this._normalizeKonamiKey(event?.key);
         if (!key) return;
 
-        let matchedRoute = null;
-        this._konamiProgressByRoute = this._konamiRoutes.map((route, index) => {
-            const currentProgress = this._konamiProgressByRoute[index] || 0;
-            const nextProgress = key === route.sequence[currentProgress]
-                ? currentProgress + 1
-                : (key === route.sequence[0] ? 1 : 0);
-
-            if (nextProgress >= route.sequence.length) {
-                matchedRoute = route;
-                return 0;
+        const expectedKey = this._konamiSequence[this._konamiProgress];
+        if (key === expectedKey) {
+            this._konamiProgress += 1;
+            console.log('[KONAMI] progress %d/%d (key=%s)', this._konamiProgress, this._konamiSequence.length, key);
+            if (this._konamiProgress >= this._konamiSequence.length) {
+                this._konamiProgress = 0;
+                this._armKonamiFinale();
             }
-
-            return nextProgress;
-        });
-
-        if (matchedRoute) {
-            this._armKonamiFinale(matchedRoute);
+            return;
         }
+
+        console.log('[KONAMI] wrong key: got=%s expected=%s resetting to %d', key, expectedKey, key === this._konamiSequence[0] ? 1 : 0);
+        this._konamiProgress = key === this._konamiSequence[0] ? 1 : 0;
     }
 
-    _armKonamiFinale(route = null) {
+    _armKonamiFinale() {
         if (this._konamiFinaleTriggered) return;
         this._konamiFinaleTriggered = true;
-        this._konamiProgressByRoute = this._konamiRoutes.map(() => 0);
 
         this._nextCaseEvent?.remove(false);
         this._nextCaseEvent = null;
@@ -7725,24 +6760,10 @@ export default class GameScene extends Phaser.Scene {
         this._advanceCaseEvent = null;
         this._clearUnsafeAcceptConfirmation();
         this._clearPhoneTyping();
-        if (route?.action === 'end-scene') {
-            this._primeKonamiEndingState(route);
-        }
-        this._showFeedback(route?.label || 'KONAMI OVERRIDE // SKIPPING TO END', '#ffd685');
+        this._showFeedback('KONAMI OVERRIDE // SKIPPING TO END', '#ffd685');
 
         this.cameras.main.fade(600, 0, 0, 0);
         this.time.delayedCall(620, () => {
-            if (route?.action === 'skip-day') {
-                if (GameState.isLastDay()) {
-                    this.scene.start('End');
-                    return;
-                }
-
-                GameState.advanceDay();
-                this.scene.start('Transition', { day: GameState.day });
-                return;
-            }
-
             this.scene.start('End');
         });
     }
@@ -7771,7 +6792,6 @@ export default class GameScene extends Phaser.Scene {
         }
         this._currentCase = queuedCase ? { ...queuedCase } : null;
         if (!this._currentCase) {
-            this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('QUEUE EMPTY\n\nSTATUS: HOLD');
             return;
         }
@@ -7787,7 +6807,6 @@ export default class GameScene extends Phaser.Scene {
                 pendingGuarantees: this._machineGuaranteeState?.filter((entry) => !entry.fulfilled).map((entry) => entry.id) || [],
             });
             this._currentCase = null;
-            this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('DAY ROSTER CLEARED\n\nSTATUS: CLOCKING OUT');
             this._triggerRosterClearShiftEnd();
             return;
@@ -7820,7 +6839,6 @@ export default class GameScene extends Phaser.Scene {
                 error: String(error?.message || error),
             });
             this._currentCase = null;
-            this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('LOAD FAULT\n\nSTATUS: SKIP');
             if ((this._machineQueue?.length || 0) > 0 || this._machineGuaranteeState?.some((entry) => !entry.fulfilled)) {
                 this._scheduleNextCase(160);
@@ -7899,7 +6917,6 @@ export default class GameScene extends Phaser.Scene {
         this._syncCurrentUnitClownEffects(this._currentMachineVariant);
 
         this._unitContainer.setVisible(true);
-        this._setMachineWorklightVisible(true);
         this._unitContainer.x = MACHINE_PRESENTATION.conveyorEntryX;
         this._unitContainer.y = 490;
         this._unitContainer.setAngle(0);
@@ -7962,7 +6979,6 @@ export default class GameScene extends Phaser.Scene {
                 }
                 try {
                     this._playMachineConversation(arrivingMachineVariant);
-                    this._refreshMachineSpeechBubbles();
                     this._emitSequenceDebug('conversation started', {
                         machineId: arrivingMachineVariant?.machineId || null,
                         stage: arrivingMachineVariant?._uiConversationStage || null,
@@ -8040,18 +7056,9 @@ export default class GameScene extends Phaser.Scene {
             }
         }
 
-        if (this._pendingExitAction !== 'scrap') {
-            this._setConveyorBottomScrollActive(true, -1);
-        }
-
         this.tweens.add({
             ...exitTween,
-            onComplete: () => {
-                if (this._pendingExitAction !== 'scrap') {
-                    this._setConveyorBottomScrollActive(false);
-                }
-                onComplete?.();
-            },
+            onComplete,
         });
     }
 
@@ -8094,12 +7101,10 @@ export default class GameScene extends Phaser.Scene {
         const clearUnitPresentation = () => {
             this._stopCurrentUnitJitter();
             this._unitContainer.setVisible(false);
-            this._setMachineWorklightVisible(false);
             this._unitContainer.setAngle(0);
             this._unitContainer.setAlpha(1);
             this._unitContainer.setY(420);
             this._machineDialogueText.setText('');
-            this._clearMachineSpeechBubbles();
             this._clearMachineGridDisplays();
             if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
             this._currentMachineVariant = null;
@@ -8166,7 +7171,6 @@ export default class GameScene extends Phaser.Scene {
         this._shiftRunning = false;
         this._gameplayPaused = true;
         this._actionLocked = true;
-        this._setMachineWorklightVisible(false);
         this._clearUnsafeAcceptConfirmation();
         this._machinePuzzleOverlay?.close(true);
         this._hideAuxiliaryOverlays();
@@ -8217,61 +7221,8 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _setMachineWorklightVisible(visible) {
-        const isVisible = Boolean(visible);
-        const lightParts = [
-            this._unitWorklightCone,
-            this._unitWorklightGlow,
-            this._unitWorklightHalo,
-            this._unitWorklightHousing,
-            this._unitWorklightBulb,
-        ].filter(Boolean);
 
-        lightParts.forEach((part) => part.setVisible(isVisible));
-        this._machineBayLightContainer?.setVisible(isVisible);
-        this._machineWorklightFlickerEvent?.remove(false);
-        this._machineWorklightFlickerEvent = null;
-        this.tweens.killTweensOf(lightParts);
 
-        if (!isVisible) {
-            this._applyMachineWorklightIntensity(0.28);
-            return;
-        }
-
-        this._applyMachineWorklightIntensity(1);
-        this._queueMachineWorklightFlicker();
-    }
-
-    _applyMachineWorklightIntensity(intensity) {
-        const safeIntensity = Phaser.Math.Clamp(intensity, 0, 1.35);
-        this._unitWorklightCone?.setAlpha(0.08 + (safeIntensity * 0.1));
-        this._unitWorklightGlow?.setAlpha(0.07 + (safeIntensity * 0.12));
-        this._unitWorklightHalo?.setAlpha(0.09 + (safeIntensity * 0.16));
-        this._unitWorklightBulb?.setAlpha(0.65 + (safeIntensity * 0.35));
-        this._unitWorklightHousing?.setAlpha(0.9);
-    }
-
-    _queueMachineWorklightFlicker() {
-        this._machineWorklightFlickerEvent?.remove(false);
-        this._machineWorklightFlickerEvent = this.time.delayedCall(Phaser.Math.Between(1200, 3200), () => {
-            if (!this._currentCase || this._shiftEnding) return;
-
-            const flickerState = { intensity: 1 };
-            this.tweens.add({
-                targets: flickerState,
-                intensity: 0.48,
-                duration: Phaser.Math.Between(36, 72),
-                yoyo: true,
-                repeat: Phaser.Math.Between(1, 3),
-                ease: 'Stepped',
-                onUpdate: () => this._applyMachineWorklightIntensity(flickerState.intensity),
-                onComplete: () => {
-                    this._applyMachineWorklightIntensity(1);
-                    this._queueMachineWorklightFlicker();
-                },
-            });
-        });
-    }
 
     _startMusic() {
         this._musicPhase = 1;
@@ -8328,10 +7279,6 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _applyMusicSettingChange() {
-        if (this._managerCallThemeAudio) {
-            this._managerCallThemeAudio.volume = this._getManagerCallThemeVolume();
-        }
-
         const targetVolume = this._getConfiguredMusicVolume();
         if (!this._activeMusicKey) return;
 
@@ -8388,39 +7335,6 @@ export default class GameScene extends Phaser.Scene {
         if (!config.loop) sound.once('complete', () => sound.destroy());
         sound.play();
         return sound;
-    }
-
-    _playNotificationSound(soundAsset = SOUND_ASSETS.notificationAlert, config = {}) {
-        const sound = this._playOneShot(soundAsset, config);
-        if (sound || soundAsset !== SOUND_ASSETS.notificationAlert) return sound;
-
-        this._playSyntheticNotificationPing(config.volume ?? SOUND_VOLUMES.notification);
-        return null;
-    }
-
-    _playSyntheticNotificationPing(volume = SOUND_VOLUMES.notification) {
-        const audioContext = this.sound?.context;
-        if (!audioContext?.createOscillator || !audioContext?.createGain) return;
-        audioContext.resume?.().catch(() => {});
-
-        const now = audioContext.currentTime;
-        const gainNode = audioContext.createGain();
-        gainNode.gain.setValueAtTime(0.0001, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.024 * Math.max(0.15, volume), now + 0.012);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-        gainNode.connect(audioContext.destination);
-
-        [740, 990].forEach((frequency, index) => {
-            const oscillator = audioContext.createOscillator();
-            oscillator.type = 'triangle';
-            oscillator.frequency.setValueAtTime(frequency, now + (index * 0.075));
-            oscillator.connect(gainNode);
-            oscillator.start(now + (index * 0.075));
-            oscillator.stop(now + 0.17 + (index * 0.075));
-            oscillator.addEventListener('ended', () => oscillator.disconnect(), { once: true });
-        });
-
-        this.time.delayedCall(320, () => gainNode.disconnect());
     }
 
     _applyMachineSprite(targetImage, scale) {
@@ -8668,24 +7582,6 @@ export default class GameScene extends Phaser.Scene {
         const flowHovered = this._miniMachinePanelHoverPort === 'flow';
         const codeHovered = this._miniMachinePanelHoverPort === 'code';
         const gearHovered = this._miniMachinePanelHoverPort === 'gear';
-
-        if (!hasMachine) {
-            [
-                this._miniGridPort,
-                this._miniFlowPort,
-                this._miniCodePort,
-                this._miniGearPort,
-            ].forEach((port) => {
-                port?.frame
-                    ?.setFillStyle(0x091116, 0.08)
-                    .setStrokeStyle(2, 0x8bb8ff, 0.42)
-                    .setAlpha(alpha);
-                port?.label
-                    ?.setColor('#8fa9b8')
-                    .setAlpha(alpha);
-            });
-            return;
-        }
 
         let gridStroke = 0x8bb8ff;
         let gridFill = 0x243041;
@@ -9531,7 +8427,7 @@ export default class GameScene extends Phaser.Scene {
         const actualOutput = debugState?.actualOutput || expectedOutput;
         const solved = Boolean(debugState?.completed);
         const patchMode = debugState?.phase === 'repair' && !solved;
-        const corrupt = !solved && Number(debugState?.dayStage || 1) === 3 && (debugState?.corruptionCount || 0) > 0;
+        const corrupt = !solved && (debugState?.corruptionCount || 0) > 0;
         const hasMismatch = !solved && Boolean(actualOutput) && actualOutput !== expectedOutput;
         const accentColor = solved
             ? 0x75ffaf

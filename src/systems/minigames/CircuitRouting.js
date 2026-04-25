@@ -153,7 +153,6 @@ function finalizeTile(cell) {
         }
         return;
     }
-    // count === 1: dead-end stub - use a straight that covers the direction
     // count === 1: dead-end stub — use a straight that covers the direction
     cell.type = 'straight';
     cell.rotation = (bits[0] || bits[2]) ? 0 : 1;
@@ -164,8 +163,8 @@ function generateCircuit(spec, rows, cols) {
         Array.from({ length: cols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     );
     const sr = spec.sourceRow ?? spec.sources?.[0]?.row ?? Math.floor(rows / 2) ?? 2;
-    const outputRows = spec.outputSpecs
-        ? spec.outputSpecs.map(s => Number(s.row))
+    const outputRows = spec.outputSpecs 
+        ? spec.outputSpecs.map(s => Number(s.row)) 
         : Object.keys(spec.outputs || {}).map(Number);
 
     outputRows.forEach((outRow, i) => {
@@ -233,8 +232,6 @@ export default class CircuitRouting extends MinigameBase {
         this._selectedInventoryType = null;
         this._inventoryViews = {};
         this._inventoryPanelGfx = null;
-        this._inventoryGhostGfx = null;
-        this._hoveredInventoryCell = null;
         this._voltageHudText = null;
     }
 
@@ -272,8 +269,8 @@ export default class CircuitRouting extends MinigameBase {
         try { this.scene.input.mouse?.disableContextMenu(); } catch {}
         this.rows = Math.max(3, Number(circuit.rows || circuit.tiles?.length || 5));
         this.cols = Math.max(3, Number(circuit.cols || circuit.tiles?.[0]?.length || 5));
-        this.cellSize = Math.max(50, Math.min(66, Math.floor(Math.min(440 / this.cols, 370 / this.rows))));
-        this.boardX = 548 - ((this.cols * this.cellSize) / 2);
+        this.cellSize = Math.max(46, Math.min(64, Math.floor(Math.min(420 / this.cols, 350 / this.rows))));
+        this.boardX = 534 - ((this.cols * this.cellSize) / 2);
         this.boardY = 360 - ((this.rows * this.cellSize) / 2);
         this._specialAction = caseData?.specialAction || null;
         this.evidence = {
@@ -305,21 +302,33 @@ export default class CircuitRouting extends MinigameBase {
         this._outputs = Object.fromEntries(this._outputSpecs.map((outputSpec) => [outputSpec.row, outputSpec.label]));
         this._sourceRow = this._sources[0]?.row ?? circuit.sourceRow ?? 2;
         this._inspectionFault = circuit.progress?.inspectionFault || circuit.inspectionFault || null;
-        this._inventory = { straight: 0, curve: 0, tee: 0, cross: 0 };
-        this._selectedInventoryType = null;
-        this._inventoryViews = {};
-        this._inventoryGhostGfx = null;
-        this._hoveredInventoryCell = null;
         this._repairTargets = this._resolveRepairTargets(circuit);
         this._repairTargetViews = [];
         if (this.evidence.scrapRequired && !this.evidence.reviewed) {
             this.emitEvidence({ reviewed: true });
         }
 
+        // Reset per-instance interaction state on every build so reopening the
+        // diagnostic doesn't carry over selected-piece highlights or accumulate
+        // inventory counts from a previous session.
+        this._inventory = { straight: 0, curve: 0, tee: 0, cross: 0 };
+        this._selectedInventoryType = null;
+
+        // Track whether we hydrated from saved progress. When true, we skip the
+        // initial inventory seed (which pops 2-3 board pieces back into the
+        // tray) — that step is only meant to run on first open, otherwise it
+        // would unwind the player's work each time they reopen the puzzle.
+        let restoredFromProgress = false;
+        let restoredInventory = null;
+
         let tiles, forbiddenList;
         if (Array.isArray(circuit.progress?.tiles) && circuit.progress.tiles.length > 0) {
             tiles = cloneCircuitTiles(circuit.progress.tiles);
             forbiddenList = circuit.forbidden || [];
+            restoredFromProgress = true;
+            if (circuit.progress.inventory && typeof circuit.progress.inventory === 'object') {
+                restoredInventory = circuit.progress.inventory;
+            }
         } else if (circuit.tiles) {
             tiles = cloneCircuitTiles(circuit.tiles);
             forbiddenList = circuit.forbidden || [];
@@ -352,7 +361,14 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
         this._tiles = tiles;
-        this._forbidden = new Set(forbiddenList.map(([x, y]) => `${x},${y}`));
+        // Forbidden cells were the amber-tinted "obstacle" tiles. They no
+        // longer ship as a player-facing mechanic — the puzzle was always
+        // solvable around them, so they read as decorative dead weight.
+        // Force the set empty regardless of what the data layer or saved
+        // progress provides; that keeps every legacy field a no-op without
+        // having to scrub case definitions.
+        forbiddenList = [];
+        this._forbidden = new Set();
         this._tileGfx = [];
 
         // Full-screen input blocker so clicks don't leak to UI below
@@ -451,8 +467,6 @@ export default class CircuitRouting extends MinigameBase {
                 this._tileGfx[y][x] = gfx;
             }
         }
-        this._inventoryGhostGfx = this.scene.add.graphics().setDepth(depth + 7).setVisible(false);
-        this.container.add(this._inventoryGhostGfx);
         this._drawInspectionFault();
 
         // Spider-Man-style HUD additions: voltage meter at top, inventory
@@ -461,11 +475,21 @@ export default class CircuitRouting extends MinigameBase {
         this._buildVoltageHud(depth + 2);
         this._buildInventoryPanel(depth + 2);
 
-        // Seed the inventory by popping a few non-critical path tiles from the
-        // board so there's something in the inventory to place from the
-        // start — this gives puzzles the "assemble the circuit" feel instead
-        // of only rotating pre-placed pieces.
-        this._seedInitialInventory(circuit);
+        // Seed the inventory only on a fresh open. If we hydrated tiles from
+        // saved progress, replay the saved inventory counts instead — running
+        // _seedInitialInventory again would pop additional pieces off the
+        // board and unwind whatever the player had already placed.
+        if (restoredFromProgress) {
+            if (restoredInventory) {
+                Object.entries(restoredInventory).forEach(([type, count]) => {
+                    if (!Object.prototype.hasOwnProperty.call(this._inventory, type)) return;
+                    this._inventory[type] = Math.max(0, Math.floor(Number(count) || 0));
+                });
+            }
+            this._refreshInventoryPanel();
+        } else {
+            this._seedInitialInventory(circuit);
+        }
 
         // Close button — added to the container LAST so it sits on top of all tiles
         // in Phaser's render list and wins input hit-testing reliably.
@@ -756,15 +780,12 @@ export default class CircuitRouting extends MinigameBase {
         bg.on('pointerover', () => {
             const liveTile = this._tiles[y]?.[x];
             const isForbiddenNow = this._forbidden.has(`${x},${y}`);
-            const showGhost = this._canShowInventoryGhost(x, y);
-            if ((!isForbiddenNow && liveTile && liveTile.type !== 'empty' && !liveTile.locked) || showGhost) {
+            if (!isForbiddenNow && liveTile && liveTile.type !== 'empty' && !liveTile.locked) {
                 repaintOct(true);
             }
-            if (showGhost) this._showInventoryGhost(x, y);
         });
         bg.on('pointerout', () => {
             repaintOct(false);
-            this._hideInventoryGhostForCell(x, y);
         });
 
         return tileView;
@@ -946,60 +967,14 @@ export default class CircuitRouting extends MinigameBase {
         gfx.fillCircle(cx, cy, 3.2);
     }
 
-    _canShowInventoryGhost(x, y) {
-        const type = this._selectedInventoryType;
-        const tile = this._tiles?.[y]?.[x];
-        if (!type || !tile) return false;
-        if ((this._inventory[type] || 0) <= 0) return false;
-        if (this._forbidden.has(`${x},${y}`)) return false;
-        return tile.type === 'empty' && tile.locked !== true;
-    }
-
-    _showInventoryGhost(x, y) {
-        if (!this._inventoryGhostGfx || !this._canShowInventoryGhost(x, y)) {
-            this._hideInventoryGhost();
-            return;
-        }
-
-        const type = this._selectedInventoryType;
-        const cx = this.boardX + x * this.cellSize + this.cellSize / 2;
-        const cy = this.boardY + y * this.cellSize + this.cellSize / 2;
-        this._hoveredInventoryCell = { x, y };
-        this._inventoryGhostGfx
-            .clear()
-            .setVisible(true)
-            .setAlpha(0.64);
-        this._drawOctagonFrame(this._inventoryGhostGfx, cx, cy, this.cellSize - 10, {
-            fill: 0x00ffcc,
-            fillAlpha: 0.08,
-            stroke: 0x9ffff0,
-            strokeAlpha: 0.86,
-            strokeWidth: 1.4,
-            chamferRatio: 0.28,
-        });
-        this._drawInventoryPieceIcon(this._inventoryGhostGfx, cx, cy, type, 0x9ffff0);
-    }
-
-    _hideInventoryGhostForCell(x, y) {
-        if (this._hoveredInventoryCell?.x !== x || this._hoveredInventoryCell?.y !== y) return;
-        this._hideInventoryGhost();
-    }
-
-    _hideInventoryGhost() {
-        this._hoveredInventoryCell = null;
-        this._inventoryGhostGfx?.clear().setVisible(false).setAlpha(1);
-    }
-
     _toggleInventorySelection(type) {
         const count = this._inventory[type] || 0;
         if (count <= 0) {
             this._selectedInventoryType = null;
-            this._hideInventoryGhost();
             this._refreshInventoryPanel();
             return;
         }
         this._selectedInventoryType = (this._selectedInventoryType === type) ? null : type;
-        this._hideInventoryGhost();
         this._refreshInventoryPanel();
     }
 
@@ -1018,7 +993,6 @@ export default class CircuitRouting extends MinigameBase {
             if (!Object.prototype.hasOwnProperty.call(this._inventory, tile.type)) return true;
             this._inventory[tile.type] = (this._inventory[tile.type] || 0) + 1;
             this._tiles[y][x] = { type: 'empty', rotation: 0 };
-            this._hideInventoryGhost();
             this._refreshInventoryPanel();
             this._updateAll();
             this._playWireTurnSound?.();
@@ -1036,7 +1010,6 @@ export default class CircuitRouting extends MinigameBase {
             // Full rebuild of this tile's visual state (its pipe graphics was
             // tied to the old empty tile). Cheapest path: re-render via
             // _updateAll which repaints all pipes from _tiles.
-            this._hideInventoryGhost();
             this._refreshInventoryPanel();
             this._updateAll();
             this._playWireTurnSound?.();
@@ -1096,7 +1069,11 @@ export default class CircuitRouting extends MinigameBase {
     _refreshVoltageHud() {
         if (!this._voltageActualText) return;
         const targetCount = this._outputSpecs.length;
-        const powered = this.evidence?.repairedTargets?.length || 0;
+        // Read from the live snapshot built each _updateAll, falling back to
+        // the persisted evidence on first paint before any flow recompute.
+        const powered = this._latestSnapshot?.repairedTargets?.length
+            ?? this.evidence?.repairedTargets?.length
+            ?? 0;
         this._voltageActualText.setText(`${powered} / ${targetCount}`);
         this._voltageTargetText.setText(String(targetCount));
 
@@ -1131,7 +1108,6 @@ export default class CircuitRouting extends MinigameBase {
         // Always rotate forward one quarter-turn per click for clear turn feedback.
         const tweenTargetAngle = tileView.container.angle + 90;
         const finalAngle = targetRotation * 90;
-        // Snap to the previous clean step so the tween always covers exactly 90 degrees,
         // Snap to the previous clean step so the tween always covers exactly 90°,
         // preventing a jump when a rapid click interrupts a mid-animation tween.
         tileView.container.angle = ((targetRotation - 1 + 4) % 4) * 90;
@@ -1237,6 +1213,7 @@ export default class CircuitRouting extends MinigameBase {
 
         return {
             tiles: cloneCircuitTiles(this._tiles),
+            inventory: { ...this._inventory },
             connected,
             missing: [...brokenTargets],
             repairedTargets,
@@ -1328,11 +1305,25 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         if (isForbidden) {
-            pipe.fillStyle(0xffb347, 0.18);
-            pipe.fillRoundedRect(-(this.cellSize / 2) + 8, -(this.cellSize / 2) + 8, this.cellSize - 16, this.cellSize - 16, 12);
-            pipe.lineStyle(4, 0xffcc77, 0.9);
-            pipe.lineBetween(-(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12, (this.cellSize / 2) - 12);
-            pipe.lineBetween((this.cellSize / 2) - 12, -(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12);
+            // Forbidden cells previously rendered a large X across the whole
+            // tile, which read as "this cell matters" — but the X is purely
+            // decorative and the puzzle can usually be solved by routing
+            // around it. The amber octagon frame + corner "?" mark already
+            // signal "blocked" without the heavy X overlay.
+            pipe.fillStyle(0xffb347, 0.10);
+            pipe.fillRoundedRect(
+                -(this.cellSize / 2) + 8,
+                -(this.cellSize / 2) + 8,
+                this.cellSize - 16,
+                this.cellSize - 16,
+                12,
+            );
+            // Diagonal hatching strokes — subtle "no-go" texture instead of
+            // the loud X. Two short parallel slashes in the corners.
+            pipe.lineStyle(2, 0xffcc77, 0.55);
+            const inset = (this.cellSize / 2) - 14;
+            pipe.lineBetween(-inset, -inset + 6, -inset + 6, -inset);
+            pipe.lineBetween(inset - 6, inset, inset, inset - 6);
             return;
         }
         if (tile.type === 'empty') return;
@@ -1427,7 +1418,19 @@ export default class CircuitRouting extends MinigameBase {
 
             while (queue.length) {
                 const { x, y, powerClass } = queue.shift();
-                const stateKey = `${x},${y}:${source.key}:${powerClass}`;
+                // Visit each cell at most once per source. The previous keying
+                // also folded in the incoming powerClass, which let a cell be
+                // re-entered after a downstream filter changed the class —
+                // and that revisit would back-flow the new class through any
+                // cycle, painting upstream wires "mixed" (pink) even though
+                // the source only fed them with neutral. Players read that
+                // as "the orange wire is broken / the wrong colour" because
+                // the target then reports CLASS MISMATCH against the very
+                // class the player ran the source through. Dropping the
+                // class from the dedup key locks each cell to whichever
+                // class first reached it from the source, mirroring how
+                // current actually flows from source toward outputs.
+                const stateKey = `${x},${y}:${source.key}`;
                 if (visitedStates.has(stateKey)) continue;
                 visitedStates.add(stateKey);
 
@@ -1568,18 +1571,17 @@ export default class CircuitRouting extends MinigameBase {
             const feeds = reachedOutputs[view.outputSpec.key] || [];
             const actualPowerClass = deriveFlowDisplayPowerClass(feeds.map((feed) => feed.powerClass || 'neutral'));
             const requiredClass = view.outputSpec.powerClass || 'neutral';
-            const displayClass = actualPowerClass || 'neutral';
+            const displayClass = actualPowerClass || requiredClass;
             const palette = getFlowPowerPalette(displayClass || 'neutral');
-            const requirementPalette = getFlowPowerPalette(requiredClass);
             const pulse = 0.18 + (Math.sin((this._energyPhase * Math.PI * 2) + (Number(view.outputSpec.row) * 0.65)) * 0.08);
             const active = feeds.length > 0;
-            const hazardous = actualPowerClass === 'red';
+            const hazardous = requiredClass === 'red' || actualPowerClass === 'red';
 
-            view.glow?.setFillStyle(palette.tint, 1).setAlpha(active || hazardous ? pulse : 0);
-            view.ring?.setStrokeStyle(2, palette.tint, active || hazardous ? 0.42 + pulse : 0);
-            view.dot?.setFillStyle(active || hazardous ? palette.tint : 0x225533, 1).setScale(active ? 1.02 + (pulse * 0.08) : 1);
-            view.lbl?.setColor(active ? palette.label : requirementPalette.idle);
-            view.req?.setColor(active ? palette.label : requirementPalette.label);
+            view.glow?.setFillStyle(palette.tint, 1).setAlpha(active ? pulse : (hazardous ? 0.18 : 0));
+            view.ring?.setStrokeStyle(2, palette.tint, active ? 0.42 + pulse : (hazardous ? 0.52 : 0));
+            view.dot?.setFillStyle((active || hazardous) ? palette.tint : 0x225533, 1).setScale(active ? 1.02 + (pulse * 0.08) : 1);
+            view.lbl?.setColor(active ? palette.label : palette.idle);
+            view.req?.setColor(palette.label);
         });
 
         Object.values(this._sourceViews).forEach((view) => {
@@ -1646,7 +1648,11 @@ export default class CircuitRouting extends MinigameBase {
 
         this._refreshAnimatedCircuitEffects();
 
-        this._syncCircuitProgress(this._lastResult);
+        // Build the live snapshot once and feed it both to circuit.progress
+        // (used by Game.js) and to the voltage HUD. Previously the HUD read
+        // from `this.evidence`, which is only mutated on close, so the meter
+        // stayed stuck at its initial value during play.
+        this._latestSnapshot = this._syncCircuitProgress(this._lastResult);
         this._refreshVoltageHud?.();
     }
 
@@ -1677,7 +1683,6 @@ export default class CircuitRouting extends MinigameBase {
 
     hide() {
         this._stopCircuitAnimationLoop();
-        this._hideInventoryGhost();
         this._tileGfx?.forEach((row) => {
             row?.forEach((tileView) => {
                 tileView?.rotationTween?.stop();
@@ -1695,8 +1700,6 @@ export default class CircuitRouting extends MinigameBase {
         this._wireFilters = [];
         this._wireFilterMap = new Map();
         this._inspectionFaultGfx = null;
-        this._inventoryGhostGfx = null;
-        this._hoveredInventoryCell = null;
         this._inspectionFault = null;
         this._specialAction = null;
         this._specialActionButton = null;

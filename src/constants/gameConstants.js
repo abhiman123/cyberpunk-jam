@@ -170,11 +170,10 @@ export const SHIFT_CLOCK = Object.freeze({
     inGameMinutesPerAdvanceChunk: 120,
 });
 
-const createIntroSequenceLine = (id, text, voiceAsset = null, options = {}) => Object.freeze({
+const createIntroSequenceLine = (id, text, voiceAsset = null) => Object.freeze({
     id,
     text,
     voiceAsset,
-    tutorialTarget: options.tutorialTarget || null,
 });
 
 const createIntroSequence = ({
@@ -212,17 +211,17 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             postVoiceBody: 'Day 1 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Hey, welcome back. Another day, another penny, am I right?', SOUND_ASSETS.phoneIntroLine1),
-                createIntroSequenceLine('line2', 'You remember the job, right?', SOUND_ASSETS.phoneIntroLine2),
+                createIntroSequenceLine('line2', '...You remember the job, right? First day is simple. If a subsystem is obviously unsalvageable, you scrap it.', SOUND_ASSETS.phoneIntroLine2),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Alright sweet cuz I don\'t.', SOUND_ASSETS.phoneIntroNoLine3),
-                createIntroSequenceLine('line4', 'Good luck, shift ends at 12.', SOUND_ASSETS.phoneIntroNoLine4, { tutorialTarget: 'clock' }),
+                createIntroSequenceLine('line3', 'Alright, sweetie, because I do not.', SOUND_ASSETS.phoneIntroNoLine3),
+                createIntroSequenceLine('line4', 'Day one is just repair versus obvious scrap. Do not invent extra paperwork for yourself.', SOUND_ASSETS.phoneIntroNoLine4),
             ],
             no: [
-                createIntroSequenceLine('line3', 'Alright, see this? The rulebook is the job.', SOUND_ASSETS.phoneIntroYesLine3, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line4', 'Repair what can be repaired. Scrap what is clearly done for.', SOUND_ASSETS.phoneIntroYesLine4, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line5', 'Today is just solve it or scrap it. Easy enough.', SOUND_ASSETS.phoneIntroYesLine5, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line6', 'Good luck, shift ends at 12.', SOUND_ASSETS.phoneIntroYesLine6, { tutorialTarget: 'clock' }),
+                createIntroSequenceLine('line3', 'Alright, see this? The rulebook only cares about one thing today: can the subsystem even be saved.', SOUND_ASSETS.phoneIntroYesLine3),
+                createIntroSequenceLine('line4', 'If the gear is cracked, the wire route is severed, or the board has an orphan cell, you scrap it. Programming jobs should run clean on day one if they are repairable at all.', SOUND_ASSETS.phoneIntroYesLine4),
+                createIntroSequenceLine('line5', 'If it is broken but still repairable, you solve the puzzle and file the unit clean. Today is about learning the work, not chasing output drift.', SOUND_ASSETS.phoneIntroYesLine5),
+                createIntroSequenceLine('line6', 'Good luck. Shift ends at noon.', SOUND_ASSETS.phoneIntroYesLine6),
             ],
         }),
         '2-1': createIntroSequence({
@@ -232,16 +231,16 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             postVoiceBody: 'Day 2 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Morning, honey. Company pushed a fresh directive while you were asleep.'),
-                createIntroSequenceLine('line2', 'You know the new rule, right? Today the puzzle can work and still fail compliance.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line2', 'You know the new rule, right? Today the puzzle can work and still fail compliance.'),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Perfect. Today you are not just repair. You are inspection.', null, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line4', 'If the subsystem breaks protocol, carries a rejection mark, drinks the wrong power, or shows a corrupted board marker, you scrap it anyway.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line3', 'Perfect. Today you are not just repair. You are inspection.'),
+                createIntroSequenceLine('line4', 'If the subsystem breaks protocol, carries a rejection mark, drinks the wrong power, or shows a corrupted board marker, you scrap it anyway.'),
             ],
             no: [
-                createIntroSequenceLine('line3', 'Then listen. Day two is compliance verification.', null, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line4', 'Programming outputs must be exact. Gears cannot carry contraband marks. Required wire targets cannot take the wrong power class. Board markers have to be valid and readable.', null, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line5', 'It can look almost right and still be scrap. That is the point.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line3', 'Then listen. Day two is compliance verification.'),
+                createIntroSequenceLine('line4', 'Programming outputs must be exact. Gears cannot carry contraband marks. Required wire targets cannot take the wrong power class. Board markers have to be valid and readable.'),
+                createIntroSequenceLine('line5', 'It can look almost right and still be scrap. That is the point.'),
             ],
         }),
         '3-1': createIntroSequence({
@@ -251,16 +250,16 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             postVoiceBody: 'Day 3 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Hey, sweetheart. Final day now. The floor got meaner.'),
-                createIntroSequenceLine('line2', 'You know the new rule, right? If the subsystem shows hazardous instability, contamination, or unsafe discharge, you scrap it.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line2', 'You know the new rule, right? If the subsystem shows hazardous instability, contamination, or unsafe discharge, you scrap it.'),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Good. If it sparks red, crawls wrong, or starts shaking like it wants a witness, do not be brave.', null, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line4', 'You are here to classify danger, not survive it.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line3', 'Good. If it sparks red, crawls wrong, or starts shaking like it wants a witness, do not be brave.'),
+                createIntroSequenceLine('line4', 'You are here to classify danger, not survive it.'),
             ],
             no: [
-                createIntroSequenceLine('line3', 'Then listen close. Day three is hazard control.', null, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line4', 'Green debugger bug with red sparks? Scrap. Overtorqued drivetrain throwing red discharge? Scrap. Power module flashing red from bad load? Scrap. Board region glowing red? Scrap.', null, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line5', 'Today the rulebook stops sounding human for a reason.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line3', 'Then listen close. Day three is hazard control.'),
+                createIntroSequenceLine('line4', 'Green debugger bug with red sparks? Scrap. Overtorqued drivetrain throwing red discharge? Scrap. Power module flashing red from bad load? Scrap. Board region glowing red? Scrap.'),
+                createIntroSequenceLine('line5', 'Today the rulebook stops sounding human for a reason.'),
             ],
         }),
         '4-1': createIntroSequence({
@@ -270,14 +269,14 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             postVoiceBody: 'Day 4 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Look at you. Still here.'),
-                createIntroSequenceLine('line2', 'Same hazard rules as yesterday. If it looks unstable, contaminated, or dangerous, you scrap it.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line2', 'Same hazard rules as yesterday. If it looks unstable, contaminated, or dangerous, you scrap it.'),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Good. Then trust the warning signs before you trust the machine.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line3', 'Good. Then trust the warning signs before you trust the machine.'),
             ],
             no: [
-                createIntroSequenceLine('line3', 'Quick version. If the machine starts looking wrong in a dangerous way, do not get sentimental.', null, { tutorialTarget: 'rulebook' }),
-                createIntroSequenceLine('line4', 'Unsafe software, unsafe load, unsafe motion, unsafe board. Scrap it and keep moving.', null, { tutorialTarget: 'rulebook' }),
+                createIntroSequenceLine('line3', 'Quick version. If the machine starts looking wrong in a dangerous way, do not get sentimental.'),
+                createIntroSequenceLine('line4', 'Unsafe software, unsafe load, unsafe motion, unsafe board. Scrap it and keep moving.'),
             ],
         }),
     }),
@@ -312,7 +311,7 @@ export const MACHINE_PUZZLE = Object.freeze({
     overlayCellSize: 54,
     overlayTableGap: 34,
     overlayTableMinWidth: 520,
-    overlayTablePadding: 43,
+    overlayTablePadding: 38,
     dominoWidth: 64,
     dominoHeight: 116,
     dominoHitPaddingX: 8,

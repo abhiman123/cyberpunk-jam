@@ -96,10 +96,3 @@ export function setMusicVolume(value) {
     return updateGameSettings({ musicVolume: value });
 }
 
-export function isMusicEnabled() {
-    return getMusicVolume() > 0;
-}
-
-export function toggleMusicEnabled() {
-    return updateGameSettings({ musicEnabled: !isMusicEnabled() });
-}

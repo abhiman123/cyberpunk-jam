@@ -249,21 +249,16 @@ export default class MachinePuzzleOverlay {
         this._cellViews.forEach((cell) => {
             cell.previewTween?.stop();
             cell.matchTween?.stop();
-            cell.baseRect.destroy();
-            cell.matchRect.destroy();
-            cell.previewRect.destroy();
-            cell.valueText.destroy();
         });
         this._cellViews = [];
         this._cellViewMap.clear();
         this._groupLabelLayer.removeAll(true);
 
-        this._dominoViews.forEach((domino) => domino.container.destroy(true));
         this._dominoViews = [];
         this._dominoViewMap.clear();
 
-        this._gridLayer.removeAll(false);
-        this._dominoLayer.removeAll(false);
+        this._gridLayer.removeAll(true);
+        this._dominoLayer.removeAll(true);
     }
 
     _layoutPuzzle() {
@@ -554,98 +549,78 @@ export default class MachinePuzzleOverlay {
             dominoView.centerLabel.setVisible(false).setText('');
         }
 
-        if (dominoView.dominoState.firstOptionAmount > 6) {
+        if (dominoView.dominoState.firstOptionAmount > 9) {
             dominoView.topLabel.setVisible(true).setText(String(dominoView.dominoState.firstOptionAmount));
         } else {
             dominoView.topLabel.setVisible(false);
         }
 
-        if (dominoView.dominoState.secondOptionAmount > 6) {
+        if (dominoView.dominoState.secondOptionAmount > 9) {
             dominoView.bottomLabel.setVisible(true).setText(String(dominoView.dominoState.secondOptionAmount));
         } else {
             dominoView.bottomLabel.setVisible(false);
         }
     }
 
-    _drawCircuitLine(graphics, startX, startY, endX, endY, color, width, alpha = 1) {
-        graphics.lineStyle(width, color, alpha);
-        graphics.beginPath();
-        graphics.moveTo(startX, startY);
-        graphics.lineTo(endX, endY);
-        graphics.strokePath();
-    }
-
-    _drawCircuitRing(graphics, x, y, radius, color, width, alpha = 1, centerDot = false) {
-        graphics.lineStyle(width, color, alpha);
-        graphics.strokeCircle(x, y, radius);
-        if (centerDot) {
-            graphics.fillStyle(color, alpha);
-            graphics.fillCircle(x, y, Math.max(1, radius * 0.28));
-        }
-    }
-
-    _drawCircuitPipPattern(graphics, count, sectionOffsetY, color, { glow = false } = {}) {
-        const lineWidth = glow ? 8 : 4;
-        const ringWidth = glow ? 6 : 3;
-        const alpha = glow ? 0.28 : 1;
-
-        switch (count) {
-        case 0:
-            this._drawCircuitLine(graphics, -12, sectionOffsetY - 14, -12, sectionOffsetY + 14, color, lineWidth, alpha);
-            this._drawCircuitLine(graphics, 12, sectionOffsetY - 14, 12, sectionOffsetY + 14, color, lineWidth, alpha);
-            break;
-        case 1:
-            this._drawCircuitRing(graphics, 0, sectionOffsetY, glow ? 18 : 16, color, ringWidth, alpha);
-            break;
-        case 2:
-            this._drawCircuitLine(graphics, -20, sectionOffsetY + 6, -4, sectionOffsetY + 22, color, lineWidth, alpha);
-            this._drawCircuitLine(graphics, -4, sectionOffsetY - 8, 12, sectionOffsetY + 8, color, lineWidth, alpha);
-            this._drawCircuitLine(graphics, 12, sectionOffsetY - 22, 28, sectionOffsetY - 6, color, lineWidth, alpha);
-            break;
-        case 3:
-            this._drawCircuitRing(graphics, -14, sectionOffsetY - 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
-            this._drawCircuitRing(graphics, 14, sectionOffsetY - 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
-            this._drawCircuitRing(graphics, 0, sectionOffsetY + 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
-            break;
-        case 4:
-            this._drawCircuitLine(graphics, -22, sectionOffsetY, 22, sectionOffsetY, color, lineWidth, alpha);
-            this._drawCircuitLine(graphics, 0, sectionOffsetY - 22, 0, sectionOffsetY + 22, color, lineWidth, alpha);
-            this._drawCircuitRing(graphics, 0, sectionOffsetY, glow ? 10 : 8, color, ringWidth, alpha, !glow);
-            break;
-        default:
-            break;
-        }
-    }
-
     _drawPips(graphics, count, isTopHalf, shouldGlow, glowColor = 0xfff2a3, pipColor = 0xf4d850) {
         if (!count || count <= 0) return;
 
-        const sectionOffsetY = isTopHalf ? -(MACHINE_PUZZLE.dominoHeight / 4) : (MACHINE_PUZZLE.dominoHeight / 4);
+        // Traditional NYT-style domino pip arrangements.
+        // Coordinates are offsets within a single half-tile (approximately
+        // 56×56 px) centered on the section center.
+        const dx = 14;
+        const dy = 14;
         const pipLayouts = {
             1: [{ x: 0, y: 0 }],
-            2: [{ x: -15, y: -18 }, { x: 15, y: 18 }],
-            3: [{ x: -15, y: -18 }, { x: 0, y: 0 }, { x: 15, y: 18 }],
-            4: [{ x: -15, y: -18 }, { x: 15, y: -18 }, { x: -15, y: 18 }, { x: 15, y: 18 }],
-            5: [{ x: -15, y: -18 }, { x: 15, y: -18 }, { x: 0, y: 0 }, { x: -15, y: 18 }, { x: 15, y: 18 }],
-            6: [{ x: -15, y: -18 }, { x: 15, y: -18 }, { x: -15, y: 0 }, { x: 15, y: 0 }, { x: -15, y: 18 }, { x: 15, y: 18 }],
+            2: [{ x: -dx, y: -dy }, { x: dx, y: dy }],
+            3: [{ x: -dx, y: -dy }, { x: 0, y: 0 }, { x: dx, y: dy }],
+            4: [
+                { x: -dx, y: -dy }, { x: dx, y: -dy },
+                { x: -dx, y: dy }, { x: dx, y: dy },
+            ],
+            5: [
+                { x: -dx, y: -dy }, { x: dx, y: -dy },
+                { x: 0, y: 0 },
+                { x: -dx, y: dy }, { x: dx, y: dy },
+            ],
+            6: [
+                { x: -dx, y: -dy }, { x: dx, y: -dy },
+                { x: -dx, y: 0 }, { x: dx, y: 0 },
+                { x: -dx, y: dy }, { x: dx, y: dy },
+            ],
         };
-        const visualCount = Math.max(0, Math.min(6, Math.floor(Number(count) || 0)));
-        const localPositions = pipLayouts[visualCount] || pipLayouts[6];
-        const pipCount = Math.min(visualCount, localPositions.length);
+
+        const positions = pipLayouts[Math.min(6, Math.max(1, Math.floor(count)))] || [];
+        if (positions.length === 0) return;
+
+        const sectionOffsetY = isTopHalf ? -(MACHINE_PUZZLE.dominoHeight / 4) : (MACHINE_PUZZLE.dominoHeight / 4);
+        const pipRadius = 5.5;
+        const outerRadius = pipRadius + 1.5;
 
         if (shouldGlow) {
-            graphics.fillStyle(glowColor, 0.32);
-            for (let index = 0; index < pipCount; index++) {
-                const pip = localPositions[index];
-                graphics.fillCircle(pip.x, sectionOffsetY + pip.y, 9);
-            }
+            graphics.fillStyle(glowColor, 0.4);
+            positions.forEach((pip) => {
+                graphics.fillCircle(pip.x, sectionOffsetY + pip.y, pipRadius + 4);
+            });
         }
 
+        // Outer ring for a crisp NYT-style edge.
+        graphics.fillStyle(0x000000, 0.35);
+        positions.forEach((pip) => {
+            graphics.fillCircle(pip.x, sectionOffsetY + pip.y + 1, outerRadius);
+        });
+
+        // Pip core.
         graphics.fillStyle(pipColor, 1);
-        for (let index = 0; index < pipCount; index++) {
-            const pip = localPositions[index];
-            graphics.fillCircle(pip.x, sectionOffsetY + pip.y, 5);
-        }
+        positions.forEach((pip) => {
+            graphics.fillCircle(pip.x, sectionOffsetY + pip.y, pipRadius);
+        });
+
+        // Highlight for depth.
+        graphics.fillStyle(0xffffff, 0.35);
+        positions.forEach((pip) => {
+            graphics.fillCircle(pip.x - 1.4, sectionOffsetY + pip.y - 1.4, pipRadius / 3);
+        });
     }
 
     _getDominoGlowState(dominoView) {
