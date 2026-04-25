@@ -5111,6 +5111,10 @@ export default class GameScene extends Phaser.Scene {
         this._machineBlueprintLabelContainer = this.add.container(0, 0).setVisible(false);
         this._conveyorContainer.add(this._machineBlueprintLabelContainer);
 
+        this._trapdoorSprite = this.add.image(MACHINE_PRESENTATION.conveyorTargetX, 450, 'trapdoor_0')
+            .setDepth(18)
+            .setVisible(false);
+
         this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 490).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText = this.add.text(0, 115, '', {
@@ -7029,38 +7033,53 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        const exitTween = this._pendingExitAction === 'scrap'
-            ? {
-                targets: this._unitContainer,
-                y: 860,
-                angle: -6,
-                alpha: 0.22,
-                duration: 520,
-                ease: 'Cubic.In',
-            }
-            : {
-                targets: this._unitContainer,
-                x: MACHINE_PRESENTATION.conveyorExitX,
+        if (this._pendingExitAction === 'scrap' && this._trapdoorSprite) {
+            // Whole sequence must finish <700ms — _advanceCase calls
+            // _scheduleNextCase(700) synchronously, and clearUnitPresentation
+            // (run from this onComplete) toggles visibility off, so a slow
+            // exit animation will hide the next robot after it spawns.
+            this._trapdoorSprite.setTexture('trapdoor_0').setVisible(true);
+            this.time.delayedCall(50,  () => this._trapdoorSprite?.setTexture('trapdoor_1'));
+            this.time.delayedCall(100, () => this._trapdoorSprite?.setTexture('trapdoor_2'));
+            this.time.delayedCall(150, () => this._trapdoorSprite?.setTexture('trapdoor_3'));
+
+            this.time.delayedCall(150, () => {
+                this.tweens.add({
+                    targets: this._unitContainer,
+                    y: 760,
+                    alpha: 0,
+                    duration: 300,
+                    ease: 'Cubic.In',
+                });
+            });
+
+            this.time.delayedCall(450, () => this._trapdoorSprite?.setTexture('trapdoor_2'));
+            this.time.delayedCall(500, () => this._trapdoorSprite?.setTexture('trapdoor_1'));
+            this.time.delayedCall(550, () => this._trapdoorSprite?.setTexture('trapdoor_0'));
+            this.time.delayedCall(600, () => {
+                this._trapdoorSprite?.setVisible(false);
+                onComplete?.();
+            });
+            return;
+        }
+
+        const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorExitX - this._unitContainer.x);
+        const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
+        if (conveyorLayers.length > 0) {
+            this._conveyorAnimTween?.stop();
+            this._conveyorAnimTween = this.tweens.add({
+                targets: conveyorLayers,
+                tilePositionX: `+=${travelDistance}`,
                 duration: 500,
                 ease: 'Linear',
-            };
-
-        if (this._pendingExitAction !== 'scrap') {
-            const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorExitX - this._unitContainer.x);
-            const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
-            if (conveyorLayers.length > 0) {
-                this._conveyorAnimTween?.stop();
-                this._conveyorAnimTween = this.tweens.add({
-                    targets: conveyorLayers,
-                    tilePositionX: `+=${travelDistance}`,
-                    duration: 500,
-                    ease: 'Linear',
-                });
-            }
+            });
         }
 
         this.tweens.add({
-            ...exitTween,
+            targets: this._unitContainer,
+            x: MACHINE_PRESENTATION.conveyorExitX,
+            duration: 500,
+            ease: 'Linear',
             onComplete,
         });
     }

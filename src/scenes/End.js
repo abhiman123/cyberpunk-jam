@@ -308,10 +308,10 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _buildActors() {
-        // Source asset is 128x128 with a 5x nearest upscale already baked in (640x640).
-        // 0.44 brings the rendered sprite to ~280px tall — fits on the catwalk.
+        // Source asset (Robomanager.png) is 320x195, 5x upscaled to 1600x975.
+        // 0.29 brings the rendered sprite to ~280px tall — fits on the catwalk.
         this._managerSprite = this.add.image(1440, 360, 'manager_robot')
-            .setScale(0.44)
+            .setScale(0.29)
             .setDepth(10)
             .setVisible(false);
         // Umbrella placeholder is 120x180; original 1.4 was reasonable for that base.

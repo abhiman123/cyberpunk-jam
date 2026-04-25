@@ -38,7 +38,7 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_future_lounge_chair_source', 'Untitled_Artwork.png');
         this.load.image('family_photo_source', 'Untitled_Artwork2.png');
         this.load.image('manager_human_source', 'Untitled_Artwork4.png');
-        this.load.image('manager_robot_source', 'Untitled_Artwork3.png');
+        this.load.image('manager_robot_source', 'Robomanager.png');
         this.load.image('mainview_bottom_source', 'bottomLayer.png');
         this.load.image('mainview_second_source', 'secondlayer.png');
         this.load.image('mainview_lightradiance_source', 'lightradiance.png');
@@ -49,6 +49,10 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('btn_accept_source', 'Green.png');
         this.load.image('track_and_discus_robot_source', 'Tennis.png');
         this.load.image('track_and_discus_robot_close_source', 'TennisClose.png');
+        this.load.image('trapdoor_0_source', 'Trapdoor0.png');
+        this.load.image('trapdoor_1_source', 'Trapdoor_1.png');
+        this.load.image('trapdoor_2_source', 'Trapdoor2.png');
+        this.load.image('trapdoor_3_source', 'Trapdoor_3.png');
 
         // Pixel art backgrounds
         this.load.image('bg_inspectview', 'inspectview.jpeg');
@@ -62,6 +66,7 @@ export default class BootScene extends Phaser.Scene {
         this._createFamilyPhotoFromSource();
         this._createManagerHumanFromSource();
         this._createManagerRobotFromSource();
+        this._createTrapdoorFramesFromSource();
         this._generatePlaceholders();
         this.scene.start('Title');
     }
@@ -99,6 +104,12 @@ export default class BootScene extends Phaser.Scene {
 
     _createManagerRobotFromSource() {
         this._createNearestUpscaledTexture('manager_robot_source', 'manager_robot', 5);
+    }
+
+    _createTrapdoorFramesFromSource() {
+        for (let i = 0; i < 4; i++) {
+            this._createNearestUpscaledTexture(`trapdoor_${i}_source`, `trapdoor_${i}`, 2);
+        }
     }
 
     _createCroppedUpscaledTexture(sourceKey, targetKey, integerScale, crop) {
