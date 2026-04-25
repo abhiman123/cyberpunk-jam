@@ -1418,7 +1418,19 @@ export default class CircuitRouting extends MinigameBase {
 
             while (queue.length) {
                 const { x, y, powerClass } = queue.shift();
-                const stateKey = `${x},${y}:${source.key}:${powerClass}`;
+                // Visit each cell at most once per source. The previous keying
+                // also folded in the incoming powerClass, which let a cell be
+                // re-entered after a downstream filter changed the class —
+                // and that revisit would back-flow the new class through any
+                // cycle, painting upstream wires "mixed" (pink) even though
+                // the source only fed them with neutral. Players read that
+                // as "the orange wire is broken / the wrong colour" because
+                // the target then reports CLASS MISMATCH against the very
+                // class the player ran the source through. Dropping the
+                // class from the dedup key locks each cell to whichever
+                // class first reached it from the source, mirroring how
+                // current actually flows from source toward outputs.
+                const stateKey = `${x},${y}:${source.key}`;
                 if (visitedStates.has(stateKey)) continue;
                 visitedStates.add(stateKey);
 
