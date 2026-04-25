@@ -1862,13 +1862,9 @@ export default class GameScene extends Phaser.Scene {
             fontSize: '23px',
             glowColor: 0xffdddd,
         });
-        const infoButton = this._createPhoneChannelButton(212, 160, 'INFO', 30);
-        const chatButton = this._createPhoneChannelButton(247, 160, 'CHAT', 30);
-        // The alert tab used to render a single '!' glyph in 7px Arial Black
-        // — at that size it looked like a colon (the dot below the bar was
-        // barely visible). Use 'ALERT' with the same width as the other tabs
-        // so the row reads as three matching channels.
-        const alertButton = this._createPhoneChannelButton(282, 160, 'ALERT', 30);
+        const infoButton = this._createPhoneChannelButton(214, 160, 'INFO', 30);
+        const chatButton = this._createPhoneChannelButton(249, 160, 'CHAT', 30);
+        const alertButton = this._createPhoneChannelButton(284, 160, '!', 18);
 
         accept.bg.on('pointerover', () => this._setPhoneButtonHover(accept, true));
         accept.bg.on('pointerout', () => this._setPhoneButtonHover(accept, false));
@@ -5038,23 +5034,24 @@ export default class GameScene extends Phaser.Scene {
     _buildConveyorScreen() {
         this._conveyorContainer = this.add.container(0, 0).setDepth(10);
 
-        // The "fam" silhouettes (fam1/fam2) used to live on the catwalk as
-        // background characters. They were both interactively draggable, which
-        // meant the player could grab them and drop them onto puzzle overlays
-        // (Flow, Pips, etc.) — the dragged sprite would render on top of the
-        // puzzle bounds and visually "break" the puzzle. Both keys are removed
-        // from the layer list so the figures never spawn.
         const mainViewLayerKeys = [
             'mainview_bottom',
             'mainview_second',
             'mainview_lightradiance',
             'mainview_lightlayer',
+            'mainview_fam2',
+            'mainview_fam1',
         ];
-        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key));
+        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
         if (!hasMainViewLayers) {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
         }
+        // Fam images are cropped tight sprites; game coords = source_center * (1280/320, 720/195)
+        const famPositions = {
+            mainview_fam1: { x: 202, y: 659 },
+            mainview_fam2: { x: 278, y: 669 },
+        };
 
         this._mainViewLayers = {};
         mainViewLayerKeys.forEach((key) => {
@@ -5064,6 +5061,15 @@ export default class GameScene extends Phaser.Scene {
             if (key === 'mainview_bottom' || key === 'mainview_second') {
                 const texFrame = this.textures.getFrame(key);
                 layer = this.add.tileSprite(640, 360, texFrame.width, texFrame.height, key).setDisplaySize(1280, 720);
+            } else if (famPositions[key]) {
+                const pos = famPositions[key];
+                layer = this.add.image(pos.x, pos.y, key).setScale(1);
+                layer.setInteractive({ useHandCursor: true, draggable: true });
+                this.input.setDraggable(layer);
+                layer.on('drag', (pointer, dragX, dragY) => {
+                    layer.x = dragX;
+                    layer.y = dragY;
+                });
             } else {
                 layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
             }

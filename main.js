@@ -16,20 +16,12 @@ Phaser.GameObjects.Text.prototype.setStyle = function (style) {
     return _origTextStyle.call(this, style);
 };
 
-// We deliberately do NOT enable Phaser's `pixelArt: true` mode. It forces every
-// texture to NEAREST sampling globally, which gives crisp pixel art at the cost
-// of jagged, aliased text. Pixel-art textures already opt into NEAREST filtering
-// individually in Boot.js (`setFilter(Phaser.Textures.FilterMode.NEAREST)`), so
-// flipping antialias on here lets text smooth correctly while sprites stay
-// crisp. `roundPixels: true` keeps sprite positions snapped to integer pixels
-// so the pixel art doesn't wobble between sub-pixel positions.
 const config = {
     type: Phaser.AUTO,
     width: 1280,
     height: 720,
-    antialias: true,
-    pixelArt: false,
-    roundPixels: true,
+    antialias: false,
+    pixelArt: true,
     resolution: window.devicePixelRatio,
     backgroundColor: '#0a0a0a',
     scene: [BootScene, TitleScene, GameScene, SummaryScene, TransitionScene, EndScene],
