@@ -174,13 +174,12 @@ export default class MachinePuzzleOverlay {
         this._clearDynamic();
         this._layoutPuzzle();
 
-        const subtitle = [
-            machineVariant.openingDialogue,
-            machineVariant.questionDialogue?.prompt ? `Q: ${machineVariant.questionDialogue.prompt}` : '',
-        ].filter(Boolean).join('  //  ');
-
+        // Bot dialogue (opening line + question prompt) is delivered through
+        // the FactoryLink chat panel (see Game.js#_buildMachineConversationSnapshot)
+        // — the puzzle overlay deliberately does NOT echo it here, otherwise
+        // it competes with the chat surface and feels like a "speech bubble".
         this._titleText.setText(`${machineVariant.name.toUpperCase()} GRID`);
-        this._subtitleText.setText(subtitle || 'Align the charge cells and clear the unit.');
+        this._subtitleText.setText('Align the charge cells and clear the unit.');
         this._refreshSpecialAction();
 
         this._root.setVisible(true);

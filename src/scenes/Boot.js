@@ -43,8 +43,6 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('mainview_second_source', 'secondlayer.png');
         this.load.image('mainview_lightradiance_source', 'lightradiance.png');
         this.load.image('mainview_lightlayer_source', 'lightlayer.png');
-        this.load.image('mainview_fam2_source', 'Fam2.png');
-        this.load.image('mainview_fam1_source', 'Fam1.png');
         this.load.image('btn_scrap_source', 'Red.png');
         this.load.image('btn_accept_source', 'Green.png');
         this.load.image('track_and_discus_robot_source', 'Tennis.png');
@@ -71,8 +69,6 @@ export default class BootScene extends Phaser.Scene {
         this._createNearestUpscaledTexture('mainview_second_source', 'mainview_second', 4);
         this._createNearestUpscaledTexture('mainview_lightradiance_source', 'mainview_lightradiance', 4);
         this._createNearestUpscaledTexture('mainview_lightlayer_source', 'mainview_lightlayer', 4);
-        this._createCroppedUpscaledTexture('mainview_fam2_source', 'mainview_fam2', 4, { sx: 60, sy: 173, sw: 20, sh: 17 });
-        this._createCroppedUpscaledTexture('mainview_fam1_source', 'mainview_fam1', 4, { sx: 38, sy: 172, sw: 26, sh: 14 });
         this._createCroppedUpscaledTexture('btn_scrap_source', 'btn_scrap', 4, { sx: 0, sy: 0, sw: 54, sh: 20 });
         this._createCroppedUpscaledTexture('btn_accept_source', 'btn_accept', 4, { sx: 0, sy: 0, sw: 54, sh: 20 });
     }
