@@ -1270,11 +1270,25 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         if (isForbidden) {
-            pipe.fillStyle(0xffb347, 0.18);
-            pipe.fillRoundedRect(-(this.cellSize / 2) + 8, -(this.cellSize / 2) + 8, this.cellSize - 16, this.cellSize - 16, 12);
-            pipe.lineStyle(4, 0xffcc77, 0.9);
-            pipe.lineBetween(-(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12, (this.cellSize / 2) - 12);
-            pipe.lineBetween((this.cellSize / 2) - 12, -(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12);
+            // Forbidden cells previously rendered a large X across the whole
+            // tile, which read as "this cell matters" — but the X is purely
+            // decorative and the puzzle can usually be solved by routing
+            // around it. The amber octagon frame + corner "?" mark already
+            // signal "blocked" without the heavy X overlay.
+            pipe.fillStyle(0xffb347, 0.10);
+            pipe.fillRoundedRect(
+                -(this.cellSize / 2) + 8,
+                -(this.cellSize / 2) + 8,
+                this.cellSize - 16,
+                this.cellSize - 16,
+                12,
+            );
+            // Diagonal hatching strokes — subtle "no-go" texture instead of
+            // the loud X. Two short parallel slashes in the corners.
+            pipe.lineStyle(2, 0xffcc77, 0.55);
+            const inset = (this.cellSize / 2) - 14;
+            pipe.lineBetween(-inset, -inset + 6, -inset + 6, -inset);
+            pipe.lineBetween(inset - 6, inset, inset, inset - 6);
             return;
         }
         if (tile.type === 'empty') return;
