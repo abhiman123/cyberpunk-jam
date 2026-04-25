@@ -4993,12 +4993,57 @@ function pickGridTransformKey(_gridOption, randomFn) {
     return pickRandomEntry(GRID_TRANSFORM_KEYS, randomFn) || 'none';
 }
 
-function buildWeightedGridPool(gridOptions) {
+function countOpenGridCells(gridOption) {
+    if (!gridOption || !Array.isArray(gridOption.grid)) return 0;
+    let count = 0;
+    for (const row of gridOption.grid) {
+        if (!Array.isArray(row)) continue;
+        for (const cell of row) {
+            if (cell !== CELL_WALL) count += 1;
+        }
+    }
+    return count;
+}
+
+function buildWeightedGridPool(gridOptions, stage = null) {
     if (!Array.isArray(gridOptions)) return [];
 
-    return gridOptions
-        .filter((gridOption) => Boolean(gridOption) && (gridOption.impossible || isPlayableGridOption(gridOption)))
-        .flatMap((gridOption) => (gridOption.impossible ? [gridOption] : [gridOption, gridOption]));
+    const playable = gridOptions
+        .filter((gridOption) => Boolean(gridOption) && (gridOption.impossible || isPlayableGridOption(gridOption)));
+
+    // Without a stage, fall back to original behavior (each playable option
+    // counted twice so it can vary).
+    if (stage == null) {
+        return playable.flatMap((gridOption) => (gridOption.impossible ? [gridOption] : [gridOption, gridOption]));
+    }
+
+    const normalizedStage = Math.max(1, Number(stage) || 1);
+
+    // Per-day weighting: bias toward smaller grids on Day 1, larger grids on
+    // Day 3 so cell count visibly scales with the day. We keep impossible
+    // (scrap) options at weight 1 so they stay reachable.
+    return playable.flatMap((gridOption) => {
+        if (gridOption.impossible) return [gridOption];
+        const cellCount = countOpenGridCells(gridOption);
+        let weight;
+        if (normalizedStage <= 1) {
+            // Day 1: favor 5-7 cell boards.
+            if (cellCount <= 7) weight = 4;
+            else if (cellCount <= 9) weight = 2;
+            else weight = 1;
+        } else if (normalizedStage === 2) {
+            // Day 2: favor 7-9 cell boards.
+            if (cellCount <= 6) weight = 1;
+            else if (cellCount <= 9) weight = 4;
+            else weight = 2;
+        } else {
+            // Day 3+: favor 9+ cell boards.
+            if (cellCount <= 7) weight = 1;
+            else if (cellCount <= 9) weight = 2;
+            else weight = 4;
+        }
+        return Array.from({ length: weight }, () => gridOption);
+    });
 }
 
 function isChargeCode(value) {
@@ -6433,8 +6478,9 @@ function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
 
     // --- 3. Choose which cells become charge constraints ---
     // We want a mix: 40-70% of pairs have at least one charge half.
-    // Day 1: fewer, Day 3+: more.
-    const chargeRatio = stage === 1 ? 0.4 : stage === 2 ? 0.55 : 0.7;
+    // Day 1 stays airy (~25% of pairs get a charge half); Day 2 doubles up;
+    // Day 3 saturates so most pairs carry a constraint.
+    const chargeRatio = stage === 1 ? 0.25 : stage === 2 ? 0.5 : 0.75;
     const chargeMap = new Map(existingChargeMap); // start from any pre-existing charges
 
     // Shuffle pairs for random charge selection.
@@ -6500,9 +6546,10 @@ function injectPerCellComparators(grid, pipMap, randomFn, stage = 1) {
 
     if (candidates.length === 0) return out;
 
-    // Density: aim for ~35-55% of eligible empty cells to get a comparator.
-    // Stage 1: 0.35, 2: 0.45, 3+: 0.55.
-    const ratio = stage >= 3 ? 0.55 : stage === 2 ? 0.45 : 0.35;
+    // Per-day comparator density. Day 1 keeps it sparse (~20%) so the board
+    // breathes; Day 2 ramps to ~45%; Day 3 packs the board (~65%) so most
+    // empty cells carry a `<N` / `>N` rule.
+    const ratio = stage >= 3 ? 0.65 : stage === 2 ? 0.45 : 0.20;
     const target = Math.max(1, Math.round(candidates.length * ratio));
 
     // Shuffle (Fisher–Yates with seeded randomFn).
@@ -6780,12 +6827,14 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
         : greedyTileGrid(derivedGrid, openKeys, randomFn);
 
     // -- Equality links (Day 1+) FIRST so their usedCells set is populated --
-    // Denser on later stages so the board feels fuller.
-    const equalityCount = normalizedStage >= 3 ? 3 : normalizedStage === 2 ? 2 : 1;
+    // Day 1 is intentionally airy (1 link); Day 2 adds a second; Day 3 cranks
+    // up to 4 so the board feels visibly busier with rules.
+    const equalityCount = normalizedStage >= 3 ? 4 : normalizedStage === 2 ? 2 : 1;
     let resultGrid = injectDerivedEqualityLinks(derivedGrid, pairs, chargeMap, randomFn, equalityCount);
 
     // -- Not-equal links (Day 2+) SECOND --
-    const notEqualCount = normalizedStage >= 3 ? 2 : normalizedStage === 2 ? 1 : 0;
+    // Day 1 has none; Day 2 introduces 1; Day 3 adds 2-3 more for spice.
+    const notEqualCount = normalizedStage >= 3 ? 3 : normalizedStage === 2 ? 1 : 0;
     if (notEqualCount > 0) {
         resultGrid = injectDerivedNotEqualLinks(resultGrid, pairs, chargeMap, randomFn, notEqualCount);
     }
@@ -7059,7 +7108,7 @@ export function createMachineVariant(options = {}) {
         : null;
     const definition = forcedDefinition || pickRandomEntry(machinePool, randomFn) || machinePool[0] || MACHINE_CATALOG[0];
     const protectedStoryMachine = isProtectedStoryMachine(definition);
-    const weightedGridPool = buildWeightedGridPool(definition.possibleGrids);
+    const weightedGridPool = buildWeightedGridPool(definition.possibleGrids, targetPeriod ?? null);
     const gridPool = weightedGridPool.length > 0 ? weightedGridPool : (definition.possibleGrids || []);
     const protectedGridPool = protectedStoryMachine
         ? gridPool.filter((gridOption) => !gridOption?.impossible)
