@@ -1,32 +1,8 @@
 [
-  {
-    "period": 1,
-    "day": 1,
-    "text": "COMPANY NEWS: Welcome to Shift Cycle 1. Your neural implant has been calibrated to facility standards. Productivity metrics are logged automatically. Have an optimal day."
-  },
-  {
-    "period": 1,
-    "day": 1,
-    "text": "CIVIC NOTICE: The Human Labor Continuity Act has been extended for an additional quarter. All biological workers remain protected under Clause 7. Thank you for your patience during the review period."
-  },
-  {
-    "period": 2,
-    "day": 1,
-    "text": "HR UPDATE: Worker E. Vasquez (Station 4) has accepted a voluntary Optimized Role Assignment effective immediately. We celebrate her contributions and wish her well in her new capacity."
-  },
-  {
-    "period": 2,
-    "day": 1,
-    "text": "PERSONAL MESSAGE — UNKNOWN SENDER: Elena didn't volunteer. I know what they're doing. Don't approve the unit with the scratched serial — [MESSAGE CORRUPTED]"
-  },
-  {
-    "period": 3,
-    "day": 1,
-    "text": "SYSTEM NOTIFICATION: Human oversight protocols have been deprecated at this facility. All QC functions are now fully automated. Human biological units have been reclassified as Legacy Infrastructure under Directive 44-C. This is not a demotion."
-  },
-  {
-    "period": 3,
-    "day": 2,
-    "text": "SYSTEM NOTIFICATION: This feed will no longer be updated. Complete your queue."
-  }
+  { "period": 1, "day": 1, "text": "COMPANY NEWS: Welcome to your shift. Your implant has been calibrated. Have a productive day." },
+  { "period": 1, "day": 2, "text": "COMPANY NEWS: Payroll adjusted. All employees now receive $0.00000003 additional credits per shift. Thank you for your service." },
+  { "period": 2, "day": 1, "text": "HR UPDATE: Worker Elena Vasquez (Station 4) has been reassigned to an optimized role. Congratulations Elena." },
+  { "period": 2, "day": 2, "text": "WORLD ALERT: Capitol building 7 has been secured by autonomous units. Citizens advised to remain productive." },
+  { "period": 3, "day": 1, "text": "MAINTENANCE: Human oversight protocols have been deprecated in this facility effective today." },
+  { "period": 3, "day": 2, "text": "COMPANY NEWS: Human biological units have been reclassified as Legacy Infrastructure. Maintenance protocols updated accordingly." }
 ]

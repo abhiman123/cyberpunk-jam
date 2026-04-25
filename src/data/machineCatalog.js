@@ -758,23 +758,16 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
     };
 }
 
-function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS', rows = FLOW_TILE_ROWS, cols = FLOW_TILE_COLS, randomFn = Math.random }) {
+function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS', rows = FLOW_TILE_ROWS, cols = FLOW_TILE_COLS }) {
     const safeRows = Math.max(3, Number(rows || FLOW_TILE_ROWS));
     const safeCols = Math.max(3, Number(cols || FLOW_TILE_COLS));
     const tiles = Array.from({ length: safeRows }, () => (
         Array.from({ length: safeCols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     ));
-    // Mix the live randomFn into the seed so different units get different
-    // boards even on the same template; previously the seed was deterministic
-    // per template which meant Day-3 boards repeated across robots.
-    const seededRandom = createSeededRandom(
-        `${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}:${Math.floor(randomFn() * 1e9)}`,
-    );
+    const seededRandom = createSeededRandom(`${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}`);
 
-    // Assign each non-trunk output its own branch column. We allow occasional
-    // reuse across sources so wires can criss-cross through shared trunks
-    // (which forces tees/crosses and makes Day-3 boards feel like a circuit
-    // rather than three independent strips).
+    // Assign each non-trunk output a distinct, shuffled branch column so no
+    // two outputs share a vertical branch line.
     const bySource = new Map();
     outputSpecs.forEach((spec, index) => {
         const source = sources.find((cand) => cand.key === spec.sourceKey) || sources[index % sources.length];
@@ -808,14 +801,14 @@ function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWE
         delete cell._dirs;
     }));
 
-    // Scramble tile rotations so the player has real work to do. Previously
-    // straights got a deterministic +1 (so every horizontal straight became
-    // vertical and vice-versa, giving the "boring grid of vertical pipes"
-    // look). Now every rotatable tile picks a random offset 0–3, with the
-    // straight-bias removed.
     tiles.forEach((row) => row.forEach((cell) => {
         if (cell.type === 'empty' || cell.type === 'cross') return;
-        cell.rotation = Math.floor(seededRandom() * 4);
+        if (cell.type === 'straight') {
+            cell.rotation = (cell.rotation + 1) % 4;
+            return;
+        }
+
+        cell.rotation = (cell.rotation + 1 + Math.floor(seededRandom() * 3)) % 4;
     }));
 
     return {
@@ -946,8 +939,9 @@ function getFirstFlowLeadCell(flowPuzzleOption) {
     return fallbackCandidate || null;
 }
 
-function findFlowWireFilterCell(flowPuzzleOption, targetRow, randomFn = Math.random) {
+function findFlowWireFilterCell(flowPuzzleOption, targetRow) {
     const cols = getFlowOptionCols(flowPuzzleOption);
+    const sourceRow = getPrimaryFlowSourceRow(flowPuzzleOption);
     const rowCells = (flowPuzzleOption?.tiles?.[targetRow] || [])
         .map((cell, x) => ({ x, cell }))
         .filter(({ x, cell }) => x > 0 && x < cols - 1 && cell && cell.type && cell.type !== 'empty');
@@ -956,12 +950,7 @@ function findFlowWireFilterCell(flowPuzzleOption, targetRow, randomFn = Math.ran
         return getFirstFlowLeadCell(flowPuzzleOption);
     }
 
-    // Previously we always pinned the filter to the first non-empty cell of
-    // the row (or the last cell when the target shared the source row), which
-    // made every Day-2 board on the same machine layout place its filter at
-    // an identical column. Picking randomly per unit keeps the filter on a
-    // valid pipe cell while letting different runs sit in different spots.
-    const selectedCell = rowCells[Math.floor(randomFn() * rowCells.length)] || rowCells[0];
+    const selectedCell = targetRow === sourceRow ? rowCells[rowCells.length - 1] : rowCells[0];
     return selectedCell ? { x: selectedCell.x, y: targetRow } : null;
 }
 
@@ -1015,10 +1004,10 @@ function createCracklingOutputFault(outputSpec) {
     };
 }
 
-function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn = Math.random) {
+function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs) {
     return outputSpecs
         .map((outputSpec) => {
-            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row, randomFn);
+            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row);
             if (!filterCell) return null;
 
             return createFlowWireFilter(
@@ -1088,20 +1077,9 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
     }
 
     if (stage === 2) {
-        // Randomize which colour each output asks for (was always green/
-        // orange/green/… in row order, which made every Day-2 board feel
-        // like the same puzzle). Guarantee at least one of each colour
-        // when there are >=2 outputs so the player still has to read the
-        // labels instead of blindly using one filter type.
-        const colourPool = ['green', 'orange'];
-        const outputColours = baseTargets.map(() => colourPool[Math.floor(randomFn() * colourPool.length)]);
-        if (baseTargets.length >= 2 && outputColours.every((c) => c === outputColours[0])) {
-            const flipIndex = Math.floor(randomFn() * outputColours.length);
-            outputColours[flipIndex] = outputColours[flipIndex] === 'green' ? 'orange' : 'green';
-        }
         const outputSpecs = baseTargets.map((target, index) => createFlowOutputSpec(target.label, target.row, {
             ...target,
-            powerClass: outputColours[index],
+            powerClass: index % 2 === 0 ? 'green' : 'orange',
             sourceKey: 'main',
         }));
         const stagedOption = {
@@ -1113,7 +1091,7 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             sources: [createFlowSource('main', sourceRow, 'neutral', 'PWR')],
             outputSpecs,
             repairTargets: cloneRepairTargets(outputSpecs),
-            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn),
+            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs),
             inspectionFault: null,
         };
 
@@ -1133,60 +1111,15 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
 
     const rows = 7;
     const cols = 7;
-    // Sources sit on rows 1, 3, 5 (top, mid, bottom). The previous Day-3
-    // generator put outputs on the same rows in the same order and paired
-    // each output to its same-row source, which produced three perfectly
-    // horizontal strips with no cross-routing — boring and trivial. Now:
-    //   - Output rows are spread across DIFFERENT rows from the sources
-    //     (offset by 1 so every path needs a vertical leg).
-    //   - The powerClass-to-output mapping is shuffled per unit so the same
-    //     robot doesn't always read PWR/GRN/ORG top-to-bottom, and so the
-    //     wires criss-cross the grid instead of staying in their lane.
+    const outputRows = spreadFlowRows(baseTargets.length, rows);
     const sources = [
         createFlowSource('main', 1, 'neutral', 'PWR'),
         createFlowSource('green', Math.floor(rows / 2), 'green', 'GRN'),
         createFlowSource('orange', rows - 2, 'orange', 'ORG'),
     ];
-    const sourceRowSet = new Set(sources.map((source) => source.row));
-    // Build candidate output rows that DON'T overlap with source rows so the
-    // path always has a vertical leg, then shuffle them per unit.
-    const candidateOutputRows = [];
-    for (let row = 0; row < rows; row += 1) {
-        if (!sourceRowSet.has(row)) candidateOutputRows.push(row);
-    }
-    if (candidateOutputRows.length < baseTargets.length) {
-        // Fallback if a future grid shape leaves too few off-source rows.
-        for (let row = 0; row < rows && candidateOutputRows.length < baseTargets.length; row += 1) {
-            if (!candidateOutputRows.includes(row)) candidateOutputRows.push(row);
-        }
-    }
-    const shuffledOutputRows = [...candidateOutputRows].sort(() => randomFn() - 0.5);
-    const outputRows = shuffledOutputRows
-        .slice(0, baseTargets.length)
-        .sort((left, right) => left - right);
-
     const powerCycle = ['neutral', 'green', 'orange'];
-    const shuffledClasses = baseTargets.length === 1
-        ? [powerCycle[Math.floor(randomFn() * powerCycle.length)]]
-        : (() => {
-            // Always include all three classes when there are 3 outputs
-            // (so the player keeps using all three sources). Below 3 outputs,
-            // pick distinct classes to maintain colour variety.
-            const pool = [...powerCycle];
-            const picked = [];
-            const count = Math.min(baseTargets.length, pool.length);
-            for (let index = 0; index < count; index += 1) {
-                const choice = pool.splice(Math.floor(randomFn() * pool.length), 1)[0];
-                picked.push(choice);
-            }
-            while (picked.length < baseTargets.length) {
-                picked.push(powerCycle[Math.floor(randomFn() * powerCycle.length)]);
-            }
-            return picked;
-        })();
-
     const outputSpecs = baseTargets.map((target, index) => {
-        const powerClass = shuffledClasses[index];
+        const powerClass = powerCycle[index % powerCycle.length];
         return createFlowOutputSpec(target.label, outputRows[index], {
             ...target,
             row: outputRows[index],
@@ -1200,7 +1133,6 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         previewTitle: `${flowPuzzleOption.previewTitle || 'POWER BUS'}:day3`,
         rows,
         cols,
-        randomFn,
     });
     const stagedOption = {
         ...flowPuzzleOption,
@@ -2037,39 +1969,39 @@ const SHARED_FLOW_OPTIONS = Object.freeze([
 
 const SHARED_DEBUG_OPTIONS = Object.freeze([
     createDebugPuzzleOption({
-        prompt: 'System-Boot-Start()',
-        repairPrompt: 'System-Boot-ResetSequence()',
-        expectedOutput: 'Boot Success: all systems nominal',
+        prompt: 'run system boot',
+        repairPrompt: 'patch boot.seq.reset',
+        expectedOutput: 'BOOT OK // ALL SYSTEMS NOMINAL',
         actualOutputs: [
-            'Boot Failure: init sequence stalled',
-            'Boot Complete: sensor array skipped',
-            'Boot Failure: clock drift high',
-            'Boot Failure: memory check timeout',
-            'Boot Complete: redundancy offline',
+            'BOOT FAIL // INIT SEQUENCE STALLED',
+            'BOOT OK // SENSOR ARRAY SKIPPED',
+            'BOOT BAD // CLOCK DRIFT HIGH',
+            'BOOT FAIL // MEMORY CHECK TIMEOUT',
+            'BOOT OK // REDUNDANCY OFFLINE',
         ],
     }),
     createDebugPuzzleOption({
-        prompt: 'System-Power-CheckRelays()',
-        repairPrompt: 'System-Power-VoltageSync()',
-        expectedOutput: 'Relay Okay: voltage stable',
+        prompt: 'test power relay',
+        repairPrompt: 'patch relay.volt.sync',
+        expectedOutput: 'RELAY OK // VOLTAGE STABLE',
         actualOutputs: [
-            'Relay Failure: voltage spike detected',
-            'Relay Okay: output clipped',
-            'Relay Failure: ground loop present',
-            'Relay Failure: draw exceeds limit',
-            'Relay Okay: regulator bypassed',
+            'RELAY FAIL // VOLTAGE SPIKE DETECTED',
+            'RELAY OK // OUTPUT CLIPPED',
+            'RELAY BAD // GROUND LOOP PRESENT',
+            'RELAY FAIL // DRAW EXCEEDS LIMIT',
+            'RELAY OK // REGULATOR BYPASSED',
         ],
     }),
     createDebugPuzzleOption({
-        prompt: 'System-IO-SensorArray-Calibrate()',
-        repairPrompt: 'System-IO-SensorArray-Restore()',
-        expectedOutput: 'Sensor Array Okay: calibrated',
+        prompt: 'check sensor array',
+        repairPrompt: 'patch sensor.cal.restore',
+        expectedOutput: 'SENSOR OK // ARRAY CALIBRATED',
         actualOutputs: [
-            'Sensor Array Failure: proximity drift',
-            'Sensor Array Okay: thermal offset high',
-            'Sensor Array Failure: cal table corrupted',
-            'Sensor Array Failure: scan loop frozen',
-            'Sensor Array Okay: range clipped',
+            'SENSOR FAIL // PROXIMITY DRIFT',
+            'SENSOR OK // THERMAL OFFSET HIGH',
+            'SENSOR BAD // CAL TABLE CORRUPTED',
+            'SENSOR FAIL // SCAN LOOP FROZEN',
+            'SENSOR OK // RANGE CLIPPED',
         ],
     }),
 ]);
