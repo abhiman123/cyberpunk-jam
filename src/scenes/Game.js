@@ -7370,6 +7370,13 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorAnimTween?.stop();
         this._conveyorAnimTween = null;
 
+        // Lock all robot / button input while the conveyor is moving the new
+        // unit into position. _actionLocked already gates clicks across the
+        // factory, robot, and ruling buttons — set it during arrival and
+        // clear it once the unit has come to a stop.
+        this._actionLocked = true;
+        this._refreshFactoryActionButtons?.();
+
         const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
         if (conveyorLayers.length > 0) {
             this._conveyorAnimTween = this.tweens.add({
@@ -7387,6 +7394,8 @@ export default class GameScene extends Phaser.Scene {
             ease: 'Linear',
             onComplete: () => {
                 this._unitMoveTween = null;
+                this._actionLocked = false;
+                this._refreshFactoryActionButtons?.();
                 this._emitSequenceDebug('machine arrived', {
                     machineId: arrivingMachineVariant?.machineId || null,
                     caseId: arrivingCase?.id || null,

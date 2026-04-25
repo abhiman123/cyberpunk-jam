@@ -1142,8 +1142,21 @@ export default class MachinePuzzleOverlay {
             cellView.valueText.setText('');
             return;
         } else if (chargeLevel > 0) {
-            fillColor = isMatchedCharge ? 0x7e8832 : 0x4d5a2f;
-            strokeColor = isMatchedCharge ? 0xfff0b5 : 0xe0dc92;
+            // Charge cells now match the new comparator visual language: a
+            // dark cyber-teal cell with a coloured pill badge hanging off the
+            // bottom edge (rendered by _refreshComparatorBadges). The old
+            // beige/olive cell fill clashed with the new pill styling, so the
+            // base cell stays neutral and the badge carries the charge value.
+            if (isMatchedCharge) {
+                fillColor = 0x4f6328;
+                strokeColor = 0xf6e89c;
+            } else if (isPlaced) {
+                fillColor = 0x213d3d;
+                strokeColor = 0xc9b97a;
+            } else {
+                fillColor = 0x1d2d33;
+                strokeColor = 0x9a8b58;
+            }
         } else if (chargeGroupSummary) {
             fillColor = isMatchedGroup
                 ? 0x55793a
@@ -1216,9 +1229,10 @@ export default class MachinePuzzleOverlay {
             cellView.valueText.setText(inspectionFault.type === 'corrupted-marker' ? String(inspectionFault.glyph || '?') : '!');
             cellView.valueText.setColor(inspectionFault.kind === 'hazard' ? '#ffd0c9' : '#ffe2aa');
         } else if (chargeLevel > 0) {
-            cellView.valueText.setVisible(true);
-            cellView.valueText.setText(String(chargeLevel));
-            cellView.valueText.setColor(isMatchedCharge ? '#fff6b8' : '#ffe784');
+            // Per-cell charge target is now drawn as a gold pill hanging off
+            // the bottom edge of the cell (see _refreshComparatorBadges).
+            cellView.valueText.setVisible(false);
+            cellView.valueText.setText('');
         } else if (chargeGroupSummary) {
             cellView.valueText.setVisible(false);
             cellView.valueText.setText('');
@@ -1404,7 +1418,8 @@ export default class MachinePuzzleOverlay {
         this._comparatorLabelLayer?.removeAll(true);
 
         const comparators = this._puzzleState.getComparatorCells?.() || [];
-        if (comparators.length === 0) return;
+        const chargeBadges = this._collectChargeBadges();
+        if (comparators.length === 0 && chargeBadges.length === 0) return;
 
         const cellSize = MACHINE_PUZZLE.overlayCellSize;
         // Pill tag rendered as a small caption hanging off the bottom edge of
@@ -1414,23 +1429,9 @@ export default class MachinePuzzleOverlay {
         const pillWidth = Math.max(28, Math.floor(cellSize * 0.78));
         const pillHeight = Math.max(12, Math.floor(cellSize * 0.26));
         const pillRadius = Math.floor(pillHeight / 2);
-        // Mark each cell that hosts a comparator so _refreshCell can skip
-        // drawing the in-cell diamond there (we now show it as a pill below
-        // the cell instead).
-        comparators.forEach((entry) => {
-            const center = this._getCellCenter(entry.row, entry.col);
-            const isLessThan = entry.op === '<';
-            const isMatched = !this._powerEffectsSuspended && entry.matched;
 
-            const fillColor = isMatched
-                ? (isLessThan ? 0x64a9d9 : 0xc789dd)
-                : (isLessThan ? 0x214566 : 0x4a2a55);
-            const strokeColor = isMatched
-                ? (isLessThan ? 0xe9f5ff : 0xfbe7ff)
-                : (isLessThan ? 0x9bc5e0 : 0xc89fd6);
-            const glowColor = isLessThan ? 0x4a8fbe : 0x9d66b4;
-            const glowAlpha = isMatched ? 0.42 : 0.22;
-
+        const drawPill = ({ row, col, label, fillColor, strokeColor, glowColor, glowAlpha, textColor }) => {
+            const center = this._getCellCenter(row, col);
             const pillX = center.x - pillWidth / 2;
             // Bottom edge of the pill sits at the bottom edge of the cell, so
             // the pill hangs halfway inside the cell and halfway outside.
@@ -1451,27 +1452,79 @@ export default class MachinePuzzleOverlay {
             this._comparatorGfx.fillRoundedRect(pillX, pillY, pillWidth, pillHeight, pillRadius);
 
             // pill stroke
-            this._comparatorGfx.lineStyle(1.5, strokeColor, isMatched ? 1 : 0.9);
+            this._comparatorGfx.lineStyle(1.5, strokeColor, 0.95);
             this._comparatorGfx.strokeRoundedRect(pillX, pillY, pillWidth, pillHeight, pillRadius);
 
-            const label = this.scene.add.text(
+            const labelText = this.scene.add.text(
                 pillX + pillWidth / 2,
                 pillY + pillHeight / 2,
-                `${entry.op}${entry.threshold}`,
+                label,
                 {
                     fontFamily: 'Courier New',
                     fontSize: `${Math.max(10, Math.floor(pillHeight * 0.82))}px`,
                     fontStyle: 'bold',
-                    color: isMatched ? '#ffffff' : (isLessThan ? '#e9f5ff' : '#fbe7ff'),
+                    color: textColor,
                     stroke: '#000000',
                     strokeThickness: 1.5,
                 },
             ).setOrigin(0.5);
-            this._comparatorLabelLayer.add(label);
+            this._comparatorLabelLayer.add(labelText);
+        };
+
+        comparators.forEach((entry) => {
+            const isLessThan = entry.op === '<';
+            const isMatched = !this._powerEffectsSuspended && entry.matched;
+            drawPill({
+                row: entry.row,
+                col: entry.col,
+                label: `${entry.op}${entry.threshold}`,
+                fillColor: isMatched
+                    ? (isLessThan ? 0x64a9d9 : 0xc789dd)
+                    : (isLessThan ? 0x214566 : 0x4a2a55),
+                strokeColor: isMatched
+                    ? (isLessThan ? 0xe9f5ff : 0xfbe7ff)
+                    : (isLessThan ? 0x9bc5e0 : 0xc89fd6),
+                glowColor: isLessThan ? 0x4a8fbe : 0x9d66b4,
+                glowAlpha: isMatched ? 0.42 : 0.22,
+                textColor: isMatched ? '#ffffff' : (isLessThan ? '#e9f5ff' : '#fbe7ff'),
+            });
+        });
+
+        chargeBadges.forEach((entry) => {
+            const isMatched = !this._powerEffectsSuspended && entry.matched;
+            drawPill({
+                row: entry.row,
+                col: entry.col,
+                label: `${entry.chargeLevel}`,
+                fillColor: isMatched ? 0xd9b13e : 0x6a5320,
+                strokeColor: isMatched ? 0xfff5c8 : 0xf2d68a,
+                glowColor: 0xc99a36,
+                glowAlpha: isMatched ? 0.46 : 0.24,
+                textColor: isMatched ? '#fffbe1' : '#ffe9a8',
+            });
         });
 
         this._panel?.bringToTop(this._comparatorGfx);
         this._panel?.bringToTop(this._comparatorLabelLayer);
+    }
+
+    _collectChargeBadges() {
+        const badges = [];
+        const initialGrid = this._puzzleState?.initialGrid;
+        if (!Array.isArray(initialGrid)) return badges;
+        initialGrid.forEach((row, rowIndex) => {
+            row.forEach((_value, colIndex) => {
+                const chargeLevel = this._puzzleState.getChargeLevel(rowIndex, colIndex);
+                if (chargeLevel <= 0) return;
+                badges.push({
+                    row: rowIndex,
+                    col: colIndex,
+                    chargeLevel,
+                    matched: this._puzzleState.isChargeMatched(rowIndex, colIndex),
+                });
+            });
+        });
+        return badges;
     }
 
     _getCellCenter(row, col) {

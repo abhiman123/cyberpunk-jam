@@ -574,6 +574,16 @@ export default class CircuitRouting extends MinigameBase {
         this._inspectionFaultGfx.clear();
         if (!this._inspectionFault) return;
 
+        // If the fault is anchored on a forbidden cell, the orange forbidden
+        // tint already conveys "do not touch" — drawing an extra X/circle on
+        // top stacks two scrap markers in the same square and reads as a bug.
+        const faultGridX = this._inspectionFault.x;
+        const faultGridY = this._inspectionFault.y;
+        if (Number.isFinite(faultGridX) && Number.isFinite(faultGridY)
+            && this._forbidden?.has(`${faultGridX},${faultGridY}`)) {
+            return;
+        }
+
         const outputView = this._inspectionFault.targetKey ? this._outputDots?.[this._inspectionFault.targetKey] : null;
         const x = outputView
             ? outputView.dot.x
@@ -717,10 +727,16 @@ export default class CircuitRouting extends MinigameBase {
         bg.on('pointerdown', (pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
             if (this._handleInventoryClick?.(x, y, pointer)) return;
-            if (locked || tile.type === 'empty') return;
+            // Re-resolve the tile each click — pickup/placement swaps the
+            // object reference at this grid slot, so the closure-captured
+            // `tile` from build time would be stale.
+            const liveTile = this._tiles[y]?.[x];
+            const isForbiddenNow = this._forbidden.has(`${x},${y}`);
+            const isLockedNow = isForbiddenNow || liveTile?.locked === true;
+            if (!liveTile || isLockedNow || liveTile.type === 'empty') return;
 
-            tile.rotation = (tile.rotation + 1) % 4;
-            this._animateTileRotation(tileView, tile.rotation);
+            liveTile.rotation = (liveTile.rotation + 1) % 4;
+            this._animateTileRotation(tileView, liveTile.rotation);
             this._playWireTurnSound();
             this._updateAll();
         });
@@ -728,7 +744,11 @@ export default class CircuitRouting extends MinigameBase {
             event?.stopPropagation?.();
         });
         bg.on('pointerover', () => {
-            if (!locked && tile.type !== 'empty') repaintOct(true);
+            const liveTile = this._tiles[y]?.[x];
+            const isForbiddenNow = this._forbidden.has(`${x},${y}`);
+            if (!isForbiddenNow && liveTile && liveTile.type !== 'empty' && !liveTile.locked) {
+                repaintOct(true);
+            }
         });
         bg.on('pointerout', () => {
             repaintOct(false);
