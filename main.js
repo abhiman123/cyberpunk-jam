@@ -5,6 +5,7 @@ import GameScene from './src/scenes/Game.js';
 import SummaryScene from './src/scenes/Summary.js';
 import TransitionScene from './src/scenes/Transition.js';
 import EndScene from './src/scenes/End.js';
+import CreditsScene from './src/scenes/Credits.js';
 
 // ── Sharp text on a pixel-art game ───────────────────────────────────────────
 // We keep `pixelArt: true` so sprite textures stay crisp under integer
@@ -48,7 +49,7 @@ const config = {
     pixelArt: true,
     resolution: window.devicePixelRatio,
     backgroundColor: '#0a0a0a',
-    scene: [BootScene, TitleScene, GameScene, SummaryScene, TransitionScene, EndScene],
+    scene: [BootScene, TitleScene, GameScene, SummaryScene, TransitionScene, EndScene, CreditsScene],
 };
 
 new Phaser.Game(config);

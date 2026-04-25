@@ -461,32 +461,6 @@ export default class EndScene extends Phaser.Scene {
             color: '#cdefff',
             align: 'center',
         }).setOrigin(0.5).setDepth(40).setAlpha(0);
-
-        this._playAgainBg = this.add.rectangle(640, 504, 220, 46, 0x0a0a0a)
-            .setStrokeStyle(1, 0x334455)
-            .setDepth(41)
-            .setAlpha(0)
-            .setInteractive({ useHandCursor: true });
-        this._playAgainText = this.add.text(640, 504, 'PLAY AGAIN', {
-            fontFamily: 'Courier New',
-            fontSize: '16px',
-            color: '#778899',
-        }).setOrigin(0.5).setDepth(42).setAlpha(0);
-
-        this._playAgainBg.on('pointerover', () => {
-            this._playAgainBg.setStrokeStyle(1, 0x6688aa);
-            this._playAgainText.setColor('#aabbcc');
-        });
-        this._playAgainBg.on('pointerout', () => {
-            this._playAgainBg.setStrokeStyle(1, 0x334455);
-            this._playAgainText.setColor('#778899');
-        });
-        this._playAgainBg.on('pointerdown', () => {
-            GameState.reset();
-            this.cameras.main.fade(400, 0, 0, 0);
-            this.time.delayedCall(400, () => this.scene.start('Title'));
-        });
-
     }
 
     _playCutsceneMusic() {
@@ -875,17 +849,6 @@ export default class EndScene extends Phaser.Scene {
 
         this.cameras.main.fadeIn(700, 0, 0, 0);
 
-        const musicVolume = getMusicVolume();
-        if (musicVolume > 0 && this.cache.audio.has(SOUND_ASSETS.firedMusic.key)) {
-            const endMusic = this.sound.add(SOUND_ASSETS.firedMusic.key, { loop: false, volume: 0 });
-            endMusic.play();
-            this.tweens.add({
-                targets: endMusic,
-                volume: 0.6 * musicVolume,
-                duration: 1000,
-            });
-        }
-
         this.tweens.add({
             targets: this._titleCard,
             alpha: 1,
@@ -894,11 +857,8 @@ export default class EndScene extends Phaser.Scene {
         });
 
         await this._wait(4200);
-        this.tweens.add({
-            targets: [this._playAgainBg, this._playAgainText],
-            alpha: 1,
-            duration: 600,
-        });
+        this.cameras.main.fade(700, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Credits'));
     }
 
     _wait(duration) {
