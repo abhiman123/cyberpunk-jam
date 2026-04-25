@@ -283,9 +283,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._caretTween = this.scene.tweens.add({
             targets: this._caret,
             alpha: 0,
-            duration: 500,
+            duration: 370,
             yoyo: true,
             repeat: -1,
+            repeatDelay: 370,
             ease: 'Stepped',
         });
 
