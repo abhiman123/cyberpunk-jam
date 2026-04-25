@@ -5053,6 +5053,14 @@ export default class GameScene extends Phaser.Scene {
             mainview_fam2: { x: 278, y: 669 },
         };
 
+        // Both bottomLayer.png and the trapdoor PNGs are 320×195 and the door
+        // element starts at the same native y=155. After 4× upscale + display
+        // scale (720/780) the belt surface sits at display y≈572. The trapdoor
+        // at 2× upscale (390 px tall) must be centered at y=572−(310−195)=457
+        // so its native y=155 aligns with the belt surface.
+        this._trapdoorSprite = this.add.image(MACHINE_PRESENTATION.conveyorTargetX, 457, 'trapdoor_0')
+            .setVisible(false);
+
         this._mainViewLayers = {};
         mainViewLayerKeys.forEach((key) => {
             if (!this.textures.exists(key)) return;
@@ -5076,6 +5084,10 @@ export default class GameScene extends Phaser.Scene {
 
             this._conveyorContainer.add(layer);
             this._mainViewLayers[key] = layer;
+
+            if (key === 'mainview_bottom') {
+                this._conveyorContainer.add(this._trapdoorSprite);
+            }
         });
 
 
@@ -5110,10 +5122,6 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorContainer.add(this._machineBlueprintLinkGfx);
         this._machineBlueprintLabelContainer = this.add.container(0, 0).setVisible(false);
         this._conveyorContainer.add(this._machineBlueprintLabelContainer);
-
-        this._trapdoorSprite = this.add.image(MACHINE_PRESENTATION.conveyorTargetX, 450, 'trapdoor_0')
-            .setDepth(18)
-            .setVisible(false);
 
         this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 490).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
