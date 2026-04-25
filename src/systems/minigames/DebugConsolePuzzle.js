@@ -712,11 +712,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
         return mismatchCount;
     }
 
-    _hasStartedTyping() {
-        const inputValue = this._hiddenInput?.value ?? this.evidence.inputValue ?? '';
-        return String(inputValue || '').length > 0;
-    }
-
     _getNowMs() {
         return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
     }
@@ -926,8 +921,14 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._specialCommandMode = false;
         }
 
-        const hasTypedInput = this._hasStartedTyping();
-        const showActualOutput = this.evidence.completed || this.evidence.phase === 'repair' || this.evidence.phase === 'scrap' || hasTypedInput;
+        // Only reveal the actual output once the test has actually been run
+        // (phase has transitioned out of 'test' into 'repair' / 'complete' /
+        // 'scrap'). Showing it while the player is still typing leaked the
+        // expected result on stable units, since the data layer seeds
+        // actualOutput = expectedOutput for those.
+        const showActualOutput = this.evidence.completed
+            || this.evidence.phase === 'repair'
+            || this.evidence.phase === 'scrap';
         const outputMismatch = Boolean(
             showActualOutput
             && this.evidence.actualOutput
