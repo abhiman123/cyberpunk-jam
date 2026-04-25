@@ -11,11 +11,14 @@ export const GameState = {
     bonusRuleIds: [],
     rulebookSeenRules: new Set(),
     trackedMachineOutcomes: [],
+    activePuzzleTimers: {},
+    puzzleTimingRecords: [],
     pendingWorldFeedNotifications: [],
     shiftSummaryAdjustments: [],
     specialItems: [],
     jesterDeal: null,
     umbrellaQuest: null,
+    janitorStory: null,
     debriefReport: null,
 
     get period() {
@@ -121,6 +124,80 @@ export const GameState = {
         });
 
         return outcome;
+    },
+
+    _getPuzzleTimerKey(type, timerId) {
+        const normalizedType = String(type || '').trim();
+        const normalizedId = String(timerId || '').trim();
+        if (!normalizedType || !normalizedId) return null;
+        return `${normalizedType}:${normalizedId}`;
+    },
+
+    beginPuzzleTimer({ type, timerId, startedAtMs } = {}) {
+        const key = this._getPuzzleTimerKey(type, timerId);
+        if (!key) return null;
+
+        const alreadyRecorded = this.puzzleTimingRecords.some((record) => record.key === key);
+        if (alreadyRecorded) return null;
+
+        const existing = this.activePuzzleTimers[key];
+        if (existing) return existing;
+
+        const now = Number.isFinite(startedAtMs) ? startedAtMs : Date.now();
+        const timer = {
+            key,
+            type: String(type),
+            timerId: String(timerId),
+            startedAtMs: now,
+        };
+        this.activePuzzleTimers[key] = timer;
+        return timer;
+    },
+
+    finishPuzzleTimer({ type, timerId, endedAtMs, completed = false, resolved = false } = {}) {
+        const key = this._getPuzzleTimerKey(type, timerId);
+        if (!key) return null;
+
+        const timer = this.activePuzzleTimers[key];
+        if (!timer) return null;
+
+        delete this.activePuzzleTimers[key];
+
+        const alreadyRecorded = this.puzzleTimingRecords.some((record) => record.key === key);
+        if (alreadyRecorded) return null;
+
+        const now = Number.isFinite(endedAtMs) ? endedAtMs : Date.now();
+        const elapsedMs = Math.max(0, now - Number(timer.startedAtMs || now));
+        if (elapsedMs <= 0) return null;
+
+        const record = {
+            key,
+            type: timer.type,
+            timerId: timer.timerId,
+            elapsedMs,
+            completed: Boolean(completed),
+            resolved: Boolean(resolved || completed),
+        };
+        this.puzzleTimingRecords.push(record);
+        return record;
+    },
+
+    getPuzzleTimingStats(type) {
+        const normalizedType = String(type || '').trim();
+        const records = this.puzzleTimingRecords.filter((record) => (
+            record.type === normalizedType
+            && record.completed
+            && Number.isFinite(record.elapsedMs)
+            && record.elapsedMs > 0
+        ));
+        const totalMs = records.reduce((sum, record) => sum + record.elapsedMs, 0);
+        const averageMs = records.length > 0 ? totalMs / records.length : 0;
+        return {
+            type: normalizedType,
+            count: records.length,
+            totalMs,
+            averageMs,
+        };
     },
 
     queueWorldFeedNotification(notification) {
@@ -267,6 +344,7 @@ export const GameState = {
         this.recomputeActiveRules();
 
         this.casesProcessedThisShift = 0;
+        this.activePuzzleTimers = {};
     },
 
     reset() {
@@ -282,11 +360,14 @@ export const GameState = {
         this.bonusRuleIds = [];
         this.rulebookSeenRules = new Set();
         this.trackedMachineOutcomes = [];
+        this.activePuzzleTimers = {};
+        this.puzzleTimingRecords = [];
         this.pendingWorldFeedNotifications = [];
         this.shiftSummaryAdjustments = [];
         this.specialItems = [];
         this.jesterDeal = null;
         this.umbrellaQuest = null;
+        this.janitorStory = null;
         this.debriefReport = null;
     }
 };

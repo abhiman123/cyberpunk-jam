@@ -58,6 +58,88 @@ const ENDING_DIALOGUE = Object.freeze({
 
 const TITLE_TEXT = "you're just a machine.";
 const DOGSI_ENDING_PATH = '/dogsi.mp3';
+const PAYCHECK_DELTA = 18;
+const CREDIT_ROLL_TEXT = [
+    'From the mind of: Big O',
+    '',
+    '',
+    'Credits',
+    '',
+    '',
+    'Programming',
+    '',
+    'Claude',
+    '',
+    'Orion Allen Borntrager',
+    '',
+    'Safiullah Baig',
+    '',
+    'Andrew Bui',
+    '',
+    'Abhimanyu Bhalla',
+    '',
+    'Ethan Nishimura',
+    '',
+    'Minh Tran',
+    '',
+    '',
+    'Art:',
+    '',
+    'Ishita Pradhan',
+    '',
+    'Pranaav Makharia',
+    '',
+    'Jacqueline King',
+    '',
+    'Pranet Ramanan',
+    '',
+    'Jacob Jansta',
+    '',
+    'Minh Tran',
+    '',
+    '',
+    'Storyboarding',
+    '',
+    'Zachary Boseman',
+    '',
+    'Jacqueline King',
+    '',
+    'Geetika Joshi',
+    '',
+    'Christian Gonzalez',
+    '',
+    'Caleb Livingston',
+    '',
+    '',
+    'Music & Sound',
+    '',
+    'Shane Ollek',
+    '',
+    'Julien Vincent',
+    '',
+    '',
+    'thanks to wavedash and gamedev.js',
+    '',
+    'for hosting the gamejam',
+    '',
+    '',
+    'Special thanks to: Claude.',
+    '',
+    "You were there when we weren't.",
+].join('\n');
+const SCORE_GRADES = Object.freeze([
+    { grade: 'Z', min: 0 },
+    { grade: 'F', min: 15 },
+    { grade: 'C-', min: 28 },
+    { grade: 'C+', min: 40 },
+    { grade: 'B-', min: 52 },
+    { grade: 'B+', min: 64 },
+    { grade: 'A-', min: 74 },
+    { grade: 'A+', min: 82 },
+    { grade: 'A++', min: 89 },
+    { grade: 'S', min: 94 },
+    { grade: 'S+++', min: 98 },
+]);
 
 export default class EndScene extends Phaser.Scene {
     constructor() {
@@ -72,6 +154,12 @@ export default class EndScene extends Phaser.Scene {
         this._music = null;
         this._speakerTween = null;
         this._dogsiAudio = null;
+        this._creditsTween = null;
+        this._creditsResolve = null;
+        this._creditsFinished = false;
+        this._scoreContainer = null;
+        this._factoryIntro = null;
+        this._eerieBlueOverlay = null;
 
         applyCyberpunkLook(this);
         this.cameras.main.setBackgroundColor('#050709');
@@ -80,6 +168,12 @@ export default class EndScene extends Phaser.Scene {
         this._buildStage();
         this._buildActors();
         this._buildUi();
+        this._eerieBlueOverlay = this.add.rectangle(640, 360, 1280, 720, 0x4877bd, 1)
+            .setDepth(34)
+            .setVisible(false)
+            .setAlpha(0);
+        this._buildFactoryIntroArt();
+        this._world.setVisible(false).setAlpha(0);
         this._playCutsceneMusic();
 
         const scan = this.add.graphics().setDepth(100);
@@ -90,6 +184,7 @@ export default class EndScene extends Phaser.Scene {
 
         this.events.on('shutdown', () => {
             this._speakerTween?.stop();
+            this._creditsTween?.stop();
             this._music?.stop();
             this._music = null;
             this._stopDogsiAudio();
@@ -106,7 +201,7 @@ export default class EndScene extends Phaser.Scene {
         });
 
         this.time.delayedCall(550, () => {
-            void this._runEndingSequence();
+            void this._runStageIntroThenEnding();
         });
     }
 
@@ -206,8 +301,8 @@ export default class EndScene extends Phaser.Scene {
         }
         this._plates = plates;
 
-        // Low-level red emergency strip (pulses subtly)
-        this._emergencyStrip = this.add.rectangle(640, 556, 1280, 3, 0xb52a2a, 0.6).setDepth(2);
+        // Low-level safety strip (pulses subtly)
+        this._emergencyStrip = this.add.rectangle(640, 556, 1280, 3, 0x2a80b5, 0.6).setDepth(2);
         this.tweens.add({
             targets: this._emergencyStrip,
             alpha: 0.85,
@@ -218,7 +313,7 @@ export default class EndScene extends Phaser.Scene {
         });
 
         // Pit glow at the bottom (industrial chasm)
-        const pitGlow = this.add.ellipse(640, 706, 540, 70, 0xff5a3a, 0.18).setDepth(1);
+        const pitGlow = this.add.ellipse(640, 706, 540, 70, 0x4ab8ff, 0.16).setDepth(1);
         this.tweens.add({
             targets: pitGlow,
             alpha: 0.30,
@@ -308,6 +403,134 @@ export default class EndScene extends Phaser.Scene {
             this._scrapButton,
             this._scrapButtonLabel,
         ]);
+    }
+
+    _buildFactoryIntroArt() {
+        const intro = this.add.container(0, 0).setDepth(64).setAlpha(1);
+        const background = this.add.rectangle(640, 360, 1280, 720, 0x03070b, 1);
+        const layers = [background];
+        const addLayer = (key, alpha = 1) => {
+            if (!this.textures.exists(key)) return null;
+
+            const image = this.add.image(640, 360, key)
+                .setOrigin(0.5)
+                .setAlpha(alpha);
+            const scale = Math.max(
+                1280 / Math.max(1, image.width || 1280),
+                720 / Math.max(1, image.height || 720),
+            );
+            image.setScale(scale);
+            layers.push(image);
+            return image;
+        };
+
+        addLayer('mainview_bottom', 1);
+        addLayer('mainview_second', 1);
+        addLayer('mainview_lightradiance', 0.68);
+        addLayer('mainview_lightlayer', 0.82);
+
+        layers.push(this.add.rectangle(640, 360, 1280, 720, 0x02080e, 0.18));
+        intro.add(layers);
+        this._factoryIntro = intro;
+    }
+
+    _playStageLightsCue() {
+        if (!this.cache.audio.has(SOUND_ASSETS.inspectionReveal.key)) return;
+
+        this.sound.play(SOUND_ASSETS.inspectionReveal.key, {
+            volume: SOUND_VOLUMES.reveal * 0.9,
+        });
+    }
+
+    _getReplacementEntranceLightTargets() {
+        return [
+            ...(this._lightCones || []),
+            ...(this._lights || []),
+            this._emergencyStrip,
+        ].filter(Boolean);
+    }
+
+    _getReplacementEntranceGuiTargets() {
+        return [
+            this._panelShadow,
+            this._panel,
+            this._panelHeaderStrip,
+            this._panelStripes,
+            this._panelBrackets,
+            this._panelAlertDot,
+            this._panelTag,
+            this._panelMeta,
+        ].filter(Boolean);
+    }
+
+    async _setReplacementEerieState(active = true, { duration = 2000 } = {}) {
+        const lightTargets = this._getReplacementEntranceLightTargets();
+        const guiTargets = this._getReplacementEntranceGuiTargets();
+        const tweens = [];
+
+        if (lightTargets.length > 0) {
+            tweens.push(this._tweenAsync({
+                targets: lightTargets,
+                alpha: active ? 0.06 : 1,
+                duration,
+                ease: 'Sine.InOut',
+            }));
+        }
+
+        if (guiTargets.length > 0) {
+            tweens.push(this._tweenAsync({
+                targets: guiTargets,
+                alpha: active ? 0 : 1,
+                duration,
+                ease: 'Sine.InOut',
+            }));
+        }
+
+        if (this._eerieBlueOverlay) {
+            this._eerieBlueOverlay.setVisible(true);
+            tweens.push(this._tweenAsync({
+                targets: this._eerieBlueOverlay,
+                alpha: active ? 0.34 : 0,
+                duration,
+                ease: 'Sine.InOut',
+                onComplete: () => {
+                    if (!active) {
+                        this._eerieBlueOverlay?.setVisible(false);
+                    }
+                },
+            }));
+        }
+
+        await Promise.all(tweens);
+    }
+
+    async _runStageIntroThenEnding() {
+        await this._wait(2600);
+        this._playStageLightsCue();
+        this.cameras.main.flash(220, 208, 244, 255, false);
+
+        this._world.setVisible(true).setAlpha(0);
+        const revealTweens = [
+            this._tweenAsync({
+                targets: this._world,
+                alpha: 1,
+                duration: 1200,
+                ease: 'Sine.Out',
+            }),
+        ];
+
+        if (this._factoryIntro) {
+            revealTweens.push(this._tweenAsync({
+                targets: this._factoryIntro,
+                alpha: 0,
+                duration: 1200,
+                ease: 'Sine.Out',
+            }));
+        }
+
+        await Promise.all(revealTweens);
+        this._factoryIntro?.setVisible(false);
+        await this._runEndingSequence();
     }
 
     _buildActors() {
@@ -434,7 +657,7 @@ export default class EndScene extends Phaser.Scene {
             repeat: -1,
             ease: 'Sine.InOut',
         });
-        this._panelTag = this.add.text(186, 545, 'FINAL TRANSMISSION', {
+        this._panelTag = this.add.text(186, 545, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#9fe2f5',
@@ -442,7 +665,7 @@ export default class EndScene extends Phaser.Scene {
         }).setDepth(23);
 
         // Right-side meta tag
-        this._panelMeta = this.add.text(1100, 545, 'CH//04', {
+        this._panelMeta = this.add.text(1100, 545, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#5a98b6',
@@ -514,6 +737,41 @@ export default class EndScene extends Phaser.Scene {
             this.cameras.main.fade(400, 0, 0, 0);
             this.time.delayedCall(400, () => this.scene.start('Title'));
         });
+        this._playAgainBg.disableInteractive().setVisible(false);
+        this._playAgainText.setVisible(false);
+
+        this._creditsContainer = this.add.container(640, 760).setDepth(48).setVisible(false).setAlpha(0);
+        this._creditsText = this.add.text(0, 0, CREDIT_ROLL_TEXT, {
+            fontFamily: 'Courier New',
+            fontSize: '22px',
+            color: '#d9f6ff',
+            align: 'center',
+            lineSpacing: 18,
+        }).setOrigin(0.5, 0);
+        this._creditsContainer.add(this._creditsText);
+
+        this._skipCreditsBg = this.add.rectangle(1096, 674, 228, 42, 0x08111c, 0.94)
+            .setStrokeStyle(1, 0x5a98b6, 0.82)
+            .setDepth(58)
+            .setAlpha(0)
+            .setVisible(false)
+            .setInteractive({ useHandCursor: true });
+        this._skipCreditsText = this.add.text(1096, 674, 'SKIP CREDITS', {
+            fontFamily: 'Courier New',
+            fontSize: '14px',
+            color: '#9fe2f5',
+            letterSpacing: 2,
+        }).setOrigin(0.5).setDepth(59).setAlpha(0).setVisible(false);
+        this._skipCreditsBg.on('pointerover', () => {
+            this._skipCreditsBg?.setStrokeStyle(1, 0x9fe2f5, 0.95);
+            this._skipCreditsText?.setColor('#d8f7ff');
+        });
+        this._skipCreditsBg.on('pointerout', () => {
+            this._skipCreditsBg?.setStrokeStyle(1, 0x5a98b6, 0.82);
+            this._skipCreditsText?.setColor('#9fe2f5');
+        });
+        this._skipCreditsBg.on('pointerdown', () => this._finishCreditsNow());
+        this._skipCreditsBg.disableInteractive();
 
     }
 
@@ -595,7 +853,18 @@ export default class EndScene extends Phaser.Scene {
 
     async _runReplacementEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 950 });
+        await Promise.all([
+            this._setReplacementEerieState(true, { duration: 2200 }),
+            this._enterActor(this._managerSprite, {
+                x: 360,
+                y: 360,
+                startX: 1700,
+                duration: 5600,
+                ease: 'Sine.InOut',
+                alphaFrom: 0.08,
+                scaleFromFactor: 0.82,
+            }),
+        ]);
         this._startManagerIdle();
         await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.replacement, {
             speaker: 'MANAGER BOT',
@@ -608,7 +877,7 @@ export default class EndScene extends Phaser.Scene {
     }
 
     async _runUmbrellaPurpleEnding() {
-        await this._enterActor(this._umbrellaSprite, { x: 360, y: 360, duration: 980 });
+        await this._enterActor(this._umbrellaSprite, { x: 360, y: 360, duration: 1700 });
         this._styleUmbrella('purple');
         await this._bubbleDialogue(this._umbrellaSprite, ENDING_DIALOGUE.umbrella_purple, {
             speaker: 'UMBRELLA',
@@ -622,7 +891,7 @@ export default class EndScene extends Phaser.Scene {
 
     async _runUmbrellaRedEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 900 });
+        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 1800 });
         this._startManagerIdle();
         await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_manager, {
             speaker: 'MANAGER BOT',
@@ -655,7 +924,7 @@ export default class EndScene extends Phaser.Scene {
 
     async _runUmbrellaMixedEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 900 });
+        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 1800 });
         this._startManagerIdle();
         await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_manager, {
             speaker: 'MANAGER BOT',
@@ -748,19 +1017,25 @@ export default class EndScene extends Phaser.Scene {
         });
     }
 
-    _enterActor(actor, { x, y, duration = 900 } = {}) {
+    _enterActor(actor, { x, y, duration = 900, startX = 1440, ease = 'Cubic.Out', alphaFrom = 1, scaleFromFactor = 1 } = {}) {
+        const targetScaleX = actor.scaleX || 1;
+        const targetScaleY = actor.scaleY || 1;
         actor.setVisible(true);
-        actor.setAlpha(1);
-        actor.setPosition(1440, y ?? actor.y);
+        actor.setAlpha(alphaFrom);
+        actor.setPosition(startX, y ?? actor.y);
         actor.setAngle(0);
+        actor.setScale(targetScaleX * scaleFromFactor, targetScaleY * scaleFromFactor);
 
         return new Promise((resolve) => {
             this.tweens.add({
                 targets: actor,
                 x,
                 y: y ?? actor.y,
+                alpha: 1,
+                scaleX: targetScaleX,
+                scaleY: targetScaleY,
                 duration,
-                ease: 'Cubic.Out',
+                ease,
                 onComplete: () => resolve(true),
             });
         });
@@ -819,7 +1094,7 @@ export default class EndScene extends Phaser.Scene {
 
     async _runExplosionLeadIn() {
         for (let index = 0; index < 5; index += 1) {
-            this.cameras.main.flash(90, 255, 80 + (index * 15), 70, false);
+            this.cameras.main.flash(90, 190, 230, 255, false);
             this.cameras.main.shake(150, 0.02 + (index * 0.002));
             this.tweens.add({
                 targets: this._scrapButton,
@@ -1042,7 +1317,7 @@ export default class EndScene extends Phaser.Scene {
         }
 
         if (violent) {
-            this.cameras.main.flash(220, 255, 95, 72, false);
+            this.cameras.main.flash(220, 190, 230, 255, false);
         }
         this.cameras.main.shake(700, violent ? 0.03 : 0.018);
 
@@ -1082,7 +1357,7 @@ export default class EndScene extends Phaser.Scene {
         });
 
         await this._wait(920);
-        this.cameras.main.fade(700, 120, 6, 6);
+        this.cameras.main.fade(700, 0, 0, 0);
         await this._wait(820);
     }
 
@@ -1102,6 +1377,7 @@ export default class EndScene extends Phaser.Scene {
         this._panelTag.setVisible(false);
         this._panelMeta.setVisible(false);
         this._speakerTween?.stop();
+        this._setPlayAgainVisible(false);
 
         this.cameras.main.fadeIn(700, 0, 0, 0);
 
@@ -1123,11 +1399,293 @@ export default class EndScene extends Phaser.Scene {
             delay: 160,
         });
 
-        await this._wait(4200);
-        this.tweens.add({
-            targets: [this._playAgainBg, this._playAgainText],
+        await this._wait(1900);
+        await this._tweenAsync({
+            targets: this._titleCard,
+            y: 96,
+            scale: 0.82,
+            duration: 1300,
+            ease: 'Cubic.InOut',
+        });
+        await this._runCreditsSequence();
+        await this._showScoreScreen();
+    }
+
+    _setPlayAgainVisible(visible) {
+        const isVisible = Boolean(visible);
+        this._playAgainBg
+            ?.setVisible(isVisible)
+            .setAlpha(isVisible ? 1 : 0)
+            .setPosition(640, 660)
+            .setDepth(58);
+        this._playAgainText
+            ?.setVisible(isVisible)
+            .setAlpha(isVisible ? 1 : 0)
+            .setPosition(640, 660)
+            .setDepth(59);
+
+        if (isVisible) {
+            this._playAgainBg?.setInteractive({ useHandCursor: true });
+        } else {
+            this._playAgainBg?.disableInteractive();
+        }
+    }
+
+    _setSkipCreditsVisible(visible) {
+        const isVisible = Boolean(visible);
+        this._skipCreditsBg
+            ?.setVisible(isVisible)
+            .setAlpha(isVisible ? 1 : 0);
+        this._skipCreditsText
+            ?.setVisible(isVisible)
+            .setAlpha(isVisible ? 1 : 0);
+
+        if (isVisible) {
+            this._skipCreditsBg?.setInteractive({ useHandCursor: true });
+        } else {
+            this._skipCreditsBg?.disableInteractive();
+        }
+    }
+
+    _runCreditsSequence() {
+        this._creditsFinished = false;
+        this._creditsContainer
+            ?.setVisible(true)
+            .setAlpha(1)
+            .setY(760);
+        this._setSkipCreditsVisible(true);
+
+        const creditHeight = this._creditsText?.height || 900;
+        const endY = -creditHeight - 120;
+        const duration = Math.max(24000, creditHeight * 28);
+
+        return new Promise((resolve) => {
+            this._creditsResolve = resolve;
+            this._creditsTween = this.tweens.add({
+                targets: this._creditsContainer,
+                y: endY,
+                duration,
+                ease: 'Linear',
+                onComplete: () => this._finishCreditsNow(),
+            });
+        });
+    }
+
+    _finishCreditsNow() {
+        if (this._creditsFinished) return;
+        this._creditsFinished = true;
+
+        const tween = this._creditsTween;
+        this._creditsTween = null;
+        tween?.stop();
+
+        this._creditsContainer?.setVisible(false).setAlpha(0);
+        this._setSkipCreditsVisible(false);
+
+        const resolve = this._creditsResolve;
+        this._creditsResolve = null;
+        resolve?.(true);
+    }
+
+    async _showScoreScreen() {
+        const summary = this._buildEndScoreSummary();
+        this._titleCard.setVisible(false);
+        this._scoreContainer?.destroy(true);
+
+        this._scoreContainer = this.add.container(0, 0).setDepth(52).setAlpha(0);
+        const bg = this.add.rectangle(640, 360, 1280, 720, 0x010306, 0.98);
+        const topLine = this.add.rectangle(640, 54, 1040, 2, 0x5a98b6, 0.7);
+        const title = this.add.text(640, 84, 'PERFORMANCE REVIEW', {
+            fontFamily: 'Courier New',
+            fontSize: '24px',
+            color: '#cdefff',
+            letterSpacing: 5,
+        }).setOrigin(0.5);
+        const gradeLabel = this.add.text(640, 142, 'FINAL GRADE', {
+            fontFamily: 'Courier New',
+            fontSize: '13px',
+            color: '#7fbad1',
+            letterSpacing: 4,
+        }).setOrigin(0.5);
+        const grade = this.add.text(640, 210, summary.grade, {
+            fontFamily: 'Courier New',
+            fontSize: summary.grade.length > 2 ? '76px' : '92px',
+            color: summary.grade === 'M' ? '#ffd685' : '#e6fbff',
+            letterSpacing: 4,
+        }).setOrigin(0.5);
+        const scoreLine = this.add.text(640, 274, `${summary.score}/100 // ${summary.verdict}`, {
+            fontFamily: 'Courier New',
+            fontSize: '16px',
+            color: '#9fe2f5',
+            align: 'center',
+        }).setOrigin(0.5);
+        const statsTitle = this.add.text(210, 332, 'HOW YOUR SCORE WAS GRADED', {
+            fontFamily: 'Courier New',
+            fontSize: '14px',
+            color: '#8ddff5',
+            letterSpacing: 3,
+        }).setOrigin(0, 0.5);
+        const statsText = this.add.text(210, 362, summary.lines.join('\n'), {
+            fontFamily: 'Courier New',
+            fontSize: '15px',
+            color: '#d9f6ff',
+            lineSpacing: 8,
+            wordWrap: { width: 860 },
+        }).setOrigin(0, 0);
+        const bottomLine = this.add.rectangle(640, 626, 860, 1, 0x334455, 0.9);
+
+        this._scoreContainer.add([bg, topLine, title, gradeLabel, grade, scoreLine, statsTitle, statsText, bottomLine]);
+        this._setPlayAgainVisible(true);
+
+        await this._tweenAsync({
+            targets: this._scoreContainer,
             alpha: 1,
-            duration: 600,
+            duration: 700,
+            ease: 'Sine.Out',
+        });
+    }
+
+    _buildEndScoreSummary() {
+        const outcomes = Array.isArray(GameState.trackedMachineOutcomes)
+            ? GameState.trackedMachineOutcomes
+            : [];
+        const mistakes = Math.max(0, Number(GameState.totalMistakes || 0));
+        const netMoney = Number(GameState.paycheckTotal || 0);
+        const totalCases = outcomes.length;
+        const readyCount = outcomes.filter((outcome) => outcome.ready).length;
+        const readyRate = totalCases > 0 ? readyCount / totalCases : 1;
+        const puzzleTotals = this._collectPuzzleTotals(outcomes);
+        const timingStats = {
+            grid: GameState.getPuzzleTimingStats?.('grid') || { count: 0, averageMs: 0 },
+            flow: GameState.getPuzzleTimingStats?.('flow') || { count: 0, averageMs: 0 },
+            gear: GameState.getPuzzleTimingStats?.('gear') || { count: 0, averageMs: 0 },
+            code: GameState.getPuzzleTimingStats?.('code') || { count: 0, averageMs: 0 },
+        };
+        const completionRate = puzzleTotals.required > 0 ? puzzleTotals.completed / puzzleTotals.required : 1;
+        const resolvedRate = puzzleTotals.required > 0 ? puzzleTotals.resolved / puzzleTotals.required : 1;
+        const totalMoneyLost = Math.max(0, mistakes * PAYCHECK_DELTA);
+        const totalMoneyMade = Math.max(0, netMoney) + totalMoneyLost;
+        const clownBonus = this._getClownBonusAmount();
+        const rawScore = Phaser.Math.Clamp(
+            38
+                + (completionRate * 28)
+                + (resolvedRate * 12)
+                + (readyRate * 18)
+                + Phaser.Math.Clamp(netMoney / PAYCHECK_DELTA, -10, 10)
+                + (clownBonus > 0 ? 3 : 0)
+                - (mistakes * 12),
+            0,
+            100,
+        );
+        const perfect = totalCases > 0
+            && mistakes === 0
+            && completionRate >= 1
+            && resolvedRate >= 1
+            && readyRate >= 1
+            && netMoney >= (totalCases * PAYCHECK_DELTA);
+        const grade = perfect ? 'M' : this._gradeFromScore(rawScore);
+        const score = perfect ? 100 : Math.round(rawScore);
+        const netPercent = Phaser.Math.Clamp(Math.round(18 + (netMoney / Math.max(PAYCHECK_DELTA, totalCases * PAYCHECK_DELTA)) * 42), 2, 96);
+        const verdict = perfect
+            ? 'LITERALLY PERFECT GAMEPLAY'
+            : (score >= 94 ? 'ELITE FLOOR PERFORMANCE' : (score >= 74 ? 'ABOVE QUOTA' : (score >= 40 ? 'KEPT EMPLOYED' : 'CORPORATE EVIDENCE BAG')));
+
+        return {
+            grade,
+            score,
+            verdict,
+            lines: [
+                `- mistakes: ${mistakes}`,
+                this._formatPuzzleTimeLine('average debug puzzle time', timingStats.code, 96),
+                this._formatPuzzleTimeLine('average circuit puzzle time', timingStats.grid, 84),
+                this._formatPuzzleTimeLine('average gear puzzle time', timingStats.gear, 112),
+                this._formatPuzzleTimeLine('average wiring puzzle time', timingStats.flow, 90),
+                `- total money made: $${totalMoneyMade.toFixed(2)}`,
+                `- total money lost: $${totalMoneyLost.toFixed(2)}`,
+                `- net money: $${netMoney.toFixed(2)} (${netPercent}% ahead of everyone else)`,
+                `- clown bonus: ${clownBonus > 0 ? `+$${clownBonus.toFixed(2)} APPLIED` : '$0.00'}`,
+            ],
+        };
+    }
+
+    _collectPuzzleTotals(outcomes) {
+        const byKey = {
+            grid: { required: 0, completed: 0, resolved: 0 },
+            flow: { required: 0, completed: 0, resolved: 0 },
+            gear: { required: 0, completed: 0, resolved: 0 },
+            code: { required: 0, completed: 0, resolved: 0 },
+        };
+
+        outcomes.forEach((outcome) => {
+            Object.entries(outcome.puzzleResults || {}).forEach(([key, result]) => {
+                if (!byKey[key]) return;
+                if (!result?.required) return;
+                byKey[key].required += 1;
+                if (result.completed) byKey[key].completed += 1;
+                if (result.resolved) byKey[key].resolved += 1;
+            });
+        });
+
+        return {
+            byKey,
+            required: Object.values(byKey).reduce((sum, entry) => sum + entry.required, 0),
+            completed: Object.values(byKey).reduce((sum, entry) => sum + entry.completed, 0),
+            resolved: Object.values(byKey).reduce((sum, entry) => sum + entry.resolved, 0),
+        };
+    }
+
+    _formatPuzzleTimeLine(label, timingStats, benchmarkSeconds) {
+        const count = Math.max(0, Number(timingStats?.count || 0));
+        if (count <= 0) {
+            return `- ${label}: N/A (no normal completed runs recorded)`;
+        }
+
+        const averageSeconds = Math.max(0, Number(timingStats.averageMs || 0) / 1000);
+        const benchmark = Math.max(1, Number(benchmarkSeconds || 1));
+        const deltaPercent = Phaser.Math.Clamp(Math.round(Math.abs((benchmark - averageSeconds) / benchmark) * 100), 1, 98);
+        const comparison = averageSeconds <= benchmark
+            ? `${deltaPercent}% faster than everyone else`
+            : `${deltaPercent}% slower than everyone else`;
+        return `- ${label}: ${this._formatDuration(averageSeconds)} (${comparison}, ${count} run${count === 1 ? '' : 's'})`;
+    }
+
+    _formatDuration(totalSeconds) {
+        const seconds = Math.max(0, Math.round(totalSeconds));
+        const minutes = Math.floor(seconds / 60);
+        const remainder = String(seconds % 60).padStart(2, '0');
+        return `${minutes}:${remainder}`;
+    }
+
+    _getClownBonusAmount() {
+        if (this._endingVariant === 'umbrella_red' || this._endingVariant === 'umbrella_mixed') {
+            return 20;
+        }
+
+        const deal = GameState.jesterDeal;
+        if (deal?.rewardGranted) {
+            return Number(deal.benefactorBonus || 20);
+        }
+
+        return 0;
+    }
+
+    _gradeFromScore(score) {
+        let grade = SCORE_GRADES[0].grade;
+        SCORE_GRADES.forEach((entry) => {
+            if (score >= entry.min) grade = entry.grade;
+        });
+        return grade;
+    }
+
+    _tweenAsync(config) {
+        return new Promise((resolve) => {
+            this.tweens.add({
+                ...config,
+                onComplete: (...args) => {
+                    config.onComplete?.(...args);
+                    resolve(true);
+                },
+            });
         });
     }
 
