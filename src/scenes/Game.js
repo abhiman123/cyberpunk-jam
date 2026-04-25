@@ -5896,14 +5896,6 @@ export default class GameScene extends Phaser.Scene {
         this._setFactoryBackgroundLightVisible(true);
         this._queueFactoryBackgroundLightFlicker();
 
-        // this._monitorText = this.add.text(130, 375,
-        //     'AWAITING UNIT\n\nSTATUS: READY', {
-        //         fontFamily: 'Courier New', fontSize: '10px', color: '#301934',
-        //         align: 'center', lineSpacing: 4,
-        //     }
-        // ).setOrigin(0.5);
-        // this._conveyorContainer.add(this._monitorText);
-
         this._machineDialogueText = this.add.text(966, 460, '', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#bceef8',
             align: 'left', wordWrap: { width: 260 }, lineSpacing: 6,
@@ -6018,17 +6010,21 @@ export default class GameScene extends Phaser.Scene {
                 .setInteractive(this.input.makePixelPerfect(0));
 
             buttonImage.on('pointerover', () => {
-                if (!this._canUseFactoryDecisionButtons()) return;
-                buttonImage.setTint(0xffffff).setAlpha(1);
+                if (this._canUseFactoryDecisionButtons()) {
+                    buttonImage.setTint(0xffffff);
+                }
             });
+
             buttonImage.on('pointerout', () => {
-                this._refreshFactoryActionButtons();
+                if (this._canUseFactoryDecisionButtons()) {
+                    buttonImage.setTint(0x7f7f7f);
+                }
             });
 
             buttonImage.on('pointerdown', () => {
-                if (!this._canUseFactoryDecisionButtons()) return;
-                buttonImage.setTint(0xffffff).setAlpha(1);
-                this._submitRuling(def.action);
+                if (this._canUseFactoryDecisionButtons()) {
+                    this._submitRuling(def.action);
+                }
             });
 
             this._factoryControlsContainer.add(buttonImage);
@@ -6252,7 +6248,6 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleReturnPhoneState = null;
         this._gearPuzzleReturnPhoneState = null;
         this._debugPuzzleReturnPhoneState = null;
-        // if (this._monitorText) this._monitorText.setText(message);
         if (this._unitContainer) this._unitContainer.setVisible(false);
         this._setMachineWorklightVisible(false);
         if (this._machineDialogueText) this._machineDialogueText.setText('');
@@ -7155,9 +7150,7 @@ export default class GameScene extends Phaser.Scene {
         const acceptOverrideReady = Boolean(this._pendingUnsafeAcceptConfirmation) && hasUnit;
 
         Object.entries(this._conveyorRulingButtons).forEach(([action, button]) => {
-            button.bgRect
-                .setTint(canInteract ? 0xffffff : 0x6f6f6f)
-                .setAlpha(canInteract ? 1 : 0.48);
+            button.bgRect.setTint(0x7f7f7f)
         });
 
         this._refreshOtherPuzzleButton();
@@ -7586,7 +7579,6 @@ export default class GameScene extends Phaser.Scene {
         });
         this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.45 });
         this._showFeedback('ACCEPT AGAIN TO OVERRIDE', '#ffd685');
-        this._refreshFactoryActionButtons();
     }
 
     _prepareSpecialMachineRuling(action, gateState) {
@@ -8459,9 +8451,6 @@ export default class GameScene extends Phaser.Scene {
         const monitorStatus = this._currentCase._konamiOverride || this._currentCase.isFinalCase
             ? 'STATUS: FINAL'
             : 'STATUS: ACTIVE';
-        // this._monitorText.setText(
-        //     `UNIT INCOMING\n\n${this._currentCase.id}\n${this._currentCase.name}\n${monitorStatus}`
-        // );
 
         this._machineDialogueText.setText('');
         const stateSyncStartedAt = this._getPerfNow();
