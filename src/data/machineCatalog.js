@@ -6487,33 +6487,28 @@ function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
     }
 
     // --- 3. Choose which cells become charge constraints ---
-    // Every pair (= every domino) must carry at least one charge constraint
-    // so the player has a real reason to place that specific domino in that
-    // specific orientation. Otherwise dominos with no constrained half could
-    // be swapped freely, the puzzle becomes trivial, and — in the worst case
-    // visible to the player — feels like "extra dominos that don't belong on
-    // the board". `applyBoth` then decides how often we go further and pin
-    // *both* halves: low on Day 1 (more wiggle room), high on Day 3 (tight
-    // uniqueness).
-    const applyBothChance = stage === 1 ? 0.3 : stage === 2 ? 0.55 : 0.85;
+    // We want a mix: 40-70% of pairs have at least one charge half.
+    // Day 1 stays airy (~25% of pairs get a charge half); Day 2 doubles up;
+    // Day 3 saturates so most pairs carry a constraint.
+    const chargeRatio = stage === 1 ? 0.25 : stage === 2 ? 0.5 : 0.75;
     const chargeMap = new Map(existingChargeMap); // start from any pre-existing charges
 
+    // Shuffle pairs for random charge selection.
     const shuffledPairs = [...pairs].sort(() => randomFn() - 0.5);
+    const chargeTarget = Math.max(1, Math.round(pairs.length * chargeRatio));
+    let chargeCount = 0;
 
     for (const pair of shuffledPairs) {
-        // Skip pairs that are already fully constrained by pre-existing
-        // authored charges (rare, but possible when a hand-authored grid
-        // option seeds them).
-        const alreadyFullyFixed = pair.every(([r, c]) => chargeMap.has(`${r},${c}`));
-        if (alreadyFullyFixed) continue;
-
-        const applyBoth = randomFn() < applyBothChance;
+        if (chargeCount >= chargeTarget) break;
+        // Pick one or both halves.
+        const applyBoth = randomFn() < 0.4;
         for (const [r, c] of pair) {
             const k = `${r},${c}`;
             if (chargeMap.has(k)) continue; // already fixed by existing charge
             // Pip values 0–4, but we favour 1–3 for interesting gameplay.
             const pip = Math.floor(randomFn() * 4) + 1;
             chargeMap.set(k, Math.min(4, pip));
+            chargeCount++;
             if (!applyBoth) break;
         }
     }
