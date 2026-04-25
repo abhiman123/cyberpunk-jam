@@ -1615,8 +1615,12 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
     }
 
     if (stage === 2) {
-        const decoyCell = findFirstOpenGearCell(stagedOption.board, stagedOption.pieces);
-        if (decoyCell) {
+        // Day 2: 1-2 decoy idler gears so the player has to choose
+        // which loose part to install vs. ignore.
+        const decoyCount = 1 + (randomFn() < 0.5 ? 1 : 0);
+        for (let index = 0; index < decoyCount; index += 1) {
+            const decoyCell = findFirstOpenGearCell(stagedOption.board, stagedOption.pieces);
+            if (!decoyCell) break;
             stagedOption.pieces.push(createGearPiece(GEAR_CODES.FULL, decoyCell.row, decoyCell.col, {
                 role: 'decoy',
                 label: 'IDLER',
@@ -1625,15 +1629,28 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
     }
 
     if (stage >= 3) {
-        const clampCount = stagedOption.pieces.filter((p) => p.role === 'deadlock-clamp').length;
-        if (clampCount < 2) {
+        // Day 3: 2-3 deadlock clamps + 1-2 decoy idlers. Denser board,
+        // more "wrong" choices the player has to filter out.
+        const targetClamps = 2 + (randomFn() < 0.45 ? 1 : 0);
+        let clampCount = stagedOption.pieces.filter((p) => p.role === 'deadlock-clamp').length;
+        while (clampCount < targetClamps) {
             const clampCell = findFirstOpenGearCell(stagedOption.board, stagedOption.pieces);
-            if (clampCell) {
-                stagedOption.pieces.push(createGearPiece(GEAR_CODES.MOVABLE_WALL, clampCell.row, clampCell.col, {
-                    role: 'deadlock-clamp',
-                    label: 'CLAMP',
-                }));
-            }
+            if (!clampCell) break;
+            stagedOption.pieces.push(createGearPiece(GEAR_CODES.MOVABLE_WALL, clampCell.row, clampCell.col, {
+                role: 'deadlock-clamp',
+                label: 'CLAMP',
+            }));
+            clampCount += 1;
+        }
+
+        const decoyCount = 1 + (randomFn() < 0.5 ? 1 : 0);
+        for (let index = 0; index < decoyCount; index += 1) {
+            const decoyCell = findFirstOpenGearCell(stagedOption.board, stagedOption.pieces);
+            if (!decoyCell) break;
+            stagedOption.pieces.push(createGearPiece(GEAR_CODES.FULL, decoyCell.row, decoyCell.col, {
+                role: 'decoy',
+                label: 'IDLER',
+            }));
         }
     }
 
