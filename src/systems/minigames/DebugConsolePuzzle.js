@@ -6,9 +6,25 @@ const PANEL_WIDTH = 1120;
 const PANEL_HEIGHT = 636;
 const CHAR_FONT_SIZE = '22px';
 const BUG_SYMBOLS = Object.freeze(['#', '%', '@', '&', '?', '!']);
-const BUG_SPAWN_DELAY_MS = 3600;
-const BUG_TRAVEL_MIN_MS = 6500;
-const BUG_TRAVEL_MAX_MS = 9200;
+// Per-day bug pacing. Day 1 has bugs disabled entirely (constant unused).
+// Day 2 introduces slow occasional bugs. Day 3 ramps spawn rate ~2x and
+// makes them crawl ~30% faster so the player has less time to react.
+const BUG_SPAWN_DELAY_MS_BY_DAY = Object.freeze({ 1: 7200, 2: 5400, 3: 3000 });
+const BUG_TRAVEL_RANGE_BY_DAY = Object.freeze({
+    1: { min: 9000, max: 12000 },
+    2: { min: 7800, max: 10500 },
+    3: { min: 5200, max: 7400 },
+});
+
+function getBugSpawnDelayMs(dayStage) {
+    const stage = Math.max(1, Math.min(3, Number(dayStage) || 1));
+    return BUG_SPAWN_DELAY_MS_BY_DAY[stage] ?? 3600;
+}
+
+function getBugTravelRange(dayStage) {
+    const stage = Math.max(1, Math.min(3, Number(dayStage) || 1));
+    return BUG_TRAVEL_RANGE_BY_DAY[stage] ?? { min: 6500, max: 9200 };
+}
 
 function clampIndex(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -1187,8 +1203,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
     _startBugSpawner() {
         if (!this.evidence.bugsEnabled || this.evidence.phase === 'scrap') return;
         this._stopBugSpawner();
+        const spawnDelay = getBugSpawnDelayMs(this.evidence?.dayStage);
         this._bugSpawnEvent = this.scene.time.addEvent({
-            delay: BUG_SPAWN_DELAY_MS,
+            delay: spawnDelay,
             loop: true,
             callback: () => {
                 if (!this.active || this.evidence.completed) return;
@@ -1251,11 +1268,12 @@ export default class DebugConsolePuzzle extends MinigameBase {
             repeat: -1,
             ease: 'Sine.InOut',
         });
+        const travelRange = getBugTravelRange(this.evidence?.dayStage);
         const tween = this.scene.tweens.add({
             targets: bug,
             x: targetX,
             y: targetY,
-            duration: Phaser.Math.Between(BUG_TRAVEL_MIN_MS, BUG_TRAVEL_MAX_MS),
+            duration: Phaser.Math.Between(travelRange.min, travelRange.max),
             ease: 'Linear',
             onComplete: () => this._handleBugImpact(bugView),
         });

@@ -1719,10 +1719,15 @@ function corruptDebugPrompt(prompt = '', randomFn = Math.random) {
 function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.random) {
     if (!debugPuzzleOption) return null;
 
+    // Per-day difficulty:
+    // - Day 1: stable harness, no bugs, no protocol-invalid mismatches.
+    // - Day 2: bugs enabled at slow pace + 70% chance of repairable mismatch.
+    // - Day 3: bugs enabled at fast pace + 85% chance of repairable mismatch
+    //          + 30% chance of spark-hazard (instant scrap).
     const stagedOption = {
         ...debugPuzzleOption,
         dayStage: stage,
-        bugsEnabled: stage >= 3,
+        bugsEnabled: stage >= 2,
         resultType: 'stable',
         protocolInvalidOutputs: stage >= 2 ? buildProtocolInvalidOutputs(debugPuzzleOption.expectedOutput) : [],
         scrapKind: null,
@@ -1738,15 +1743,20 @@ function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.r
     }
 
     if (stage === 2 && Array.isArray(stagedOption.actualOutputs) && stagedOption.actualOutputs.length > 0) {
-        stagedOption.resultType = randomFn() < 0.58 ? 'repairable-mismatch' : 'stable';
+        stagedOption.resultType = randomFn() < 0.70 ? 'repairable-mismatch' : 'stable';
         return stagedOption;
     }
 
-    if (stage >= 3 && randomFn() < 0.24) {
+    if (stage >= 3 && randomFn() < 0.30) {
         stagedOption.resultType = 'spark-hazard';
         stagedOption.scrapKind = 'hazard';
         stagedOption.scrapStatus = 'SPARKED DEBUG BUG';
         stagedOption.scrapReason = 'A sparked debugger bug indicates unstable software contamination. Scrap the unit immediately.';
+        return stagedOption;
+    }
+
+    if (stage >= 3 && Array.isArray(stagedOption.actualOutputs) && stagedOption.actualOutputs.length > 0) {
+        stagedOption.resultType = randomFn() < 0.85 ? 'repairable-mismatch' : 'stable';
         return stagedOption;
     }
 
