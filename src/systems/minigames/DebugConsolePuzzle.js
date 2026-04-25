@@ -983,6 +983,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             detailText = this._specialCommandMode && this._canUseSpecialCommand()
                 ? ['Special command armed.', 'Type the theft command exactly.', '', 'Command:', this._specialCommand.command].join('\n')
                 : ['Prompt:', this.evidence.prompt, '', 'Expected output:', this.evidence.expectedOutput].join('\n');
+            const hasTypedInput = String(this._hiddenInput?.value ?? this.evidence.inputValue ?? '').length > 0;
             message = this._specialCommandMode && this._canUseSpecialCommand()
                 ? 'Type steal data exactly to yank the file instead of running the normal test.'
                 : (hasTypedInput
