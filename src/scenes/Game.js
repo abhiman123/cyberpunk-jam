@@ -67,8 +67,6 @@ export default class GameScene extends Phaser.Scene {
         this._lastTypeBeepAt = 0;
         this._miniMachinePanelVisible = false;
         this._miniMachinePanelHoverPort = null;
-        this._machineSpeechBubbleHistory = [];
-        this._activeMachineSpeechBubbleIndex = -1;
         this._pendingKonamiFinalCase = null;
         this._purpleCircuitDeskItem = null;
         this._umbrellaDeskItemMap = new Map();
@@ -2594,18 +2592,6 @@ export default class GameScene extends Phaser.Scene {
             this._syncPhoneBodyLayout();
         }
 
-        // if (typingState.showMachineBubble && typingState.bubbleMachineVariant === this._currentMachineVariant) {
-        //     this._finalizeMachineSpeechBubble(typingState.bubbleText);
-        // }
-
-        // if (typingState.bubbleMachineVariant) {
-        //     const chatView = this._getPhoneViewState('chat');
-        //     this._cacheMachineConversationSnapshot(
-        //         typingState.bubbleMachineVariant,
-        //         chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
-        //     );
-        // }
-
         this._activePhoneTypingState = null;
         return true;
     }
@@ -2897,21 +2883,11 @@ export default class GameScene extends Phaser.Scene {
     _typePhoneMessage(text, {
         append = false,
         onComplete = null,
-        showMachineBubble = false,
-        speechBubbleText = null,
-        bubbleFooter = '',
-        bubbleMachineVariant = this._currentMachineVariant,
     } = {}) {
         this._clearPhoneTyping();
 
         const view = this._getPhoneViewState('chat');
         const prefix = append ? view.body : '';
-        const bubbleText = showMachineBubble
-            ? String(speechBubbleText ?? text ?? '').replace(/\s+/g, ' ').trim()
-            : '';
-        const shouldRenderMachineBubble = Boolean(bubbleText)
-            && Boolean(bubbleMachineVariant)
-            && bubbleMachineVariant === this._currentMachineVariant;
 
         if (!append) view.body = '';
         view.stickToBottom = true;
@@ -2920,20 +2896,8 @@ export default class GameScene extends Phaser.Scene {
             this._refreshPhonePanelDisplay();
         }
 
-        if (shouldRenderMachineBubble) {
-            if (!this._hasBrokenVoiceBox(bubbleMachineVariant)) {
-                this._playOneShot(this._getMachineDialogueSoundAsset(bubbleMachineVariant), {
-                    volume: SOUND_VOLUMES.voice * 0.58,
-                });
-            }
-            this._beginMachineSpeechBubble({ footer: bubbleFooter });
-        }
-
         if (!text) {
             this._activePhoneTypingState = null;
-            if (shouldRenderMachineBubble) {
-                this._finalizeMachineSpeechBubble(bubbleText);
-            }
             onComplete?.();
             return;
         }
@@ -2943,9 +2907,6 @@ export default class GameScene extends Phaser.Scene {
             view,
             prefix,
             text: String(text || ''),
-            bubbleText,
-            showMachineBubble: false,
-            bubbleMachineVariant,
             onComplete,
             charIndex: 0,
         };
@@ -2963,19 +2924,11 @@ export default class GameScene extends Phaser.Scene {
                     this._phoneStickToBottom = true;
                     this._syncPhoneBodyLayout();
                 }
-                if (shouldRenderMachineBubble && bubbleMachineVariant === this._currentMachineVariant) {
-                    const progressRatio = text.length > 0 ? (charIndex / text.length) : 1;
-                    const bubbleCharCount = Math.max(0, Math.min(bubbleText.length, Math.round(progressRatio * bubbleText.length)));
-                    this._updateActiveMachineSpeechBubbleText(bubbleText.slice(0, bubbleCharCount));
-                }
                 if (nextChar && nextChar.trim()) this._playTypeBeep();
 
                 if (charIndex >= text.length) {
                     this._commTypingEvent = null;
                     this._activePhoneTypingState = null;
-                    if (shouldRenderMachineBubble && bubbleMachineVariant === this._currentMachineVariant) {
-                        this._finalizeMachineSpeechBubble(bubbleText);
-                    }
                     onComplete?.();
                 }
             },
@@ -3246,38 +3199,6 @@ export default class GameScene extends Phaser.Scene {
         return segments.join('');
     }
 
-    _buildMachineSpeechBubbleEntries(machineVariant = this._currentMachineVariant) {
-        if (!machineVariant?.hasCommunication) return [];
-
-        const stage = machineVariant._uiConversationStage || 'opening';
-        const prompt = machineVariant.questionDialogue?.prompt || '';
-        const entries = [];
-        const pushEntry = (textValue, footer = '') => {
-            const normalizedText = String(textValue || '').replace(/\s+/g, ' ').trim();
-            if (!normalizedText) return;
-            entries.push({ text: normalizedText, footer: String(footer || '').trim() });
-        };
-
-        if (machineVariant.openingDialogue) {
-            pushEntry(this._formatMachineSpeech(machineVariant.openingDialogue, machineVariant));
-        }
-
-        if ((stage === 'question' || stage === 'answered') && prompt) {
-            pushEntry(this._formatMachineSpeech(prompt, machineVariant), 'YES / NO');
-        }
-
-        if (stage === 'answered') {
-            const choice = machineVariant._uiConversationChoice;
-            const responseText = choice === 'accept'
-                ? machineVariant.questionDialogue?.yesDialogue
-                : machineVariant.questionDialogue?.noDialogue;
-            if (responseText) {
-                pushEntry(this._formatMachineSpeech(responseText, machineVariant), choice === 'accept' ? 'YES' : 'NO');
-            }
-        }
-
-        return entries.slice(-2);
-    }
 
     _refreshMachineConversationPanel(machineVariant = this._currentMachineVariant, status = null, options = {}) {
         if (!machineVariant) return false;
@@ -3298,11 +3219,6 @@ export default class GameScene extends Phaser.Scene {
             'chat',
             options,
         );
-        if (machineVariant === this._currentMachineVariant && !this._commTypingEvent) {
-            this._machineSpeechBubbleHistory = this._buildMachineSpeechBubbleEntries(machineVariant);
-            this._activeMachineSpeechBubbleIndex = -1;
-            this._refreshMachineSpeechBubbles();
-        }
         return true;
     }
 
@@ -3326,9 +3242,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(speechText, machineVariant)}`, {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: speechText,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
                 this._cacheMachineConversationSnapshot(machineVariant, status);
@@ -4193,9 +4106,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'SIGNAL SPIKE', 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(panicText, machineVariant)}`, {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: panicText,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
                 this._cacheMachineConversationSnapshot(machineVariant, 'CLOWN SIGNAL');
@@ -4302,9 +4212,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'PROPOSITION INCOMING', 'chat');
         this._typePhoneMessage('\n\nWait. Keep it quiet. I need a little supply run.\n\nQ> Want to hear it?', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'Wait. Keep it quiet. I need a little supply run. Want to hear it?',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4339,9 +4246,6 @@ export default class GameScene extends Phaser.Scene {
                 this._showPhonePanel(header, currentBody, 'PROPOSITION CLOSED', 'chat');
                 this._typePhoneMessage('\n\nX Alright, whatever, bro.', {
                     append: true,
-                    showMachineBubble: false,
-                    speechBubbleText: 'Alright, whatever, bro.',
-                    bubbleMachineVariant: machineVariant,
                     onComplete: () => {
                         if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4358,9 +4262,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'HEAR ME OUT', 'chat');
             this._typePhoneMessage('\n\n✓ Alright. Here it is.\n\nQ> I need you to lift gears, circuits, wire, and data for me. Keep it on your desk until I come back tomorrow. You down?', {
                 append: true,
-                showMachineBubble: true,
-                speechBubbleText: 'Alright. Here it is. I need you to lift gears, circuits, wire, and data for me. Keep it on your desk until I come back tomorrow. You down?',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4381,9 +4282,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'REBELLION REFUSED', 'chat');
             this._typePhoneMessage('\n\nX Whatever. You missed out.', {
                 append: true,
-                showMachineBubble: true,
-                speechBubbleText: 'Whatever. You missed out.',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4404,9 +4302,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'QUEST ACCEPTED', 'chat');
         this._typePhoneMessage(`\n\n✓ Good. Keep it quiet. I need ${requirementText}. Lift it from the floor jobs, stash it on your desk, and keep it clean until I get back.`, {
             append: true,
-            showMachineBubble: true,
-            speechBubbleText: `Good. Keep it quiet. I need ${requirementText}. Lift it from the floor jobs, stash it on your desk, and keep it clean until I get back.`,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4450,9 +4345,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'PART CHECK', 'chat');
         this._typePhoneMessage(`\n\nQ> You got all the ${label} or what?`, {
             append: true,
-            showMachineBubble: true,
-            speechBubbleText: `You got all the ${label} or what?`,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4482,9 +4374,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'DEAL TERMINATED', 'chat');
             this._typePhoneMessage('\n\nX Then give me the rest of your parts. Our business here is concluded.', {
                 append: true,
-                showMachineBubble: true,
-                speechBubbleText: 'Then give me the rest of your parts. Our business here is concluded.',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4501,9 +4390,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL TRUSTING YOU', 'chat');
         this._typePhoneMessage('\n\n✓ Alright. Then keep loading me up.', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'Alright. Then keep loading me up.',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4531,9 +4417,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'DIDN\'T FEEL A THING', 'chat');
         this._typePhoneMessage('\n\nQ> r u sure u have the part? i didnt feel anything', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'r u sure u have the part? i didnt feel anything',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4563,9 +4446,6 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'DEAL CLOSED', 'chat');
             this._typePhoneMessage('\n\nX our business here is done.', {
                 append: true,
-                showMachineBubble: false,
-                speechBubbleText: 'our business here is done.',
-                bubbleMachineVariant: machineVariant,
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4591,9 +4471,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL WAITING', 'chat');
         this._typePhoneMessage('\n\n✓ im waiting.', {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: 'im waiting.',
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4612,7 +4489,6 @@ export default class GameScene extends Phaser.Scene {
         const promptSpeech = this._formatMachineSpeech(prompt, machineVariant);
 
         machineVariant._uiConversationChoice = null;
-        this._clearMachineSpeechBubbles();
 
         if (!machineVariant?.hasCommunication) {
             machineVariant._uiConversationStage = 'no-signal';
@@ -4630,9 +4506,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE', 'chat');
 
         this._typePhoneMessage(openingSpeech, {
-            showMachineBubble: false,
-            speechBubbleText: openingSpeech,
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (!prompt) {
                     this._phoneChoicePhase = 'inactive';
@@ -4654,10 +4527,6 @@ export default class GameScene extends Phaser.Scene {
                     );
                     this._typePhoneMessage(`\n\nQ> ${promptSpeech}`, {
                         append: true,
-                        showMachineBubble: false,
-                        speechBubbleText: promptSpeech,
-                        bubbleFooter: 'YES / NO',
-                        bubbleMachineVariant: machineVariant,
                         onComplete: () => {
                             machineVariant._uiConversationStage = 'question';
                             this._phoneChoicePhase = 'machine-question';
@@ -4780,10 +4649,6 @@ export default class GameScene extends Phaser.Scene {
             this._commSequenceEvent = this.time.delayedCall(90, () => {
                 this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
                     append: true,
-                    showMachineBubble: false,
-                    speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
-                    bubbleFooter: choice === 'accept' ? 'YES' : 'NO',
-                    bubbleMachineVariant: machineVariant,
                     onComplete: () => {
                         if (specialChoiceResult.autoApprove && this._currentMachineVariant === machineVariant) {
                             this._pendingUnsafeAcceptConfirmation = true;
@@ -5291,13 +5156,6 @@ export default class GameScene extends Phaser.Scene {
             stroke: '#000000', strokeThickness: 2,
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._machineDialogueText);
-
-        this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(16).setVisible(false);
-        this._machineSpeechBubbleSlots = [
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 320, 244),
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 406, 286, true),
-        ];
-        this._machineSpeechBubbleSlots.forEach((slot) => this._machineSpeechBubbleLayer.add(slot.container));
 
         this._shapeTitleText = this.add.text(964, 126, 'CHASSIS GRID', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
@@ -6781,9 +6639,6 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n${action === 'approve' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
             append: true,
-            showMachineBubble: false,
-            speechBubbleText: this._formatMachineSpeech(responseText, machineVariant),
-            bubbleMachineVariant: machineVariant,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -6942,187 +6797,14 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _createMachineSpeechBubbleSlot(x, y, maxWidth, withTail = false) {
-        const container = this.add.container(x, y).setVisible(false);
-        const shadow = this.add.graphics();
-        const bubble = this.add.graphics();
-        const tailShadow = this.add.graphics();
-        const tail = this.add.graphics();
-        const text = this.add.text(0, 0, '', {
-            fontFamily: 'Courier New',
-            fontSize: '14px',
-            color: '#2a2d34',
-            align: 'left',
-            wordWrap: { width: maxWidth - 28 },
-            lineSpacing: 4,
-        }).setOrigin(0, 1);
-        const footerText = this.add.text(0, 0, '', {
-            fontFamily: 'Courier New',
-            fontSize: '10px',
-            color: '#6f5b45',
-            letterSpacing: 1,
-        }).setOrigin(1, 1).setVisible(false);
-        container.add([shadow, bubble, tailShadow, tail, text, footerText]);
 
-        return { container, shadow, bubble, tailShadow, tail, text, footerText, maxWidth, withTail };
-    }
 
-    _normalizeMachineSpeechBubbleEntry(entryValue = '') {
-        if (typeof entryValue === 'string') {
-            return {
-                text: String(entryValue || '').trim(),
-                footer: '',
-            };
-        }
 
-        return {
-            text: String(entryValue?.text || '').trim(),
-            footer: String(entryValue?.footer || '').trim(),
-        };
-    }
 
-    _drawMachineSpeechBubbleSlot(slot, entryValue = '') {
-        if (!slot) return;
 
-        const entry = this._normalizeMachineSpeechBubbleEntry(entryValue);
-        const content = entry.text;
-        const footer = entry.footer;
-        if (!content) {
-            slot.container.setVisible(false);
-            slot.shadow.clear();
-            slot.bubble.clear();
-            slot.tailShadow.clear();
-            slot.tail.clear();
-            slot.text.setText('');
-            slot.footerText?.setText('');
-            slot.footerText?.setVisible(false);
-            return;
-        }
 
-        slot.text.setWordWrapWidth(slot.maxWidth - 28, true);
-        slot.text.setText(content);
-        slot.footerText?.setText(footer);
-        slot.footerText?.setVisible(Boolean(footer));
 
-        const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 30, 110, slot.maxWidth);
-        const bubbleHeight = Phaser.Math.Clamp(slot.text.height + 24 + (footer ? 16 : 0), 48, 148);
-        const left = 0;
-        const top = -bubbleHeight;
 
-        slot.text.setPosition(14, footer ? -28 : -12);
-        slot.footerText?.setPosition(bubbleWidth - 12, -8);
-
-        slot.shadow.clear();
-        slot.shadow.fillStyle(0x000000, 0.18);
-        slot.shadow.fillRoundedRect(left + 4, top + 4, bubbleWidth, bubbleHeight, 12);
-
-        slot.bubble.clear();
-        slot.bubble.fillStyle(0xf4ecdf, 0.98);
-        slot.bubble.fillRoundedRect(left, top, bubbleWidth, bubbleHeight, 12);
-        slot.bubble.lineStyle(2, 0x5d5040, 0.96);
-        slot.bubble.strokeRoundedRect(left, top, bubbleWidth, bubbleHeight, 12);
-
-        slot.tailShadow.clear();
-        slot.tail.clear();
-        if (slot.withTail) {
-            const tailPoints = [
-                left + 24, -10,
-                left + 40, 20,
-                left + 58, -2,
-            ];
-            slot.tailShadow.fillStyle(0x000000, 0.18);
-            slot.tailShadow.fillPoints([
-                { x: tailPoints[0] + 4, y: tailPoints[1] + 4 },
-                { x: tailPoints[2] + 4, y: tailPoints[3] + 4 },
-                { x: tailPoints[4] + 4, y: tailPoints[5] + 4 },
-            ], true);
-            slot.tail.fillStyle(0xf4ecdf, 0.98);
-            slot.tail.fillPoints([
-                { x: tailPoints[0], y: tailPoints[1] },
-                { x: tailPoints[2], y: tailPoints[3] },
-                { x: tailPoints[4], y: tailPoints[5] },
-            ], true);
-            slot.tail.lineStyle(2, 0x5d5040, 0.96);
-            slot.tail.strokePoints([
-                { x: tailPoints[0], y: tailPoints[1] },
-                { x: tailPoints[2], y: tailPoints[3] },
-                { x: tailPoints[4], y: tailPoints[5] },
-            ], true);
-        }
-
-        slot.container.setVisible(true);
-    }
-
-    _canShowMachineSpeechBubbles() {
-        return Boolean(
-            this._currentCase
-            && this._currentMachineVariant?.hasCommunication
-            && this._unitContainer?.visible
-            && !this._unitMoveTween
-        );
-    }
-
-    _refreshMachineSpeechBubbles() {
-        if (!Array.isArray(this._machineSpeechBubbleSlots) || this._machineSpeechBubbleSlots.length === 0) return;
-
-        const visibleEntries = this._machineSpeechBubbleHistory
-            .map((entry) => this._normalizeMachineSpeechBubbleEntry(entry))
-            .filter((entry) => entry.text.length > 0)
-            .slice(-2);
-        const hasEntries = visibleEntries.length > 0 && this._canShowMachineSpeechBubbles();
-
-        this._machineSpeechBubbleLayer?.setVisible(hasEntries);
-        this._machineSpeechBubbleSlots.forEach((slot, index) => {
-            const slotText = visibleEntries.length === 1
-                ? (index === this._machineSpeechBubbleSlots.length - 1 ? visibleEntries[0] : null)
-                : (visibleEntries[index] || null);
-            this._drawMachineSpeechBubbleSlot(slot, slotText);
-        });
-    }
-
-    _clearMachineSpeechBubbles() {
-        this._machineSpeechBubbleHistory = [];
-        this._activeMachineSpeechBubbleIndex = -1;
-        this._refreshMachineSpeechBubbles();
-    }
-
-    _beginMachineSpeechBubble({ footer = '' } = {}) {
-        this._machineSpeechBubbleHistory.push({ text: '', footer: String(footer || '').trim() });
-        if (this._machineSpeechBubbleHistory.length > 2) {
-            this._machineSpeechBubbleHistory.shift();
-        }
-        this._activeMachineSpeechBubbleIndex = this._machineSpeechBubbleHistory.length - 1;
-        this._refreshMachineSpeechBubbles();
-    }
-
-    _updateActiveMachineSpeechBubbleText(textValue = '') {
-        if (this._activeMachineSpeechBubbleIndex < 0) return;
-
-        const currentEntry = this._normalizeMachineSpeechBubbleEntry(this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex]);
-        this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex] = {
-            ...currentEntry,
-            text: String(textValue || ''),
-        };
-        this._refreshMachineSpeechBubbles();
-    }
-
-    _finalizeMachineSpeechBubble(textValue = '') {
-        if (this._activeMachineSpeechBubbleIndex >= 0) {
-            const currentEntry = this._normalizeMachineSpeechBubbleEntry(this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex]);
-            this._machineSpeechBubbleHistory[this._activeMachineSpeechBubbleIndex] = {
-                ...currentEntry,
-                text: String(textValue || ''),
-            };
-        } else if (textValue) {
-            this._machineSpeechBubbleHistory.push({ text: String(textValue), footer: '' });
-            if (this._machineSpeechBubbleHistory.length > 2) {
-                this._machineSpeechBubbleHistory.shift();
-            }
-        }
-
-        this._activeMachineSpeechBubbleIndex = -1;
-        this._refreshMachineSpeechBubbles();
-    }
 
     _appendLog(text) {
         this._logLines.push(text);
@@ -7214,7 +6896,6 @@ export default class GameScene extends Phaser.Scene {
         }
         this._currentCase = queuedCase ? { ...queuedCase } : null;
         if (!this._currentCase) {
-            this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('QUEUE EMPTY\n\nSTATUS: HOLD');
             return;
         }
@@ -7230,7 +6911,6 @@ export default class GameScene extends Phaser.Scene {
                 pendingGuarantees: this._machineGuaranteeState?.filter((entry) => !entry.fulfilled).map((entry) => entry.id) || [],
             });
             this._currentCase = null;
-            this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('DAY ROSTER CLEARED\n\nSTATUS: CLOCKING OUT');
             this._triggerRosterClearShiftEnd();
             return;
@@ -7263,7 +6943,6 @@ export default class GameScene extends Phaser.Scene {
                 error: String(error?.message || error),
             });
             this._currentCase = null;
-            this._clearMachineSpeechBubbles();
             this._setFactoryIdleState('LOAD FAULT\n\nSTATUS: SKIP');
             if ((this._machineQueue?.length || 0) > 0 || this._machineGuaranteeState?.some((entry) => !entry.fulfilled)) {
                 this._scheduleNextCase(160);
@@ -7408,7 +7087,6 @@ export default class GameScene extends Phaser.Scene {
                 }
                 try {
                     this._playMachineConversation(arrivingMachineVariant);
-                    this._refreshMachineSpeechBubbles();
                     this._emitSequenceDebug('conversation started', {
                         machineId: arrivingMachineVariant?.machineId || null,
                         stage: arrivingMachineVariant?._uiConversationStage || null,
@@ -7536,7 +7214,6 @@ export default class GameScene extends Phaser.Scene {
             this._unitContainer.setAlpha(1);
             this._unitContainer.setY(420);
             this._machineDialogueText.setText('');
-            this._clearMachineSpeechBubbles();
             this._clearMachineGridDisplays();
             if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
             this._currentMachineVariant = null;
