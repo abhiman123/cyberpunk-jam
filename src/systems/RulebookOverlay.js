@@ -26,6 +26,11 @@ const TAB_DEFINITIONS = [
 // a HOW-TO-SOLVE paragraph, and three numbered SCRAP rules. The right-hand
 // example panel is rendered separately by `_renderDiagram`.
 
+// `howToSolve` and `scrapRules` items can be plain strings (always shown)
+// or objects with a `minDay` field — those entries are only revealed once
+// `GameState.day` reaches that day. This is how, e.g., the Flow colour
+// rule appears starting on Day 2.
+
 const TAB_CONTENT = {
     overview: {
         cardHeader: 'OVERVIEW FIELD RULES',
@@ -43,25 +48,33 @@ const TAB_CONTENT = {
     grid: {
         cardHeader: 'GRID FIELD RULES',
         subline:    'CHARGE CELLS // PIPS MUST EQUAL THE CELL TARGET',
-        howToSolve: 'Place dominos so every charge cell is covered by a half whose pip count matches the cell target. Equality links must agree; not-equal links must differ.',
+        howToSolve: [
+            { text: 'Place dominos so every charge cell is covered by a half whose pip count matches the cell target.' },
+            { text: 'Equality cells must hold matching pip counts; <N / >N cells must beat their threshold.', minDay: 2 },
+            { text: 'Charge cells now also pair across rows — both halves of each pair carry constraints.', minDay: 3 },
+        ],
         scrapBlurb: 'Tile the open cells, satisfy every constraint, then judge.',
         scrapRules: [
-            'No legal tiling possible = scrap.',
-            'Charge target violated under best play = scrap.',
-            'Equality / inequality link broken = scrap.',
+            { text: 'No legal tiling possible = scrap.' },
+            { text: 'Charge target violated under best play = scrap.' },
+            { text: 'Equality / threshold cell broken = scrap.', minDay: 2 },
         ],
         diagramTitle: 'GRID EXAMPLE',
         diagramKind:  'grid',
     },
     flow: {
         cardHeader: 'FLOW FIELD RULES',
-        subline:    'SOURCES → OUTPUTS // CURRENT MUST CARRY ITS COLOUR',
-        howToSolve: 'Rotate wire tiles to deliver power from each source to its matching output. Colour filters tint the current after the tile; wrong colour at the output fails the test.',
-        scrapBlurb: 'Route every source to its output; respect colour filters.',
+        subline:    'SOURCES → OUTPUTS // ROUTE POWER TO EVERY LEAD',
+        howToSolve: [
+            { text: 'Rotate wire tiles to deliver power from the source to every output.' },
+            { text: 'Colour filters tint the current after the tile — the output expects that colour.', minDay: 2 },
+            { text: 'Multiple sources feed the grid; cross-routing is allowed but discharge wires kill outputs.', minDay: 3 },
+        ],
+        scrapBlurb: 'Route every source to its output, respect colour and discharge.',
         scrapRules: [
-            'Output starved of current = scrap.',
-            'Colour mismatch at any output = scrap.',
-            'Discharge wire reaches a live output = scrap.',
+            { text: 'Output starved of current = scrap.' },
+            { text: 'Colour mismatch at any output = scrap.', minDay: 2 },
+            { text: 'Discharge wire reaches a live output = scrap.', minDay: 3 },
         ],
         diagramTitle: 'FLOW EXAMPLE',
         diagramKind:  'flow',
@@ -69,12 +82,16 @@ const TAB_CONTENT = {
     gear: {
         cardHeader: 'GEAR FIELD RULES',
         subline:    'AXLES MUST SPIN // TEETH MUST MESH',
-        howToSolve: 'Drop loose gears into the empty slots so the input axle drives every output axle. Watch tooth size — gears only mesh with neighbours of compatible scale.',
+        howToSolve: [
+            { text: 'Drop loose gears into the empty slots so the input axle drives every output axle.' },
+            { text: 'Watch tooth size — gears only mesh with neighbours of compatible scale.', minDay: 2 },
+            { text: 'Reverse gears flip rotation — keep an even number between drive and load.', minDay: 3 },
+        ],
         scrapBlurb: 'Build a clean drive train from input to every output.',
         scrapRules: [
-            'Output axle does not spin = scrap.',
-            'Cracked gear sits inside the chain = scrap.',
-            'Output spins the wrong direction = scrap.',
+            { text: 'Output axle does not spin = scrap.' },
+            { text: 'Cracked gear sits inside the chain = scrap.' },
+            { text: 'Output spins the wrong direction = scrap.', minDay: 3 },
         ],
         diagramTitle: 'GEAR EXAMPLE',
         diagramKind:  'gear',
@@ -82,17 +99,31 @@ const TAB_CONTENT = {
     code: {
         cardHeader: 'CODE FIELD RULES',
         subline:    'PATCH BUGS // OUTPUT MUST MATCH EXPECTED',
-        howToSolve: 'Patch out crawling bugs in the source, then run the test. The console must print the expected output before you accept the unit.',
+        howToSolve: [
+            { text: 'Patch out crawling bugs in the source, then run the test.' },
+            { text: 'The console must print the expected output before you accept the unit.' },
+            { text: 'Bugs respawn faster on later shifts; corruptions can spawn from missed patches.', minDay: 2 },
+        ],
         scrapBlurb: 'Patch every bug, run the test, then judge by the output.',
         scrapRules: [
-            'Output drifts after patching = scrap.',
-            'Hazard line is unrepairable on the floor = scrap.',
-            'Bugs respawn after every patch = scrap.',
+            { text: 'Output drifts after patching = scrap.' },
+            { text: 'Hazard line is unrepairable on the floor = scrap.', minDay: 2 },
+            { text: 'Bugs respawn after every patch = scrap.', minDay: 3 },
         ],
         diagramTitle: 'CODE EXAMPLE',
         diagramKind:  'code',
     },
 };
+
+// Filter helper — accepts either a string or { text, minDay } object and
+// resolves to an array of strings the player should see today.
+function resolveDayContent(items, day) {
+    if (!items) return [];
+    const arr = Array.isArray(items) ? items : [items];
+    return arr
+        .filter((it) => typeof it === 'string' || (it.minDay ?? 1) <= day)
+        .map((it) => (typeof it === 'string' ? it : it.text));
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -356,7 +387,10 @@ export default class RulebookOverlay {
         this._dynamic(howHeader);
         cursor += howHeader.height + 10;
 
-        const howBody = this.scene.add.text(innerX, cursor, content.howToSolve, {
+        const day = GameState.day || 1;
+        const howLines = resolveDayContent(content.howToSolve, day);
+        const howText  = howLines.length ? howLines.join('\n\n') : '';
+        const howBody = this.scene.add.text(innerX, cursor, howText, {
             fontFamily: 'Courier New', fontSize: '14px', color: '#c8e3ec',
             wordWrap: { width: innerW }, lineSpacing: 6,
         }).setOrigin(0, 0);
@@ -383,7 +417,8 @@ export default class RulebookOverlay {
         cursor += scrapBlurb.height + 14;
 
         // Numbered scrap rule rows.
-        content.scrapRules.forEach((rule, idx) => {
+        const scrapLines = resolveDayContent(content.scrapRules, day);
+        scrapLines.forEach((rule, idx) => {
             const rowY = cursor;
             const numBoxSize = 26;
             const numBg = this.scene.add.rectangle(innerX, rowY, numBoxSize, numBoxSize, 0x0a1820, 1)
@@ -413,7 +448,6 @@ export default class RulebookOverlay {
             this._dynamic(dirHeader);
             cursor += dirHeader.height + 8;
 
-            const day = GameState.day || 1;
             const directives = this.allRules.filter((r) => (
                 this.activeRuleIds.includes(r.id) && r.period === day
             ));
@@ -591,122 +625,343 @@ export default class RulebookOverlay {
     }
 
     _drawGridDiagram(x, y, w, h) {
-        // 4×4 grid silhouette with a couple of charge cells + a horizontal domino.
-        const cellSize = Math.min(48, Math.floor((h - 40) / 4));
-        const cols = 4;
-        const rows = 4;
-        const gridW = cols * cellSize;
-        const gridH = rows * cellSize;
-        const gridX = x + (w - gridW) / 2;
-        const gridY = y + 20;
+        // Brown "PHONOGRAPH GRID" backdrop matching the actual Pips puzzle:
+        // brown card, scattered open cells, comparator pills (>N / <N) on top
+        // cells, an equality-bar covering two cells, and a tray of NYT-style
+        // green dominos beneath.
+        const brownBg = this.scene.add.rectangle(x, y, w, h, 0x2c1a14, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x6a3f2c, 0.85);
+        this._dynamic(brownBg);
 
-        const gfx = this.scene.add.graphics();
-        gfx.lineStyle(1, 0x6ce8a4, 0.55);
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                gfx.strokeRect(gridX + c * cellSize, gridY + r * cellSize, cellSize, cellSize);
+        // Inner card (the actual board area).
+        const boardW = w - 24;
+        const boardH = Math.floor(h * 0.55);
+        const boardX = x + 12;
+        const boardY = y + 14;
+        const board = this.scene.add.rectangle(boardX, boardY, boardW, boardH, 0x3a241c, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x8a553c, 0.85);
+        this._dynamic(board);
+
+        // Cell layout — a 4-wide × 3-tall grid with some empty spots for "shape".
+        const cell = 36;
+        const gridCols = 4;
+        const gridRows = 3;
+        const gridW = gridCols * cell;
+        const gridH = gridRows * cell;
+        const gridX = boardX + (boardW - gridW) / 2;
+        const gridY = boardY + (boardH - gridH) / 2;
+
+        // Open cell grid: 1 = open, 0 = hidden. Mimics the screenshot layout.
+        const layout = [
+            [1, 0, 1, 0],
+            [0, 0, 1, 1],
+            [1, 0, 0, 0],
+        ];
+
+        for (let r = 0; r < gridRows; r++) {
+            for (let c = 0; c < gridCols; c++) {
+                if (!layout[r][c]) continue;
+                const cellRect = this.scene.add.rectangle(
+                    gridX + c * cell + 2, gridY + r * cell + 2,
+                    cell - 4, cell - 4, 0x1c100c, 0.95,
+                ).setOrigin(0, 0).setStrokeStyle(1, 0x6a3f2c, 0.85);
+                this._dynamic(cellRect);
             }
         }
-        this._dynamic(gfx);
 
-        // Charge cell (target = 3) at (1,1)
-        const chargeR = 1, chargeC = 1;
-        const chargePill = this.scene.add.rectangle(
-            gridX + chargeC * cellSize + cellSize / 2,
-            gridY + chargeR * cellSize + cellSize - 6,
-            cellSize - 14, 14, 0x6ce8a4, 0.95,
-        );
-        const chargeLabel = this.scene.add.text(
-            gridX + chargeC * cellSize + cellSize / 2,
-            gridY + chargeR * cellSize + cellSize - 6,
-            '3', {
-                fontFamily: 'Courier New', fontSize: '11px', color: '#062a18', letterSpacing: 1,
-            }
-        ).setOrigin(0.5);
-        this._dynamic(chargePill, chargeLabel);
+        // Comparator pill helper (rounded rect with > or < label).
+        const drawComparator = (col, row, label, isLess) => {
+            const cx = gridX + col * cell + cell / 2;
+            const cy = gridY + row * cell + cell / 2;
+            // Draw a darker fill on the cell background to indicate comparator
+            const fill = isLess ? 0x183444 : 0x2a1c4a;
+            const stroke = isLess ? 0x4ad0e8 : 0xb27aff;
+            const cellOverlay = this.scene.add.rectangle(
+                gridX + col * cell + 2, gridY + row * cell + 2,
+                cell - 4, cell - 4, fill, 0.85,
+            ).setOrigin(0, 0).setStrokeStyle(1, stroke, 0.85);
+            // Rounded pill at the bottom of the cell with the comparator text.
+            const pillBg = this.scene.add.rectangle(
+                cx, cy + cell / 2 - 7, cell - 12, 14, fill, 0.95,
+            ).setStrokeStyle(1, stroke, 0.95);
+            const pillLabel = this.scene.add.text(cx, cy + cell / 2 - 7, label, {
+                fontFamily: 'Courier New', fontSize: '11px',
+                color: isLess ? '#c8f0fa' : '#e9d5ff', letterSpacing: 1,
+            }).setOrigin(0.5);
+            this._dynamic(cellOverlay, pillBg, pillLabel);
+        };
 
-        // Horizontal domino covering (1,1) and (1,2)
-        const dominoX = gridX + chargeC * cellSize + 4;
-        const dominoY = gridY + chargeR * cellSize + 4;
-        const dominoBg = this.scene.add.rectangle(
-            dominoX, dominoY, cellSize * 2 - 8, cellSize - 8, 0x113224, 0.85,
-        ).setOrigin(0, 0).setStrokeStyle(2, 0x6ce8a4, 0.95);
-        const dominoSplit = this.scene.add.rectangle(
-            dominoX + cellSize - 4, dominoY + 4,
-            1, cellSize - 16, 0x6ce8a4, 0.7,
-        ).setOrigin(0, 0);
-        const pipL = this.scene.add.text(
-            dominoX + (cellSize - 4) / 2, dominoY + cellSize / 2 - 4, '3', {
-                fontFamily: 'Courier New', fontSize: '13px', color: '#c8f6dc', letterSpacing: 1,
-            }
-        ).setOrigin(0.5);
-        const pipR = this.scene.add.text(
-            dominoX + cellSize - 4 + (cellSize - 4) / 2, dominoY + cellSize / 2 - 4, '1', {
-                fontFamily: 'Courier New', fontSize: '13px', color: '#c8f6dc', letterSpacing: 1,
-            }
-        ).setOrigin(0.5);
-        this._dynamic(dominoBg, dominoSplit, pipL, pipR);
+        drawComparator(0, 0, '>2', false);
+        drawComparator(2, 0, '>1', false);
+        drawComparator(0, 2, '<1', true);
 
-        // Caption
-        const caption = this.scene.add.text(x + w / 2, gridY + gridH + 22,
-            'Pip "3" half lands on the "3" cell — match.', {
-                fontFamily: 'Courier New', fontSize: '12px', color: '#7eb09a', letterSpacing: 1,
-            }
-        ).setOrigin(0.5);
-        this._dynamic(caption);
+        // Equality bar covering (1,2) and (1,3) — yellow gold rod with `=`
+        // glyph, matching the actual puzzle's equality link visual.
+        const eqRow = 1;
+        const eqColLeft = 2;
+        const eqWidth = cell * 2 - 8;
+        const eqHeight = cell - 16;
+        const eqX = gridX + eqColLeft * cell + 4;
+        const eqY = gridY + eqRow * cell + 8;
+
+        // Two host cells already drawn; add gold/yellow tint over them.
+        const eqLeftCell = this.scene.add.rectangle(
+            gridX + eqColLeft * cell + 2, gridY + eqRow * cell + 2,
+            cell - 4, cell - 4, 0x1d3441, 0.95,
+        ).setOrigin(0, 0).setStrokeStyle(1, 0x4ad0e8, 0.85);
+        const eqRightCell = this.scene.add.rectangle(
+            gridX + (eqColLeft + 1) * cell + 2, gridY + eqRow * cell + 2,
+            cell - 4, cell - 4, 0x1d3441, 0.95,
+        ).setOrigin(0, 0).setStrokeStyle(1, 0x4ad0e8, 0.85);
+        const rod = this.scene.add.rectangle(eqX, eqY + eqHeight / 2 - 3, eqWidth, 6, 0xf2c84b, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x8a6a25, 0.95);
+        const eqGlyphBg = this.scene.add.circle(eqX + eqWidth / 2, eqY + eqHeight / 2, 9, 0x3a2410, 1)
+            .setStrokeStyle(1, 0xf2c84b, 1);
+        const eqGlyph = this.scene.add.text(eqX + eqWidth / 2, eqY + eqHeight / 2, '=', {
+            fontFamily: 'Courier New', fontSize: '11px', color: '#f2c84b', letterSpacing: 1,
+        }).setOrigin(0.5);
+        this._dynamic(eqLeftCell, eqRightCell, rod, eqGlyphBg, eqGlyph);
+
+        // Domino tray below the board.
+        const trayY = boardY + boardH + 10;
+        const trayH = h - (trayY - y) - 12;
+        const tray = this.scene.add.rectangle(x + 12, trayY, w - 24, trayH, 0x2c1a14, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0xc26d3c, 0.85);
+        this._dynamic(tray);
+
+        const dominoes = [
+            [6, 4],
+            [4, 4],
+            [3, 0],
+            [5, 5],
+            [3, 3],
+            [2, 0],
+        ];
+
+        const dominoW = 36;
+        const dominoH = trayH - 16;
+        const totalW = dominoes.length * dominoW + (dominoes.length - 1) * 6;
+        const dominoStartX = x + (w - totalW) / 2;
+        const dominoY = trayY + 8;
+
+        dominoes.forEach((pair, idx) => {
+            const dx = dominoStartX + idx * (dominoW + 6);
+            const bg = this.scene.add.rectangle(dx, dominoY, dominoW, dominoH, 0x59c977, 1)
+                .setOrigin(0, 0).setStrokeStyle(1, 0xffffff, 0.95);
+            this._dynamic(bg);
+            const split = this.scene.add.rectangle(
+                dx + 3, dominoY + dominoH / 2 - 1,
+                dominoW - 6, 1, 0x0c2418, 0.85,
+            ).setOrigin(0, 0);
+            this._dynamic(split);
+
+            // Pip dots for each half.
+            const drawPips = (count, halfTop) => {
+                const halfX = dx + dominoW / 2;
+                const halfY = halfTop + (dominoH / 2) / 2;
+                const dot = (px, py) => {
+                    const c = this.scene.add.circle(px, py, 2.5, 0xf2c84b, 1)
+                        .setStrokeStyle(1, 0x8a6a25, 0.95);
+                    this._dynamic(c);
+                };
+                const positions = {
+                    1: [[0, 0]],
+                    2: [[-5, -3], [5, 3]],
+                    3: [[-5, -3], [0, 0], [5, 3]],
+                    4: [[-5, -3], [5, -3], [-5, 3], [5, 3]],
+                    5: [[-5, -3], [5, -3], [0, 0], [-5, 3], [5, 3]],
+                    6: [[-5, -4], [5, -4], [-5, 0], [5, 0], [-5, 4], [5, 4]],
+                };
+                const pos = positions[count] || [];
+                pos.forEach(([dx2, dy2]) => dot(halfX + dx2, halfY + dy2));
+            };
+            drawPips(pair[0], dominoY);
+            drawPips(pair[1], dominoY + dominoH / 2);
+        });
     }
 
     _drawFlowDiagram(x, y, w, h) {
-        // Source dot → 3 wire tiles → output port. One filter tile in the middle.
-        const tileSize = 56;
-        const tileCount = 4;
-        const totalW = tileCount * tileSize + (tileCount - 1) * 8;
-        const startX = x + (w - totalW) / 2;
-        const tileY  = y + h / 2 - tileSize / 2;
+        // Mimic the actual Circuit Diagnostic UI: dark green background, a
+        // voltage HUD strip on top, an inventory column on the left, an
+        // octagonal tile grid in the centre, and repair-target LEDs on the
+        // right.
+        const greenBg = this.scene.add.rectangle(x, y, w, h, 0x06161e, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x1a3d48, 0.9);
+        this._dynamic(greenBg);
 
-        // Source
-        const src = this.scene.add.circle(startX - 18, tileY + tileSize / 2, 10, 0x6abdff, 1)
-            .setStrokeStyle(1, 0x9bd3ff, 0.9);
-        this._dynamic(src);
+        // ── Voltage HUD strip (top) ──────────────────────────────────────
+        const hudY = y + 10;
+        const hudH = 26;
+        const hudPanel = (px, pw, label, value, valueHex) => {
+            const bg = this.scene.add.rectangle(px, hudY, pw, hudH, 0x0a1820, 1)
+                .setOrigin(0, 0).setStrokeStyle(1, 0x3ec0d0, 0.7);
+            const lab = this.scene.add.text(px + pw / 2, hudY + 6, label, {
+                fontFamily: 'Courier New', fontSize: '8px', color: '#7eb09a', letterSpacing: 2,
+            }).setOrigin(0.5, 0);
+            const val = this.scene.add.text(px + pw / 2, hudY + 16, value, {
+                fontFamily: 'Courier New', fontSize: '11px', color: valueHex, letterSpacing: 1,
+            }).setOrigin(0.5, 0);
+            this._dynamic(bg, lab, val);
+        };
+        const hudLeftX = x + 12;
+        const hudW = 72;
+        hudPanel(hudLeftX, hudW, 'ACTUAL POWER', '1 / 3', '#6ce8a4');
 
-        for (let i = 0; i < tileCount; i++) {
-            const tx = startX + i * (tileSize + 8);
-            const tileBg = this.scene.add.rectangle(tx, tileY, tileSize, tileSize, 0x0e2034, 1)
-                .setOrigin(0, 0).setStrokeStyle(1, 0x6abdff, 0.7);
-            this._dynamic(tileBg);
-
-            // Pipe drawn through the tile.
-            const pgfx = this.scene.add.graphics();
-            pgfx.lineStyle(4, 0x6abdff, 0.95);
-            if (i === 2) {
-                // filter tile: short orange overlay
-                const fbg = this.scene.add.rectangle(tx + tileSize / 2, tileY + tileSize / 2, 26, 26, 0xf6a25a, 0.35)
-                    .setStrokeStyle(1, 0xf6a25a, 0.9);
-                this._dynamic(fbg);
-            }
-            pgfx.beginPath();
-            pgfx.moveTo(tx, tileY + tileSize / 2);
-            pgfx.lineTo(tx + tileSize, tileY + tileSize / 2);
-            pgfx.strokePath();
-            this._dynamic(pgfx);
+        // Segmented bar between the panels
+        const segX = hudLeftX + hudW + 6;
+        const segW = w - hudW * 2 - 36;
+        const segBg = this.scene.add.rectangle(segX, hudY + 4, segW, hudH - 8, 0x0e2034, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x3ec0d0, 0.6);
+        this._dynamic(segBg);
+        const segCount = 8;
+        const segGap = 2;
+        const segCell = (segW - 6 - segGap * (segCount - 1)) / segCount;
+        for (let i = 0; i < segCount; i++) {
+            const filled = i < 3;
+            const sx = segX + 3 + i * (segCell + segGap);
+            const seg = this.scene.add.rectangle(sx, hudY + 7, segCell, hudH - 14,
+                filled ? 0x6ce8a4 : 0x123540, 1).setOrigin(0, 0);
+            this._dynamic(seg);
         }
 
-        // Output port
-        const outX = startX + totalW + 18;
-        const out = this.scene.add.rectangle(outX - 8, tileY + tileSize / 2 - 10, 16, 20, 0x0e2034, 1)
-            .setOrigin(0, 0).setStrokeStyle(2, 0xf6a25a, 0.95);
-        const outLabel = this.scene.add.text(outX + 18, tileY + tileSize / 2, 'OUT', {
-            fontFamily: 'Courier New', fontSize: '11px', color: '#f6a25a', letterSpacing: 3,
-        }).setOrigin(0, 0.5);
-        this._dynamic(out, outLabel);
+        hudPanel(segX + segW + 6, hudW, 'TARGET POWER', '3', '#f2c84b');
 
-        // Caption
-        const caption = this.scene.add.text(x + w / 2, y + h - 22,
-            'Filter recolours current → output expects orange.', {
-                fontFamily: 'Courier New', fontSize: '12px', color: '#6abdff', letterSpacing: 1,
+        // ── Main play area ──────────────────────────────────────────────
+        const playTop = hudY + hudH + 12;
+        const playH = h - (playTop - y) - 14;
+
+        // Inventory column (left)
+        const invW = 60;
+        const inv = this.scene.add.rectangle(x + 10, playTop, invW, playH, 0x0a1820, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x3ec0d0, 0.65);
+        const invLabel = this.scene.add.text(x + 10 + invW / 2, playTop + 8, 'INVENTORY', {
+            fontFamily: 'Courier New', fontSize: '8px', color: '#3ec0d0', letterSpacing: 1,
+        }).setOrigin(0.5, 0);
+        this._dynamic(inv, invLabel);
+
+        const invShapes = ['STRAIGHT', 'CURVE', 'TEE', 'CROSS'];
+        const slotH = (playH - 24) / invShapes.length;
+        invShapes.forEach((shape, idx) => {
+            const sy = playTop + 22 + idx * slotH;
+            const slot = this.scene.add.rectangle(
+                x + 10 + 8, sy + 4, invW - 16, slotH - 8, 0x0e2034, 1,
+            ).setOrigin(0, 0).setStrokeStyle(1, 0x3ec0d0, 0.55);
+            // Pipe glyph
+            const cx = x + 10 + invW / 2;
+            const cy = sy + 4 + (slotH - 8) / 2 - 4;
+            const gfx = this.scene.add.graphics();
+            gfx.lineStyle(3, 0x6abdff, 0.95);
+            if (shape === 'STRAIGHT') {
+                gfx.beginPath(); gfx.moveTo(cx, cy - 12); gfx.lineTo(cx, cy + 12); gfx.strokePath();
+            } else if (shape === 'CURVE') {
+                gfx.beginPath(); gfx.moveTo(cx, cy + 12); gfx.lineTo(cx, cy); gfx.lineTo(cx + 12, cy); gfx.strokePath();
+            } else if (shape === 'TEE') {
+                gfx.beginPath(); gfx.moveTo(cx - 12, cy); gfx.lineTo(cx + 12, cy); gfx.strokePath();
+                gfx.beginPath(); gfx.moveTo(cx, cy); gfx.lineTo(cx, cy + 12); gfx.strokePath();
+            } else if (shape === 'CROSS') {
+                gfx.beginPath(); gfx.moveTo(cx - 12, cy); gfx.lineTo(cx + 12, cy); gfx.strokePath();
+                gfx.beginPath(); gfx.moveTo(cx, cy - 12); gfx.lineTo(cx, cy + 12); gfx.strokePath();
             }
-        ).setOrigin(0.5);
-        this._dynamic(caption);
+            const lab = this.scene.add.text(cx, sy + slotH - 12, shape, {
+                fontFamily: 'Courier New', fontSize: '8px', color: '#7eb09a', letterSpacing: 1,
+            }).setOrigin(0.5);
+            this._dynamic(slot, gfx, lab);
+        });
+
+        // Repair targets column (right)
+        const targetsW = 60;
+        const targetsX = x + w - targetsW - 10;
+        const targets = this.scene.add.rectangle(targetsX, playTop, targetsW, playH, 0x0a1820, 1)
+            .setOrigin(0, 0).setStrokeStyle(1, 0x3ec0d0, 0.65);
+        const targetsLabel = this.scene.add.text(targetsX + targetsW / 2, playTop + 8, 'REPAIRS', {
+            fontFamily: 'Courier New', fontSize: '8px', color: '#3ec0d0', letterSpacing: 1,
+        }).setOrigin(0.5, 0);
+        this._dynamic(targets, targetsLabel);
+
+        const repairList = [
+            { label: 'CPU', state: 'OK', color: '#6ce8a4' },
+            { label: 'SENSOR', state: 'BROKEN', color: '#ff6b6b' },
+            { label: 'RELAY', state: 'BROKEN', color: '#ff6b6b' },
+        ];
+        const rowH = (playH - 24) / repairList.length;
+        repairList.forEach((r, idx) => {
+            const ry = playTop + 22 + idx * rowH;
+            const led = this.scene.add.circle(targetsX + 12, ry + rowH / 2 - 4, 4,
+                r.state === 'OK' ? 0x6ce8a4 : 0x422020, 1).setStrokeStyle(1, 0x3ec0d0, 0.85);
+            const lab = this.scene.add.text(targetsX + 22, ry + rowH / 2 - 9, r.label, {
+                fontFamily: 'Courier New', fontSize: '9px', color: '#c8e3ec', letterSpacing: 1,
+            }).setOrigin(0, 0);
+            const st = this.scene.add.text(targetsX + 22, ry + rowH / 2 + 1, r.state, {
+                fontFamily: 'Courier New', fontSize: '8px', color: r.color, letterSpacing: 1,
+            }).setOrigin(0, 0);
+            this._dynamic(led, lab, st);
+        });
+
+        // Octagonal tile grid in the centre.
+        const gridX = x + 10 + invW + 14;
+        const gridW = (targetsX - 10) - gridX;
+        const cols = 4;
+        const rows = 4;
+        const tile = Math.min(Math.floor(gridW / cols), Math.floor((playH - 28) / rows));
+        const realGridW = tile * cols;
+        const realGridH = tile * rows;
+        const gridStartX = gridX + (gridW - realGridW) / 2;
+        const gridStartY = playTop + (playH - realGridH) / 2;
+
+        const drawOctTile = (cx, cy, size) => {
+            const gfx = this.scene.add.graphics();
+            const r = (size - 4) / 2;
+            const off = r * 0.4;
+            const points = [
+                [cx - r + off, cy - r], [cx + r - off, cy - r],
+                [cx + r, cy - r + off], [cx + r, cy + r - off],
+                [cx + r - off, cy + r], [cx - r + off, cy + r],
+                [cx - r, cy + r - off], [cx - r, cy - r + off],
+            ];
+            gfx.fillStyle(0x0e2034, 0.95);
+            gfx.lineStyle(1, 0x3ec0d0, 0.7);
+            gfx.beginPath();
+            gfx.moveTo(points[0][0], points[0][1]);
+            for (let i = 1; i < points.length; i++) gfx.lineTo(points[i][0], points[i][1]);
+            gfx.closePath();
+            gfx.fillPath();
+            gfx.strokePath();
+            return gfx;
+        };
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const cx = gridStartX + c * tile + tile / 2;
+                const cy = gridStartY + r * tile + tile / 2;
+                this._dynamic(drawOctTile(cx, cy, tile));
+            }
+        }
+
+        // Pipes drawn over the centre row connecting source → output.
+        const pipeRow = 1;
+        const pipeY = gridStartY + pipeRow * tile + tile / 2;
+        const pgfx = this.scene.add.graphics();
+        pgfx.lineStyle(4, 0x6ce8a4, 1);
+        pgfx.beginPath();
+        pgfx.moveTo(gridStartX, pipeY);
+        pgfx.lineTo(gridStartX + tile * 2, pipeY);
+        pgfx.strokePath();
+        // Filter tile (Day 2+ visualisation)
+        const filterX = gridStartX + tile * 2 + tile / 2;
+        const filter = this.scene.add.rectangle(filterX - 10, pipeY - 10, 20, 20, 0xf6a25a, 0.5)
+            .setOrigin(0, 0).setStrokeStyle(1, 0xf6a25a, 0.95);
+        const pgfx2 = this.scene.add.graphics();
+        pgfx2.lineStyle(4, 0xf6a25a, 1);
+        pgfx2.beginPath();
+        pgfx2.moveTo(gridStartX + tile * 2, pipeY);
+        pgfx2.lineTo(gridStartX + realGridW, pipeY);
+        pgfx2.strokePath();
+        this._dynamic(pgfx, pgfx2, filter);
+
+        // Power source on the left edge of pipe row.
+        const pwr = this.scene.add.circle(gridStartX - 10, pipeY, 7, 0xf2c84b, 1)
+            .setStrokeStyle(1, 0xfff0a8, 0.95);
+        this._dynamic(pwr);
     }
 
     _drawGearDiagram(x, y, w, h) {
