@@ -249,21 +249,16 @@ export default class MachinePuzzleOverlay {
         this._cellViews.forEach((cell) => {
             cell.previewTween?.stop();
             cell.matchTween?.stop();
-            cell.baseRect.destroy();
-            cell.matchRect.destroy();
-            cell.previewRect.destroy();
-            cell.valueText.destroy();
         });
         this._cellViews = [];
         this._cellViewMap.clear();
         this._groupLabelLayer.removeAll(true);
 
-        this._dominoViews.forEach((domino) => domino.container.destroy(true));
         this._dominoViews = [];
         this._dominoViewMap.clear();
 
-        this._gridLayer.removeAll(false);
-        this._dominoLayer.removeAll(false);
+        this._gridLayer.removeAll(true);
+        this._dominoLayer.removeAll(true);
     }
 
     _layoutPuzzle() {
