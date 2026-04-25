@@ -15,7 +15,7 @@ import {
     getOpeningPhoneCallSequence,
     getShiftClockStepMs,
 } from '../constants/gameConstants.js';
-import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections, isGearType } from '../core/gearPuzzleLogic.js';
+import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections } from '../core/gearPuzzleLogic.js';
 import { createMachineVariant, getEligibleMachineDefinitions, resolveMachineTexture } from '../data/machineCatalog.js';
 import { getMusicVolume } from '../state/gameSettings.js';
 
@@ -26,7 +26,6 @@ import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
 
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
-const UMBRELLA_REBELLION_RULE_ID = 101;
 const UMBRELLA_PART_PORTS = Object.freeze({
     circuit: 'grid',
     wire: 'flow',
@@ -103,7 +102,6 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleReturnPhoneState = null;
         this._debugPuzzleReturnPhoneState = null;
         this._otherPuzzleReturnVoiceBroken = false;
-        this._machineWorklightFlickerEvent = null;
         this._phoneBodyScrollOffset = 0;
         this._phoneStickToBottom = true;
         this._phoneScrollHover = false;
@@ -193,7 +191,6 @@ export default class GameScene extends Phaser.Scene {
             this._openingCallChoiceResolver = null;
             this._nextCaseEvent?.remove(false);
             this._advanceCaseEvent?.remove(false);
-            this._machineWorklightFlickerEvent?.remove(false);
             this.input.off('wheel', this._handlePhoneWheel, this);
             this.input.off('pointermove', this._handleDeskItemPointerMove, this);
             this.input.off('pointerup', this._handleDeskItemPointerUp, this);
@@ -429,38 +426,6 @@ export default class GameScene extends Phaser.Scene {
         this._hudContainer.add(this._deskContainer);
     }
 
-    _createDeskPhoto(photoId, textureKey, options = {}) {
-        const width = options.width || 62;
-        const height = options.height || 48;
-        const portraitScale = options.portraitScale || 0.38;
-
-        return this._createDeskItem(photoId, {
-            ...options,
-            width,
-            height,
-            rotationStep: 12,
-            buildVisual: () => {
-                const liftShadow = this.add.rectangle(6, 8, width + 6, height + 6, 0x000000, 0.14);
-                const focusGlow = this.add.rectangle(0, 0, width + 16, height + 16, 0xfff8db, 0)
-                    .setStrokeStyle(2, 0xfffbe7, 0);
-                const shadow = this.add.rectangle(4, 5, width, height, 0x000000, 0.2);
-                const frame = this.add.rectangle(0, 0, width, height, 0xf0e8db, 1)
-                    .setStrokeStyle(1, 0x5d5247, 0.68);
-                const matte = this.add.rectangle(0, -4, width - 12, height - 16, 0x7b7368, 1)
-                    .setStrokeStyle(1, 0x443b32, 0.4);
-                const portrait = this.add.image(0, -4, textureKey)
-                    .setScale(portraitScale)
-                    .setTint(options.tint || 0xf0f0f0);
-
-                return {
-                    nodes: [liftShadow, focusGlow, shadow, frame, matte, portrait],
-                    frame,
-                    focusGlow,
-                    liftShadow,
-                };
-            },
-        });
-    }
 
     _createDeskTablet(itemId, options = {}) {
         const width = options.width || 128;
@@ -1506,10 +1471,6 @@ export default class GameScene extends Phaser.Scene {
         this._returnDeskItemToHome(item, { shake: true });
     }
 
-    _updateDeskDateText() {
-        if (!this._deskDateText) return;
-        this._deskDateText.setText(GameState.formatCurrentShiftDate());
-    }
 
     _buildDisabledInspectionContainer() {
         this._inspectionContainer = this.add.container(0, 0).setVisible(false);
@@ -2296,10 +2257,6 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _hidePhonePanel() {
-        this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE', 'chat');
-    }
 
     _setCommStandbyState(message = 'Awaiting next unit.', status = 'CHANNEL IDLE') {
         this._clearPhoneTyping();
@@ -2962,10 +2919,6 @@ export default class GameScene extends Phaser.Scene {
         };
     }
 
-    _getMachineDialogueSoundAsset(machineVariant = this._currentMachineVariant) {
-        const assetKey = machineVariant?.dialogueSoundAssetKey;
-        return SOUND_ASSETS[assetKey] || SOUND_ASSETS.phoneVoiceIntro;
-    }
 
     _getMachineFlowState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.flowPuzzle) return null;
@@ -4173,23 +4126,6 @@ export default class GameScene extends Phaser.Scene {
         this._rulebook?.setRuleState(GameState.activeRules, newRuleIds);
     }
 
-    _unlockUmbrellaRebellionRule() {
-        const added = GameState.addBonusRule(UMBRELLA_REBELLION_RULE_ID);
-        this._syncRulebookState(added ? [UMBRELLA_REBELLION_RULE_ID] : []);
-        if (!added) return false;
-
-        this._pushPhoneNotification(
-            'QUEST LOGGED',
-            'The Rebellious Umbrella slipped a rebellion note into your rulebook.',
-            'NEW QUEST',
-            {
-                activate: false,
-                unread: this._phoneViewMode !== 'notifications',
-                soundAsset: SOUND_ASSETS.notificationAlert,
-            }
-        );
-        return true;
-    }
 
     _beginRebelliousUmbrellaProposal() {
         const machineVariant = this._currentMachineVariant;
@@ -5142,13 +5078,6 @@ export default class GameScene extends Phaser.Scene {
             this._mainViewLayers[key] = layer;
         });
 
-        // this._monitorText = this.add.text(130, 375,
-        //     'AWAITING UNIT\n\nSTATUS: READY', {
-        //         fontFamily: 'Courier New', fontSize: '10px', color: '#301934',
-        //         align: 'center', lineSpacing: 4,
-        //     }
-        // ).setOrigin(0.5);
-        // this._conveyorContainer.add(this._monitorText);
 
         this._machineDialogueText = this.add.text(966, 460, '', {
             fontFamily: 'Courier New', fontSize: '11px', color: '#bceef8',
@@ -5182,25 +5111,6 @@ export default class GameScene extends Phaser.Scene {
         this._machineBlueprintLabelContainer = this.add.container(0, 0).setVisible(false);
         this._conveyorContainer.add(this._machineBlueprintLabelContainer);
 
-        // this._machineBayLightContainer = this.add.container(MACHINE_PRESENTATION.conveyorTargetX, 420).setDepth(14);
-        // this._unitWorklightCone = this.add.graphics();
-        // this._unitWorklightCone.fillStyle(0xffe4aa, 0.13);
-        // this._unitWorklightCone.fillTriangle(-170, -146, 170, -146, 0, 62);
-        // this._unitWorklightGlow = this.add.ellipse(0, -26, 248, 132, 0xffdc96, 0.14);
-        // this._unitWorklightHalo = this.add.ellipse(0, -172, 84, 30, 0xffefc7, 0.16);
-        // this._unitWorklightHousing = this.add.rectangle(0, -190, 126, 16, 0x2e3439, 1)
-        //     .setStrokeStyle(2, 0x707a82, 0.82);
-        // this._unitWorklightBulb = this.add.rectangle(0, -178, 52, 14, 0xfff0c6, 0.96)
-        //     .setStrokeStyle(1, 0xfffed9, 0.64);
-        // this._machineBayLightContainer.add([
-        //     this._unitWorklightCone,
-        //     this._unitWorklightGlow,
-        //     this._unitWorklightHalo,
-        //     this._unitWorklightHousing,
-        //     this._unitWorklightBulb,
-        // ]);
-        // this._conveyorContainer.add(this._machineBayLightContainer);
-
         this._unitContainer = this.add.container(MACHINE_PRESENTATION.conveyorEntryX, 490).setDepth(15);
         this._conveyorUnitSprite = this.add.image(0, 0, 'unit_placeholder').setScale(1.0);
         this._unitNameText = this.add.text(0, 115, '', {
@@ -5217,7 +5127,6 @@ export default class GameScene extends Phaser.Scene {
             this._unitIdText,
         ]);
         this._unitContainer.setVisible(false);
-        this._setMachineWorklightVisible(false);
 
         this._conveyorUnitSprite.setInteractive({ useHandCursor: true });
         this._conveyorUnitSprite.on('pointerover', () => {
@@ -5313,9 +5222,7 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleReturnPhoneState = null;
         this._gearPuzzleReturnPhoneState = null;
         this._debugPuzzleReturnPhoneState = null;
-        // if (this._monitorText) this._monitorText.setText(message);
         if (this._unitContainer) this._unitContainer.setVisible(false);
-        this._setMachineWorklightVisible(false);
         if (this._machineDialogueText) this._machineDialogueText.setText('');
         this._clearMachineGridDisplays();
         if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
@@ -5600,13 +5507,7 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _scrollBelt(_delta) {
-        // Belt animation handled by pixel art background.
-    }
 
-    _buildInspectionScreen() {
-        this._buildDisabledInspectionContainer();
-    }
 
     _setScreen(name) {
         this._screen = name;
@@ -6819,11 +6720,6 @@ export default class GameScene extends Phaser.Scene {
         return null;
     }
 
-    _findFinalCaseDefinition() {
-        const allCases = this.cache.json.get('cases') || [];
-        const finalCase = allCases.find((item) => item?.isFinalCase);
-        return finalCase ? { ...finalCase } : null;
-    }
 
     _handleKonamiKey(event) {
         if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
@@ -6998,9 +6894,6 @@ export default class GameScene extends Phaser.Scene {
         const monitorStatus = this._currentCase._konamiOverride || this._currentCase.isFinalCase
             ? 'STATUS: FINAL'
             : 'STATUS: ACTIVE';
-        // this._monitorText.setText(
-        //     `UNIT INCOMING\n\n${this._currentCase.id}\n${this._currentCase.name}\n${monitorStatus}`
-        // );
 
         this._machineDialogueText.setText('');
         const stateSyncStartedAt = this._getPerfNow();
@@ -7024,7 +6917,6 @@ export default class GameScene extends Phaser.Scene {
         this._syncCurrentUnitClownEffects(this._currentMachineVariant);
 
         this._unitContainer.setVisible(true);
-        this._setMachineWorklightVisible(true);
         this._unitContainer.x = MACHINE_PRESENTATION.conveyorEntryX;
         this._unitContainer.y = 490;
         this._unitContainer.setAngle(0);
@@ -7209,7 +7101,6 @@ export default class GameScene extends Phaser.Scene {
         const clearUnitPresentation = () => {
             this._stopCurrentUnitJitter();
             this._unitContainer.setVisible(false);
-            this._setMachineWorklightVisible(false);
             this._unitContainer.setAngle(0);
             this._unitContainer.setAlpha(1);
             this._unitContainer.setY(420);
@@ -7280,7 +7171,6 @@ export default class GameScene extends Phaser.Scene {
         this._shiftRunning = false;
         this._gameplayPaused = true;
         this._actionLocked = true;
-        this._setMachineWorklightVisible(false);
         this._clearUnsafeAcceptConfirmation();
         this._machinePuzzleOverlay?.close(true);
         this._hideAuxiliaryOverlays();
@@ -7331,61 +7221,8 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    _setMachineWorklightVisible(visible) {
-        const isVisible = Boolean(visible);
-        const lightParts = [
-            this._unitWorklightCone,
-            this._unitWorklightGlow,
-            this._unitWorklightHalo,
-            this._unitWorklightHousing,
-            this._unitWorklightBulb,
-        ].filter(Boolean);
 
-        lightParts.forEach((part) => part.setVisible(isVisible));
-        this._machineBayLightContainer?.setVisible(isVisible);
-        this._machineWorklightFlickerEvent?.remove(false);
-        this._machineWorklightFlickerEvent = null;
-        this.tweens.killTweensOf(lightParts);
 
-        if (!isVisible) {
-            this._applyMachineWorklightIntensity(0.28);
-            return;
-        }
-
-        this._applyMachineWorklightIntensity(1);
-        this._queueMachineWorklightFlicker();
-    }
-
-    _applyMachineWorklightIntensity(intensity) {
-        const safeIntensity = Phaser.Math.Clamp(intensity, 0, 1.35);
-        this._unitWorklightCone?.setAlpha(0.08 + (safeIntensity * 0.1));
-        this._unitWorklightGlow?.setAlpha(0.07 + (safeIntensity * 0.12));
-        this._unitWorklightHalo?.setAlpha(0.09 + (safeIntensity * 0.16));
-        this._unitWorklightBulb?.setAlpha(0.65 + (safeIntensity * 0.35));
-        this._unitWorklightHousing?.setAlpha(0.9);
-    }
-
-    _queueMachineWorklightFlicker() {
-        this._machineWorklightFlickerEvent?.remove(false);
-        this._machineWorklightFlickerEvent = this.time.delayedCall(Phaser.Math.Between(1200, 3200), () => {
-            if (!this._currentCase || this._shiftEnding) return;
-
-            const flickerState = { intensity: 1 };
-            this.tweens.add({
-                targets: flickerState,
-                intensity: 0.48,
-                duration: Phaser.Math.Between(36, 72),
-                yoyo: true,
-                repeat: Phaser.Math.Between(1, 3),
-                ease: 'Stepped',
-                onUpdate: () => this._applyMachineWorklightIntensity(flickerState.intensity),
-                onComplete: () => {
-                    this._applyMachineWorklightIntensity(1);
-                    this._queueMachineWorklightFlicker();
-                },
-            });
-        });
-    }
 
     _startMusic() {
         this._musicPhase = 1;

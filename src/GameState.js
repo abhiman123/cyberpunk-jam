@@ -85,21 +85,6 @@ export const GameState = {
         return this.activeRules;
     },
 
-    hasRule(ruleId) {
-        return this.activeRules.includes(ruleId) || this.bonusRuleIds.includes(ruleId);
-    },
-
-    addBonusRule(ruleId) {
-        const normalizedId = Number(ruleId);
-        if (!Number.isInteger(normalizedId) || this.bonusRuleIds.includes(normalizedId)) {
-            return false;
-        }
-
-        this.bonusRuleIds.push(normalizedId);
-        this.recomputeActiveRules();
-        return true;
-    },
-
     getCurrentShiftDate() {
         const [year, month, day] = this.ensureCalendarAnchor().split('-').map(Number);
         const date = new Date(year, month - 1, day);
@@ -231,34 +216,12 @@ export const GameState = {
         return 'replacement';
     },
 
-    updateSpecialItem(itemId, updates = {}) {
-        const existing = this.getSpecialItem(itemId);
-        if (!existing) return null;
-
-        const nextItem = {
-            ...existing,
-            ...updates,
-            id: existing.id,
-            label: String((updates && updates.label) || existing.label || existing.id),
-        };
-
-        return this.addSpecialItem(nextItem);
-    },
-
     removeSpecialItem(itemId) {
         const existingIndex = this.specialItems.findIndex((item) => item.id === itemId);
         if (existingIndex < 0) return null;
 
         const [removed] = this.specialItems.splice(existingIndex, 1);
         return removed || null;
-    },
-
-    formatCurrentShiftDate() {
-        const date = this.getCurrentShiftDate();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const year = String(date.getFullYear()).slice(-2);
-        return `${month}.${day}.${year}`;
     },
 
     advanceDay() {
