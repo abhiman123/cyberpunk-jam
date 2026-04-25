@@ -93,61 +93,212 @@ export default class EndScene extends Phaser.Scene {
         });
 
         this.cameras.main.fadeIn(500, 0, 0, 0);
+
+        // Subtle camera push-in for cinematic feel during dialogue
+        this.tweens.add({
+            targets: this.cameras.main,
+            zoom: 1.06,
+            duration: 14000,
+            ease: 'Sine.InOut',
+        });
+
         this.time.delayedCall(550, () => {
             void this._runEndingSequence();
         });
     }
 
     _buildStage() {
-        const background = this.add.rectangle(640, 360, 1280, 720, 0x080c10).setDepth(0);
-        const haze = this.add.rectangle(640, 220, 1280, 320, 0x112332, 0.32).setDepth(0);
-        const pitGlow = this.add.ellipse(640, 680, 420, 70, 0x040608, 0.92).setDepth(1);
-        const catwalk = this.add.rectangle(640, 468, 1280, 164, 0x101820, 1).setDepth(1);
-        const rail = this.add.rectangle(640, 396, 1280, 10, 0x274b62, 0.84).setDepth(2);
+        const background = this.add.rectangle(640, 360, 1280, 720, 0x05080d).setDepth(0);
 
-        this._lights = [];
-        for (let i = 0; i < 6; i += 1) {
-            const light = this.add.rectangle(124 + (i * 206), 96, 84, 20, 0xe8fff3, 0.2)
-                .setDepth(2)
-                .setStrokeStyle(1, 0xe8fff3, 0.24);
-            this._lights.push(light);
+        // Sky gradient (three layered bands)
+        const skyHigh = this.add.rectangle(640, 110, 1280, 220, 0x0e1a2c, 1).setDepth(0);
+        const skyMid = this.add.rectangle(640, 250, 1280, 100, 0x152944, 0.9).setDepth(0);
+        const haze = this.add.rectangle(640, 320, 1280, 60, 0x1d3a5c, 0.55).setDepth(0);
+
+        // Distant factory silhouette (back wall)
+        const backWall = this.add.rectangle(640, 360, 1280, 60, 0x070d16, 0.96).setDepth(0);
+        const skyline = this.add.graphics().setDepth(0);
+        skyline.fillStyle(0x080d18, 1);
+        const skylineSegments = [
+            { x: 60, w: 80, h: 32 },
+            { x: 150, w: 60, h: 22 },
+            { x: 220, w: 110, h: 46 },
+            { x: 350, w: 70, h: 28 },
+            { x: 440, w: 90, h: 38 },
+            { x: 545, w: 60, h: 24 },
+            { x: 615, w: 100, h: 50 },
+            { x: 730, w: 70, h: 30 },
+            { x: 815, w: 110, h: 44 },
+            { x: 935, w: 70, h: 26 },
+            { x: 1015, w: 90, h: 36 },
+            { x: 1115, w: 70, h: 30 },
+            { x: 1200, w: 60, h: 22 },
+        ];
+        skylineSegments.forEach((s) => skyline.fillRect(s.x, 360 - s.h, s.w, s.h));
+        // Tiny window glints in the silhouette
+        skyline.fillStyle(0x4a6f93, 0.6);
+        for (let i = 0; i < 30; i += 1) {
+            const wx = 90 + ((i * 42) % 1180);
+            const wy = 332 + ((i * 17) % 22);
+            skyline.fillRect(wx, wy, 3, 3);
         }
 
+        // Vent fans on the back wall
+        const vents = this.add.graphics().setDepth(0);
+        [200, 540, 920].forEach((vx) => {
+            vents.lineStyle(2, 0x3a5471, 0.8);
+            vents.strokeCircle(vx, 348, 20);
+            vents.lineStyle(2, 0x2a3e54, 0.85);
+            for (let blade = 0; blade < 4; blade += 1) {
+                const angle = (blade / 4) * Math.PI;
+                vents.lineBetween(
+                    vx - Math.cos(angle) * 17,
+                    348 - Math.sin(angle) * 17,
+                    vx + Math.cos(angle) * 17,
+                    348 + Math.sin(angle) * 17,
+                );
+            }
+        });
+        this._vents = vents;
+
+        // Cable bundles dangling from the ceiling
+        const cables = this.add.graphics().setDepth(2);
+        cables.lineStyle(3, 0x0a1018, 1);
+        [180, 410, 700, 970, 1150].forEach((cx) => {
+            cables.lineBetween(cx, 0, cx, 96);
+        });
+        cables.lineStyle(2, 0x1c2632, 0.9);
+        [120, 290, 510, 820, 1080].forEach((cx) => {
+            cables.lineBetween(cx, 0, cx, 70);
+        });
+
+        // Catwalk (main floor) with edge highlights
+        const catwalk = this.add.rectangle(640, 468, 1280, 164, 0x0d141c, 1).setDepth(1);
+        const catwalkEdgeTop = this.add.rectangle(640, 388, 1280, 4, 0x3a6d8f, 0.9).setDepth(2);
+        const catwalkEdgeBottom = this.add.rectangle(640, 550, 1280, 2, 0x1d3548, 0.85).setDepth(2);
+
+        // Rail with bracket posts
+        const rail = this.add.rectangle(640, 392, 1280, 6, 0x4a7a9a, 0.85).setDepth(2);
+        const railShadow = this.add.rectangle(640, 396, 1280, 2, 0x0a1018, 0.7).setDepth(2);
+
+        const railPosts = this.add.graphics().setDepth(2);
+        railPosts.fillStyle(0x232c3a, 0.95);
+        for (let px = 40; px <= 1240; px += 80) {
+            railPosts.fillRect(px - 2, 392, 4, 12);
+        }
+        this._railPosts = railPosts;
+
+        // Catwalk grid plates (subtle diagonal stripe pattern)
+        const plates = this.add.graphics().setDepth(2);
+        plates.lineStyle(1, 0x192230, 0.5);
+        for (let px = 0; px < 1280; px += 64) {
+            plates.lineBetween(px, 410, px, 548);
+        }
+        plates.lineStyle(1, 0x141b25, 0.7);
+        for (let py = 410; py < 548; py += 22) {
+            plates.lineBetween(0, py, 1280, py);
+        }
+        this._plates = plates;
+
+        // Low-level red emergency strip (pulses subtly)
+        this._emergencyStrip = this.add.rectangle(640, 556, 1280, 3, 0xb52a2a, 0.6).setDepth(2);
+        this.tweens.add({
+            targets: this._emergencyStrip,
+            alpha: 0.85,
+            duration: 1400,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
+
+        // Pit glow at the bottom (industrial chasm)
+        const pitGlow = this.add.ellipse(640, 706, 540, 70, 0xff5a3a, 0.18).setDepth(1);
+        this.tweens.add({
+            targets: pitGlow,
+            alpha: 0.30,
+            scaleX: 1.06,
+            duration: 1800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
+        const pitDark = this.add.rectangle(640, 660, 1280, 60, 0x010204, 0.96).setDepth(1);
+
+        // Conveyor tile strip running below the catwalk
         this._conveyorTiles = [];
+        const tileY = 600;
         for (let i = 0; i < 33; i += 1) {
-            const tile = this.add.image(20 + (i * 40), 530, 'conveyor_tile')
+            const tile = this.add.image(20 + (i * 40), tileY, 'conveyor_tile')
                 .setDepth(2)
-                .setAlpha(0.86);
+                .setAlpha(0.74);
             this._conveyorTiles.push(tile);
         }
+        const conveyorEdge = this.add.rectangle(640, 580, 1280, 2, 0x2a3a4a, 0.85).setDepth(2);
 
-        this._scrapButtonGlow = this.add.rectangle(1038, 514, 168, 94, 0xff786f, 0.08)
+        // Industrial overhead lights (housing + bulb + light cone)
+        this._lights = [];
+        this._lightCones = [];
+        const lightXs = [180, 420, 660, 900, 1140];
+        lightXs.forEach((lx) => {
+            // Mounting strap
+            const strap = this.add.rectangle(lx, 30, 4, 30, 0x1b2330, 1).setDepth(2);
+            // Housing (industrial trapezoid look)
+            const housing = this.add.graphics().setDepth(3);
+            housing.fillStyle(0x2a3340, 1);
+            housing.fillTriangle(lx - 36, 64, lx + 36, 64, lx + 24, 96);
+            housing.fillTriangle(lx - 36, 64, lx - 24, 96, lx + 24, 96);
+            housing.lineStyle(1, 0x0d1218, 1);
+            housing.strokeTriangle(lx - 36, 64, lx + 36, 64, lx + 24, 96);
+            housing.strokeTriangle(lx - 36, 64, lx - 24, 96, lx + 24, 96);
+            // Bulb glow
+            const bulb = this.add.ellipse(lx, 96, 38, 8, 0xffe9b2, 0.95).setDepth(4);
+            const bulbCore = this.add.ellipse(lx, 96, 22, 4, 0xffffff, 1).setDepth(4);
+            // Light cone falling onto the catwalk
+            const cone = this.add.graphics().setDepth(2);
+            cone.fillGradientStyle(0xffe9b2, 0xffe9b2, 0xffe9b2, 0xffe9b2, 0.18, 0.18, 0, 0);
+            cone.fillTriangle(lx, 100, lx - 110, 388, lx + 110, 388);
+            this._lights.push(strap, housing, bulb, bulbCore);
+            this._lightCones.push(cone);
+        });
+
+        // Scrap button (used for red/mixed endings)
+        this._scrapButtonGlow = this.add.rectangle(1038, 510, 168, 94, 0xff786f, 0.08)
             .setDepth(3)
             .setVisible(false);
-        this._scrapButton = this.add.rectangle(1038, 514, 146, 72, 0x4c1312, 0.94)
+        this._scrapButton = this.add.rectangle(1038, 510, 146, 72, 0x4c1312, 0.94)
             .setStrokeStyle(2, 0xff7c73, 0.84)
             .setDepth(4)
             .setVisible(false);
-        this._scrapButtonLabel = this.add.text(1038, 514, 'SCRAP', {
+        this._scrapButtonLabel = this.add.text(1038, 510, 'SCRAP', {
             fontFamily: 'Courier New',
             fontSize: '24px',
             color: '#ffd7d2',
             letterSpacing: 4,
         }).setOrigin(0.5).setDepth(5).setVisible(false);
 
-        // this._fallHole = this.add.ellipse(640, 760, 220, 54, 0x000000, 0.96)
-        //     .setDepth(30)
-        //     .setScale(0.3)
-        //     .setAlpha(0);
-
         this._world.add([
             background,
+            skyHigh,
+            skyMid,
             haze,
-            pitGlow,
+            backWall,
+            skyline,
+            vents,
+            cables,
             catwalk,
+            catwalkEdgeTop,
+            catwalkEdgeBottom,
             rail,
-            ...this._lights,
+            railShadow,
+            railPosts,
+            plates,
+            this._emergencyStrip,
+            pitGlow,
+            pitDark,
             ...this._conveyorTiles,
+            conveyorEdge,
+            ...this._lightCones,
+            ...this._lights,
             this._scrapButtonGlow,
             this._scrapButton,
             this._scrapButtonLabel,
@@ -155,37 +306,140 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _buildActors() {
-        this._managerSprite = this.add.image(1440, 408, 'manager_robot')
-            .setScale(2.0)
+        // Source asset is 128x128 with a 5x nearest upscale already baked in (640x640).
+        // 0.44 brings the rendered sprite to ~280px tall — fits on the catwalk.
+        this._managerSprite = this.add.image(1440, 360, 'manager_robot')
+            .setScale(0.44)
             .setDepth(10)
             .setVisible(false);
-        this._umbrellaSprite = this.add.image(1440, 384, 'machine_rebellious_umbrella')
-            .setScale(1.4)
+        // Umbrella placeholder is 120x180; original 1.4 was reasonable for that base.
+        this._umbrellaSprite = this.add.image(1440, 360, 'machine_rebellious_umbrella')
+            .setScale(1.1)
             .setDepth(11)
             .setVisible(false);
-        this._world.add([this._managerSprite, this._umbrellaSprite]);
+
+        // Player inspector silhouette — small foreground figure facing the antagonist.
+        // Drawn inline so we don't depend on a baked sprite.
+        // Player x=860 so it doesn't overlap the SCRAP button (which appears
+        // at x=1038 in the umbrella_red / umbrella_mixed endings).
+        this._playerFigure = this.add.graphics().setDepth(9);
+        this._drawPlayerFigure(this._playerFigure);
+        this._playerFigure.setPosition(860, 0);
+
+        // Floor shadow under the player figure
+        this._playerShadow = this.add.ellipse(860, 472, 84, 14, 0x000000, 0.5).setDepth(8);
+
+        this._world.add([this._playerFigure, this._playerShadow, this._managerSprite, this._umbrellaSprite]);
+    }
+
+    _drawPlayerFigure(g) {
+        // Inspector silhouette, back-of-head perspective, facing left toward the antagonist.
+        // Local origin at feet (x=0, y=472 floor line).
+        // Coat
+        g.fillStyle(0x070b12, 1);
+        g.fillRect(-22, 318, 44, 154);
+        g.fillStyle(0x0d1620, 1);
+        g.fillRect(-26, 360, 52, 64);
+        // Shoulders
+        g.fillStyle(0x111c28, 1);
+        g.fillRect(-32, 320, 64, 22);
+        // Neck
+        g.fillStyle(0x0a1018, 1);
+        g.fillRect(-8, 308, 16, 14);
+        // Head (back of head, slightly turned)
+        g.fillStyle(0x101820, 1);
+        g.fillRect(-18, 274, 36, 38);
+        // Hair tuft
+        g.fillStyle(0x070a10, 1);
+        g.fillRect(-16, 270, 32, 8);
+        // Headset earpiece (faint cyan glow)
+        g.fillStyle(0x4ad7ff, 0.85);
+        g.fillRect(-22, 286, 4, 8);
+        g.fillStyle(0x4ad7ff, 0.35);
+        g.fillRect(-23, 285, 6, 10);
+        // Subtle cyan rim light on the right edge of the silhouette
+        g.fillStyle(0x2c5a78, 0.55);
+        g.fillRect(20, 318, 2, 154);
+        g.fillStyle(0x2c5a78, 0.55);
+        g.fillRect(16, 274, 2, 38);
+        // Pants/legs
+        g.fillStyle(0x05080d, 1);
+        g.fillRect(-18, 422, 14, 50);
+        g.fillRect(4, 422, 14, 50);
+        // Boots
+        g.fillStyle(0x000000, 1);
+        g.fillRect(-22, 466, 20, 8);
+        g.fillRect(2, 466, 20, 8);
     }
 
     _buildUi() {
-        this._panelShadow = this.add.rectangle(640, 612, 926, 150, 0x000000, 0.34).setDepth(20);
-        this._panel = this.add.rectangle(640, 604, 914, 138, 0x081017, 0.9)
-            .setStrokeStyle(2, 0x6bb6da, 0.5)
-            .setDepth(21);
-        this._panelTag = this.add.text(198, 548, 'FINAL TRANSMISSION', {
-            fontFamily: 'Courier New',
-            fontSize: '13px',
-            color: '#8fd8f3',
-            letterSpacing: 3,
-        }).setDepth(22);
+        // Drop shadow
+        this._panelShadow = this.add.rectangle(640, 624, 980, 168, 0x000000, 0.45).setDepth(20);
 
-        this._dialogueText = this.add.text(640, 606, '', {
+        // Main panel
+        this._panel = this.add.rectangle(640, 614, 968, 156, 0x06101a, 0.92)
+            .setStrokeStyle(2, 0x6bb6da, 0.55)
+            .setDepth(21);
+
+        // Top accent bar (cyberpunk-style header strip)
+        this._panelHeaderStrip = this.add.rectangle(640, 552, 968, 14, 0x0d2236, 0.95)
+            .setStrokeStyle(1, 0x6bb6da, 0.5)
+            .setDepth(22);
+        // Header strip diagonal stripes
+        const stripeOverlay = this.add.graphics().setDepth(22);
+        stripeOverlay.fillStyle(0x6bb6da, 0.18);
+        for (let sx = 158; sx < 1122; sx += 12) {
+            stripeOverlay.fillTriangle(sx, 547, sx + 6, 547, sx, 559);
+        }
+        this._panelStripes = stripeOverlay;
+
+        // Corner brackets (cyberpunk HUD signature)
+        const brackets = this.add.graphics().setDepth(23);
+        brackets.lineStyle(2, 0x8ddff5, 0.95);
+        const drawCornerBracket = (cx, cy, dx, dy) => {
+            brackets.lineBetween(cx, cy, cx + dx, cy);
+            brackets.lineBetween(cx, cy, cx, cy + dy);
+        };
+        // 4 corners of the main panel
+        drawCornerBracket(160, 540, 18, 0); drawCornerBracket(160, 540, 0, 18);
+        drawCornerBracket(1120, 540, -18, 0); drawCornerBracket(1120, 540, 0, 18);
+        drawCornerBracket(160, 690, 18, 0); drawCornerBracket(160, 690, 0, -18);
+        drawCornerBracket(1120, 690, -18, 0); drawCornerBracket(1120, 690, 0, -18);
+        this._panelBrackets = brackets;
+
+        // Tag with red "alert" dot
+        this._panelAlertDot = this.add.circle(174, 552, 4, 0xff5d5d, 1).setDepth(23);
+        this.tweens.add({
+            targets: this._panelAlertDot,
+            alpha: 0.35,
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
+        this._panelTag = this.add.text(186, 545, 'FINAL TRANSMISSION', {
             fontFamily: 'Courier New',
-            fontSize: '24px',
+            fontSize: '12px',
+            color: '#9fe2f5',
+            letterSpacing: 4,
+        }).setDepth(23);
+
+        // Right-side meta tag
+        this._panelMeta = this.add.text(1100, 545, 'CH//04', {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#5a98b6',
+            letterSpacing: 3,
+        }).setOrigin(1, 0).setDepth(23);
+
+        this._dialogueText = this.add.text(640, 614, '', {
+            fontFamily: 'Courier New',
+            fontSize: '22px',
             color: '#b8efff',
             align: 'center',
-            wordWrap: { width: 820 },
+            wordWrap: { width: 880 },
             lineSpacing: 10,
-        }).setOrigin(0.5).setDepth(22);
+        }).setOrigin(0.5).setDepth(23);
 
         this._titleCard = this.add.text(640, 338, TITLE_TEXT, {
             fontFamily: 'Courier New',
@@ -261,13 +515,14 @@ export default class EndScene extends Phaser.Scene {
 
     async _runReplacementEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 950 });
+        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 950 });
+        this._startManagerIdle();
         await this._typeDialogueLines(ENDING_DIALOGUE.replacement, { color: '#aee7ff' });
         await this._wait(700);
     }
 
     async _runUmbrellaPurpleEnding() {
-        await this._enterActor(this._umbrellaSprite, { x: 348, y: 384, duration: 980 });
+        await this._enterActor(this._umbrellaSprite, { x: 360, y: 360, duration: 980 });
         this._styleUmbrella('purple');
         await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_purple, { color: '#ddb6ff' });
         await this._wait(700);
@@ -275,7 +530,8 @@ export default class EndScene extends Phaser.Scene {
 
     async _runUmbrellaRedEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 900 });
+        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 900 });
+        this._startManagerIdle();
         await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_manager, { color: '#aee7ff' });
         this._showScrapButton();
         const dropPromise = this._dropUmbrellaToButton('red');
@@ -288,7 +544,8 @@ export default class EndScene extends Phaser.Scene {
 
     async _runUmbrellaMixedEnding() {
         this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 320, y: 408, duration: 900 });
+        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 900 });
+        this._startManagerIdle();
         await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_red_manager, { color: '#aee7ff' });
         this._showScrapButton();
         const dropPromise = this._dropUmbrellaToButton('mixed');
@@ -303,6 +560,18 @@ export default class EndScene extends Phaser.Scene {
         this._scrapButtonGlow.setVisible(true);
         this._scrapButton.setVisible(true);
         this._scrapButtonLabel.setVisible(true);
+    }
+
+    _startManagerIdle() {
+        this._speakerTween?.stop();
+        this._speakerTween = this.tweens.add({
+            targets: this._managerSprite,
+            y: '+=4',
+            duration: 1400,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
     }
 
     _styleUmbrella(mode = 'red') {
@@ -382,7 +651,7 @@ export default class EndScene extends Phaser.Scene {
             this.tweens.add({
                 targets: this._umbrellaSprite,
                 x: 1038,
-                y: 404,
+                y: 470,
                 duration: 2400,
                 ease: 'Sine.In',
                 onComplete: () => {
@@ -543,7 +812,12 @@ export default class EndScene extends Phaser.Scene {
         this._dialogueText.setVisible(false);
         this._panelShadow.setVisible(false);
         this._panel.setVisible(false);
+        this._panelHeaderStrip.setVisible(false);
+        this._panelStripes.setVisible(false);
+        this._panelBrackets.setVisible(false);
+        this._panelAlertDot.setVisible(false);
         this._panelTag.setVisible(false);
+        this._panelMeta.setVisible(false);
         this._speakerTween?.stop();
 
         this.cameras.main.fadeIn(700, 0, 0, 0);
