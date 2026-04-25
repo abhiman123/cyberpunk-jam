@@ -82,7 +82,21 @@ const FLOW_TARGET_METADATA = Object.freeze({
     WIRING: { displayName: 'Wiring Bench', brokenLabel: 'Wiring bench is disconnected.', fixedLabel: 'Wiring bench is online.' },
     CIRCUIT_BREAKING: { displayName: 'Circuit Breaking', brokenLabel: 'Circuit breaker rig is locked up.', fixedLabel: 'Circuit breaker rig is reset.' },
     GEARING: { displayName: 'Gearing Desk', brokenLabel: 'Gearing desk is jammed.', fixedLabel: 'Gearing desk is responsive.' },
+    BUS_A: { displayName: 'Bus Channel A', brokenLabel: 'Bus channel A unpowered.', fixedLabel: 'Bus channel A live.' },
+    BUS_B: { displayName: 'Bus Channel B', brokenLabel: 'Bus channel B unpowered.', fixedLabel: 'Bus channel B live.' },
+    BUS_C: { displayName: 'Bus Channel C', brokenLabel: 'Bus channel C unpowered.', fixedLabel: 'Bus channel C live.' },
+    BUS_D: { displayName: 'Bus Channel D', brokenLabel: 'Bus channel D unpowered.', fixedLabel: 'Bus channel D live.' },
+    RELAY_1: { displayName: 'Relay Sub-1', brokenLabel: 'Relay sub-1 silent.', fixedLabel: 'Relay sub-1 chattering.' },
+    RELAY_2: { displayName: 'Relay Sub-2', brokenLabel: 'Relay sub-2 silent.', fixedLabel: 'Relay sub-2 chattering.' },
+    RELAY_3: { displayName: 'Relay Sub-3', brokenLabel: 'Relay sub-3 silent.', fixedLabel: 'Relay sub-3 chattering.' },
 });
+
+// Generic, machine-agnostic labels we can pad output lists with when a
+// stage requires more outputs than the base template provides.
+const FLOW_GENERIC_PADDING_LABELS = Object.freeze([
+    'BUS_A', 'BUS_B', 'BUS_C', 'BUS_D',
+    'RELAY_1', 'RELAY_2', 'RELAY_3',
+]);
 
 function cloneFlowTiles(tiles) {
     if (!Array.isArray(tiles)) return [];
@@ -1036,6 +1050,7 @@ function collectFlowInspectionCandidates(flowPuzzleOption) {
     const sourceRows = new Set((flowPuzzleOption?.sources || []).map((source) => source.row));
     const outputRows = new Set((flowPuzzleOption?.outputSpecs || Object.keys(flowPuzzleOption?.outputs || {}).map(Number)).map((spec) => Number(spec?.row ?? spec)));
     const blocked = new Set((flowPuzzleOption?.forbidden || []).map(([x, y]) => `${x},${y}`));
+    const cols = getFlowOptionCols(flowPuzzleOption);
     const candidates = [];
 
     (flowPuzzleOption?.tiles || []).forEach((row, rowIndex) => {
@@ -1043,12 +1058,64 @@ function collectFlowInspectionCandidates(flowPuzzleOption) {
             if (!cell || cell.type === 'empty') return;
             if (blocked.has(`${colIndex},${rowIndex}`)) return;
             if (colIndex === 0 && sourceRows.has(rowIndex)) return;
-            if (colIndex === FLOW_TILE_COLS - 1 && outputRows.has(rowIndex)) return;
+            if (colIndex === cols - 1 && outputRows.has(rowIndex)) return;
             candidates.push({ x: colIndex, y: rowIndex });
         });
     });
 
     return candidates;
+}
+
+// Pad / trim the base target list so a staged Flow puzzle has the right
+// number of outputs for its day. Existing targets are preserved (they're
+// thematic per-machine); the padding draws from a generic label pool
+// (BUS_A, RELAY_1, etc.) when more outputs are required than the base
+// template carries.
+function expandFlowTargets({ baseTargets, minCount, maxCount, totalRows, takenRows = [], randomFn = Math.random }) {
+    const desiredCount = Math.min(
+        maxCount,
+        Math.max(minCount, minCount + Math.floor(randomFn() * (maxCount - minCount + 1)))
+    );
+
+    const result = baseTargets.slice(0, desiredCount).map((target) => ({ ...target }));
+    const usedLabels = new Set(result.map((target) => target.label));
+    const usedRows = new Set([
+        ...takenRows,
+        ...result.map((target) => target.row).filter((row) => row >= 0 && row < totalRows),
+    ]);
+
+    const candidatePool = FLOW_GENERIC_PADDING_LABELS.filter((label) => !usedLabels.has(label));
+    while (result.length < desiredCount && candidatePool.length > 0) {
+        const labelIndex = Math.floor(randomFn() * candidatePool.length);
+        const label = candidatePool.splice(labelIndex, 1)[0];
+
+        // Pick a free row. Prefer rows that aren't already used.
+        const freeRows = [];
+        for (let row = 0; row < totalRows; row += 1) {
+            if (!usedRows.has(row)) freeRows.push(row);
+        }
+        const row = freeRows.length > 0
+            ? freeRows[Math.floor(randomFn() * freeRows.length)]
+            : Math.floor(randomFn() * totalRows);
+
+        usedRows.add(row);
+        result.push(createRepairTarget(label, row));
+    }
+
+    // Reassign rows for any base target whose original row falls outside the
+    // (possibly resized) grid.
+    return result.map((target) => {
+        if (target.row >= 0 && target.row < totalRows) return target;
+        const freeRows = [];
+        for (let row = 0; row < totalRows; row += 1) {
+            if (!usedRows.has(row)) freeRows.push(row);
+        }
+        const row = freeRows.length > 0
+            ? freeRows[Math.floor(randomFn() * freeRows.length)]
+            : Math.floor(randomFn() * totalRows);
+        usedRows.add(row);
+        return { ...target, row };
+    });
 }
 
 function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.random) {
@@ -1059,18 +1126,54 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
     const sourceRow = getPrimaryFlowSourceRow(flowPuzzleOption);
 
     if (stage <= 1) {
+        // Day 1: 1 input, 2-3 outputs, 5x5 grid.
+        const rows = getFlowOptionRows(flowPuzzleOption);
+        const cols = getFlowOptionCols(flowPuzzleOption);
+        const sources = [createFlowSource('main', sourceRow, 'neutral', 'PWR')];
+        const targets = expandFlowTargets({
+            baseTargets,
+            minCount: 2,
+            maxCount: 3,
+            totalRows: rows,
+            takenRows: [sourceRow],
+            randomFn,
+        });
+        const outputSpecs = targets.map((target) => createFlowOutputSpec(target.label, target.row, {
+            ...target,
+            powerClass: 'neutral',
+            sourceKey: 'main',
+        }));
+
+        // If we expanded beyond the base template's outputs we need to
+        // re-carve the layout so the new outputs actually have a path.
+        const needsRecarve = outputSpecs.length !== baseTargets.length
+            || outputSpecs.some((spec, idx) => spec.row !== baseTargets[idx]?.row);
+        let tiles = flowPuzzleOption.tiles;
+        let forbidden = flowPuzzleOption.forbidden;
+        if (needsRecarve || !Array.isArray(tiles) || tiles.length === 0) {
+            const layout = buildTypedFlowOptionLayout({
+                sources,
+                outputSpecs,
+                previewTitle: `${flowPuzzleOption.previewTitle || 'POWER BUS'}:day1`,
+                rows,
+                cols,
+                randomFn,
+            });
+            tiles = layout.tiles;
+            forbidden = layout.forbidden;
+        }
+
         const stagedOption = {
             ...flowPuzzleOption,
             dayStage: 1,
-            rows: getFlowOptionRows(flowPuzzleOption),
-            cols: getFlowOptionCols(flowPuzzleOption),
-            sources: [createFlowSource('main', sourceRow, 'neutral', 'PWR')],
-            outputSpecs: baseTargets.map((target) => createFlowOutputSpec(target.label, target.row, {
-                ...target,
-                powerClass: 'neutral',
-                sourceKey: 'main',
-            })),
-            repairTargets: cloneRepairTargets(baseTargets),
+            rows,
+            cols,
+            sourceRow: sources[0].row,
+            sources,
+            outputSpecs,
+            repairTargets: cloneRepairTargets(outputSpecs),
+            tiles,
+            forbidden: forbidden || [],
             wireFilters: [],
             inspectionFault: null,
         };
@@ -1088,32 +1191,73 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
     }
 
     if (stage === 2) {
-        // Randomize which colour each output asks for (was always green/
-        // orange/green/… in row order, which made every Day-2 board feel
-        // like the same puzzle). Guarantee at least one of each colour
-        // when there are >=2 outputs so the player still has to read the
-        // labels instead of blindly using one filter type.
-        const colourPool = ['green', 'orange'];
-        const outputColours = baseTargets.map(() => colourPool[Math.floor(randomFn() * colourPool.length)]);
-        if (baseTargets.length >= 2 && outputColours.every((c) => c === outputColours[0])) {
-            const flipIndex = Math.floor(randomFn() * outputColours.length);
-            outputColours[flipIndex] = outputColours[flipIndex] === 'green' ? 'orange' : 'green';
+        // Day 2: 2 inputs (neutral + green or orange), 3-4 outputs, 7x7 grid.
+        const rows = 7;
+        const cols = 7;
+        const auxClass = randomFn() < 0.5 ? 'green' : 'orange';
+        const auxLabel = auxClass === 'green' ? 'GRN' : 'ORG';
+        // Source rows: top half + bottom half so they're visually separated.
+        const mainRow = 1 + Math.floor(randomFn() * 2);            // 1 or 2
+        const auxRow = 4 + Math.floor(randomFn() * 2);             // 4 or 5
+        const sources = [
+            createFlowSource('main', mainRow, 'neutral', 'PWR'),
+            createFlowSource(auxClass, auxRow, auxClass, auxLabel),
+        ];
+
+        const targets = expandFlowTargets({
+            baseTargets,
+            minCount: 3,
+            maxCount: 4,
+            totalRows: rows,
+            takenRows: [mainRow, auxRow],
+            randomFn,
+        });
+
+        // Spread output power classes between the two sources. Always include
+        // at least one of each so the player has to use both inputs.
+        const classCycle = ['neutral', auxClass];
+        const outputSpecs = targets.map((target, index) => {
+            const powerClass = classCycle[index % classCycle.length];
+            return createFlowOutputSpec(target.label, target.row, {
+                ...target,
+                powerClass,
+                sourceKey: powerClass === 'neutral' ? 'main' : auxClass,
+            });
+        });
+        // Guarantee both classes appear (above index-mod logic already does
+        // this for >=2 outputs, but be defensive).
+        if (!outputSpecs.some((spec) => spec.powerClass === 'neutral')) {
+            outputSpecs[0].powerClass = 'neutral';
+            outputSpecs[0].sourceKey = 'main';
         }
-        const outputSpecs = baseTargets.map((target, index) => createFlowOutputSpec(target.label, target.row, {
-            ...target,
-            powerClass: outputColours[index],
-            sourceKey: 'main',
-        }));
+        if (!outputSpecs.some((spec) => spec.powerClass === auxClass)) {
+            outputSpecs[outputSpecs.length - 1].powerClass = auxClass;
+            outputSpecs[outputSpecs.length - 1].sourceKey = auxClass;
+        }
+
+        const layout = buildTypedFlowOptionLayout({
+            sources,
+            outputSpecs,
+            previewTitle: `${flowPuzzleOption.previewTitle || 'POWER BUS'}:day2`,
+            rows,
+            cols,
+            randomFn,
+        });
+
         const stagedOption = {
             ...flowPuzzleOption,
-            rows: getFlowOptionRows(flowPuzzleOption),
-            cols: getFlowOptionCols(flowPuzzleOption),
+            rows,
+            cols,
+            sourceRow: sources[0].row,
+            forbiddenCount: 0,
+            forbidden: layout.forbidden,
+            tiles: layout.tiles,
             dayStage: 2,
             stageResultKind: 'repairable',
-            sources: [createFlowSource('main', sourceRow, 'neutral', 'PWR')],
+            sources,
             outputSpecs,
             repairTargets: cloneRepairTargets(outputSpecs),
-            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn),
+            wireFilters: [],
             inspectionFault: null,
         };
 
@@ -1131,61 +1275,59 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         return stagedOption;
     }
 
-    const rows = 7;
-    const cols = 7;
-    // Sources sit on rows 1, 3, 5 (top, mid, bottom). The previous Day-3
-    // generator put outputs on the same rows in the same order and paired
-    // each output to its same-row source, which produced three perfectly
-    // horizontal strips with no cross-routing — boring and trivial. Now:
-    //   - Output rows are spread across DIFFERENT rows from the sources
-    //     (offset by 1 so every path needs a vertical leg).
-    //   - The powerClass-to-output mapping is shuffled per unit so the same
-    //     robot doesn't always read PWR/GRN/ORG top-to-bottom, and so the
-    //     wires criss-cross the grid instead of staying in their lane.
+    // Day 3: 3 inputs, 4-5 outputs, 9x9 grid.
+    const rows = 9;
+    const cols = 9;
+    // Sources sit at top / middle / bottom on different rows from each
+    // other so they're spread across the grid.
     const sources = [
         createFlowSource('main', 1, 'neutral', 'PWR'),
         createFlowSource('green', Math.floor(rows / 2), 'green', 'GRN'),
         createFlowSource('orange', rows - 2, 'orange', 'ORG'),
     ];
     const sourceRowSet = new Set(sources.map((source) => source.row));
+
+    // Pad/trim base targets to 4-5 outputs.
+    const dayThreeTargets = expandFlowTargets({
+        baseTargets,
+        minCount: 4,
+        maxCount: 5,
+        totalRows: rows,
+        takenRows: Array.from(sourceRowSet),
+        randomFn,
+    });
+
     // Build candidate output rows that DON'T overlap with source rows so the
     // path always has a vertical leg, then shuffle them per unit.
     const candidateOutputRows = [];
     for (let row = 0; row < rows; row += 1) {
         if (!sourceRowSet.has(row)) candidateOutputRows.push(row);
     }
-    if (candidateOutputRows.length < baseTargets.length) {
-        // Fallback if a future grid shape leaves too few off-source rows.
-        for (let row = 0; row < rows && candidateOutputRows.length < baseTargets.length; row += 1) {
+    if (candidateOutputRows.length < dayThreeTargets.length) {
+        for (let row = 0; row < rows && candidateOutputRows.length < dayThreeTargets.length; row += 1) {
             if (!candidateOutputRows.includes(row)) candidateOutputRows.push(row);
         }
     }
     const shuffledOutputRows = [...candidateOutputRows].sort(() => randomFn() - 0.5);
     const outputRows = shuffledOutputRows
-        .slice(0, baseTargets.length)
+        .slice(0, dayThreeTargets.length)
         .sort((left, right) => left - right);
 
+    // Distribute the three power classes across 4-5 outputs. Always
+    // include all three classes so every source must be used; remaining
+    // slots are randomly assigned to maintain variety.
     const powerCycle = ['neutral', 'green', 'orange'];
-    const shuffledClasses = baseTargets.length === 1
-        ? [powerCycle[Math.floor(randomFn() * powerCycle.length)]]
-        : (() => {
-            // Always include all three classes when there are 3 outputs
-            // (so the player keeps using all three sources). Below 3 outputs,
-            // pick distinct classes to maintain colour variety.
-            const pool = [...powerCycle];
-            const picked = [];
-            const count = Math.min(baseTargets.length, pool.length);
-            for (let index = 0; index < count; index += 1) {
-                const choice = pool.splice(Math.floor(randomFn() * pool.length), 1)[0];
-                picked.push(choice);
-            }
-            while (picked.length < baseTargets.length) {
-                picked.push(powerCycle[Math.floor(randomFn() * powerCycle.length)]);
-            }
-            return picked;
-        })();
+    const shuffledClasses = (() => {
+        const required = [...powerCycle].sort(() => randomFn() - 0.5);
+        const result = required.slice(0, Math.min(dayThreeTargets.length, required.length));
+        while (result.length < dayThreeTargets.length) {
+            result.push(powerCycle[Math.floor(randomFn() * powerCycle.length)]);
+        }
+        // Shuffle so the three required classes aren't always in the same slots.
+        return result.sort(() => randomFn() - 0.5);
+    })();
 
-    const outputSpecs = baseTargets.map((target, index) => {
+    const outputSpecs = dayThreeTargets.map((target, index) => {
         const powerClass = shuffledClasses[index];
         return createFlowOutputSpec(target.label, outputRows[index], {
             ...target,
