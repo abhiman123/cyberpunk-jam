@@ -23,10 +23,6 @@ function pickRandomEntry(list) {
     return list[Math.floor(Math.random() * list.length)] ?? list[0];
 }
 
-function displayCommandChar(character) {
-    return character === ' ' ? '.' : character;
-}
-
 function getCorruptCharacter(expectedCharacter = '') {
     const pool = 'abcdefghijklmnopqrstuvwxyz0123456789_./-#$%';
     const expected = String(expectedCharacter || '').toLowerCase();
@@ -64,15 +60,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._specialCommandButtonBg = null;
         this._specialCommandButtonText = null;
         this._charWidth = 14;
-        this._commandVisualPadding = 18;
-        this._commandWindowStart = 0;
         this._commandTextStartX = -471;
         this._commandTextY = -100;
         this._commandZoneWidth = 520;
         this._commandZoneHeight = 48;
-        this._commandClipContainer = null;
-        this._commandMaskSource = null;
-        this._commandMaskFilter = null;
         this._closeButtonBg = null;
         this._closeButtonText = null;
         this._statusText = null;
@@ -171,29 +162,25 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._panel = this.scene.add.container(640, 360).setDepth(depth);
 
         // --- Frames ---
-        const outer = this.scene.add.rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x050c07, 0.98)
-            .setStrokeStyle(2, 0x3a6b28, 0.95);
-        const inner = this.scene.add.rectangle(0, 0, PANEL_WIDTH - 34, PANEL_HEIGHT - 34, 0x070f09, 0.96)
-            .setStrokeStyle(1, 0x1e3d18, 0.72);
-        const headerRule = this.scene.add.rectangle(0, -252, PANEL_WIDTH - 90, 2, 0x3a6b28, 0.82);
-        // Command frame — amber-accented focal point
-        const commandFrame = this.scene.add.rectangle(-231, -112, 572, 118, 0x060e07, 0.97)
-            .setStrokeStyle(2, 0xb87200, 0.88);
-        const commandTopAccent = this.scene.add.rectangle(-231, -171, 572, 2, 0xFFB000, 0.55);
-        const actualFrame = this.scene.add.rectangle(286, -126, 352, 146, 0x060d08, 0.96)
-            .setStrokeStyle(1, 0x235018, 0.82);
-        const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x060d08, 0.96)
-            .setStrokeStyle(1, 0x1e6018, 0.85);
-        const actualOutputBack = this.scene.add.rectangle(286, -112, 324, 90, 0x000000, 1)
-            .setStrokeStyle(1, 0x12310f, 0.72);
-        const expectedOutputBack = this.scene.add.rectangle(286, 44, 324, 64, 0x000000, 1)
-            .setStrokeStyle(1, 0x12310f, 0.72);
-        const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x060d08, 0.96)
-            .setStrokeStyle(1, 0x1e3d18, 0.72);
+        const outer = this.scene.add.rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x050a0c, 0.98)
+            .setStrokeStyle(2, 0x285a9a, 0.95);
+        const inner = this.scene.add.rectangle(0, 0, PANEL_WIDTH - 34, PANEL_HEIGHT - 34, 0x07090f, 0.96)
+            .setStrokeStyle(1, 0x18283d, 0.72);
+        const headerRule = this.scene.add.rectangle(0, -252, PANEL_WIDTH - 90, 2, 0x285a9a, 0.82);
+        // Command frame — pink-accented focal point
+        const commandFrame = this.scene.add.rectangle(-231, -112, 572, 118, 0x06070e, 0.97)
+            .setStrokeStyle(2, 0xC040C8, 0.88);
+        const commandTopAccent = this.scene.add.rectangle(-231, -171, 572, 2, 0xF684F7, 0.55);
+        const actualFrame = this.scene.add.rectangle(286, -126, 352, 146, 0x06070d, 0.96)
+            .setStrokeStyle(1, 0x182350, 0.82);
+        const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x06070d, 0.96)
+            .setStrokeStyle(1, 0x183060, 0.85);
+        const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x06070d, 0.96)
+            .setStrokeStyle(1, 0x18283d, 0.72);
 
         // --- Corner bracket decorations (outer panel) ---
         const cornerGfx = this.scene.add.graphics();
-        cornerGfx.lineStyle(3, 0xFFB000, 0.82);
+        cornerGfx.lineStyle(3, 0xF684F7, 0.82);
         const hw = PANEL_WIDTH / 2, hh = PANEL_HEIGHT / 2, arm = 26;
         cornerGfx.lineBetween(-hw, -hh + arm, -hw, -hh); cornerGfx.lineBetween(-hw, -hh, -hw + arm, -hh);
         cornerGfx.lineBetween(hw - arm, -hh, hw, -hh);   cornerGfx.lineBetween(hw, -hh, hw, -hh + arm);
@@ -202,7 +189,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         // Corner brackets on command frame
         const cmdBracketGfx = this.scene.add.graphics();
-        cmdBracketGfx.lineStyle(2, 0xFFB000, 0.65);
+        cmdBracketGfx.lineStyle(2, 0xF684F7, 0.65);
         const cfx = -231, cfy = -112, cfw2 = 286, cfh2 = 59, ca = 12;
         cmdBracketGfx.lineBetween(cfx - cfw2, cfy - cfh2 + ca, cfx - cfw2, cfy - cfh2);
         cmdBracketGfx.lineBetween(cfx - cfw2, cfy - cfh2, cfx - cfw2 + ca, cfy - cfh2);
@@ -224,7 +211,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const title = this.scene.add.text(-520, -284, `${this._machineName} // SOFTWARE DIAGNOSTIC`, {
             fontFamily: 'Courier New',
             fontSize: '22px',
-            color: '#d8f0cc',
+            color: '#cce4f0',
             letterSpacing: 3,
             wordWrap: { width: 900 },
         }).setOrigin(0, 0.5);
@@ -234,7 +221,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         ].filter(Boolean).join('\n'), {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#5a8a50',
+            color: '#506a8a',
             wordWrap: { width: 840 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
@@ -242,44 +229,44 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const commandLabel = this.scene.add.text(-509, -155, 'COMMAND LINE', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#FFB000',
+            color: '#F684F7',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._modeText = this.scene.add.text(-119, -155, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#FFB000',
+            color: '#F684F7',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._statusText = this.scene.add.text(-509, -40, '', {
             fontFamily: 'Courier New',
             fontSize: '14px',
-            color: '#FFB000',
+            color: '#F684F7',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
 
-        this._specialCommandButtonBg = this.scene.add.rectangle(-146, -40, 176, 30, 0x1a2b18, 0.96)
-            .setStrokeStyle(1, 0x4a7a38, 0.82)
+        this._specialCommandButtonBg = this.scene.add.rectangle(-146, -40, 176, 30, 0x181a2b, 0.96)
+            .setStrokeStyle(1, 0x38609a, 0.82)
             .setInteractive({ useHandCursor: true });
         this._specialCommandButtonText = this.scene.add.text(-146, -40, 'STEAL DATA', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#7acc5a',
+            color: '#5ab8f0',
             letterSpacing: 1,
         }).setOrigin(0.5);
         this._specialCommandButtonBg.on('pointerover', () => {
-            this._specialCommandButtonBg?.setFillStyle(0x253d22, 0.98);
+            this._specialCommandButtonBg?.setFillStyle(0x1d253d, 0.98);
         });
         this._specialCommandButtonBg.on('pointerout', () => {
-            this._specialCommandButtonBg?.setFillStyle(0x1a2b18, 0.96);
+            this._specialCommandButtonBg?.setFillStyle(0x181a2b, 0.96);
         });
         this._specialCommandButtonBg.on('pointerdown', (_pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
             this._toggleSpecialCommandMode();
         });
 
-        this._commandZone = this.scene.add.rectangle(-231, -96, this._commandZoneWidth, this._commandZoneHeight, 0x030a05, 0.99)
-            .setStrokeStyle(2, 0xFFB000, 0.48)
+        this._commandZone = this.scene.add.rectangle(-231, -96, this._commandZoneWidth, this._commandZoneHeight, 0x03050a, 0.99)
+            .setStrokeStyle(2, 0xF684F7, 0.48)
             .setInteractive({ useHandCursor: true });
         this._commandZone.on('pointerdown', (pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
@@ -291,46 +278,28 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._setSelectionRange(index, index);
         });
 
-        this._commandClipContainer = this.scene.add.container(0, 0);
-        this._commandClipContainer.enableFilters();
-        this._commandMaskSource = this.scene.make.graphics({
-            x: 640 - 231 - (this._commandZoneWidth / 2) + 4,
-            y: 360 - 96 - (this._commandZoneHeight / 2) + 4,
-            add: false,
-        });
-        this._commandMaskSource.fillStyle(0xffffff, 1);
-        this._commandMaskSource.fillRoundedRect(0, 0, this._commandZoneWidth - 8, this._commandZoneHeight - 8, 6);
-        this._commandMaskFilter = this._commandClipContainer.filters.external.addMask(
-            this._commandMaskSource,
-            false,
-            this.scene.cameras.main,
-            'world',
-        );
-        this._commandMaskFilter.autoUpdate = false;
-        this._commandMaskFilter.needsUpdate = true;
-
-        // Amber block cursor with hard blink
-        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xFFB000, 1).setOrigin(0, 0.5);
-        this._commandClipContainer.add(this._caret);
+        // Pink block cursor with hard blink
+        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xF684F7, 1).setOrigin(0, 0.5);
         this._caretTween = this.scene.tweens.add({
             targets: this._caret,
             alpha: 0,
-            duration: 500,
+            duration: 370,
             yoyo: true,
             repeat: -1,
+            repeatDelay: 370,
             ease: 'Stepped',
         });
 
         const actualLabel = this.scene.add.text(115, -188, 'ACTUAL OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#4a7a58',
+            color: '#486aaa',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._actualOutputText = this.scene.add.text(115, -164, '', {
             fontFamily: 'Courier New',
             fontSize: '16px',
-            color: '#ffd6b0',
+            color: '#F4BCFF',
             wordWrap: { width: 320 },
             lineSpacing: 7,
         }).setOrigin(0, 0);
@@ -338,13 +307,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const expectedLabel = this.scene.add.text(115, -28, 'EXPECTED OUTPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#32CD32',
+            color: '#32AAFF',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._expectedOutputText = this.scene.add.text(115, -8, '', {
             fontFamily: 'Courier New',
             fontSize: '16px',
-            color: '#32CD32',
+            color: '#32AAFF',
             wordWrap: { width: 320 },
             lineSpacing: 7,
         }).setOrigin(0, 0);
@@ -352,48 +321,48 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const detailLabel = this.scene.add.text(-488, 124, 'PATCH NOTES', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#4a7a38',
+            color: '#38609a',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._instructionText = this.scene.add.text(-488, 150, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#5a8050',
+            color: '#50709a',
             wordWrap: { width: 596 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
         this._bugCounterText = this.scene.add.text(148, 126, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#FFB000',
+            color: '#F684F7',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._messageText = this.scene.add.text(148, 152, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#4a7a58',
+            color: '#486aaa',
             wordWrap: { width: 332 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
 
         // --- Mechanical close button ---
         const closeBaseY = 284;
-        this._closeButtonBg = this.scene.add.rectangle(0, closeBaseY, 286, 44, 0x0c1e0c, 0.97)
-            .setStrokeStyle(2, 0x3a6b28, 0.9)
+        this._closeButtonBg = this.scene.add.rectangle(0, closeBaseY, 286, 44, 0x0a0f1e, 0.97)
+            .setStrokeStyle(2, 0x285a9a, 0.9)
             .setInteractive({ useHandCursor: true });
         this._closeButtonText = this.scene.add.text(0, closeBaseY, 'RETURN TO BOOTH [ESC]', {
             fontFamily: 'Courier New',
             fontSize: '15px',
-            color: '#7acc5a',
+            color: '#5ab8f0',
             letterSpacing: 2,
         }).setOrigin(0.5);
         this._closeButtonBg.on('pointerover', () => {
-            this._closeButtonBg?.setFillStyle(0x163a16, 0.99).setStrokeStyle(2, 0x7acc5a, 0.95);
-            this._closeButtonText?.setColor('#b8ff94');
+            this._closeButtonBg?.setFillStyle(0x0f163a, 0.99).setStrokeStyle(2, 0x5ab8f0, 0.95);
+            this._closeButtonText?.setColor('#94d8ff');
         });
         this._closeButtonBg.on('pointerout', () => {
-            this._closeButtonBg?.setFillStyle(0x0c1e0c, 0.97).setStrokeStyle(2, 0x3a6b28, 0.9);
-            this._closeButtonText?.setColor('#7acc5a');
+            this._closeButtonBg?.setFillStyle(0x0a0f1e, 0.97).setStrokeStyle(2, 0x285a9a, 0.9);
+            this._closeButtonText?.setColor('#5ab8f0');
             this.scene.tweens.add({
                 targets: [this._closeButtonBg, this._closeButtonText],
                 y: closeBaseY,
@@ -420,8 +389,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
             commandTopAccent,
             actualFrame,
             expectedFrame,
-            actualOutputBack,
-            expectedOutputBack,
             detailFrame,
             cornerGfx,
             cmdBracketGfx,
@@ -433,7 +400,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._specialCommandButtonBg,
             this._specialCommandButtonText,
             this._commandZone,
-            this._commandClipContainer,
+            this._caret,
             actualLabel,
             this._actualOutputText,
             expectedLabel,
@@ -463,7 +430,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._escKey?.on('down', this._escHandler);
 
         this._attachHiddenInput(this.evidence.inputValue || '');
-        this._setHiddenInputLocked(this.evidence.completed || this.evidence.phase === 'scrap');
         this._syncOutputPanels();
         this._syncCommandVisuals();
         if (this.evidence.resultType === 'spark-hazard') {
@@ -497,10 +463,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._selectionRects = [];
         this._charObjects.forEach((charObject) => charObject.destroy());
         this._charObjects = [];
-        this._commandMaskFilter?.destroy?.();
-        this._commandMaskSource?.destroy();
-        this._commandMaskFilter = null;
-        this._commandMaskSource = null;
         this.scene.tweens.killTweensOf(this._caret);
         this._caretTween?.stop();
         this._caretTween = null;
@@ -525,7 +487,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._bugCounterText = null;
         this._messageText = null;
         this._caret = null;
-        this._commandClipContainer = null;
         this._commandZone = null;
         this._specialCommandMode = false;
     }
@@ -578,23 +539,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
         }
     }
 
-    _setHiddenInputLocked(locked) {
-        if (!this._hiddenInput) return;
-
-        this._hiddenInput.readOnly = Boolean(locked);
-        if (locked) {
-            this._hiddenInput.blur();
-        }
-    }
-
     _handleHiddenInput() {
         if (!this.active || !this._hiddenInput) return;
-        if (this.evidence.completed || this.evidence.phase === 'scrap') {
-            this._hiddenInput.value = String(this.evidence.inputValue || '');
-            this._setHiddenInputLocked(true);
-            this._queueVisualSync();
-            return;
-        }
+        if (this.evidence.phase === 'scrap') return;
 
         const previousValue = String(this.evidence.inputValue || '');
         const nextValue = this._hiddenInput.value;
@@ -848,7 +795,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 color: '#ffffff',
             }).setOrigin(0, 0.5);
             this._charObjects.push(text);
-            (this._commandClipContainer || this._panel)?.add(text);
+            this._panel?.add(text);
         }
 
         this._charObjects.forEach((charObject, index) => charObject.setVisible(index < total));
@@ -860,25 +807,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 .setOrigin(0, 0.5)
                 .setVisible(false);
             this._selectionRects.push(rect);
-            (this._commandClipContainer || this._panel)?.add(rect);
-            this._commandClipContainer?.bringToTop(this._caret);
+            this._panel?.add(rect);
+            this._panel?.bringToTop(this._caret);
         }
-    }
-
-    _getDebugStage() {
-        return Number(this.evidence?.dayStage || this._puzzle?.dayStage || 1);
-    }
-
-    _isCorruptionStage() {
-        return this._getDebugStage() >= 3;
-    }
-
-    _getVisibleCommandSlots() {
-        return Math.max(1, Math.floor((this._commandZoneWidth - (this._commandVisualPadding * 2)) / this._charWidth));
-    }
-
-    _getCommandXForIndex(index) {
-        return this._commandTextStartX + ((index - this._commandWindowStart) * this._charWidth);
     }
 
     _syncCommandVisuals() {
@@ -889,15 +820,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const totalSlots = Math.max(command.length, inputValue.length, 1);
         const selectionStart = this._hiddenInput?.selectionStart ?? inputValue.length;
         const selectionEnd = this._hiddenInput?.selectionEnd ?? inputValue.length;
-        const visibleSlots = this._getVisibleCommandSlots();
-        const maxWindowStart = Math.max(0, totalSlots - visibleSlots);
-        let windowStart = clampIndex(selectionEnd - visibleSlots + 1, 0, maxWindowStart);
-        if (selectionStart < windowStart) {
-            windowStart = clampIndex(selectionStart, 0, maxWindowStart);
-        }
-        const windowEnd = windowStart + visibleSlots;
-
-        this._commandWindowStart = windowStart;
 
         this._ensureCharObjects(totalSlots);
         this._ensureSelectionRects(totalSlots);
@@ -906,20 +828,20 @@ export default class DebugConsolePuzzle extends MinigameBase {
             const expectedCharacter = command[index] ?? '';
             const typedCharacter = inputValue[index];
             const extraCharacter = index >= command.length;
+            const x = this._commandTextStartX + (index * this._charWidth);
             const charObject = this._charObjects[index];
-            const inWindow = index >= windowStart && index < windowEnd;
 
-            let text = displayCommandChar(expectedCharacter || ' ');
+            let text = displayChar(expectedCharacter || ' ');
             let color = '#6e7b84';
             let alpha = 0.5;
 
             if (typedCharacter !== undefined) {
-                text = displayCommandChar(typedCharacter);
+                text = displayChar(typedCharacter);
                 alpha = 1;
                 if (extraCharacter) {
                     color = '#8f2f2f';
                 } else if (typedCharacter === expectedCharacter) {
-                    color = '#d8f7dd';
+                    color = '#cce8ff';
                 } else {
                     color = '#ff7979';
                 }
@@ -927,14 +849,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 alpha = 0.2;
             }
 
-            if (!inWindow) {
-                charObject.setVisible(false);
-                continue;
-            }
-
             charObject
-                .setVisible(true)
-                .setPosition(this._getCommandXForIndex(index), this._commandTextY)
+                .setPosition(x, this._commandTextY)
                 .setText(text)
                 .setColor(color)
                 .setAlpha(alpha);
@@ -943,18 +859,14 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const selectedCount = Math.max(0, selectionEnd - selectionStart);
         this._selectionRects.forEach((rect, index) => {
             const inSelection = index >= selectionStart && index < selectionEnd;
-            const inWindow = index >= windowStart && index < windowEnd;
             rect
-                .setPosition(this._getCommandXForIndex(index), this._commandTextY)
-                .setVisible(inSelection && inWindow && selectedCount > 0);
+                .setPosition(this._commandTextStartX + (index * this._charWidth), this._commandTextY)
+                .setVisible(inSelection && selectedCount > 0);
         });
 
         this._caret.setVisible(selectedCount === 0 && !this.evidence.completed);
-        this._caret.setPosition(
-            this._commandTextStartX + (clampIndex(selectionEnd - windowStart, 0, visibleSlots) * this._charWidth),
-            this._commandTextY,
-        );
-        this._commandClipContainer?.bringToTop(this._caret);
+        this._caret.setPosition(this._commandTextStartX + (selectionEnd * this._charWidth), this._commandTextY);
+        this._panel.bringToTop(this._caret);
 
         this._modeText?.setText(
             this._specialCommandMode && this._canUseSpecialCommand()
@@ -975,8 +887,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._specialCommandMode = false;
         }
 
-        const showBugCounter = this._getDebugStage() === 3;
-        const corruptionStage = this._isCorruptionStage();
         const hasTypedInput = this._hasStartedTyping();
         const showActualOutput = this.evidence.completed || this.evidence.phase === 'repair' || this.evidence.phase === 'scrap' || hasTypedInput;
         const outputMismatch = Boolean(
@@ -986,29 +896,24 @@ export default class DebugConsolePuzzle extends MinigameBase {
             && !this.evidence.completed
             && this.evidence.phase !== 'scrap'
         );
-        const actualOutputMatches = Boolean(
-            showActualOutput
-            && this.evidence.actualOutput
-            && this.evidence.actualOutput === this.evidence.expectedOutput
-        );
 
         this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
         this._actualOutputText?.setText(showActualOutput ? (this.evidence.actualOutput || '') : '');
-        this._expectedOutputText?.setColor('#32CD32');
+        this._expectedOutputText?.setColor('#32AAFF');
         this._actualOutputText?.setColor(
-            this.evidence.phase === 'scrap' || outputMismatch
-                ? '#ff5f5f'
-                : (this.evidence.completed || actualOutputMatches
-                    ? '#7aff8a'
-                    : '#ffd6b0')
+            this.evidence.completed
+                ? '#94d8ff'
+                : (this.evidence.phase === 'scrap'
+                    ? '#ff7a5a'
+                    : (outputMismatch ? '#ff5f5f' : '#F4BCFF'))
         );
 
-        let statusColor = '#FFB000';
+        let statusColor = '#F684F7';
         let detailText = 'Type the highlighted command exactly. Correct letters stay cool, wrong letters go red, and overflow letters go dark red. Bugs try to ruin letters you already locked in.';
         let message = 'Tap the console to focus. Start typing to surface the live output.';
 
         if (this.evidence.completed) {
-            statusColor = '#32CD32';
+            statusColor = '#32AAFF';
             detailText = this.evidence.fixed
                 ? ['Patch command applied.', 'AUTO RETEST PASS.', '', 'Repair prompt:', this.evidence.repairPrompt].join('\n')
                 : ['Primary test passed.', 'No patch required.', '', 'Prompt:', this.evidence.prompt].join('\n');
@@ -1030,11 +935,11 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 ? ['This subsystem is not repairable on the floor.', `Observed output: ${this.evidence.actualOutput}`, 'Return to the booth and file SCRAP.'].join('\n')
                 : 'This subsystem is not repairable on the floor. Return to the booth and file SCRAP.';
         } else if (this.evidence.phase === 'repair') {
-            statusColor = '#FFB000';
+            statusColor = '#F684F7';
             detailText = ['Mismatch detected.', 'Type the repair command exactly.', '', 'Repair prompt:', this.evidence.repairPrompt].join('\n');
             message = ['Actual output drifted away from the expected result.', `Unexpected output: ${this.evidence.actualOutput}`].join('\n');
         } else {
-            statusColor = '#FFB000';
+            statusColor = '#F684F7';
             detailText = this._specialCommandMode && this._canUseSpecialCommand()
                 ? ['Special command armed.', 'Type the theft command exactly.', '', 'Command:', this._specialCommand.command].join('\n')
                 : ['Prompt:', this.evidence.prompt, '', 'Expected output:', this.evidence.expectedOutput].join('\n');
@@ -1051,11 +956,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._statusText.setText(this.evidence.lastStatus || 'TEST READY').setColor(statusColor);
         this._instructionText?.setText(detailText);
         this._messageText?.setText(message);
-        this._bugCounterText?.setText(
-            showBugCounter
-                ? `BUGS SQUASHED ${this.evidence.bugsSquashed || 0}`
-                : '',
-        );
+        this._bugCounterText?.setText(`BUGS SQUASHED ${this.evidence.bugsSquashed || 0}  //  CORRUPTIONS ${this.evidence.corruptionCount || 0}`);
         this._closeButtonText?.setText((this.evidence.completed || this.evidence.phase === 'scrap') ? 'RETURN TO BOOTH [ESC]' : 'CLOSE PANEL [ESC]');
         this._specialCommandButtonBg?.setVisible(Boolean(this._specialCommand?.command));
         this._specialCommandButtonText?.setVisible(Boolean(this._specialCommand?.command));
@@ -1104,7 +1005,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
         }
 
         if (nextEvidence.completed || nextEvidence.phase === 'scrap') {
-            this._setHiddenInputLocked(true);
             this._stopBugSpawner();
             this._destroyAllBugs();
         }
@@ -1135,7 +1035,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
     }
 
     _runTestCommand() {
-        const submittedInput = this._hiddenInput?.value || this.evidence.prompt || '';
         const matched = this.evidence.actualOutput === this.evidence.expectedOutput;
 
         if (matched) {
@@ -1145,13 +1044,12 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 fixed: false,
                 repairRequired: false,
                 outputMatched: true,
-                inputValue: submittedInput,
+                inputValue: '',
                 lastStatus: 'TEST PASS // OUTPUT CLEAN',
                 flags: [],
                 symptoms: ['Diagnostic output matches the expected result.'],
             });
-            this._hiddenInput.value = submittedInput;
-            this._setHiddenInputLocked(true);
+            this._hiddenInput.value = '';
             this._playPuzzleFixed();
             this._stopBugSpawner();
             this._autoSquashAllBugs();
@@ -1172,7 +1070,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 scrapReason: this.evidence.scrapReason || 'Output format is compromised. Floor repair is forbidden.',
             });
             this._hiddenInput.value = '';
-            this._setHiddenInputLocked(true);
             this._stopBugSpawner();
             this._destroyAllBugs();
         } else {
@@ -1196,7 +1093,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
     }
 
     _completeRepair() {
-        const submittedInput = this._hiddenInput?.value || this.evidence.repairPrompt || '';
         this.emitEvidence({
             completed: true,
             phase: 'complete',
@@ -1205,15 +1101,14 @@ export default class DebugConsolePuzzle extends MinigameBase {
             scrapRequired: false,
             outputMatched: true,
             actualOutput: this.evidence.expectedOutput,
-            inputValue: submittedInput,
+            inputValue: '',
             lastStatus: 'PATCH APPLIED // AUTO RETEST PASS',
             flags: [],
             symptoms: ['Patch applied. Diagnostic output stabilized.'],
         });
         if (this._hiddenInput) {
-            this._hiddenInput.value = submittedInput;
+            this._hiddenInput.value = '';
         }
-        this._setHiddenInputLocked(true);
         this._playPuzzleFixed();
         this._stopBugSpawner();
         this._autoSquashAllBugs();
@@ -1229,11 +1124,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
         if (!this._panel || this._bugViews.some((bugView) => bugView.hazard)) return;
 
         const targetIndex = Math.max(0, Math.floor(Math.max(1, this._getActiveCommand().length - 1) / 2));
-        const targetX = this._getCommandXForIndex(targetIndex) + (this._charWidth / 2);
-        const targetY = this._commandTextY;
-        const edge = Phaser.Math.Between(0, 3);
-        const startX = edge === 0 ? -520 : edge === 1 ? 520 : Phaser.Math.Between(-520, 520);
-        const startY = edge === 2 ? -250 : edge === 3 ? 250 : Phaser.Math.Between(-250, 250);
+        const targetX = this._commandTextStartX + (targetIndex * this._charWidth) + (this._charWidth / 2);
+        const targetY = this._commandTextY - 8;
         const sparks = this.scene.add.graphics();
         sparks.lineStyle(2, 0xff5f5f, 0.92);
         sparks.lineBetween(-22, -18, -34, -30);
@@ -1241,64 +1133,34 @@ export default class DebugConsolePuzzle extends MinigameBase {
         sparks.lineBetween(16, -12, 28, -24);
         sparks.lineBetween(-20, 10, -32, 18);
         sparks.lineBetween(18, 12, 30, 24);
-        const body = this.scene.add.circle(0, 0, 11, 0x48d86f, 1).setStrokeStyle(1, 0x12391d, 0.95);
-        const head = this.scene.add.circle(10, -8, 6, 0x8eff95, 1).setStrokeStyle(1, 0x12391d, 0.95);
+        const body = this.scene.add.circle(0, 0, 11, 0x4870d8, 1).setStrokeStyle(1, 0x12193d, 0.95);
+        const head = this.scene.add.circle(10, -8, 6, 0x8eb0ff, 1).setStrokeStyle(1, 0x12193d, 0.95);
         const eye = this.scene.add.circle(12, -10, 1.8, 0x7b0000, 1);
         const legs = this.scene.add.text(-10, 13, '╲╱╲╱', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#a8ffb3',
+            color: '#a8c8ff',
         }).setOrigin(0, 0.5);
-        const bug = this.scene.add.container(startX, startY, [sparks, body, head, eye, legs]).setSize(36, 36);
+        const bug = this.scene.add.container(targetX - 136, targetY - 64, [sparks, body, head, eye, legs]).setSize(36, 36);
         this._panel.add(bug);
 
         let bugView = null;
-        const crawlTween = this.scene.tweens.add({
-            targets: bug,
-            angle: { from: -5, to: 5 },
-            duration: 240,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut',
-        });
-        const legTween = this.scene.tweens.add({
-            targets: legs,
-            y: 15,
-            duration: 180,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut',
-        });
-        const bobTween = this.scene.tweens.add({
-            targets: [body, head, eye],
-            y: '+=1.5',
-            duration: 200,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut',
-        });
-        const tween = this.scene.tweens.add({
+        const arrivalTween = this.scene.tweens.add({
             targets: bug,
             x: targetX,
             y: targetY,
-            duration: Phaser.Math.Between(BUG_TRAVEL_MIN_MS, BUG_TRAVEL_MAX_MS),
-            ease: 'Linear',
-            onComplete: () => {
-                if (!bugView || !this._bugViews.includes(bugView)) return;
-                bugView.crawlTween?.stop();
-                bugView.legTween?.stop();
-                bugView.bobTween?.stop();
-                bugView.jitterTween = this.scene.tweens.add({
-                    targets: bug,
-                    x: '+=6',
-                    y: '+=4',
-                    angle: { from: -7, to: 7 },
-                    duration: 110,
-                    yoyo: true,
-                    repeat: -1,
-                    ease: 'Sine.InOut',
-                });
-            },
+            duration: 760,
+            ease: 'Sine.Out',
+        });
+        const jitterTween = this.scene.tweens.add({
+            targets: bug,
+            x: '+=6',
+            y: '+=4',
+            angle: { from: -7, to: 7 },
+            duration: 110,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
         });
         const sparkTween = this.scene.tweens.add({
             targets: sparks,
@@ -1317,7 +1179,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             },
         });
 
-        bugView = { bug, hazard: true, tween, crawlTween, legTween, bobTween, sparkTween, soundEvent, jitterTween: null };
+        bugView = { bug, hazard: true, arrivalTween, jitterTween, sparkTween, soundEvent };
         this._bugViews.push(bugView);
         this._playBugSkitterSound();
     }
@@ -1344,20 +1206,20 @@ export default class DebugConsolePuzzle extends MinigameBase {
         if (!this._panel) return;
 
         const targetIndex = this._getPreferredBugTargetIndex();
-        const targetX = this._getCommandXForIndex(targetIndex) + (this._charWidth / 2);
+        const targetX = this._commandTextStartX + (targetIndex * this._charWidth) + (this._charWidth / 2);
         const targetY = this._commandTextY;
         const edge = Phaser.Math.Between(0, 3);
         const startX = edge === 0 ? -520 : edge === 1 ? 520 : Phaser.Math.Between(-520, 520);
         const startY = edge === 2 ? -250 : edge === 3 ? 250 : Phaser.Math.Between(-250, 250);
-        const body = this.scene.add.circle(0, 0, 10, 0xd88b2f, 1).setStrokeStyle(1, 0x3d1700, 0.95);
-        const head = this.scene.add.circle(10, -8, 6, 0xf2b14f, 1).setStrokeStyle(1, 0x3d1700, 0.95);
+        const body = this.scene.add.circle(0, 0, 10, 0xD060D8, 1).setStrokeStyle(1, 0x4A0A50, 0.95);
+        const head = this.scene.add.circle(10, -8, 6, 0xF0A0F5, 1).setStrokeStyle(1, 0x4A0A50, 0.95);
         const eye = this.scene.add.circle(12, -10, 1.5, 0x2b0000, 1);
         const legs = this.scene.add.text(-10, 13, '╲╱╲╱', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#7f3e15',
+            color: '#952090',
         }).setOrigin(0, 0.5);
-        const splat = this.scene.add.ellipse(0, 8, 24, 8, 0x8b3e17, 0.84).setVisible(false);
+        const splat = this.scene.add.ellipse(0, 8, 24, 8, 0x952090, 0.84).setVisible(false);
         const bug = this.scene.add.container(startX, startY, [splat, body, head, eye, legs]).setSize(28, 28);
         const hitZone = this.scene.add.rectangle(0, 0, 32, 32, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
@@ -1537,9 +1399,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             corruptionCount: (this.evidence.corruptionCount || 0) + 1,
         });
 
-        this._statusText
-            ?.setText(this._isCorruptionStage() ? 'BUG IMPACT // INPUT DAMAGED' : 'BUG IMPACT // LETTER FLIPPED')
-            .setColor('#ff7e7e');
+        this._statusText?.setText('BUG IMPACT // CORRUPTION WRITTEN').setColor('#ff7e7e');
         this._syncCommandVisuals();
         this._focusHiddenInput();
     }
@@ -1547,8 +1407,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
     _getCaretIndexFromPointer(pointer) {
         const localX = pointer.x - this._panel.x - this._commandTextStartX;
         const maxIndex = Math.max(this._getActiveCommand().length, this._hiddenInput?.value.length || 0);
-        const visibleIndex = clampIndex(Math.round(localX / this._charWidth), 0, this._getVisibleCommandSlots());
-        return clampIndex(this._commandWindowStart + visibleIndex, 0, maxIndex);
+        return clampIndex(Math.round(localX / this._charWidth), 0, maxIndex);
     }
 
     _handlePointerMove(pointer) {

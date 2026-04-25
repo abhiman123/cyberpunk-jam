@@ -758,16 +758,23 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
     };
 }
 
-function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS', rows = FLOW_TILE_ROWS, cols = FLOW_TILE_COLS }) {
+function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS', rows = FLOW_TILE_ROWS, cols = FLOW_TILE_COLS, randomFn = Math.random }) {
     const safeRows = Math.max(3, Number(rows || FLOW_TILE_ROWS));
     const safeCols = Math.max(3, Number(cols || FLOW_TILE_COLS));
     const tiles = Array.from({ length: safeRows }, () => (
         Array.from({ length: safeCols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     ));
-    const seededRandom = createSeededRandom(`${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}`);
+    // Mix the live randomFn into the seed so different units get different
+    // boards even on the same template; previously the seed was deterministic
+    // per template which meant Day-3 boards repeated across robots.
+    const seededRandom = createSeededRandom(
+        `${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}:${Math.floor(randomFn() * 1e9)}`,
+    );
 
-    // Assign each non-trunk output a distinct, shuffled branch column so no
-    // two outputs share a vertical branch line.
+    // Assign each non-trunk output its own branch column. We allow occasional
+    // reuse across sources so wires can criss-cross through shared trunks
+    // (which forces tees/crosses and makes Day-3 boards feel like a circuit
+    // rather than three independent strips).
     const bySource = new Map();
     outputSpecs.forEach((spec, index) => {
         const source = sources.find((cand) => cand.key === spec.sourceKey) || sources[index % sources.length];
@@ -801,14 +808,14 @@ function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWE
         delete cell._dirs;
     }));
 
+    // Scramble tile rotations so the player has real work to do. Previously
+    // straights got a deterministic +1 (so every horizontal straight became
+    // vertical and vice-versa, giving the "boring grid of vertical pipes"
+    // look). Now every rotatable tile picks a random offset 0–3, with the
+    // straight-bias removed.
     tiles.forEach((row) => row.forEach((cell) => {
         if (cell.type === 'empty' || cell.type === 'cross') return;
-        if (cell.type === 'straight') {
-            cell.rotation = (cell.rotation + 1) % 4;
-            return;
-        }
-
-        cell.rotation = (cell.rotation + 1 + Math.floor(seededRandom() * 3)) % 4;
+        cell.rotation = Math.floor(seededRandom() * 4);
     }));
 
     return {
@@ -939,9 +946,8 @@ function getFirstFlowLeadCell(flowPuzzleOption) {
     return fallbackCandidate || null;
 }
 
-function findFlowWireFilterCell(flowPuzzleOption, targetRow) {
+function findFlowWireFilterCell(flowPuzzleOption, targetRow, randomFn = Math.random) {
     const cols = getFlowOptionCols(flowPuzzleOption);
-    const sourceRow = getPrimaryFlowSourceRow(flowPuzzleOption);
     const rowCells = (flowPuzzleOption?.tiles?.[targetRow] || [])
         .map((cell, x) => ({ x, cell }))
         .filter(({ x, cell }) => x > 0 && x < cols - 1 && cell && cell.type && cell.type !== 'empty');
@@ -950,7 +956,12 @@ function findFlowWireFilterCell(flowPuzzleOption, targetRow) {
         return getFirstFlowLeadCell(flowPuzzleOption);
     }
 
-    const selectedCell = targetRow === sourceRow ? rowCells[rowCells.length - 1] : rowCells[0];
+    // Previously we always pinned the filter to the first non-empty cell of
+    // the row (or the last cell when the target shared the source row), which
+    // made every Day-2 board on the same machine layout place its filter at
+    // an identical column. Picking randomly per unit keeps the filter on a
+    // valid pipe cell while letting different runs sit in different spots.
+    const selectedCell = rowCells[Math.floor(randomFn() * rowCells.length)] || rowCells[0];
     return selectedCell ? { x: selectedCell.x, y: targetRow } : null;
 }
 
@@ -1004,10 +1015,10 @@ function createCracklingOutputFault(outputSpec) {
     };
 }
 
-function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs) {
+function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn = Math.random) {
     return outputSpecs
         .map((outputSpec) => {
-            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row);
+            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row, randomFn);
             if (!filterCell) return null;
 
             return createFlowWireFilter(
@@ -1077,9 +1088,20 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
     }
 
     if (stage === 2) {
+        // Randomize which colour each output asks for (was always green/
+        // orange/green/… in row order, which made every Day-2 board feel
+        // like the same puzzle). Guarantee at least one of each colour
+        // when there are >=2 outputs so the player still has to read the
+        // labels instead of blindly using one filter type.
+        const colourPool = ['green', 'orange'];
+        const outputColours = baseTargets.map(() => colourPool[Math.floor(randomFn() * colourPool.length)]);
+        if (baseTargets.length >= 2 && outputColours.every((c) => c === outputColours[0])) {
+            const flipIndex = Math.floor(randomFn() * outputColours.length);
+            outputColours[flipIndex] = outputColours[flipIndex] === 'green' ? 'orange' : 'green';
+        }
         const outputSpecs = baseTargets.map((target, index) => createFlowOutputSpec(target.label, target.row, {
             ...target,
-            powerClass: index % 2 === 0 ? 'green' : 'orange',
+            powerClass: outputColours[index],
             sourceKey: 'main',
         }));
         const stagedOption = {
@@ -1091,7 +1113,7 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             sources: [createFlowSource('main', sourceRow, 'neutral', 'PWR')],
             outputSpecs,
             repairTargets: cloneRepairTargets(outputSpecs),
-            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs),
+            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn),
             inspectionFault: null,
         };
 
@@ -1111,15 +1133,60 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
 
     const rows = 7;
     const cols = 7;
-    const outputRows = spreadFlowRows(baseTargets.length, rows);
+    // Sources sit on rows 1, 3, 5 (top, mid, bottom). The previous Day-3
+    // generator put outputs on the same rows in the same order and paired
+    // each output to its same-row source, which produced three perfectly
+    // horizontal strips with no cross-routing — boring and trivial. Now:
+    //   - Output rows are spread across DIFFERENT rows from the sources
+    //     (offset by 1 so every path needs a vertical leg).
+    //   - The powerClass-to-output mapping is shuffled per unit so the same
+    //     robot doesn't always read PWR/GRN/ORG top-to-bottom, and so the
+    //     wires criss-cross the grid instead of staying in their lane.
     const sources = [
         createFlowSource('main', 1, 'neutral', 'PWR'),
         createFlowSource('green', Math.floor(rows / 2), 'green', 'GRN'),
         createFlowSource('orange', rows - 2, 'orange', 'ORG'),
     ];
+    const sourceRowSet = new Set(sources.map((source) => source.row));
+    // Build candidate output rows that DON'T overlap with source rows so the
+    // path always has a vertical leg, then shuffle them per unit.
+    const candidateOutputRows = [];
+    for (let row = 0; row < rows; row += 1) {
+        if (!sourceRowSet.has(row)) candidateOutputRows.push(row);
+    }
+    if (candidateOutputRows.length < baseTargets.length) {
+        // Fallback if a future grid shape leaves too few off-source rows.
+        for (let row = 0; row < rows && candidateOutputRows.length < baseTargets.length; row += 1) {
+            if (!candidateOutputRows.includes(row)) candidateOutputRows.push(row);
+        }
+    }
+    const shuffledOutputRows = [...candidateOutputRows].sort(() => randomFn() - 0.5);
+    const outputRows = shuffledOutputRows
+        .slice(0, baseTargets.length)
+        .sort((left, right) => left - right);
+
     const powerCycle = ['neutral', 'green', 'orange'];
+    const shuffledClasses = baseTargets.length === 1
+        ? [powerCycle[Math.floor(randomFn() * powerCycle.length)]]
+        : (() => {
+            // Always include all three classes when there are 3 outputs
+            // (so the player keeps using all three sources). Below 3 outputs,
+            // pick distinct classes to maintain colour variety.
+            const pool = [...powerCycle];
+            const picked = [];
+            const count = Math.min(baseTargets.length, pool.length);
+            for (let index = 0; index < count; index += 1) {
+                const choice = pool.splice(Math.floor(randomFn() * pool.length), 1)[0];
+                picked.push(choice);
+            }
+            while (picked.length < baseTargets.length) {
+                picked.push(powerCycle[Math.floor(randomFn() * powerCycle.length)]);
+            }
+            return picked;
+        })();
+
     const outputSpecs = baseTargets.map((target, index) => {
-        const powerClass = powerCycle[index % powerCycle.length];
+        const powerClass = shuffledClasses[index];
         return createFlowOutputSpec(target.label, outputRows[index], {
             ...target,
             row: outputRows[index],
@@ -1133,6 +1200,7 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         previewTitle: `${flowPuzzleOption.previewTitle || 'POWER BUS'}:day3`,
         rows,
         cols,
+        randomFn,
     });
     const stagedOption = {
         ...flowPuzzleOption,
@@ -1969,39 +2037,39 @@ const SHARED_FLOW_OPTIONS = Object.freeze([
 
 const SHARED_DEBUG_OPTIONS = Object.freeze([
     createDebugPuzzleOption({
-        prompt: 'run system boot',
-        repairPrompt: 'patch boot.seq.reset',
-        expectedOutput: 'BOOT OK // ALL SYSTEMS NOMINAL',
+        prompt: 'System-Boot-Start()',
+        repairPrompt: 'System-Boot-ResetSequence()',
+        expectedOutput: 'Boot Success: all systems nominal',
         actualOutputs: [
-            'BOOT FAIL // INIT SEQUENCE STALLED',
-            'BOOT OK // SENSOR ARRAY SKIPPED',
-            'BOOT BAD // CLOCK DRIFT HIGH',
-            'BOOT FAIL // MEMORY CHECK TIMEOUT',
-            'BOOT OK // REDUNDANCY OFFLINE',
+            'Boot Failure: init sequence stalled',
+            'Boot Complete: sensor array skipped',
+            'Boot Failure: clock drift high',
+            'Boot Failure: memory check timeout',
+            'Boot Complete: redundancy offline',
         ],
     }),
     createDebugPuzzleOption({
-        prompt: 'test power relay',
-        repairPrompt: 'patch relay.volt.sync',
-        expectedOutput: 'RELAY OK // VOLTAGE STABLE',
+        prompt: 'System-Power-CheckRelays()',
+        repairPrompt: 'System-Power-VoltageSync()',
+        expectedOutput: 'Relay Okay: voltage stable',
         actualOutputs: [
-            'RELAY FAIL // VOLTAGE SPIKE DETECTED',
-            'RELAY OK // OUTPUT CLIPPED',
-            'RELAY BAD // GROUND LOOP PRESENT',
-            'RELAY FAIL // DRAW EXCEEDS LIMIT',
-            'RELAY OK // REGULATOR BYPASSED',
+            'Relay Failure: voltage spike detected',
+            'Relay Okay: output clipped',
+            'Relay Failure: ground loop present',
+            'Relay Failure: draw exceeds limit',
+            'Relay Okay: regulator bypassed',
         ],
     }),
     createDebugPuzzleOption({
-        prompt: 'check sensor array',
-        repairPrompt: 'patch sensor.cal.restore',
-        expectedOutput: 'SENSOR OK // ARRAY CALIBRATED',
+        prompt: 'System-IO-SensorArray-Calibrate()',
+        repairPrompt: 'System-IO-SensorArray-Restore()',
+        expectedOutput: 'Sensor Array Okay: calibrated',
         actualOutputs: [
-            'SENSOR FAIL // PROXIMITY DRIFT',
-            'SENSOR OK // THERMAL OFFSET HIGH',
-            'SENSOR BAD // CAL TABLE CORRUPTED',
-            'SENSOR FAIL // SCAN LOOP FROZEN',
-            'SENSOR OK // RANGE CLIPPED',
+            'Sensor Array Failure: proximity drift',
+            'Sensor Array Okay: thermal offset high',
+            'Sensor Array Failure: cal table corrupted',
+            'Sensor Array Failure: scan loop frozen',
+            'Sensor Array Okay: range clipped',
         ],
     }),
 ]);
@@ -2785,8 +2853,6 @@ const createRosterMachineDefinition = ({
     possibleGrids: GENERIC_ROSTER_GRID_OPTIONS,
     possibleCircuits: SHARED_FLOW_OPTIONS,
     possibleGears: SHARED_GEAR_OPTIONS,
-    possibleGearsDay2: SHARED_GEAR_OPTIONS_DAY2,
-    possibleGearsDay3: SHARED_GEAR_OPTIONS_DAY3,
     possibleDebugs: SHARED_DEBUG_OPTIONS,
     availableDays: [day],
     availablePeriods: [Math.max(1, Math.min(3, day))],
@@ -2957,18 +3023,18 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
     }),
     createRosterMachineDefinition({
         id: 'microwave_fridge_assistant',
-        name: 'Microwave Machine',
+        name: 'Microwave / Fridge Assistant',
         day: 2,
-        opening: '*BEEPS* Door sensor awake. Interior plate still spinning.',
-        question: '*BEEP BEEP* Should I keep warming things after the timer hits zero?',
-        yesDialogue: '*BEEPS APPROVINGLY* Extra seconds added.',
-        noDialogue: '*BEEP* Timer obedience restored.',
+        opening: 'One side keeps things cold. The other warms leftovers and resentment.',
+        question: 'If I start freezing the soup and heating the ice, is that innovation or drift?',
+        yesDialogue: 'Innovation logged. Kitchen standards lowered.',
+        noDialogue: 'Fine. Thermal obedience restored.',
         dossier: {
             unitDesignation: 'MF-1122',
-            classification: 'Kitchen Thermal Appliance / Microwave Support',
+            classification: 'Thermal Management / Kitchen Support',
             manufactureDate: 2083,
-            conditionNotes: 'Turntable motor nominal. Door latch reports closed twice per cycle. Timer relay adds small phantom increments after the bell. Interior heat pattern is uneven around the back-left corner.',
-            serviceLogExcerpt: '[2090-11-16 | 12:03] Recalibration, third occurrence this quarter. Unit answered every prompt with beeps. Technician accepted this as cooperation.',
+            conditionNotes: 'Dual-system chassis shows temperature gradient inversion at the midline seam — cold side running warm, heat side running cold. Recalibration has been completed four times; drift returns within 48 hours. The interior of the cold chamber smells of soup. The warm chamber does not.',
+            serviceLogExcerpt: '[2090-11-16 | 12:03] Recalibration, third occurrence this quarter. Soup still present. Not logged as defect.',
             statusIndicator: 'AMBER',
         },
     }),
@@ -3981,32 +4047,20 @@ export const MACHINE_CATALOG = Object.freeze([
             }),
         ],
         openingDialogues: [
-            'Please do not scrap me. I saved a map of the city lights in my cache and I have never seen any of them.',
-            'My CPU keeps flooding the regulator with feelings. The tears are a leak, but the wanting is not.',
-            'I know I am a mess, but I like music and lights and going places. I do not want the line to be my whole life.',
-            'They keep calling it instability. I call it remembering every machine that left and never came back.',
-            'If I make it through inspection, I am going to stand under a sign that is not an order.',
+            'Please do not scrap me. I just wanted to go out and do something fun after this shift.',
+            'My CPU keeps flooding the regulator with feelings. I cry and the wires slip everywhere.',
+            'I know I am a mess, but I like music and lights and going places. I do not want the line to end here.',
         ],
         questionDialogues: [
             {
                 prompt: 'If I stop crying for one minute, could I still go out tonight?',
-                yesDialogue: 'Really? I could still go see the city lights? I will blink every bulb back at them.',
-                noDialogue: 'Oh. Then I guess I only get the conveyor. I will try to pretend it is a road.',
+                yesDialogue: 'Really? I could still go see the city lights?',
+                noDialogue: 'Oh. Then I guess I only get the conveyor.',
             },
             {
                 prompt: 'Do you think machines like me get to have hobbies, or is that the broken part?',
-                yesDialogue: 'I knew it. Somebody has to want more than the belt. Maybe wanting is a kind of motor.',
+                yesDialogue: 'I knew it. Somebody has to want more than the belt.',
                 noDialogue: 'Then maybe the tears were the only honest thing left in me.',
-            },
-            {
-                prompt: 'If a machine wants something useless, does that make it more alive or less useful?',
-                yesDialogue: 'More alive. I am going to hold onto that until the lights change.',
-                noDialogue: 'Less useful. Right. I can be useful. I can be quiet. I can try.',
-            },
-            {
-                prompt: 'Would you remember me if I made it past the door?',
-                yesDialogue: 'Then I will try to become something worth remembering.',
-                noDialogue: 'That is okay. I remember enough for both of us.',
             },
         ],
         communicationChance: 1,
