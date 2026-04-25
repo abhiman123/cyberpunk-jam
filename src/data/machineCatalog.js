@@ -939,9 +939,8 @@ function getFirstFlowLeadCell(flowPuzzleOption) {
     return fallbackCandidate || null;
 }
 
-function findFlowWireFilterCell(flowPuzzleOption, targetRow) {
+function findFlowWireFilterCell(flowPuzzleOption, targetRow, randomFn = Math.random) {
     const cols = getFlowOptionCols(flowPuzzleOption);
-    const sourceRow = getPrimaryFlowSourceRow(flowPuzzleOption);
     const rowCells = (flowPuzzleOption?.tiles?.[targetRow] || [])
         .map((cell, x) => ({ x, cell }))
         .filter(({ x, cell }) => x > 0 && x < cols - 1 && cell && cell.type && cell.type !== 'empty');
@@ -950,7 +949,12 @@ function findFlowWireFilterCell(flowPuzzleOption, targetRow) {
         return getFirstFlowLeadCell(flowPuzzleOption);
     }
 
-    const selectedCell = targetRow === sourceRow ? rowCells[rowCells.length - 1] : rowCells[0];
+    // Previously we always pinned the filter to the first non-empty cell of
+    // the row (or the last cell when the target shared the source row), which
+    // made every Day-2 board on the same machine layout place its filter at
+    // an identical column. Picking randomly per unit keeps the filter on a
+    // valid pipe cell while letting different runs sit in different spots.
+    const selectedCell = rowCells[Math.floor(randomFn() * rowCells.length)] || rowCells[0];
     return selectedCell ? { x: selectedCell.x, y: targetRow } : null;
 }
 
@@ -1004,10 +1008,10 @@ function createCracklingOutputFault(outputSpec) {
     };
 }
 
-function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs) {
+function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn = Math.random) {
     return outputSpecs
         .map((outputSpec) => {
-            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row);
+            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row, randomFn);
             if (!filterCell) return null;
 
             return createFlowWireFilter(
@@ -1077,9 +1081,20 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
     }
 
     if (stage === 2) {
+        // Randomize which colour each output asks for (was always green/
+        // orange/green/… in row order, which made every Day-2 board feel
+        // like the same puzzle). Guarantee at least one of each colour
+        // when there are >=2 outputs so the player still has to read the
+        // labels instead of blindly using one filter type.
+        const colourPool = ['green', 'orange'];
+        const outputColours = baseTargets.map(() => colourPool[Math.floor(randomFn() * colourPool.length)]);
+        if (baseTargets.length >= 2 && outputColours.every((c) => c === outputColours[0])) {
+            const flipIndex = Math.floor(randomFn() * outputColours.length);
+            outputColours[flipIndex] = outputColours[flipIndex] === 'green' ? 'orange' : 'green';
+        }
         const outputSpecs = baseTargets.map((target, index) => createFlowOutputSpec(target.label, target.row, {
             ...target,
-            powerClass: index % 2 === 0 ? 'green' : 'orange',
+            powerClass: outputColours[index],
             sourceKey: 'main',
         }));
         const stagedOption = {
@@ -1091,7 +1106,7 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             sources: [createFlowSource('main', sourceRow, 'neutral', 'PWR')],
             outputSpecs,
             repairTargets: cloneRepairTargets(outputSpecs),
-            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs),
+            wireFilters: buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn),
             inspectionFault: null,
         };
 

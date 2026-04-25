@@ -308,10 +308,27 @@ export default class CircuitRouting extends MinigameBase {
             this.emitEvidence({ reviewed: true });
         }
 
+        // Reset per-instance interaction state on every build so reopening the
+        // diagnostic doesn't carry over selected-piece highlights or accumulate
+        // inventory counts from a previous session.
+        this._inventory = { straight: 0, curve: 0, tee: 0, cross: 0 };
+        this._selectedInventoryType = null;
+
+        // Track whether we hydrated from saved progress. When true, we skip the
+        // initial inventory seed (which pops 2-3 board pieces back into the
+        // tray) — that step is only meant to run on first open, otherwise it
+        // would unwind the player's work each time they reopen the puzzle.
+        let restoredFromProgress = false;
+        let restoredInventory = null;
+
         let tiles, forbiddenList;
         if (Array.isArray(circuit.progress?.tiles) && circuit.progress.tiles.length > 0) {
             tiles = cloneCircuitTiles(circuit.progress.tiles);
             forbiddenList = circuit.forbidden || [];
+            restoredFromProgress = true;
+            if (circuit.progress.inventory && typeof circuit.progress.inventory === 'object') {
+                restoredInventory = circuit.progress.inventory;
+            }
         } else if (circuit.tiles) {
             tiles = cloneCircuitTiles(circuit.tiles);
             forbiddenList = circuit.forbidden || [];
@@ -344,7 +361,14 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
         this._tiles = tiles;
-        this._forbidden = new Set(forbiddenList.map(([x, y]) => `${x},${y}`));
+        // Forbidden cells were the amber-tinted "obstacle" tiles. They no
+        // longer ship as a player-facing mechanic — the puzzle was always
+        // solvable around them, so they read as decorative dead weight.
+        // Force the set empty regardless of what the data layer or saved
+        // progress provides; that keeps every legacy field a no-op without
+        // having to scrub case definitions.
+        forbiddenList = [];
+        this._forbidden = new Set();
         this._tileGfx = [];
 
         // Full-screen input blocker so clicks don't leak to UI below
@@ -451,11 +475,21 @@ export default class CircuitRouting extends MinigameBase {
         this._buildVoltageHud(depth + 2);
         this._buildInventoryPanel(depth + 2);
 
-        // Seed the inventory by popping a few non-critical path tiles from the
-        // board so there's something in the inventory to place from the
-        // start — this gives puzzles the "assemble the circuit" feel instead
-        // of only rotating pre-placed pieces.
-        this._seedInitialInventory(circuit);
+        // Seed the inventory only on a fresh open. If we hydrated tiles from
+        // saved progress, replay the saved inventory counts instead — running
+        // _seedInitialInventory again would pop additional pieces off the
+        // board and unwind whatever the player had already placed.
+        if (restoredFromProgress) {
+            if (restoredInventory) {
+                Object.entries(restoredInventory).forEach(([type, count]) => {
+                    if (!Object.prototype.hasOwnProperty.call(this._inventory, type)) return;
+                    this._inventory[type] = Math.max(0, Math.floor(Number(count) || 0));
+                });
+            }
+            this._refreshInventoryPanel();
+        } else {
+            this._seedInitialInventory(circuit);
+        }
 
         // Close button — added to the container LAST so it sits on top of all tiles
         // in Phaser's render list and wins input hit-testing reliably.
@@ -1035,7 +1069,11 @@ export default class CircuitRouting extends MinigameBase {
     _refreshVoltageHud() {
         if (!this._voltageActualText) return;
         const targetCount = this._outputSpecs.length;
-        const powered = this.evidence?.repairedTargets?.length || 0;
+        // Read from the live snapshot built each _updateAll, falling back to
+        // the persisted evidence on first paint before any flow recompute.
+        const powered = this._latestSnapshot?.repairedTargets?.length
+            ?? this.evidence?.repairedTargets?.length
+            ?? 0;
         this._voltageActualText.setText(`${powered} / ${targetCount}`);
         this._voltageTargetText.setText(String(targetCount));
 
@@ -1175,6 +1213,7 @@ export default class CircuitRouting extends MinigameBase {
 
         return {
             tiles: cloneCircuitTiles(this._tiles),
+            inventory: { ...this._inventory },
             connected,
             missing: [...brokenTargets],
             repairedTargets,
@@ -1266,11 +1305,25 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         if (isForbidden) {
-            pipe.fillStyle(0xffb347, 0.18);
-            pipe.fillRoundedRect(-(this.cellSize / 2) + 8, -(this.cellSize / 2) + 8, this.cellSize - 16, this.cellSize - 16, 12);
-            pipe.lineStyle(4, 0xffcc77, 0.9);
-            pipe.lineBetween(-(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12, (this.cellSize / 2) - 12);
-            pipe.lineBetween((this.cellSize / 2) - 12, -(this.cellSize / 2) + 12, -(this.cellSize / 2) + 12, (this.cellSize / 2) - 12);
+            // Forbidden cells previously rendered a large X across the whole
+            // tile, which read as "this cell matters" — but the X is purely
+            // decorative and the puzzle can usually be solved by routing
+            // around it. The amber octagon frame + corner "?" mark already
+            // signal "blocked" without the heavy X overlay.
+            pipe.fillStyle(0xffb347, 0.10);
+            pipe.fillRoundedRect(
+                -(this.cellSize / 2) + 8,
+                -(this.cellSize / 2) + 8,
+                this.cellSize - 16,
+                this.cellSize - 16,
+                12,
+            );
+            // Diagonal hatching strokes — subtle "no-go" texture instead of
+            // the loud X. Two short parallel slashes in the corners.
+            pipe.lineStyle(2, 0xffcc77, 0.55);
+            const inset = (this.cellSize / 2) - 14;
+            pipe.lineBetween(-inset, -inset + 6, -inset + 6, -inset);
+            pipe.lineBetween(inset - 6, inset, inset, inset - 6);
             return;
         }
         if (tile.type === 'empty') return;
@@ -1365,7 +1418,19 @@ export default class CircuitRouting extends MinigameBase {
 
             while (queue.length) {
                 const { x, y, powerClass } = queue.shift();
-                const stateKey = `${x},${y}:${source.key}:${powerClass}`;
+                // Visit each cell at most once per source. The previous keying
+                // also folded in the incoming powerClass, which let a cell be
+                // re-entered after a downstream filter changed the class —
+                // and that revisit would back-flow the new class through any
+                // cycle, painting upstream wires "mixed" (pink) even though
+                // the source only fed them with neutral. Players read that
+                // as "the orange wire is broken / the wrong colour" because
+                // the target then reports CLASS MISMATCH against the very
+                // class the player ran the source through. Dropping the
+                // class from the dedup key locks each cell to whichever
+                // class first reached it from the source, mirroring how
+                // current actually flows from source toward outputs.
+                const stateKey = `${x},${y}:${source.key}`;
                 if (visitedStates.has(stateKey)) continue;
                 visitedStates.add(stateKey);
 
@@ -1583,7 +1648,11 @@ export default class CircuitRouting extends MinigameBase {
 
         this._refreshAnimatedCircuitEffects();
 
-        this._syncCircuitProgress(this._lastResult);
+        // Build the live snapshot once and feed it both to circuit.progress
+        // (used by Game.js) and to the voltage HUD. Previously the HUD read
+        // from `this.evidence`, which is only mutated on close, so the meter
+        // stayed stuck at its initial value during play.
+        this._latestSnapshot = this._syncCircuitProgress(this._lastResult);
         this._refreshVoltageHud?.();
     }
 
