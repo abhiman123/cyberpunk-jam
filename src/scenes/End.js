@@ -161,12 +161,15 @@ export default class EndScene extends Phaser.Scene {
         });
         this._vents = vents;
 
-        // Cable bundles dangling from the ceiling
+        // Cable bundles dangling from the ceiling — the thicker dark cables
+        // are the lamp power cords and must align with the lamp positions below.
+        const lightXs = [180, 420, 660, 900, 1140];
         const cables = this.add.graphics().setDepth(2);
         cables.lineStyle(3, 0x0a1018, 1);
-        [180, 410, 700, 970, 1150].forEach((cx) => {
-            cables.lineBetween(cx, 0, cx, 96);
+        lightXs.forEach((cx) => {
+            cables.lineBetween(cx, 0, cx, 60);
         });
+        // Decorative thinner cables (not powering lamps) interleaved between.
         cables.lineStyle(2, 0x1c2632, 0.9);
         [120, 290, 510, 820, 1080].forEach((cx) => {
             cables.lineBetween(cx, 0, cx, 70);
@@ -238,7 +241,6 @@ export default class EndScene extends Phaser.Scene {
         // Industrial overhead lights (housing + bulb + light cone)
         this._lights = [];
         this._lightCones = [];
-        const lightXs = [180, 420, 660, 900, 1140];
         lightXs.forEach((lx) => {
             // Mounting strap
             const strap = this.add.rectangle(lx, 30, 4, 30, 0x1b2330, 1).setDepth(2);
@@ -322,54 +324,66 @@ export default class EndScene extends Phaser.Scene {
         // Drawn inline so we don't depend on a baked sprite.
         // Player x=860 so it doesn't overlap the SCRAP button (which appears
         // at x=1038 in the umbrella_red / umbrella_mixed endings).
-        this._playerFigure = this.add.graphics().setDepth(9);
-        this._drawPlayerFigure(this._playerFigure);
-        this._playerFigure.setPosition(860, 0);
+        //
+        // The player is intentionally NOT added to _world so that during the
+        // fall sequence, _world can rise past the player (catwalk goes up
+        // while the player descends through the hole).
+        // Container origin = visual center of the figure (~y=372 in scene
+        // coords) so scale/rotate animations during the fall pivot around
+        // the player's body, not their head.
+        // Depth 30 so the player renders above the dialogue panel during the
+        // fall (panel chrome is depths 20-23). The panel fades out at the
+        // start of the fall sequence, but this guarantees no occlusion.
+        this._playerFigure = this.add.container(860, 372).setDepth(30);
+        const playerSilhouette = this.add.graphics();
+        this._drawPlayerFigure(playerSilhouette);
+        this._playerFigure.add(playerSilhouette);
 
         // Floor shadow under the player figure
         this._playerShadow = this.add.ellipse(860, 472, 84, 14, 0x000000, 0.5).setDepth(8);
 
-        this._world.add([this._playerFigure, this._playerShadow, this._managerSprite, this._umbrellaSprite]);
+        this._world.add([this._managerSprite, this._umbrellaSprite]);
     }
 
     _drawPlayerFigure(g) {
         // Inspector silhouette, back-of-head perspective, facing left toward the antagonist.
-        // Local origin at feet (x=0, y=472 floor line).
-        // Coat
+        // Body span in container-local coords: y ∈ [-102, 102] (centered on the
+        // figure mid-section so scale/rotation pivot around the body).
+        // Coat (torso)
         g.fillStyle(0x070b12, 1);
-        g.fillRect(-22, 318, 44, 154);
+        g.fillRect(-22, -54, 44, 154);
         g.fillStyle(0x0d1620, 1);
-        g.fillRect(-26, 360, 52, 64);
+        g.fillRect(-26, -12, 52, 64);
         // Shoulders
         g.fillStyle(0x111c28, 1);
-        g.fillRect(-32, 320, 64, 22);
+        g.fillRect(-32, -52, 64, 22);
         // Neck
         g.fillStyle(0x0a1018, 1);
-        g.fillRect(-8, 308, 16, 14);
+        g.fillRect(-8, -64, 16, 14);
         // Head (back of head, slightly turned)
         g.fillStyle(0x101820, 1);
-        g.fillRect(-18, 274, 36, 38);
+        g.fillRect(-18, -98, 36, 38);
         // Hair tuft
         g.fillStyle(0x070a10, 1);
-        g.fillRect(-16, 270, 32, 8);
+        g.fillRect(-16, -102, 32, 8);
         // Headset earpiece (faint cyan glow)
         g.fillStyle(0x4ad7ff, 0.85);
-        g.fillRect(-22, 286, 4, 8);
+        g.fillRect(-22, -86, 4, 8);
         g.fillStyle(0x4ad7ff, 0.35);
-        g.fillRect(-23, 285, 6, 10);
+        g.fillRect(-23, -87, 6, 10);
         // Subtle cyan rim light on the right edge of the silhouette
         g.fillStyle(0x2c5a78, 0.55);
-        g.fillRect(20, 318, 2, 154);
+        g.fillRect(20, -54, 2, 154);
         g.fillStyle(0x2c5a78, 0.55);
-        g.fillRect(16, 274, 2, 38);
+        g.fillRect(16, -98, 2, 38);
         // Pants/legs
         g.fillStyle(0x05080d, 1);
-        g.fillRect(-18, 422, 14, 50);
-        g.fillRect(4, 422, 14, 50);
+        g.fillRect(-18, 50, 14, 50);
+        g.fillRect(4, 50, 14, 50);
         // Boots
         g.fillStyle(0x000000, 1);
-        g.fillRect(-22, 466, 20, 8);
-        g.fillRect(2, 466, 20, 8);
+        g.fillRect(-22, 94, 20, 8);
+        g.fillRect(2, 94, 20, 8);
     }
 
     _buildUi() {
@@ -768,6 +782,24 @@ export default class EndScene extends Phaser.Scene {
     async _runFallSequence({ violent = false } = {}) {
         this._dialogueText.setAlpha(0);
 
+        // Fade out the dialogue panel chrome so the falling player isn't
+        // occluded by it on the way down.
+        this.tweens.add({
+            targets: [
+                this._panelShadow,
+                this._panel,
+                this._panelHeaderStrip,
+                this._panelStripes,
+                this._panelBrackets,
+                this._panelAlertDot,
+                this._panelTag,
+                this._panelMeta,
+            ],
+            alpha: 0,
+            duration: 300,
+            ease: 'Sine.Out',
+        });
+
         if (this._music) {
             this.tweens.add({
                 targets: this._music,
@@ -780,25 +812,44 @@ export default class EndScene extends Phaser.Scene {
             });
         }
 
-        // this._fallHole.setAlpha(1);
         if (violent) {
             this.cameras.main.flash(220, 255, 95, 72, false);
         }
         this.cameras.main.shake(700, violent ? 0.03 : 0.018);
 
+        // World rises above the player (parallax: gives the sense the player
+        // is falling into the pit while the catwalk recedes upward).
         this.tweens.add({
             targets: this._world,
             y: -260,
             duration: 1350,
             ease: 'Cubic.In',
         });
+
+        // Player physically falls into the pit — down, shrinking with
+        // perspective, with a slight tumble for impact. Container origin is
+        // at the figure's center so scale/rotation pivot around the body.
         this.tweens.add({
-            // targets: this._fallHole,
-            scaleX: violent ? 6.2 : 5.2,
-            scaleY: violent ? 4.8 : 4.1,
-            y: 700,
-            duration: 1350,
+            targets: this._playerFigure,
+            y: 820,
+            scale: 0.35,
+            angle: violent ? -52 : -22,
+            duration: 1100,
             ease: 'Cubic.In',
+            onComplete: () => {
+                this._playerFigure.setVisible(false);
+            },
+        });
+        this.tweens.add({
+            targets: this._playerShadow,
+            scaleX: 0.25,
+            scaleY: 0.25,
+            alpha: 0,
+            duration: 600,
+            ease: 'Cubic.In',
+            onComplete: () => {
+                this._playerShadow.setVisible(false);
+            },
         });
 
         await this._wait(920);
@@ -809,6 +860,8 @@ export default class EndScene extends Phaser.Scene {
     async _showTitleCard() {
         // hide everything so the title appears on a clean black screen
         this._world.setVisible(false);
+        this._playerFigure.setVisible(false);
+        this._playerShadow.setVisible(false);
         this._dialogueText.setVisible(false);
         this._panelShadow.setVisible(false);
         this._panel.setVisible(false);
