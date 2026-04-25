@@ -45,6 +45,19 @@ function getPieceLabel(type) {
     return '';
 }
 
+function getPieceFriendlyName(type) {
+    if (type === GEAR_CODES.MOVABLE_WALL) return 'Clamp Plate';
+    if (type === GEAR_CODES.RUSTED) return 'Rusted Gear';
+    if (type === GEAR_CODES.HORIZONTAL) return 'Straight (E-W)';
+    if (type === GEAR_CODES.VERTICAL) return 'Straight (N-S)';
+    if (type === GEAR_CODES.CURVE_NE) return 'Curve N-E';
+    if (type === GEAR_CODES.CURVE_SE) return 'Curve S-E';
+    if (type === GEAR_CODES.CURVE_SW) return 'Curve S-W';
+    if (type === GEAR_CODES.CURVE_NW) return 'Curve N-W';
+    if (type === GEAR_CODES.FULL) return 'Cross Hub';
+    return 'Drive Part';
+}
+
 function getGearDirectionPosition(dir, reach) {
     if (dir === 'N') return { x: 0, y: -reach };
     if (dir === 'E') return { x: reach, y: 0 };
@@ -252,19 +265,23 @@ export default class GearGridPuzzle extends MinigameBase {
         this._panel = panel;
 
         const legendDivider = this.scene.add.rectangle(314, 36, 234, 1, 0x395968, 0.6);
-        const legendTitle = this.scene.add.text(198, 56, 'MOVABLE PARTS', {
+        // Cyberpunk parts-bin header: rectangle banner with corner accents.
+        const legendBanner = this.scene.add.rectangle(314, 56, 234, 26, 0x0e2030, 0.92)
+            .setStrokeStyle(1, 0x5dc5e2, 0.7);
+        const legendTitle = this.scene.add.text(314, 56, '◢ PARTS INVENTORY ◣', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#cde6ee',
-            letterSpacing: 1,
-        }).setOrigin(0, 0.5);
+            color: '#9ee2f4',
+            letterSpacing: 2,
+        }).setOrigin(0.5, 0.5);
         this._legendContainer = this.scene.add.container(0, 0);
-        panel.add([legendDivider, legendTitle, this._legendContainer]);
+        panel.add([legendDivider, legendBanner, legendTitle, this._legendContainer]);
 
         this._buildBoard();
         this._buildPieces(pieces);
         this._buildLegend();
         this._drawInspectionFault();
+        this._raiseFaultedSlots();
 
         this._escKey = this.scene.input.keyboard?.addKey('ESC');
         this._escHandler = () => { if (this.active) this._finalizeAndClose(); };
@@ -320,14 +337,25 @@ export default class GearGridPuzzle extends MinigameBase {
             row.forEach((code, colIndex) => {
                 const position = getCellCenter(this._boardLeft, this._boardTop, this._cellSize, rowIndex, colIndex);
                 const slot = this.scene.add.container(position.x, position.y);
-                const slotFill = code === GEAR_CODES.WALL ? 0x211c19 : 0x0f1d24;
-                const slotStroke = code === GEAR_CODES.WALL ? 0x8c7968 : 0x42616d;
+
+                // Cyberpunk-skin slot: a base plate (warmer for walls, cooler
+                // for empty/playable cells) with a holographic grid overlay
+                // and corner accent ticks. Replaces the older flat dark
+                // rectangle which read as a placeholder texture.
+                const isWallCell = code === GEAR_CODES.WALL;
+                const slotFill = isWallCell ? 0x141014 : 0x06141a;
+                const slotStroke = isWallCell ? 0x6a4830 : 0x32647c;
                 const slotRect = this.scene.add.rectangle(0, 0, this._cellSize, this._cellSize, slotFill, 0.94)
-                    .setStrokeStyle(1, slotStroke, 0.72);
+                    .setStrokeStyle(1, slotStroke, 0.78);
+
+                // Holo grid pattern + corner ticks behind the cell content.
+                const skinGfx = this.scene.add.graphics();
+                this._drawCellSkin(skinGfx, isWallCell);
+
                 const previewRect = this.scene.add.rectangle(0, 0, this._cellSize - 4, this._cellSize - 4, 0x84ffc2, 0)
                     .setStrokeStyle(2, 0xd8fff0, 0);
 
-                slot.add([slotRect, previewRect]);
+                slot.add([slotRect, skinGfx, previewRect]);
                 this._panel.add(slot);
 
                 const cellView = {
@@ -349,6 +377,58 @@ export default class GearGridPuzzle extends MinigameBase {
                 }
             });
         });
+    }
+
+    // Cyberpunk holo-skin behind every cell. On wall cells we render a
+    // darker industrial-steel pattern; on playable cells we draw a faint
+    // cyan grid + corner ticks so empty slots read as "available" rather
+    // than as a beige placeholder texture.
+    _drawCellSkin(gfx, isWall) {
+        const half = this._cellSize / 2;
+        const inset = 4;
+        const tickLen = Math.max(6, Math.floor(this._cellSize * 0.13));
+
+        if (isWall) {
+            // Diagonal hatch + 4 corner rivets. Cleaner than the old
+            // stripey "vertical bars" wall texture.
+            gfx.lineStyle(1, 0x4a3526, 0.6);
+            for (let offset = -this._cellSize; offset < this._cellSize; offset += 8) {
+                gfx.lineBetween(-half + inset, offset, half - inset, offset + this._cellSize);
+            }
+            gfx.fillStyle(0x6a4a32, 0.8);
+            const rivetR = Math.max(2, Math.floor(this._cellSize * 0.05));
+            const rivetOff = Math.max(8, Math.floor(this._cellSize * 0.18));
+            gfx.fillCircle(-half + rivetOff, -half + rivetOff, rivetR);
+            gfx.fillCircle(half - rivetOff, -half + rivetOff, rivetR);
+            gfx.fillCircle(-half + rivetOff, half - rivetOff, rivetR);
+            gfx.fillCircle(half - rivetOff, half - rivetOff, rivetR);
+            return;
+        }
+
+        // Faint cyan holo grid for empty/playable cells.
+        gfx.lineStyle(1, 0x1d4452, 0.55);
+        const step = Math.max(8, Math.floor(this._cellSize / 5));
+        for (let x = -half + step; x < half; x += step) {
+            gfx.lineBetween(x, -half + inset, x, half - inset);
+        }
+        for (let y = -half + step; y < half; y += step) {
+            gfx.lineBetween(-half + inset, y, half - inset, y);
+        }
+
+        // Corner accent ticks (cyberpunk frame).
+        gfx.lineStyle(2, 0x6acfee, 0.78);
+        // top-left
+        gfx.lineBetween(-half + inset, -half + inset, -half + inset + tickLen, -half + inset);
+        gfx.lineBetween(-half + inset, -half + inset, -half + inset, -half + inset + tickLen);
+        // top-right
+        gfx.lineBetween(half - inset, -half + inset, half - inset - tickLen, -half + inset);
+        gfx.lineBetween(half - inset, -half + inset, half - inset, -half + inset + tickLen);
+        // bottom-left
+        gfx.lineBetween(-half + inset, half - inset, -half + inset + tickLen, half - inset);
+        gfx.lineBetween(-half + inset, half - inset, -half + inset, half - inset - tickLen);
+        // bottom-right
+        gfx.lineBetween(half - inset, half - inset, half - inset - tickLen, half - inset);
+        gfx.lineBetween(half - inset, half - inset, half - inset, half - inset - tickLen);
     }
 
     _buildPieces(pieces) {
@@ -424,9 +504,32 @@ export default class GearGridPuzzle extends MinigameBase {
         }
 
         movablePieces.forEach((pieceView, index) => {
-            const y = 92 + (index * 56);
+            const y = 96 + (index * 60);
+            // Socket frame around the gear thumbnail (parts-bin look).
+            const socketBg = this.scene.add.rectangle(218, y, 50, 50, 0x081a23, 0.92)
+                .setStrokeStyle(1, 0x5dc5e2, 0.55);
+            // Corner ticks on the socket.
+            const socketGfx = this.scene.add.graphics();
+            socketGfx.lineStyle(2, 0x6fdcf5, 0.85);
+            const sx = 218;
+            const sy = y;
+            const sh = 25;
+            const tick = 6;
+            // top-left
+            socketGfx.lineBetween(sx - sh, sy - sh, sx - sh + tick, sy - sh);
+            socketGfx.lineBetween(sx - sh, sy - sh, sx - sh, sy - sh + tick);
+            // top-right
+            socketGfx.lineBetween(sx + sh, sy - sh, sx + sh - tick, sy - sh);
+            socketGfx.lineBetween(sx + sh, sy - sh, sx + sh, sy - sh + tick);
+            // bottom-left
+            socketGfx.lineBetween(sx - sh, sy + sh, sx - sh + tick, sy + sh);
+            socketGfx.lineBetween(sx - sh, sy + sh, sx - sh, sy + sh - tick);
+            // bottom-right
+            socketGfx.lineBetween(sx + sh, sy + sh, sx + sh - tick, sy + sh);
+            socketGfx.lineBetween(sx + sh, sy + sh, sx + sh, sy + sh - tick);
+
             const sample = this._createGearVisual(pieceView.piece.type, true);
-            sample.container.setScale(0.48);
+            sample.container.setScale(0.42);
             sample.container.setPosition(218, y);
             this._drawGearVisual(sample, pieceView.piece.type, {
                 movable: true,
@@ -434,24 +537,32 @@ export default class GearGridPuzzle extends MinigameBase {
                 active: false,
                 pieceRole: pieceView.piece.role || null,
             });
-            const title = this.scene.add.text(246, y - 10, `PART ${index + 1}`, {
+
+            const partName = pieceView.piece.role === 'deadlock-clamp'
+                ? 'Deadlock Clamp'
+                : getPieceFriendlyName(pieceView.piece.type);
+            const partCode = pieceView.piece.role === 'deadlock-clamp'
+                ? 'CLAMP'
+                : (getPieceLabel(pieceView.piece.type) || 'GEAR');
+            const title = this.scene.add.text(252, y - 12, partName, {
                 fontFamily: 'Courier New',
-                fontSize: '11px',
-                color: '#dbeff4',
+                fontSize: '12px',
+                color: '#e3f4f9',
                 letterSpacing: 1,
             }).setOrigin(0, 0.5);
-            const label = this.scene.add.text(246, y + 9, pieceView.piece.role === 'deadlock-clamp' ? 'CLAMP' : (getPieceLabel(pieceView.piece.type) || 'GEAR'), {
+            const label = this.scene.add.text(252, y + 4, `${partCode} · #${index + 1}`, {
                 fontFamily: 'Courier New',
                 fontSize: '10px',
-                color: '#8db2bf',
-            }).setOrigin(0, 0.5);
-            const hint = this.scene.add.text(246, y + 23, pieceView.piece.role === 'deadlock-clamp' ? 'DEAD SPACE TOOL' : 'DRAGGABLE', {
-                fontFamily: 'Courier New',
-                fontSize: '9px',
-                color: '#a6eef3',
+                color: '#7eb5c5',
                 letterSpacing: 1,
             }).setOrigin(0, 0.5);
-            this._legendContainer.add([sample.container, title, label, hint]);
+            const hint = this.scene.add.text(252, y + 19, pieceView.piece.role === 'deadlock-clamp' ? 'DEAD-SPACE TOOL' : 'DRAG TO INSTALL', {
+                fontFamily: 'Courier New',
+                fontSize: '9px',
+                color: '#9ddff0',
+                letterSpacing: 1,
+            }).setOrigin(0, 0.5);
+            this._legendContainer.add([socketBg, socketGfx, sample.container, title, label, hint]);
         });
     }
 
@@ -459,6 +570,20 @@ export default class GearGridPuzzle extends MinigameBase {
         if (!this._inspectionFaultGfx) return;
 
         this._inspectionFaultGfx.clear();
+    }
+
+    // After the board + pieces are built, lift any slot whose contents
+    // contain a fault to the top of the panel display list so the CRACK
+    // pill (which hangs below the cell into the next row) isn't covered
+    // by the cell drawn after it.
+    _raiseFaultedSlots() {
+        const fault = this._puzzle?.inspectionFault;
+        if (!fault || !this._panel) return;
+        const cellKey = gearCellKey(fault.row, fault.col);
+        const cellView = this._cellViewMap.get(cellKey);
+        if (cellView?.slot) {
+            this._panel.bringToTop(cellView.slot);
+        }
     }
 
     _getFaultTypeForStaticView(row, col) {
@@ -752,12 +877,33 @@ export default class GearGridPuzzle extends MinigameBase {
         }
 
         if (isWall) {
-            const stripeWidth = Math.max(6, Math.floor((this._cellSize - 20) / 5));
-            for (let index = -2; index <= 2; index += 1) {
-                const x = index * stripeWidth;
-                visual.connectorGfx.fillStyle(index % 2 === 0 ? 0x8b949b : 0x616970, 0.92);
-                visual.connectorGfx.fillRoundedRect(x - 8, -((this._cellSize - 28) / 2), stripeWidth, this._cellSize - 28, 4);
+            // Chamfered industrial plate (replaces old vertical stripes).
+            // Beveled edge + dark interior + 4 corner bolts. Reads as
+            // "structural fixed component" rather than placeholder texture.
+            const plateSize = this._cellSize - 18;
+            const half = plateSize / 2;
+            const bevel = Math.max(3, Math.floor(this._cellSize * 0.08));
+            const innerColor = movable ? 0x3b3138 : 0x231a1f;
+            const edgeColor = movable ? 0x7a6c64 : 0x4a3a30;
+            visual.connectorGfx.fillStyle(edgeColor, 0.95);
+            visual.connectorGfx.fillRoundedRect(-half - 2, -half - 2, plateSize + 4, plateSize + 4, bevel + 2);
+            visual.connectorGfx.fillStyle(innerColor, 0.94);
+            visual.connectorGfx.fillRoundedRect(-half, -half, plateSize, plateSize, bevel);
+            // Diagonal hatch detail.
+            visual.connectorGfx.lineStyle(1, edgeColor, 0.4);
+            for (let offset = -half; offset <= half; offset += 6) {
+                visual.connectorGfx.lineBetween(-half + 4, offset, half - 4, offset + plateSize - 4);
             }
+            // Corner bolts.
+            const boltR = Math.max(2, Math.floor(this._cellSize * 0.045));
+            const boltOff = Math.max(6, Math.floor(plateSize * 0.18));
+            visual.connectorGfx.fillStyle(0xc7b39a, 0.9);
+            [[-half + boltOff, -half + boltOff], [half - boltOff, -half + boltOff],
+                [-half + boltOff, half - boltOff], [half - boltOff, half - boltOff]].forEach(([x, y]) => {
+                visual.connectorGfx.fillCircle(x, y, boltR);
+                visual.connectorGfx.lineStyle(1, 0x3a2c20, 0.85);
+                visual.connectorGfx.lineBetween(x - boltR + 1, y, x + boltR - 1, y);
+            });
             if (!movable && FACTORY_DEBUG.enabled) {
                 visual.badgeText.setText('LOCK').setColor('#f2f4f6').setVisible(true);
             }
@@ -892,18 +1038,34 @@ export default class GearGridPuzzle extends MinigameBase {
         if (!faultType) return;
 
         if (faultType === 'cracked-drive' || faultType === 'cracked-gear') {
+            // Crack glyph stays inside the cell (centered on the gear), but
+            // the CRACK label is now rendered as a pill HANGING OFF the
+            // bottom edge of the cell so it never covers the gear icon
+            // or the IN/OUT text. Width sized to the text + padding.
             visual.faultGfx.fillStyle(0x070707, 0.34);
-            visual.faultGfx.fillTriangle(-12, -22, 6, -2, 22, 20);
+            visual.faultGfx.fillTriangle(-12, -16, 6, -2, 22, 14);
             visual.faultGfx.lineStyle(3, 0xffc39c, 0.95);
             visual.faultGfx.beginPath();
-            visual.faultGfx.moveTo(-18, -20);
-            visual.faultGfx.lineTo(-4, -6);
-            visual.faultGfx.lineTo(-10, 6);
-            visual.faultGfx.lineTo(4, 18);
-            visual.faultGfx.lineTo(12, 4);
-            visual.faultGfx.lineTo(20, 18);
+            visual.faultGfx.moveTo(-16, -14);
+            visual.faultGfx.lineTo(-4, -2);
+            visual.faultGfx.lineTo(-8, 4);
+            visual.faultGfx.lineTo(4, 12);
+            visual.faultGfx.lineTo(10, 2);
+            visual.faultGfx.lineTo(16, 12);
             visual.faultGfx.strokePath();
-            visual.faultText.setText('CRACK').setVisible(true).setPosition(0, 24);
+
+            // Pill anchored just below the cell's bottom edge.
+            const pillY = (this._cellSize / 2) + 4;
+            const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
+            const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
+            visual.faultGfx.fillStyle(0x4a0d0a, 0.95);
+            visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
+            visual.faultGfx.lineStyle(1, 0xffc39c, 0.92);
+            visual.faultGfx.strokeRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
+            visual.faultText
+                .setText('CRACK')
+                .setVisible(true)
+                .setPosition(0, pillY + pillH / 2);
             return;
         }
 
@@ -924,7 +1086,18 @@ export default class GearGridPuzzle extends MinigameBase {
             visual.faultGfx.lineBetween(-18, 10, -28, 22);
             visual.faultGfx.lineBetween(18, 10, 30, 24);
             visual.faultGfx.strokeCircle(0, 0, 16);
-            visual.faultText.setText('SPARK').setVisible(true).setPosition(0, 24);
+            // Pill below the cell (matches the CRACK pill style).
+            const pillY = (this._cellSize / 2) + 4;
+            const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
+            const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
+            visual.faultGfx.fillStyle(0x3a0a0a, 0.95);
+            visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
+            visual.faultGfx.lineStyle(1, 0xff6960, 0.92);
+            visual.faultGfx.strokeRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
+            visual.faultText
+                .setText('SPARK')
+                .setVisible(true)
+                .setPosition(0, pillY + pillH / 2);
         }
     }
 
