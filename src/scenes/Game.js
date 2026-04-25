@@ -5550,8 +5550,8 @@ export default class GameScene extends Phaser.Scene {
 
         this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(22).setVisible(false);
         this._machineSpeechBubbleSlots = [
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 122, 312, 246),
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 122, 392, 262, true),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 304, 398, 230),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 304, 473, 230, true),
         ];
         this._machineSpeechBubbleSlots.forEach((slot) => this._machineSpeechBubbleLayer.add(slot.container));
         this._conveyorContainer.add(this._machineSpeechBubbleLayer);
@@ -7483,9 +7483,9 @@ export default class GameScene extends Phaser.Scene {
         slot.tail.clear();
         if (slot.withTail) {
             const tailPoints = [
-                left + 24, -10,
-                left + 40, 20,
-                left + 58, -2,
+                bubbleWidth - 4, -24,
+                bubbleWidth + 48, -12,
+                bubbleWidth - 4, -4,
             ];
             slot.tailShadow.fillStyle(0x000000, 0.18);
             slot.tailShadow.fillPoints([
