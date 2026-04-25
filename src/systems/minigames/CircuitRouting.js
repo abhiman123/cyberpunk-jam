@@ -308,10 +308,27 @@ export default class CircuitRouting extends MinigameBase {
             this.emitEvidence({ reviewed: true });
         }
 
+        // Reset per-instance interaction state on every build so reopening the
+        // diagnostic doesn't carry over selected-piece highlights or accumulate
+        // inventory counts from a previous session.
+        this._inventory = { straight: 0, curve: 0, tee: 0, cross: 0 };
+        this._selectedInventoryType = null;
+
+        // Track whether we hydrated from saved progress. When true, we skip the
+        // initial inventory seed (which pops 2-3 board pieces back into the
+        // tray) — that step is only meant to run on first open, otherwise it
+        // would unwind the player's work each time they reopen the puzzle.
+        let restoredFromProgress = false;
+        let restoredInventory = null;
+
         let tiles, forbiddenList;
         if (Array.isArray(circuit.progress?.tiles) && circuit.progress.tiles.length > 0) {
             tiles = cloneCircuitTiles(circuit.progress.tiles);
             forbiddenList = circuit.forbidden || [];
+            restoredFromProgress = true;
+            if (circuit.progress.inventory && typeof circuit.progress.inventory === 'object') {
+                restoredInventory = circuit.progress.inventory;
+            }
         } else if (circuit.tiles) {
             tiles = cloneCircuitTiles(circuit.tiles);
             forbiddenList = circuit.forbidden || [];
@@ -451,11 +468,21 @@ export default class CircuitRouting extends MinigameBase {
         this._buildVoltageHud(depth + 2);
         this._buildInventoryPanel(depth + 2);
 
-        // Seed the inventory by popping a few non-critical path tiles from the
-        // board so there's something in the inventory to place from the
-        // start — this gives puzzles the "assemble the circuit" feel instead
-        // of only rotating pre-placed pieces.
-        this._seedInitialInventory(circuit);
+        // Seed the inventory only on a fresh open. If we hydrated tiles from
+        // saved progress, replay the saved inventory counts instead — running
+        // _seedInitialInventory again would pop additional pieces off the
+        // board and unwind whatever the player had already placed.
+        if (restoredFromProgress) {
+            if (restoredInventory) {
+                Object.entries(restoredInventory).forEach(([type, count]) => {
+                    if (!Object.prototype.hasOwnProperty.call(this._inventory, type)) return;
+                    this._inventory[type] = Math.max(0, Math.floor(Number(count) || 0));
+                });
+            }
+            this._refreshInventoryPanel();
+        } else {
+            this._seedInitialInventory(circuit);
+        }
 
         // Close button — added to the container LAST so it sits on top of all tiles
         // in Phaser's render list and wins input hit-testing reliably.
@@ -1179,6 +1206,7 @@ export default class CircuitRouting extends MinigameBase {
 
         return {
             tiles: cloneCircuitTiles(this._tiles),
+            inventory: { ...this._inventory },
             connected,
             missing: [...brokenTargets],
             repairedTargets,
