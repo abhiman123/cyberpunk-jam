@@ -554,13 +554,13 @@ export default class MachinePuzzleOverlay {
             dominoView.centerLabel.setVisible(false).setText('');
         }
 
-        if (dominoView.dominoState.firstOptionAmount > 9) {
+        if (dominoView.dominoState.firstOptionAmount > 6) {
             dominoView.topLabel.setVisible(true).setText(String(dominoView.dominoState.firstOptionAmount));
         } else {
             dominoView.topLabel.setVisible(false);
         }
 
-        if (dominoView.dominoState.secondOptionAmount > 9) {
+        if (dominoView.dominoState.secondOptionAmount > 6) {
             dominoView.bottomLabel.setVisible(true).setText(String(dominoView.dominoState.secondOptionAmount));
         } else {
             dominoView.bottomLabel.setVisible(false);
@@ -605,8 +605,7 @@ export default class MachinePuzzleOverlay {
         case 3:
             this._drawCircuitRing(graphics, -14, sectionOffsetY - 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
             this._drawCircuitRing(graphics, 14, sectionOffsetY - 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
-            this._drawCircuitRing(graphics, -14, sectionOffsetY + 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
-            this._drawCircuitRing(graphics, 14, sectionOffsetY + 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
+            this._drawCircuitRing(graphics, 0, sectionOffsetY + 12, glow ? 8 : 6, color, ringWidth, alpha, !glow);
             break;
         case 4:
             this._drawCircuitLine(graphics, -22, sectionOffsetY, 22, sectionOffsetY, color, lineWidth, alpha);
@@ -630,12 +629,9 @@ export default class MachinePuzzleOverlay {
             5: [{ x: -15, y: -18 }, { x: 15, y: -18 }, { x: 0, y: 0 }, { x: -15, y: 18 }, { x: 15, y: 18 }],
             6: [{ x: -15, y: -18 }, { x: 15, y: -18 }, { x: -15, y: 0 }, { x: 15, y: 0 }, { x: -15, y: 18 }, { x: 15, y: 18 }],
         };
-        const localPositions = pipLayouts[count] || [
-            { x: -15, y: -18 }, { x: 0, y: -18 }, { x: 15, y: -18 },
-            { x: -15, y: 0 }, { x: 0, y: 0 }, { x: 15, y: 0 },
-            { x: -15, y: 18 }, { x: 0, y: 18 }, { x: 15, y: 18 },
-        ];
-        const pipCount = Math.min(count, localPositions.length);
+        const visualCount = Math.max(0, Math.min(6, Math.floor(Number(count) || 0)));
+        const localPositions = pipLayouts[visualCount] || pipLayouts[6];
+        const pipCount = Math.min(visualCount, localPositions.length);
 
         if (shouldGlow) {
             graphics.fillStyle(glowColor, 0.32);

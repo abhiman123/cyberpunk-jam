@@ -27,6 +27,8 @@ import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
 const PAYCHECK_DELTA = 18;
 const SCRAP_BONUS_MULTIPLIER = 2;
 const UMBRELLA_REBELLION_RULE_ID = 101;
+const MACHINE_PHONE_TRANSCRIPT_ENABLED = false;
+const MANAGER_CALL_THEME_PATH = '/ManagerCallTheme.mp3';
 const UMBRELLA_PART_PORTS = Object.freeze({
     circuit: 'grid',
     wire: 'flow',
@@ -125,6 +127,9 @@ export default class GameScene extends Phaser.Scene {
         this._phoneNotifications = [];
         this._openingCallSequenceId = 0;
         this._openingCallChoiceResolver = null;
+        this._managerCallThemeAudio = null;
+        this._managerCallThemeToken = 0;
+        this._managerTutorialArrowTarget = null;
         this._sequenceDebugCounter = 0;
         this._phoneViews = {
             info: {
@@ -161,31 +166,41 @@ export default class GameScene extends Phaser.Scene {
         this._factoryLightHum = null;
         this._konamiRoutes = [
             {
+                id: 'skip-day',
+                action: 'skip-day',
+                sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
+                label: 'KONAMI OVERRIDE // SKIP DAY',
+            },
+            {
                 id: 'ending-default',
+                action: 'end-scene',
                 sequence: ['UP', 'UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // ENDING ROUTE',
+                label: 'KONAMI OVERRIDE // END SCENE',
                 finishUmbrellaQuest: false,
             },
             {
                 id: 'ending-umbrella',
+                action: 'end-scene',
                 sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // UMBRELLA ENDING',
+                label: 'KONAMI OVERRIDE // UMBRELLA SCENE',
                 finishUmbrellaQuest: true,
                 deliveredPurpleCircuit: true,
                 deliveredClownCircuit: false,
             },
             {
                 id: 'ending-red-circuit',
+                action: 'end-scene',
                 sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // RED CIRCUIT',
+                label: 'KONAMI OVERRIDE // RED UMBRELLA SCENE',
                 finishUmbrellaQuest: true,
                 deliveredPurpleCircuit: false,
                 deliveredClownCircuit: true,
             },
             {
                 id: 'ending-both-circuits',
+                action: 'end-scene',
                 sequence: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'RIGHT', 'LEFT', 'RIGHT'],
-                label: 'KONAMI OVERRIDE // BOTH CIRCUITS',
+                label: 'KONAMI OVERRIDE // RED AND PURPLE UMBRELLA SCENE',
                 finishUmbrellaQuest: true,
                 deliveredPurpleCircuit: true,
                 deliveredClownCircuit: true,
@@ -233,6 +248,8 @@ export default class GameScene extends Phaser.Scene {
 
         this.events.on('shutdown', () => {
             this._clearPhoneTyping();
+            this._stopManagerCallTheme();
+            this._setManagerTutorialArrowTarget(null);
             this._openingCallSequenceId += 1;
             this._openingCallChoiceResolver = null;
             this._nextCaseEvent?.remove(false);
@@ -280,6 +297,10 @@ export default class GameScene extends Phaser.Scene {
     update(_time, delta) {
         this._updateMiniGearPreview(delta);
         this._syncRulebookTutorialArrow();
+        this._updateConveyorBottomLayers(delta);
+        if (this._machineSpeechBubbleLayer?.visible) {
+            this._layoutMachineSpeechBubbleSlots();
+        }
 
         if (!this._shiftRunning || this._gameplayPaused || this._shiftEnding) return;
 
@@ -431,17 +452,11 @@ export default class GameScene extends Phaser.Scene {
             x: 212,
             y: 124,
             angle: -7,
-            width: 72,
-            height: 54,
-            portraitScale: 0.55,
         });
         this._createDeskPhoto('desk_photo_family_2', 'mainview_fam2', {
             x: 286,
             y: 122,
             angle: 6,
-            width: 58,
-            height: 70,
-            portraitScale: 0.68,
         });
         // Y values are in deskContainer-local space (deskContainer.y = scale.height - 172 = 548).
         // To appear at screen y≈624-626, subtract 548 → container-local y≈76-78.
@@ -492,9 +507,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _createDeskPhoto(photoId, textureKey, options = {}) {
-        const width = options.width || 62;
-        const height = options.height || 48;
-        const portraitScale = options.portraitScale || 0.38;
+        const textureFrame = this.textures.exists(textureKey) ? this.textures.getFrame(textureKey) : null;
+        const width = options.width || textureFrame?.width || 62;
+        const height = options.height || textureFrame?.height || 48;
 
         return this._createDeskItem(photoId, {
             ...options,
@@ -502,37 +517,11 @@ export default class GameScene extends Phaser.Scene {
             height,
             rotationStep: 12,
             buildVisual: () => {
-                const liftShadow = this.add.rectangle(6, 8, width + 6, height + 6, 0x000000, 0.14);
-                const focusGlow = this.add.rectangle(0, 0, width + 16, height + 16, 0xfff8db, 0)
-                    .setStrokeStyle(2, 0xfffbe7, 0);
-                const shadow = this.add.rectangle(4, 5, width, height, 0x000000, 0.2);
-                const ghostBackFar = this.add.image(-4, -4, textureKey)
-                    .setScale(portraitScale * 1.04)
-                    .setTint(0xffffff)
-                    .setTintMode(Phaser.TintModes.FILL)
-                    .setAlpha(0)
-                    .setBlendMode(Phaser.BlendModes.ADD)
-                    .setData('baseScale', portraitScale * 1.04);
-                const ghostBackNear = this.add.image(4, 4, textureKey)
-                    .setScale(portraitScale * 1.09)
-                    .setTint(0xffffff)
-                    .setTintMode(Phaser.TintModes.FILL)
-                    .setAlpha(0)
-                    .setBlendMode(Phaser.BlendModes.ADD)
-                    .setData('baseScale', portraitScale * 1.09);
-                const frame = this.add.rectangle(0, 0, width, height, 0xf0e8db, 1)
-                    .setStrokeStyle(1, 0x5d5247, 0.68);
-                const matte = this.add.rectangle(0, -4, width - 12, height - 16, 0x7b7368, 1)
-                    .setStrokeStyle(1, 0x443b32, 0.4);
-                const portrait = this.add.image(0, -4, textureKey)
-                    .setScale(portraitScale)
-                    .setTint(options.tint || 0xf0f0f0);
+                const portrait = this.add.image(0, 0, textureKey).setScale(1);
+                if (options.tint) portrait.setTint(options.tint);
 
                 return {
-                    nodes: [liftShadow, focusGlow, shadow, frame, matte, portrait],
-                    frame,
-                    focusGlow,
-                    liftShadow,
+                    nodes: [portrait],
                 };
             },
         });
@@ -708,40 +697,74 @@ export default class GameScene extends Phaser.Scene {
         container.add([halo, plate, label, beam, arrow]);
         this._hudContainer.add(container);
 
-        this._rulebookTutorialArrow = { container, halo };
+        this._rulebookTutorialArrow = { container, halo, label };
+    }
+
+    _setManagerTutorialArrowTarget(targetKey = null) {
+        this._managerTutorialArrowTarget = targetKey || null;
+        this._syncRulebookTutorialArrow();
     }
 
     _syncRulebookTutorialArrow() {
         const arrow = this._rulebookTutorialArrow;
         if (!arrow) return;
 
-        const shouldShow = Boolean(
-            this._rulebookTutorialLineActive
-            && !this._rulebook?.isVisible()
+        const targetKey = this._managerTutorialArrowTarget || (this._rulebookTutorialLineActive ? 'rulebook' : null);
+        const canShowOverlayArrow = !this._rulebook?.isVisible()
             && !this._settingsOpen
             && !this._overlayModalOpen
-            && this._screen === 'conveyor'
-            && this._rulebookDeskItem?.container?.visible
-        );
+            && this._screen === 'conveyor';
+
+        let shouldShow = false;
+        let targetX = 0;
+        let targetY = 0;
+        let labelText = 'SEE THIS';
+
+        if (targetKey === 'rulebook') {
+            shouldShow = Boolean(canShowOverlayArrow && this._rulebookDeskItem?.container?.visible);
+            if (shouldShow) {
+                targetX = this._deskContainer.x + this._rulebookDeskItem.container.x;
+                targetY = this._deskContainer.y + this._rulebookDeskItem.container.y;
+                labelText = 'RULEBOOK';
+            }
+        } else if (targetKey === 'clock') {
+            shouldShow = Boolean(canShowOverlayArrow && this._clockText?.visible);
+            if (shouldShow) {
+                targetX = this._clockText.x;
+                targetY = this._clockText.y;
+                labelText = 'CLOCK';
+            }
+        } else if (targetKey === 'phone-choice') {
+            shouldShow = Boolean(canShowOverlayArrow && this._phonePanel?.visible && this._phoneButtonsActive);
+            if (shouldShow) {
+                const acceptBg = this._phoneButtons?.accept?.bg;
+                const rejectBg = this._phoneButtons?.reject?.bg;
+                targetX = this._phonePanel.x + (acceptBg?.x ?? 366);
+                targetY = this._phonePanel.y + (((acceptBg?.y ?? 96) + (rejectBg?.y ?? 155)) / 2);
+                labelText = 'YES / NO';
+            }
+        }
 
         if (!shouldShow) {
             arrow.container.setVisible(false).setAlpha(0);
             return;
         }
 
-        const targetX = this._deskContainer.x + this._rulebookDeskItem.container.x;
-        const targetY = this._deskContainer.y + this._rulebookDeskItem.container.y;
         const bobOffset = Math.sin(this.time.now * 0.006) * 8;
+        arrow.label.setText(labelText);
         arrow.container
             .setVisible(true)
             .setAlpha(0.96)
-            .setPosition(targetX + 10, targetY - 112 + bobOffset);
+            .setPosition(
+                targetKey === 'rulebook' ? targetX + 10 : (targetKey === 'phone-choice' ? targetX + 8 : targetX),
+                (targetKey === 'rulebook' ? targetY - 112 : (targetKey === 'phone-choice' ? targetY - 94 : targetY - 78)) + bobOffset,
+            );
         arrow.halo.setAlpha(0.08 + ((Math.sin(this.time.now * 0.008) + 1) * 0.05));
     }
 
     _setRulebookTutorialLineActive(active) {
         this._rulebookTutorialLineActive = Boolean(active);
-        this._syncRulebookTutorialArrow();
+        this._setManagerTutorialArrowTarget(active ? 'rulebook' : null);
     }
 
     _createJesterDeskTokenItem(options = {}) {
@@ -1970,22 +1993,34 @@ export default class GameScene extends Phaser.Scene {
         this._phoneQuestionPromptFrame = null;
         this._phoneQuestionPromptScanTop = null;
         this._phoneQuestionPromptScanBottom = null;
-        this._phoneQuestionPrompt = this.add.text(146, 204, 'AWAITING ANSWER // PRESS YES OR X', {
+        this._phoneQuestionPrompt = this.add.text(146, 100, 'AWAITING QUESTION\nINPUT', {
             fontFamily: 'Arial',
-            fontSize: '10px',
+            fontSize: '13px',
             fontStyle: 'bold',
             color: '#15313a',
             align: 'center',
             letterSpacing: 1,
-            wordWrap: { width: 220 },
+            lineSpacing: -2,
+            wordWrap: { width: 178 },
         }).setOrigin(0.5).setVisible(false);
 
-        this._phoneQuestionFooterBg = null;
-        this._phoneQuestionFooterText = null;
+        this._phoneQuestionFooterBg = this.add.rectangle(118, 154, 172, 28, 0x6bd5c8, 0.82)
+            .setOrigin(0.5)
+            .setStrokeStyle(1, 0x10343a, 0.26)
+            .setVisible(false);
+        this._phoneQuestionFooterText = this.add.text(118, 154, 'AWAITING QUESTION INPUT', {
+            fontFamily: 'Arial',
+            fontSize: '9px',
+            fontStyle: 'bold',
+            color: '#15313a',
+            align: 'center',
+            letterSpacing: 1,
+            wordWrap: { width: 160 },
+        }).setOrigin(0.5).setVisible(false);
 
         this._phoneBodyTranscriptVisible = true;
 
-            const accept = this._createPhoneButton(350, 116, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
+        const accept = this._createPhoneButton(366, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
             width: 44,
             height: 48,
             fontSize: '26px',
@@ -2038,6 +2073,9 @@ export default class GameScene extends Phaser.Scene {
             this._phoneBodyScrollZone,
             this._phoneScrollTrack,
             this._phoneScrollThumb,
+            this._phoneQuestionPrompt,
+            this._phoneQuestionFooterBg,
+            this._phoneQuestionFooterText,
             // header, status, and buttons rendered after body so they paint on top
             this._phoneHeaderText,
             this._phoneStatusText,
@@ -2089,6 +2127,37 @@ export default class GameScene extends Phaser.Scene {
         this._phoneStickToBottom = view.stickToBottom !== false;
     }
 
+    _setPhoneBodyTranscriptVisible(visible = true) {
+        this._phoneBodyTranscriptVisible = visible !== false;
+    }
+
+    _shouldShowMachinePhoneTranscript(machineVariant = null) {
+        if (!machineVariant) return true;
+        return MACHINE_PHONE_TRANSCRIPT_ENABLED || this._isDebriefMachine(machineVariant);
+    }
+
+    _shouldShowPhoneQuestionPrompt() {
+        return this._phoneViewMode === 'chat'
+            && (this._phoneChoicePhase === 'machine-question' || this._phoneChoicePhase === 'opening-call-question');
+    }
+
+    _refreshPhoneQuestionPrompt() {
+        const visible = this._shouldShowPhoneQuestionPrompt();
+        const useStatusLine = visible && this._phoneChoicePhase === 'opening-call-question';
+        const useFooter = visible && !useStatusLine && this._phoneBodyTranscriptVisible !== false;
+        const useCenterPrompt = visible && !useFooter && !useStatusLine;
+
+        this._phoneQuestionPromptGlow?.setVisible(useCenterPrompt);
+        this._phoneQuestionPromptFrameGlow?.setVisible(useCenterPrompt);
+        this._phoneQuestionPromptFrame?.setVisible(useCenterPrompt);
+        this._phoneQuestionPromptScanTop?.setVisible(useCenterPrompt);
+        this._phoneQuestionPromptScanBottom?.setVisible(useCenterPrompt);
+        this._phoneQuestionPrompt?.setVisible(useCenterPrompt);
+        this._phoneQuestionFooterBg?.setVisible(useFooter);
+        this._phoneQuestionFooterText?.setVisible(useFooter);
+        this._phoneStatusText?.setVisible(!visible || useStatusLine);
+    }
+
     _refreshPhonePanelDisplay() {
         const view = this._getPhoneViewState();
         if (!view || !this._phoneHeaderText || !this._phoneBodyText || !this._phoneStatusText) return;
@@ -2096,6 +2165,7 @@ export default class GameScene extends Phaser.Scene {
         this._phoneHeaderText.setText(view.header || '');
         this._phoneBodyText.setText(view.body || '');
         this._phoneStatusText.setText(view.status || '');
+        this._refreshPhoneQuestionPrompt();
         this._restorePhoneViewScroll();
         this._syncPhoneBodyLayout();
         this._refreshPhoneChannelButtons();
@@ -2117,6 +2187,17 @@ export default class GameScene extends Phaser.Scene {
 
     _syncPhoneBodyLayout() {
         if (!this._phoneBodyText || !this._phoneBodyViewport) return;
+
+        const showTranscript = this._phoneViewMode !== 'chat' || this._phoneBodyTranscriptVisible !== false;
+        this._phoneBodyText.setVisible(showTranscript);
+        if (!showTranscript) {
+            this._phoneBodyText.setPosition(this._phoneBodyViewport.x, this._phoneBodyViewport.y);
+            this._phoneBodyText.setCrop(0, 0, 0, 0);
+            this._phoneScrollTrack?.setVisible(false);
+            this._phoneScrollThumb?.setVisible(false);
+            this._persistPhoneViewScroll();
+            return;
+        }
 
         const overflow = Math.max(0, this._phoneBodyText.height - this._phoneBodyViewport.height);
         if (this._phoneStickToBottom || this._phoneBodyScrollOffset > overflow) {
@@ -2364,6 +2445,10 @@ export default class GameScene extends Phaser.Scene {
         const activate = options.activate !== false;
         const clearUnread = options.clearUnread === true;
 
+        if (Object.prototype.hasOwnProperty.call(options, 'showBodyTranscript')) {
+            this._setPhoneBodyTranscriptVisible(options.showBodyTranscript);
+        }
+
         this._setPhoneMessage(header, body, status, mode, options);
         this._phonePanel?.setVisible(true);
         this._phonePanel?.setAlpha(1);
@@ -2394,7 +2479,9 @@ export default class GameScene extends Phaser.Scene {
 
     _hidePhonePanel() {
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE', 'chat');
+        this._showPhonePanel('FACTORY LINK', 'Awaiting unit connection.', 'CHANNEL IDLE', 'chat', {
+            showBodyTranscript: true,
+        });
     }
 
     _setCommStandbyState(message = 'Awaiting next unit.', status = 'CHANNEL IDLE') {
@@ -2402,7 +2489,9 @@ export default class GameScene extends Phaser.Scene {
         this._phoneChoicePhase = 'inactive';
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
-        this._showPhonePanel('FACTORY LINK', message, status, 'chat');
+        this._showPhonePanel('FACTORY LINK', message, status, 'chat', {
+            showBodyTranscript: true,
+        });
     }
 
     _setPhoneInfoNote(message = '', status = 'UNIT NOTE') {
@@ -2616,7 +2705,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (soundAsset) {
-            this._playOneShot(soundAsset, {
+            this._playNotificationSound(soundAsset, {
                 volume: soundAsset === SOUND_ASSETS.puzzleFixed ? SOUND_VOLUMES.puzzleFixed : SOUND_VOLUMES.notification,
             });
         }
@@ -2633,7 +2722,6 @@ export default class GameScene extends Phaser.Scene {
             const parsed = this._parseNotificationFeedText(entry.text);
             this._pushPhoneNotification(parsed.title, parsed.message, 'WORLD FEED', {
                 activate: false,
-                soundAsset: null,
                 unread: this._phoneViewMode !== 'notifications',
             });
         });
@@ -2680,7 +2768,9 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent?.remove(false);
         this._commTypingEvent = null;
 
-        const finalBody = `${typingState.prefix}${typingState.text}`;
+        const finalBody = typingState.showPhoneTranscript
+            ? `${typingState.prefix}${typingState.text}`
+            : '';
         typingState.view.body = finalBody;
         if (this._phoneViewMode === 'chat') {
             this._phoneBodyText.setText(finalBody);
@@ -2688,17 +2778,17 @@ export default class GameScene extends Phaser.Scene {
             this._syncPhoneBodyLayout();
         }
 
-        // if (typingState.showMachineBubble && typingState.bubbleMachineVariant === this._currentMachineVariant) {
-        //     this._finalizeMachineSpeechBubble(typingState.bubbleText);
-        // }
+        if (typingState.bubbleText && typingState.bubbleMachineVariant === this._currentMachineVariant) {
+            this._finalizeMachineSpeechBubble(typingState.bubbleText);
+        }
 
-        // if (typingState.bubbleMachineVariant) {
-        //     const chatView = this._getPhoneViewState('chat');
-        //     this._cacheMachineConversationSnapshot(
-        //         typingState.bubbleMachineVariant,
-        //         chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
-        //     );
-        // }
+        if (typingState.bubbleMachineVariant && typingState.showPhoneTranscript) {
+            const chatView = this._getPhoneViewState('chat');
+            this._cacheMachineConversationSnapshot(
+                typingState.bubbleMachineVariant,
+                chatView?.status || typingState.bubbleMachineVariant._conversationStatus || 'SIGNAL LIVE',
+            );
+        }
 
         this._activePhoneTypingState = null;
         return true;
@@ -2876,18 +2966,91 @@ export default class GameScene extends Phaser.Scene {
         return Math.max(FIRST_SHIFT_INTRO.fallbackVoiceMs, Math.round(textLength * 32));
     }
 
+    _getManagerCallThemeVolume() {
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0) return 0;
+
+        const baseVolume = SOUND_VOLUMES.voice * 0.22;
+        return Phaser.Math.Clamp(baseVolume * Math.max(0.45, musicVolume), 0, baseVolume);
+    }
+
+    _playManagerCallTheme() {
+        this._stopManagerCallTheme();
+        if (typeof Audio === 'undefined') return;
+
+        const token = ++this._managerCallThemeToken;
+        const audio = new Audio(MANAGER_CALL_THEME_PATH);
+        audio.loop = true;
+        audio.preload = 'auto';
+        audio.volume = this._getManagerCallThemeVolume();
+        let started = false;
+
+        const startPlayback = () => {
+            if (started) return;
+            started = true;
+            if (token !== this._managerCallThemeToken || this._managerCallThemeAudio !== audio) return;
+
+            const duration = Number(audio.duration || 0);
+            const maxStart = Number.isFinite(duration) && duration > 1
+                ? Math.min(120, Math.max(0, duration - 0.5))
+                : 120;
+            if (Number.isFinite(duration) && duration > 1) {
+                try {
+                    audio.currentTime = Math.random() * maxStart;
+                } catch (error) {
+                    // Some browsers reject seeks until playback is ready; keep the default start in that case.
+                }
+            }
+
+            audio.volume = this._getManagerCallThemeVolume();
+            audio.play().catch(() => {
+                if (token === this._managerCallThemeToken && this._managerCallThemeAudio === audio) {
+                    this._managerCallThemeAudio = null;
+                }
+            });
+        };
+
+        audio.addEventListener('loadedmetadata', startPlayback, { once: true });
+        audio.addEventListener('canplay', startPlayback, { once: true });
+
+        audio.addEventListener('error', () => {
+            if (token === this._managerCallThemeToken && this._managerCallThemeAudio === audio) {
+                this._managerCallThemeAudio = null;
+            }
+        }, { once: true });
+
+        this._managerCallThemeAudio = audio;
+        audio.load();
+        this.time.delayedCall(350, startPlayback);
+    }
+
+    _stopManagerCallTheme() {
+        this._managerCallThemeToken += 1;
+
+        const audio = this._managerCallThemeAudio;
+        if (!audio) return;
+
+        audio.pause();
+        try {
+            audio.currentTime = 0;
+        } catch (error) {
+            // Ignore reset failures from partially loaded media.
+        }
+        audio.removeAttribute('src');
+        audio.load();
+        this._managerCallThemeAudio = null;
+    }
+
     _playOpeningCallLine(line, { append = true } = {}) {
         return new Promise((resolve) => {
             let typingDone = false;
             let voiceDone = false;
-            const shouldPointAtRulebook = GameState.day === 1
-                && String(line?.id || '').toLowerCase() === 'line3'
-                && /see this\?/i.test(String(line?.text || ''));
+            const tutorialTarget = line?.tutorialTarget || null;
 
             const finishLine = () => {
                 if (!typingDone || !voiceDone) return;
 
-                this._setRulebookTutorialLineActive(false);
+                this._setManagerTutorialArrowTarget(null);
 
                 this._commSequenceEvent?.remove(false);
                 this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.lineGapMs, () => {
@@ -2896,7 +3059,7 @@ export default class GameScene extends Phaser.Scene {
                 });
             };
 
-            this._setRulebookTutorialLineActive(shouldPointAtRulebook);
+            this._setManagerTutorialArrowTarget(tutorialTarget);
 
             this._showPhonePanel(
                 FIRST_SHIFT_INTRO.incomingHeader,
@@ -2933,6 +3096,7 @@ export default class GameScene extends Phaser.Scene {
         return new Promise((resolve) => {
             const callConfig = this._getOpeningCallConfig();
             this._openingCallChoiceResolver = (choice) => {
+                this._setManagerTutorialArrowTarget(null);
                 if (sequenceId !== this._openingCallSequenceId) {
                     resolve(null);
                     return;
@@ -2944,6 +3108,7 @@ export default class GameScene extends Phaser.Scene {
             this._phoneChoicePhase = 'opening-call-question';
             this._setPhoneButtonSelection(null);
             this._setPhoneButtonsActive(true);
+            this._setManagerTutorialArrowTarget('phone-choice');
             this._showPhonePanel(
                 FIRST_SHIFT_INTRO.incomingHeader,
                 this._getPhoneViewState('chat').body,
@@ -2961,31 +3126,37 @@ export default class GameScene extends Phaser.Scene {
         this._phoneChoicePhase = 'voice';
         this._setPhoneButtonsActive(false);
         this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, '', 'VOICE CONNECTED', 'chat');
+        this._playManagerCallTheme();
 
-        for (const line of callConfig.script.intro) {
+        try {
+            for (const line of callConfig.script.intro) {
+                if (sequenceId !== this._openingCallSequenceId) return;
+                await this._playOpeningCallLine(line, { append });
+                append = true;
+            }
+
+            const choice = await this._awaitOpeningCallAnswer(sequenceId);
+            if (sequenceId !== this._openingCallSequenceId || !choice) return;
+
+            this._setPhoneButtonsActive(false);
+            this._setPhoneButtonSelection(choice);
+
+            const branchLines = choice === 'accept'
+                ? callConfig.script.yes
+                : callConfig.script.no;
+
+            for (const line of branchLines) {
+                if (sequenceId !== this._openingCallSequenceId) return;
+                await this._playOpeningCallLine(line, { append: true });
+            }
+
             if (sequenceId !== this._openingCallSequenceId) return;
-            await this._playOpeningCallLine(line, { append });
-            append = true;
+            this._phoneChoicePhase = 'voice';
+            this._awaitPhoneDismiss(true);
+        } finally {
+            this._stopManagerCallTheme();
+            this._setManagerTutorialArrowTarget(null);
         }
-
-        const choice = await this._awaitOpeningCallAnswer(sequenceId);
-        if (sequenceId !== this._openingCallSequenceId || !choice) return;
-
-        this._setPhoneButtonsActive(false);
-        this._setPhoneButtonSelection(choice);
-
-        const branchLines = choice === 'accept'
-            ? callConfig.script.yes
-            : callConfig.script.no;
-
-        for (const line of branchLines) {
-            if (sequenceId !== this._openingCallSequenceId) return;
-            await this._playOpeningCallLine(line, { append: true });
-        }
-
-        if (sequenceId !== this._openingCallSequenceId) return;
-        this._phoneChoicePhase = 'voice';
-        this._awaitPhoneDismiss(true);
     }
 
     _typePhoneMessage(text, {
@@ -2994,20 +3165,23 @@ export default class GameScene extends Phaser.Scene {
         showMachineBubble = false,
         speechBubbleText = null,
         bubbleFooter = '',
-        bubbleMachineVariant = this._currentMachineVariant,
+        bubbleMachineVariant = null,
     } = {}) {
         this._clearPhoneTyping();
 
         const view = this._getPhoneViewState('chat');
-        const prefix = append ? view.body : '';
-        const bubbleText = showMachineBubble
+        const showPhoneTranscript = this._shouldShowMachinePhoneTranscript(bubbleMachineVariant);
+        const prefix = append && showPhoneTranscript ? view.body : '';
+        const bubbleText = (showMachineBubble || speechBubbleText !== null)
             ? String(speechBubbleText ?? text ?? '').replace(/\s+/g, ' ').trim()
             : '';
         const shouldRenderMachineBubble = Boolean(bubbleText)
             && Boolean(bubbleMachineVariant)
             && bubbleMachineVariant === this._currentMachineVariant;
 
-        if (!append) view.body = '';
+        this._setPhoneBodyTranscriptVisible(showPhoneTranscript);
+
+        if (!append || !showPhoneTranscript) view.body = '';
         view.stickToBottom = true;
         view.scrollOffset = 0;
         if (this._phoneViewMode === 'chat') {
@@ -3038,6 +3212,7 @@ export default class GameScene extends Phaser.Scene {
             prefix,
             text: String(text || ''),
             bubbleText,
+            showPhoneTranscript,
             showMachineBubble: false,
             bubbleMachineVariant,
             onComplete,
@@ -3051,9 +3226,14 @@ export default class GameScene extends Phaser.Scene {
                 const nextChar = text[charIndex];
                 charIndex += 1;
                 typingState.charIndex = charIndex;
-                view.body = prefix + text.slice(0, charIndex);
-                if (this._phoneViewMode === 'chat') {
-                    this._phoneBodyText.setText(view.body);
+                if (showPhoneTranscript) {
+                    view.body = prefix + text.slice(0, charIndex);
+                    if (this._phoneViewMode === 'chat') {
+                        this._phoneBodyText.setText(view.body);
+                        this._phoneStickToBottom = true;
+                        this._syncPhoneBodyLayout();
+                    }
+                } else if (this._phoneViewMode === 'chat') {
                     this._phoneStickToBottom = true;
                     this._syncPhoneBodyLayout();
                 }
@@ -4775,6 +4955,8 @@ export default class GameScene extends Phaser.Scene {
         const callConfig = this._getOpeningCallConfig();
         this._openingCallSequenceId += 1;
         this._openingCallChoiceResolver = null;
+        this._stopManagerCallTheme();
+        this._setManagerTutorialArrowTarget(null);
         this._setCommStandbyState('Factory monitor online.', 'LISTENING');
         this._commSequenceEvent = this.time.delayedCall(FIRST_SHIFT_INTRO.silenceBeforePhoneMs, () => {
             this._phoneChoicePhase = 'incoming';
@@ -4917,6 +5099,8 @@ export default class GameScene extends Phaser.Scene {
         const wasTextBrief = this._phoneChoicePhase === 'incoming-brief';
         this._openingCallSequenceId += 1;
         this._openingCallChoiceResolver = null;
+        this._stopManagerCallTheme();
+        this._setManagerTutorialArrowTarget(null);
         this._setRulebookTutorialLineActive(false);
         this._setCommStandbyState(
             wasTextBrief ? 'Brief complete. Conveyor standing by.' : 'Call complete. Conveyor standing by.',
@@ -5334,19 +5518,12 @@ export default class GameScene extends Phaser.Scene {
             'mainview_second',
             'mainview_lightradiance',
             'mainview_lightlayer',
-            'mainview_fam2',
-            'mainview_fam1',
         ];
         const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
         if (!hasMainViewLayers) {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
         }
-        // Fam images are cropped tight sprites; game coords = source_center * (1280/320, 720/195)
-        const famPositions = {
-            mainview_fam1: { x: 202, y: 659 },
-            mainview_fam2: { x: 278, y: 669 },
-        };
 
         this._mainViewLayers = {};
         mainViewLayerKeys.forEach((key) => {
@@ -5356,15 +5533,6 @@ export default class GameScene extends Phaser.Scene {
             if (key === 'mainview_bottom' || key === 'mainview_second') {
                 const texFrame = this.textures.getFrame(key);
                 layer = this.add.tileSprite(640, 360, texFrame.width, texFrame.height, key).setDisplaySize(1280, 720);
-            } else if (famPositions[key]) {
-                const pos = famPositions[key];
-                layer = this.add.image(pos.x, pos.y, key).setScale(1);
-                layer.setInteractive({ useHandCursor: true, draggable: true });
-                this.input.setDraggable(layer);
-                layer.on('drag', (pointer, dragX, dragY) => {
-                    layer.x = dragX;
-                    layer.y = dragY;
-                });
             } else {
                 layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
             }
@@ -5388,12 +5556,13 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._machineDialogueText);
 
-        this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(16).setVisible(false);
+        this._machineSpeechBubbleLayer = this.add.container(0, 0).setDepth(22).setVisible(false);
         this._machineSpeechBubbleSlots = [
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 320, 244),
-            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 8, 406, 286, true),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 122, 312, 246),
+            this._createMachineSpeechBubbleSlot(MACHINE_PRESENTATION.conveyorTargetX - 122, 392, 262, true),
         ];
         this._machineSpeechBubbleSlots.forEach((slot) => this._machineSpeechBubbleLayer.add(slot.container));
+        this._conveyorContainer.add(this._machineSpeechBubbleLayer);
 
         this._shapeTitleText = this.add.text(964, 126, 'CHASSIS GRID', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
@@ -5495,15 +5664,15 @@ export default class GameScene extends Phaser.Scene {
 
             buttonImage.on('pointerover', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
-                buttonImage.setTint(0xffffff);
+                buttonImage.setTint(0xffffff).setAlpha(1);
             });
             buttonImage.on('pointerout', () => {
-                if (!this._canUseFactoryDecisionButtons()) return;
-                buttonImage.setTint(0x7f7f7f);
+                this._refreshFactoryActionButtons();
             });
 
             buttonImage.on('pointerdown', () => {
                 if (!this._canUseFactoryDecisionButtons()) return;
+                buttonImage.setTint(0xffffff).setAlpha(1);
                 this._submitRuling(def.action);
             });
 
@@ -5584,6 +5753,88 @@ export default class GameScene extends Phaser.Scene {
         this._conveyorBottomFrontLayers?.forEach((layer, index) => {
             layer.setPosition(startX + (index * this._conveyorBottomLayerWidth), this._conveyorBottomLayerTop);
         });
+    }
+
+    _syncConveyorBeltSoundState() {
+        const shouldPlay = Boolean(this._conveyorBottomScrollActive) && !this._gameplayPaused && !this._shiftEnding;
+
+        if (shouldPlay) {
+            this._startConveyorBeltSound();
+            return;
+        }
+
+        this._stopConveyorBeltSound();
+    }
+
+    _startConveyorBeltSound() {
+        if (this._conveyorBeltSoundNodes) return;
+
+        const audioContext = this.sound?.context;
+        if (!audioContext?.createOscillator || !audioContext?.createGain || !audioContext?.createBiquadFilter) {
+            return;
+        }
+
+        audioContext.resume?.().catch(() => {});
+
+        const now = audioContext.currentTime;
+        const drive = audioContext.createOscillator();
+        const chatter = audioContext.createOscillator();
+        const wobble = audioContext.createOscillator();
+        const wobbleGain = audioContext.createGain();
+        const filter = audioContext.createBiquadFilter();
+        const gainNode = audioContext.createGain();
+
+        drive.type = 'triangle';
+        drive.frequency.setValueAtTime(44, now);
+        chatter.type = 'sawtooth';
+        chatter.frequency.setValueAtTime(92, now);
+        wobble.type = 'sine';
+        wobble.frequency.setValueAtTime(1.4, now);
+
+        wobbleGain.gain.setValueAtTime(3.8, now);
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(240, now);
+        filter.Q.setValueAtTime(0.7, now);
+        gainNode.gain.setValueAtTime(0.008, now);
+
+        wobble.connect(wobbleGain);
+        wobbleGain.connect(chatter.frequency);
+        drive.connect(filter);
+        chatter.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        drive.start(now);
+        chatter.start(now);
+        wobble.start(now);
+
+        this._conveyorBeltSoundNodes = {
+            drive,
+            chatter,
+            wobble,
+            wobbleGain,
+            filter,
+            gainNode,
+        };
+    }
+
+    _stopConveyorBeltSound() {
+        const nodes = this._conveyorBeltSoundNodes;
+        if (!nodes) return;
+
+        [nodes.drive, nodes.chatter, nodes.wobble].forEach((oscillator) => {
+            try {
+                oscillator.stop();
+            } catch (error) {
+                // Oscillators may already be stopping during scene shutdown.
+            }
+            oscillator.disconnect();
+        });
+
+        nodes.wobbleGain.disconnect();
+        nodes.filter.disconnect();
+        nodes.gainNode.disconnect();
+        this._conveyorBeltSoundNodes = null;
     }
 
     _setConveyorBottomScrollActive(active, direction = 1) {
@@ -5773,7 +6024,7 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneInfoNote(message, status);
 
         if (soundAsset) {
-            this._playOneShot(soundAsset, {
+            this._playNotificationSound(soundAsset, {
                 volume: soundAsset === SOUND_ASSETS.puzzleFixed ? SOUND_VOLUMES.puzzleFixed : SOUND_VOLUMES.notification,
             });
         }
@@ -6350,8 +6601,9 @@ export default class GameScene extends Phaser.Scene {
         const acceptOverrideReady = Boolean(this._pendingUnsafeAcceptConfirmation) && hasUnit;
 
         Object.entries(this._conveyorRulingButtons).forEach(([action, button]) => {
-            if (!canInteract)
-                button.bgRect.setTint(0x7f7f7f);
+            button.bgRect
+                .setTint(canInteract ? 0xffffff : 0x6f6f6f)
+                .setAlpha(canInteract ? 1 : 0.48);
         });
 
         this._refreshOtherPuzzleButton();
@@ -6992,6 +7244,9 @@ export default class GameScene extends Phaser.Scene {
         if (this._actionLocked) return;
 
         this._completePhoneTyping();
+        if (this._tutorialArrow?.visible) {
+            this._tutorialArrow.setVisible(false);
+        }
 
         const gateState = this._getPuzzleGateState();
         if (action === 'approve' && !gateState.ready && !gateState.mainScrapRequired && !this._pendingUnsafeAcceptConfirmation) {
@@ -7156,7 +7411,23 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(1, 1).setVisible(false);
         container.add([shadow, bubble, tailShadow, tail, text, footerText]);
 
-        return { container, shadow, bubble, tailShadow, tail, text, footerText, maxWidth, withTail };
+        return {
+            container,
+            shadow,
+            bubble,
+            tailShadow,
+            tail,
+            text,
+            footerText,
+            maxWidth,
+            withTail,
+            baseX: x,
+            baseY: y,
+            anchorOffsetX: x - (MACHINE_PRESENTATION.conveyorTargetX - 18),
+            anchorOffsetY: y - 498,
+            baseScale: withTail ? 0.94 : 0.98,
+            currentHeight: 0,
+        };
     }
 
     _normalizeMachineSpeechBubbleEntry(entryValue = '') {
@@ -7188,21 +7459,23 @@ export default class GameScene extends Phaser.Scene {
             slot.text.setText('');
             slot.footerText?.setText('');
             slot.footerText?.setVisible(false);
+            slot.currentHeight = 0;
             return;
         }
 
-        slot.text.setWordWrapWidth(slot.maxWidth - 28, true);
+        slot.text.setWordWrapWidth(slot.maxWidth - 24, true);
         slot.text.setText(content);
         slot.footerText?.setText(footer);
         slot.footerText?.setVisible(Boolean(footer));
 
-        const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 30, 110, slot.maxWidth);
-        const bubbleHeight = Phaser.Math.Clamp(slot.text.height + 24 + (footer ? 16 : 0), 48, 148);
+        const bubbleWidth = Phaser.Math.Clamp(slot.text.width + 24, 104, slot.maxWidth);
+        const bubbleHeight = Math.max(44, slot.text.height + 20 + (footer ? 14 : 0));
         const left = 0;
         const top = -bubbleHeight;
+        slot.currentHeight = bubbleHeight;
 
-        slot.text.setPosition(14, footer ? -28 : -12);
-        slot.footerText?.setPosition(bubbleWidth - 12, -8);
+        slot.text.setPosition(12, footer ? -26 : -10);
+        slot.footerText?.setPosition(bubbleWidth - 10, -7);
 
         slot.shadow.clear();
         slot.shadow.fillStyle(0x000000, 0.18);
@@ -7270,6 +7543,48 @@ export default class GameScene extends Phaser.Scene {
                 : (visibleEntries[index] || null);
             this._drawMachineSpeechBubbleSlot(slot, slotText);
         });
+        this._layoutMachineSpeechBubbleSlots();
+    }
+
+    _layoutMachineSpeechBubbleSlots() {
+        if (!Array.isArray(this._machineSpeechBubbleSlots) || this._machineSpeechBubbleSlots.length === 0) return;
+
+        const visibleSlots = this._machineSpeechBubbleSlots.filter((slot) => slot.container.visible);
+        const machineVariant = this._currentMachineVariant;
+        const richMfActive = this._isRichMf(machineVariant) && Boolean(this._unitContainer?.visible);
+        const verticalGap = richMfActive ? 12 : 14;
+        const anchorX = this._unitContainer?.visible ? this._unitContainer.x : null;
+        const anchorY = this._unitContainer?.visible ? this._unitContainer.y : null;
+        let lowerSlot = null;
+
+        for (let index = visibleSlots.length - 1; index >= 0; index -= 1) {
+            const slot = visibleSlots[index];
+            const slotScale = richMfActive ? 0.82 : slot.baseScale;
+            let targetX = slot.baseX;
+            let targetY = slot.baseY;
+
+            slot.container.setScale(slotScale);
+
+            if (anchorX !== null && anchorY !== null) {
+                targetX = anchorX + slot.anchorOffsetX;
+                targetY = anchorY + slot.anchorOffsetY - (richMfActive ? 12 : 0);
+            }
+
+            if (lowerSlot) {
+                const lowerHeight = lowerSlot.currentHeight * (lowerSlot.container.scaleY || 1);
+                targetY = Math.min(targetY, lowerSlot.container.y - lowerHeight - verticalGap);
+            }
+
+            slot.container.setPosition(targetX, targetY);
+            lowerSlot = slot;
+        }
+
+        this._machineSpeechBubbleSlots
+            .filter((slot) => !slot.container.visible)
+            .forEach((slot) => {
+                slot.container.setScale(slot.baseScale || 1);
+                slot.container.setPosition(slot.baseX, slot.baseY);
+            });
     }
 
     _clearMachineSpeechBubbles() {
@@ -7329,6 +7644,12 @@ export default class GameScene extends Phaser.Scene {
         return null;
     }
 
+    _isFactoryLightFlickerKey(event) {
+        const key = String(event?.key || '');
+        const code = String(event?.code || '');
+        return key === '0' || code === 'Digit0' || code === 'Numpad0';
+    }
+
     _findFinalCaseDefinition() {
         const allCases = this.cache.json.get('cases') || [];
         const finalCase = allCases.find((item) => item?.isFinalCase);
@@ -7362,6 +7683,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _handleKonamiKey(event) {
+        if (event?.repeat) return;
+
+        if (this._isFactoryLightFlickerKey(event)) {
+            this._triggerFactoryLightRadianceFlicker(Phaser.Math.Between(1, 2));
+            return;
+        }
+
         if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
             console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
             return;
@@ -7370,29 +7698,34 @@ export default class GameScene extends Phaser.Scene {
             console.log('[KONAMI] blocked by overlay: overlayModalOpen=%s rulebook=%s settings=%s machinePuzzle=%s', this._overlayModalOpen, this._rulebook?.isVisible(), this._settingsOverlay?.isVisible(), this._machinePuzzleOverlay?.isVisible());
             return;
         }
-        if (event?.repeat) return;
 
         const key = this._normalizeKonamiKey(event?.key);
         if (!key) return;
 
-        const expectedKey = this._konamiSequence[this._konamiProgress];
-        if (key === expectedKey) {
-            this._konamiProgress += 1;
-            console.log('[KONAMI] progress %d/%d (key=%s)', this._konamiProgress, this._konamiSequence.length, key);
-            if (this._konamiProgress >= this._konamiSequence.length) {
-                this._konamiProgress = 0;
-                this._armKonamiFinale();
-            }
-            return;
-        }
+        let matchedRoute = null;
+        this._konamiProgressByRoute = this._konamiRoutes.map((route, index) => {
+            const currentProgress = this._konamiProgressByRoute[index] || 0;
+            const nextProgress = key === route.sequence[currentProgress]
+                ? currentProgress + 1
+                : (key === route.sequence[0] ? 1 : 0);
 
-        console.log('[KONAMI] wrong key: got=%s expected=%s resetting to %d', key, expectedKey, key === this._konamiSequence[0] ? 1 : 0);
-        this._konamiProgress = key === this._konamiSequence[0] ? 1 : 0;
+            if (nextProgress >= route.sequence.length) {
+                matchedRoute = route;
+                return 0;
+            }
+
+            return nextProgress;
+        });
+
+        if (matchedRoute) {
+            this._armKonamiFinale(matchedRoute);
+        }
     }
 
-    _armKonamiFinale() {
+    _armKonamiFinale(route = null) {
         if (this._konamiFinaleTriggered) return;
         this._konamiFinaleTriggered = true;
+        this._konamiProgressByRoute = this._konamiRoutes.map(() => 0);
 
         this._nextCaseEvent?.remove(false);
         this._nextCaseEvent = null;
@@ -7400,10 +7733,24 @@ export default class GameScene extends Phaser.Scene {
         this._advanceCaseEvent = null;
         this._clearUnsafeAcceptConfirmation();
         this._clearPhoneTyping();
-        this._showFeedback('KONAMI OVERRIDE // SKIPPING TO END', '#ffd685');
+        if (route?.action === 'end-scene') {
+            this._primeKonamiEndingState(route);
+        }
+        this._showFeedback(route?.label || 'KONAMI OVERRIDE // SKIPPING TO END', '#ffd685');
 
         this.cameras.main.fade(600, 0, 0, 0);
         this.time.delayedCall(620, () => {
+            if (route?.action === 'skip-day') {
+                if (GameState.isLastDay()) {
+                    this.scene.start('End');
+                    return;
+                }
+
+                GameState.advanceDay();
+                this.scene.start('Transition', { day: GameState.day });
+                return;
+            }
+
             this.scene.start('End');
         });
     }
@@ -7992,6 +8339,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _applyMusicSettingChange() {
+        if (this._managerCallThemeAudio) {
+            this._managerCallThemeAudio.volume = this._getManagerCallThemeVolume();
+        }
+
         const targetVolume = this._getConfiguredMusicVolume();
         if (!this._activeMusicKey) return;
 
@@ -8048,6 +8399,39 @@ export default class GameScene extends Phaser.Scene {
         if (!config.loop) sound.once('complete', () => sound.destroy());
         sound.play();
         return sound;
+    }
+
+    _playNotificationSound(soundAsset = SOUND_ASSETS.notificationAlert, config = {}) {
+        const sound = this._playOneShot(soundAsset, config);
+        if (sound || soundAsset !== SOUND_ASSETS.notificationAlert) return sound;
+
+        this._playSyntheticNotificationPing(config.volume ?? SOUND_VOLUMES.notification);
+        return null;
+    }
+
+    _playSyntheticNotificationPing(volume = SOUND_VOLUMES.notification) {
+        const audioContext = this.sound?.context;
+        if (!audioContext?.createOscillator || !audioContext?.createGain) return;
+        audioContext.resume?.().catch(() => {});
+
+        const now = audioContext.currentTime;
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(0.0001, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.024 * Math.max(0.15, volume), now + 0.012);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        gainNode.connect(audioContext.destination);
+
+        [740, 990].forEach((frequency, index) => {
+            const oscillator = audioContext.createOscillator();
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(frequency, now + (index * 0.075));
+            oscillator.connect(gainNode);
+            oscillator.start(now + (index * 0.075));
+            oscillator.stop(now + 0.17 + (index * 0.075));
+            oscillator.addEventListener('ended', () => oscillator.disconnect(), { once: true });
+        });
+
+        this.time.delayedCall(320, () => gainNode.disconnect());
     }
 
     _applyMachineSprite(targetImage, scale) {

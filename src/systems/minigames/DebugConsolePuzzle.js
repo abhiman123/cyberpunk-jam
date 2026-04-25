@@ -1230,7 +1230,10 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         const targetIndex = Math.max(0, Math.floor(Math.max(1, this._getActiveCommand().length - 1) / 2));
         const targetX = this._getCommandXForIndex(targetIndex) + (this._charWidth / 2);
-        const targetY = this._commandTextY - 8;
+        const targetY = this._commandTextY;
+        const edge = Phaser.Math.Between(0, 3);
+        const startX = edge === 0 ? -520 : edge === 1 ? 520 : Phaser.Math.Between(-520, 520);
+        const startY = edge === 2 ? -250 : edge === 3 ? 250 : Phaser.Math.Between(-250, 250);
         const sparks = this.scene.add.graphics();
         sparks.lineStyle(2, 0xff5f5f, 0.92);
         sparks.lineBetween(-22, -18, -34, -30);
@@ -1246,26 +1249,56 @@ export default class DebugConsolePuzzle extends MinigameBase {
             fontSize: '12px',
             color: '#a8ffb3',
         }).setOrigin(0, 0.5);
-        const bug = this.scene.add.container(targetX - 136, targetY - 64, [sparks, body, head, eye, legs]).setSize(36, 36);
+        const bug = this.scene.add.container(startX, startY, [sparks, body, head, eye, legs]).setSize(36, 36);
         this._panel.add(bug);
 
         let bugView = null;
-        const arrivalTween = this.scene.tweens.add({
+        const crawlTween = this.scene.tweens.add({
             targets: bug,
-            x: targetX,
-            y: targetY,
-            duration: 760,
-            ease: 'Sine.Out',
-        });
-        const jitterTween = this.scene.tweens.add({
-            targets: bug,
-            x: '+=6',
-            y: '+=4',
-            angle: { from: -7, to: 7 },
-            duration: 110,
+            angle: { from: -5, to: 5 },
+            duration: 240,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.InOut',
+        });
+        const legTween = this.scene.tweens.add({
+            targets: legs,
+            y: 15,
+            duration: 180,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
+        const bobTween = this.scene.tweens.add({
+            targets: [body, head, eye],
+            y: '+=1.5',
+            duration: 200,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+        });
+        const tween = this.scene.tweens.add({
+            targets: bug,
+            x: targetX,
+            y: targetY,
+            duration: Phaser.Math.Between(BUG_TRAVEL_MIN_MS, BUG_TRAVEL_MAX_MS),
+            ease: 'Linear',
+            onComplete: () => {
+                if (!bugView || !this._bugViews.includes(bugView)) return;
+                bugView.crawlTween?.stop();
+                bugView.legTween?.stop();
+                bugView.bobTween?.stop();
+                bugView.jitterTween = this.scene.tweens.add({
+                    targets: bug,
+                    x: '+=6',
+                    y: '+=4',
+                    angle: { from: -7, to: 7 },
+                    duration: 110,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.InOut',
+                });
+            },
         });
         const sparkTween = this.scene.tweens.add({
             targets: sparks,
@@ -1284,7 +1317,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             },
         });
 
-        bugView = { bug, hazard: true, arrivalTween, jitterTween, sparkTween, soundEvent };
+        bugView = { bug, hazard: true, tween, crawlTween, legTween, bobTween, sparkTween, soundEvent, jitterTween: null };
         this._bugViews.push(bugView);
         this._playBugSkitterSound();
     }

@@ -57,6 +57,7 @@ const ENDING_DIALOGUE = Object.freeze({
 });
 
 const TITLE_TEXT = "you're just a machine.";
+const DOGSI_ENDING_PATH = 'dogsi.mp3';
 
 function colorToCss(color) {
     return `#${color.toString(16).padStart(6, '0')}`;
@@ -74,6 +75,7 @@ export default class EndScene extends Phaser.Scene {
     create() {
         this._music = null;
         this._speakerTween = null;
+        this._dogsiAudio = null;
 
         applyCyberpunkLook(this);
         this.cameras.main.setBackgroundColor('#050709');
@@ -94,6 +96,7 @@ export default class EndScene extends Phaser.Scene {
             this._speakerTween?.stop();
             this._music?.stop();
             this._music = null;
+            this._stopDogsiAudio();
         });
 
         this.cameras.main.fadeIn(500, 0, 0, 0);
@@ -287,6 +290,41 @@ export default class EndScene extends Phaser.Scene {
             volume: SOUND_VOLUMES.music * musicVolume,
             duration: 800,
         });
+    }
+
+    _playDogsiAudio() {
+        this._stopDogsiAudio();
+        if (typeof Audio === 'undefined') return;
+
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0) return;
+
+        const audio = new Audio(DOGSI_ENDING_PATH);
+        audio.loop = false;
+        audio.preload = 'auto';
+        audio.volume = Math.min(0.9, Math.max(0.18, musicVolume * 0.72));
+        audio.addEventListener('error', () => {
+            if (this._dogsiAudio === audio) this._dogsiAudio = null;
+        }, { once: true });
+        this._dogsiAudio = audio;
+        audio.play().catch(() => {
+            if (this._dogsiAudio === audio) this._dogsiAudio = null;
+        });
+    }
+
+    _stopDogsiAudio() {
+        const audio = this._dogsiAudio;
+        if (!audio) return;
+
+        audio.pause();
+        try {
+            audio.currentTime = 0;
+        } catch (error) {
+            // Optional ending media may be partially loaded during shutdown.
+        }
+        audio.removeAttribute('src');
+        audio.load();
+        this._dogsiAudio = null;
     }
 
     async _runEndingSequence() {
@@ -485,6 +523,9 @@ export default class EndScene extends Phaser.Scene {
 
             let index = 0;
             this._speechBubbleText.setText('');
+            if (/^Employee\s+\d+/i.test(text)) {
+                this._playDogsiAudio();
+            }
             this.time.addEvent({
                 delay: options.typeDelayMs ?? 24,
                 repeat: text.length - 1,

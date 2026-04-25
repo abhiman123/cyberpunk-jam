@@ -22,109 +22,193 @@ const RULEBOOK_COPY = Object.freeze({
     1: {
         overview: {
             eyebrow: 'SHIFT RULE',
-            rule: 'Fix what can be fixed. Scrap only the impossible ones.',
+            rule: 'Repair clears. Scrap impossible.',
             caption: 'One call. One picture. No extra noise.',
         },
         grid: {
             eyebrow: 'GRID',
-            rule: 'Scrap boxed-in charge targets.',
+            rule: 'Boxed charge = scrap.',
             caption: 'If the live tile cannot ever breathe, scrap it.',
         },
         flow: {
             eyebrow: 'FLOW',
-            rule: 'Scrap a route with a broken lead.',
+            rule: 'Broken lead = scrap.',
             caption: 'No first connection means no repair path.',
         },
         gear: {
             eyebrow: 'GEAR',
-            rule: 'Scrap cracked drive axles.',
+            rule: 'Cracked axle = scrap.',
             caption: 'A cracked input or output cannot be saved.',
         },
         code: {
             eyebrow: 'CODE',
-            rule: 'Scrap output that still fails the test.',
+            rule: 'Failed test = scrap.',
             caption: 'If the console stays wrong, the machine goes.',
         },
     },
     2: {
         overview: {
             eyebrow: 'SHIFT RULE',
-            rule: 'Keep the day-one checks, then watch for new compliance faults.',
+            rule: 'Repair first. Check compliance.',
             caption: 'Same flow. More traps.',
         },
         grid: {
             eyebrow: 'GRID',
-            rule: 'Scrap broken markers or blocked charge targets.',
+            rule: 'Broken mark = scrap.',
             caption: 'A damaged target is scrap even on a solvable board.',
         },
         flow: {
             eyebrow: 'FLOW',
-            rule: 'Scrap the wrong output color.',
+            rule: 'Wrong color = scrap.',
             caption: 'If the sink glows wrong, it leaves the line.',
         },
         gear: {
             eyebrow: 'GEAR',
-            rule: 'Scrap virus gears or bad axles. Rust can now show up.',
+            rule: 'Virus gear = scrap. Rust is okay.',
             caption: 'Rusted gears are live parts now, not auto-scrap.',
         },
         code: {
             eyebrow: 'CODE',
-            rule: 'Scrap non-compliant output.',
+            rule: 'Policy denied = scrap.',
             caption: 'The test may run clean and still fail policy.',
         },
         },
     3: {
         overview: {
             eyebrow: 'SHIFT RULE',
-            rule: 'Unsafe, unstable, or contaminated means scrap now.',
+            rule: 'Hazard signal = scrap.',
             caption: 'Hazard checks override everything else.',
         },
         grid: {
             eyebrow: 'GRID',
-            rule: 'Scrap red corruption on sight.',
+            rule: 'Red corruption = scrap.',
             caption: 'Corruption beats every normal repair rule.',
         },
         flow: {
             eyebrow: 'FLOW',
-            rule: 'Scrap red current or spark hazards.',
+            rule: 'Red current = scrap.',
             caption: 'Live hazard lines do not stay in rotation.',
         },
         gear: {
             eyebrow: 'GEAR',
-            rule: 'Scrap spark discharge or deadlock hazards.',
+            rule: 'Sparks or lockup = scrap.',
             caption: 'Rust is allowed. Unsafe motion is not.',
         },
         code: {
             eyebrow: 'CODE',
-            rule: 'Scrap contaminated output.',
+            rule: 'Contaminated = scrap.',
             caption: 'The screen can look right and still be poisoned.',
         },
     },
     4: {
         overview: {
             eyebrow: 'SHIFT RULE',
-            rule: 'Unsafe, unstable, or contaminated means scrap now.',
+            rule: 'Hazard signal = scrap.',
             caption: 'Final shift uses the hazard checks.',
         },
         grid: {
             eyebrow: 'GRID',
-            rule: 'Scrap red corruption on sight.',
+            rule: 'Red corruption = scrap.',
             caption: 'Corruption beats every normal repair rule.',
         },
         flow: {
             eyebrow: 'FLOW',
-            rule: 'Scrap red current or spark hazards.',
+            rule: 'Red current = scrap.',
             caption: 'Live hazard lines do not stay in rotation.',
         },
         gear: {
             eyebrow: 'GEAR',
-            rule: 'Scrap spark discharge or deadlock hazards.',
+            rule: 'Sparks or lockup = scrap.',
             caption: 'Rust is allowed. Unsafe motion is not.',
         },
         code: {
             eyebrow: 'CODE',
-            rule: 'Scrap contaminated output.',
+            rule: 'Contaminated = scrap.',
             caption: 'The screen can look right and still be poisoned.',
+        },
+    },
+});
+
+const RULEBOOK_GUIDES = Object.freeze({
+    1: {
+        overview: {
+            solve: 'Repair what clears.',
+            scrap: 'Impossible fault.',
+            photo: 'UNREPAIRABLE',
+        },
+        grid: {
+            solve: 'Fill legal pieces.',
+            scrap: 'Charge is boxed in.',
+            photo: 'BOXED CHARGE',
+        },
+        flow: {
+            solve: 'Connect the route.',
+            scrap: 'Lead is snapped.',
+            photo: 'BROKEN LEAD',
+        },
+        gear: {
+            solve: 'Mesh the train.',
+            scrap: 'Axle is cracked.',
+            photo: 'CRACKED AXLE',
+        },
+        code: {
+            solve: 'Match output.',
+            scrap: 'Test still fails.',
+            photo: 'FAILED TEST',
+        },
+    },
+    2: {
+        overview: {
+            solve: 'Repair, then check.',
+            scrap: 'Bad compliance.',
+            photo: 'POLICY FAIL',
+        },
+        grid: {
+            solve: 'Solve readable marks.',
+            scrap: 'Marker is broken.',
+            photo: 'BROKEN MARK',
+        },
+        flow: {
+            solve: 'Match colors.',
+            scrap: 'Wrong output color.',
+            photo: 'WRONG COLOR',
+        },
+        gear: {
+            solve: 'Use clean gears.',
+            scrap: 'Virus gear.',
+            photo: 'VIRUS GEAR',
+        },
+        code: {
+            solve: 'Pass policy.',
+            scrap: 'Policy denied.',
+            photo: 'POLICY DENIED',
+        },
+    },
+    3: {
+        overview: {
+            solve: 'Only safe repairs.',
+            scrap: 'Any hazard.',
+            photo: 'HAZARD SIGNAL',
+        },
+        grid: {
+            solve: 'Clean grids only.',
+            scrap: 'Red corruption.',
+            photo: 'RED CORRUPTION',
+        },
+        flow: {
+            solve: 'Safe current only.',
+            scrap: 'Red current.',
+            photo: 'RED CURRENT',
+        },
+        gear: {
+            solve: 'No deadlock.',
+            scrap: 'Sparks or lockup.',
+            photo: 'SPARK HAZARD',
+        },
+        code: {
+            solve: 'Clean output.',
+            scrap: 'Contaminated.',
+            photo: 'CONTAMINATED',
         },
     },
 });
@@ -143,6 +227,12 @@ function clamp(value, min, max) {
 
 function colorToCss(color) {
     return `#${color.toString(16).padStart(6, '0')}`;
+}
+
+function getRulebookGuide(section, previewDay) {
+    return RULEBOOK_GUIDES[previewDay]?.[section]
+        || RULEBOOK_GUIDES[3]?.[section]
+        || RULEBOOK_GUIDES[1].overview;
 }
 
 export class RulebookOverlay {
@@ -483,6 +573,7 @@ export class RulebookOverlay {
     }
 
     _renderContent(copy, sectionInfo, previewDay) {
+        const guide = getRulebookGuide(this._selectedSection, previewDay);
         const contentWidth = this._viewportW - 52;
         const leftWidth = 236;
         const columnGap = 24;
@@ -500,7 +591,7 @@ export class RulebookOverlay {
 
         const topStrip = this._addContentNode(this.scene.add.rectangle((contentWidth / 2), 48, contentWidth, 34, 0x0d151a, 1)
             .setStrokeStyle(1, 0x264550, 0.72));
-        const topStripText = this._addContentNode(this.scene.add.text(18, 38, 'LEFT: QUICK CHECK        RIGHT: SCRAP EXAMPLE', {
+        const topStripText = this._addContentNode(this.scene.add.text(18, 38, 'SOLVE // SCRAP // PHOTO', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#b5dce5',
@@ -511,7 +602,7 @@ export class RulebookOverlay {
         y += 68;
         const columnTop = y;
         const previewHeight = 344;
-        const ruleCardHeight = 186;
+        const ruleCardHeight = 172;
         const ruleCard = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, columnTop + (ruleCardHeight / 2), leftWidth, ruleCardHeight, 0x0e171d, 1)
             .setStrokeStyle(2, sectionInfo.accent, 0.72));
         const ruleLabel = this._addContentNode(this.scene.add.text(18, columnTop + 16, copy.eyebrow || sectionInfo.label, {
@@ -522,22 +613,36 @@ export class RulebookOverlay {
         }).setOrigin(0, 0));
         const ruleText = this._addContentNode(this.scene.add.text(18, columnTop + 38, copy.rule, {
             fontFamily: 'Courier New',
-            fontSize: '18px',
+            fontSize: '13px',
             color: '#effcff',
             wordWrap: { width: leftWidth - 36 },
-            lineSpacing: 3,
+            lineSpacing: 2,
         }).setOrigin(0, 0));
 
-        const divider = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, columnTop + 130, leftWidth - 28, 1, sectionInfo.accent, 0.38));
-        const captionLabel = this._addContentNode(this.scene.add.text(18, columnTop + 140, 'SCRAP SIGNAL', {
+        const solveLabel = this._addContentNode(this.scene.add.text(18, columnTop + 78, 'SOLVE', {
+            fontFamily: 'Courier New',
+            fontSize: '10px',
+            color: colorToCss(sectionInfo.accent),
+            letterSpacing: 2,
+        }).setOrigin(0, 0));
+        const solveText = this._addContentNode(this.scene.add.text(18, columnTop + 96, guide.solve, {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#d0ecf3',
+            wordWrap: { width: leftWidth - 36 },
+            lineSpacing: 2,
+        }).setOrigin(0, 0));
+
+        const divider = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, columnTop + 124, leftWidth - 28, 1, sectionInfo.accent, 0.38));
+        const captionLabel = this._addContentNode(this.scene.add.text(18, columnTop + 134, 'SCRAP', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#86c7d8',
             letterSpacing: 2,
         }).setOrigin(0, 0));
-        const captionText = this._addContentNode(this.scene.add.text(18, columnTop + 156, copy.caption, {
+        const captionText = this._addContentNode(this.scene.add.text(18, columnTop + 150, guide.scrap || copy.caption, {
             fontFamily: 'Courier New',
-            fontSize: '11px',
+            fontSize: '12px',
             color: '#d0ecf3',
             wordWrap: { width: leftWidth - 36 },
             lineSpacing: 2,
@@ -547,42 +652,23 @@ export class RulebookOverlay {
         const helperCardHeight = previewHeight - ruleCardHeight - 16;
         const helperCard = this._addContentNode(this.scene.add.rectangle(leftWidth / 2, helperTop + (helperCardHeight / 2), leftWidth, helperCardHeight, 0x0b1217, 1)
             .setStrokeStyle(1, 0x294652, 0.72));
-        const helperLabel = this._addContentNode(this.scene.add.text(18, helperTop + 14, 'FAST CHECK', {
+        const helperLabel = this._addContentNode(this.scene.add.text(18, helperTop + 14, 'PHOTO FLAG', {
             fontFamily: 'Courier New',
             fontSize: '10px',
             color: '#86c7d8',
             letterSpacing: 2,
         }).setOrigin(0, 0));
-        const helperText = this._addContentNode(this.scene.add.text(18, helperTop + 34, 'MATCH THE DEFECT IN THE EXAMPLE.\nIF IT STILL EXISTS, SCRAP.', {
+        const helperText = this._addContentNode(this.scene.add.text(18, helperTop + 38, guide.photo, {
             fontFamily: 'Courier New',
-            fontSize: '14px',
+            fontSize: '16px',
             color: '#d0ecf3',
             wordWrap: { width: leftWidth - 36 },
-            lineSpacing: 4,
+            lineSpacing: 2,
         }).setOrigin(0, 0));
 
         this._createPreviewCard(leftWidth + columnGap, columnTop, rightWidth, previewHeight, sectionInfo, previewDay);
 
         y = columnTop + previewHeight + 18;
-
-        const captionCardHeight = 108;
-        const captionCard = this._addContentNode(this.scene.add.rectangle(contentWidth / 2, y + (captionCardHeight / 2), contentWidth, captionCardHeight, 0x0d1419, 1)
-            .setStrokeStyle(1, 0x294652, 0.7));
-        const footerLabel = this._addContentNode(this.scene.add.text(22, y + 16, 'SHIFT NOTE', {
-            fontFamily: 'Courier New',
-            fontSize: '10px',
-            color: '#86c7d8',
-            letterSpacing: 2,
-        }).setOrigin(0, 0));
-        const footerText = this._addContentNode(this.scene.add.text(22, y + 38, 'Use the picture first. Use the rule card when the defect is close.', {
-            fontFamily: 'Courier New',
-            fontSize: '15px',
-            color: '#d0ecf3',
-            wordWrap: { width: contentWidth - 44 },
-            lineSpacing: 4,
-        }).setOrigin(0, 0));
-
-        y += captionCardHeight + 18;
 
         const hint = this._addContentNode(this.scene.add.text(8, y, 'SCROLL // DRAG PHOTO // CLICK OUTSIDE TO CLOSE', {
             fontFamily: 'Courier New',
@@ -731,6 +817,19 @@ export class RulebookOverlay {
             break;
         }
 
+        const photoLabel = getRulebookGuide(this._selectedSection, previewDay).photo;
+        const labelBg = this.scene.add.rectangle(0, (size.height / 2) - 22, Math.min(size.width - 72, 164), 24, monochrome ? 0xffffff : 0x111a20, monochrome ? 0.16 : 0.9)
+            .setStrokeStyle(1, accent, monochrome ? 0.68 : 0.78);
+        const labelText = this.scene.add.text(0, (size.height / 2) - 22, photoLabel, {
+            fontFamily: 'Courier New',
+            fontSize: '9px',
+            color: accentText,
+            align: 'center',
+            letterSpacing: 1,
+            wordWrap: { width: Math.min(size.width - 84, 152) },
+        }).setOrigin(0.5);
+        container.add([labelBg, labelText]);
+
         return container;
     }
 
@@ -784,9 +883,9 @@ export class RulebookOverlay {
     _drawGridPreview(container, size, palette) {
         const previewDay = palette.previewDay ?? 1;
         const graphics = this.scene.add.graphics();
-        const boardX = -(size.width / 2) + 28;
-        const boardY = -(size.height / 2) + 24;
-        const cell = 28;
+        const boardX = -(size.width / 2) + 24;
+        const boardY = -(size.height / 2) + 20;
+        const cell = 21;
         const cols = 5;
         const rows = 5;
 
@@ -807,9 +906,29 @@ export class RulebookOverlay {
             }
         }
 
+        if (previewDay === 1) {
+            [[2, 1], [1, 2], [3, 2], [2, 3]].forEach(([col, row]) => {
+                const blockX = boardX + (col * cell);
+                const blockY = boardY + (row * cell);
+                graphics.fillStyle(palette.monochrome ? 0xffffff : 0x05090c, palette.monochrome ? 0.34 : 0.98);
+                graphics.fillRect(blockX, blockY, cell - 3, cell - 3);
+                graphics.lineStyle(2, palette.hot, palette.monochrome ? 0.72 : 0.84);
+                graphics.strokeRect(blockX + 2, blockY + 2, cell - 7, cell - 7);
+            });
+        } else if (previewDay >= 3) {
+            [[1, 1], [2, 2], [3, 2], [2, 3]].forEach(([col, row]) => {
+                const x = boardX + (col * cell) + ((cell - 3) / 2);
+                const y = boardY + (row * cell) + ((cell - 3) / 2);
+                graphics.fillStyle(palette.hot, palette.monochrome ? 0.2 : 0.28);
+                graphics.fillCircle(x, y, 15);
+                graphics.lineStyle(2, palette.hot, palette.monochrome ? 0.74 : 0.82);
+                graphics.strokeCircle(x, y, 17);
+            });
+        }
+
         const chargeX = boardX + (2 * cell) + ((cell - 3) / 2);
         const chargeY = boardY + (2 * cell) + ((cell - 3) / 2);
-        const charge = this.scene.add.rectangle(chargeX, chargeY, 18, 18, palette.monochrome ? 0xffffff : 0xffcf66, palette.monochrome ? 0.24 : 1)
+        const charge = this.scene.add.rectangle(chargeX, chargeY, 17, 17, palette.monochrome ? 0xffffff : (previewDay >= 3 ? palette.hot : 0xffcf66), palette.monochrome ? 0.24 : 1)
             .setStrokeStyle(2, palette.monochrome ? 0xffffff : 0xfff1bf, 0.92);
         const chargeText = this.scene.add.text(chargeX, chargeY, previewDay === 2 ? '#' : (previewDay >= 3 ? '!' : '3'), {
             fontFamily: 'Courier New',
@@ -832,81 +951,132 @@ export class RulebookOverlay {
             mark.lineBetween(chargeX + 12, chargeY - 12, chargeX - 12, chargeY + 12);
         }
 
-        const dominoX = 98;
-        const domino = this.scene.add.graphics();
-        const cardLeft = dominoX - 58;
-        const cardTop = -72;
-        domino.fillStyle(palette.monochrome ? 0xffffff : 0x8cff9e, palette.monochrome ? 0.16 : 1);
-        domino.fillRoundedRect(cardLeft, cardTop, 116, 144, 18);
-        domino.lineStyle(3, palette.monochrome ? 0xffffff : 0x1d4630, palette.monochrome ? 0.88 : 1);
-        domino.strokeRoundedRect(cardLeft, cardTop, 116, 144, 18);
-        domino.lineBetween(cardLeft + 10, 0, cardLeft + 106, 0);
+        const calloutLeft = 30;
+        const calloutTop = -56;
+        const calloutW = 106;
+        const calloutH = 96;
+        const calloutCenterX = calloutLeft + (calloutW / 2);
+        const calloutCenterY = calloutTop + (calloutH / 2);
+        graphics.fillStyle(palette.monochrome ? 0xffffff : 0x101c22, palette.monochrome ? 0.16 : 1);
+        graphics.fillRoundedRect(calloutLeft, calloutTop, calloutW, calloutH, 14);
+        graphics.lineStyle(2, palette.hot, palette.monochrome ? 0.76 : 0.88);
+        graphics.strokeRoundedRect(calloutLeft, calloutTop, calloutW, calloutH, 14);
 
-        this._drawCircuitPipPattern(domino, 0, dominoX, -36, palette.monochrome ? 0xffffff : 0x12351f, palette.monochrome ? 0.84 : 1);
-        this._drawCircuitPipPattern(domino, 3, dominoX, 36, palette.monochrome ? 0xffffff : 0x12351f, palette.monochrome ? 0.84 : 1);
+        let calloutTextValue = '3';
+        if (previewDay === 1) {
+            const miniCell = 22;
+            const miniLeft = calloutCenterX - (miniCell * 1.5);
+            const miniTop = calloutCenterY - (miniCell * 1.5);
+            for (let row = 0; row < 3; row += 1) {
+                for (let col = 0; col < 3; col += 1) {
+                    const x = miniLeft + (col * miniCell);
+                    const y = miniTop + (row * miniCell);
+                    const isBlock = (row === 1 && col !== 1) || (col === 1 && row !== 1);
+                    graphics.fillStyle(isBlock ? (palette.monochrome ? 0xffffff : 0x05090c) : (palette.monochrome ? 0xffffff : 0x21343c), palette.monochrome ? (isBlock ? 0.34 : 0.12) : 1);
+                    graphics.fillRect(x, y, miniCell - 3, miniCell - 3);
+                }
+            }
+        } else if (previewDay === 2) {
+            calloutTextValue = '#';
+            graphics.fillStyle(palette.monochrome ? 0xffffff : 0xffcf66, palette.monochrome ? 0.2 : 1);
+            graphics.fillRoundedRect(calloutCenterX - 24, calloutCenterY - 24, 48, 48, 8);
+            graphics.lineStyle(3, palette.hot, palette.monochrome ? 0.84 : 0.96);
+            graphics.lineBetween(calloutCenterX - 24, calloutCenterY - 12, calloutCenterX + 10, calloutCenterY + 22);
+            graphics.lineBetween(calloutCenterX - 2, calloutCenterY - 24, calloutCenterX + 24, calloutCenterY + 2);
+            graphics.fillStyle(palette.deepPanel, palette.monochrome ? 0.22 : 1);
+            graphics.fillTriangle(calloutCenterX + 24, calloutCenterY - 24, calloutCenterX + 24, calloutCenterY - 4, calloutCenterX + 4, calloutCenterY - 24);
+        } else {
+            calloutTextValue = '!';
+            graphics.fillStyle(palette.hot, palette.monochrome ? 0.24 : 0.3);
+            graphics.fillCircle(calloutCenterX, calloutCenterY, 34);
+            graphics.fillCircle(calloutCenterX - 24, calloutCenterY - 14, 18);
+            graphics.fillCircle(calloutCenterX + 24, calloutCenterY + 10, 16);
+            graphics.lineStyle(3, palette.hot, palette.monochrome ? 0.84 : 0.96);
+            graphics.strokeCircle(calloutCenterX, calloutCenterY, 38);
+        }
 
-        const note = this.scene.add.text(102, 92, 'MATCH THE GRID DEFECT', {
+        const calloutText = this.scene.add.text(calloutCenterX, calloutCenterY, calloutTextValue, {
             fontFamily: 'Courier New',
-            fontSize: '9px',
-            color: palette.accentText,
+            fontSize: previewDay === 1 ? '20px' : '30px',
+            color: previewDay === 2 ? (palette.monochrome ? '#ffffff' : '#4b360e') : palette.accentText,
             align: 'center',
-            letterSpacing: 1,
         }).setOrigin(0.5);
 
-        container.add([graphics, charge, chargeText, mark, domino, note]);
+        container.add([graphics, charge, chargeText, mark, calloutText]);
     }
 
     _drawFlowPreview(container, size, palette) {
         const previewDay = palette.previewDay ?? 1;
         const graphics = this.scene.add.graphics();
-        const left = -(size.width / 2) + 28;
-        const top = -(size.height / 2) + 28;
+        const left = -(size.width / 2) + 26;
+        const top = -(size.height / 2) + 24;
+        const panelW = size.width - 52;
+        const panelH = size.height - 56;
         const pathColor = previewDay >= 3 ? palette.hot : palette.accent;
+        const sourceX = left + 42;
+        const sinkX = left + panelW - 42;
+        const routeY = top + 54;
+        const lowerY = top + 92;
+        const elbowX = left + Math.floor(panelW / 2);
+        const sinkLeadX = sinkX - 26;
+        const overlayNodes = [];
 
         graphics.fillStyle(palette.deepPanel, palette.monochrome ? 0.2 : 1);
-        graphics.fillRoundedRect(left, top, size.width - 56, size.height - 56, 18);
+        graphics.fillRoundedRect(left, top, panelW, panelH, 18);
         graphics.lineStyle(2, palette.accent, palette.monochrome ? 0.72 : 0.36);
-        graphics.strokeRoundedRect(left, top, size.width - 56, size.height - 56, 18);
+        graphics.strokeRoundedRect(left, top, panelW, panelH, 18);
 
-        const source = this.scene.add.circle(left + 48, top + 76, 18, palette.monochrome ? 0xffffff : 0x1b4a56, palette.monochrome ? 0.18 : 1)
+        const source = this.scene.add.circle(sourceX, routeY, 18, palette.monochrome ? 0xffffff : 0x1b4a56, palette.monochrome ? 0.18 : 1)
             .setStrokeStyle(3, palette.accent, 0.92);
-        const sink = this.scene.add.circle(left + size.width - 104, top + 124, 18, palette.monochrome ? 0xffffff : (previewDay === 2 ? 0xe7a851 : (previewDay >= 3 ? 0xff7d95 : 0x244f5e)), palette.monochrome ? 0.18 : 1)
+        const sink = this.scene.add.circle(sinkX, routeY, 18, palette.monochrome ? 0xffffff : (previewDay === 2 ? 0xe7a851 : (previewDay >= 3 ? 0xff7d95 : 0x244f5e)), palette.monochrome ? 0.18 : 1)
             .setStrokeStyle(3, previewDay === 2 ? palette.warm : pathColor, 0.92);
 
         graphics.lineStyle(8, pathColor, palette.monochrome ? 0.78 : 0.94);
-        graphics.lineBetween(left + 72, top + 76, left + 154, top + 76);
         if (previewDay === 1) {
-            graphics.lineStyle(8, pathColor, palette.monochrome ? 0.3 : 0.18);
-            graphics.lineBetween(left + 154, top + 76, left + 154, top + 118);
+            const breakX = sourceX + 48;
+            const deadWire = palette.monochrome ? 0xffffff : 0x566a72;
+            graphics.lineBetween(sourceX + 24, routeY, breakX - 14, routeY);
+            graphics.lineStyle(8, deadWire, palette.monochrome ? 0.22 : 0.24);
+            graphics.lineBetween(breakX + 16, routeY, elbowX, routeY);
+            graphics.lineBetween(elbowX, routeY, elbowX, lowerY);
+            graphics.lineBetween(elbowX, lowerY, sinkLeadX, lowerY);
+            graphics.lineBetween(sinkLeadX, lowerY, sinkLeadX, routeY);
+            graphics.lineBetween(sinkLeadX, routeY, sinkX - 24, routeY);
             graphics.lineStyle(4, palette.hot, palette.monochrome ? 0.78 : 0.9);
-            graphics.lineBetween(left + 144, top + 92, left + 164, top + 112);
-            graphics.lineBetween(left + 164, top + 92, left + 144, top + 112);
+            graphics.lineBetween(breakX - 10, routeY - 10, breakX + 12, routeY + 12);
+            graphics.lineBetween(breakX + 12, routeY - 10, breakX - 10, routeY + 12);
         } else {
-            graphics.lineBetween(left + 154, top + 76, left + 154, top + 118);
+            graphics.lineBetween(sourceX + 24, routeY, elbowX, routeY);
+            graphics.lineBetween(elbowX, routeY, elbowX, lowerY);
+            graphics.lineBetween(elbowX, lowerY, sinkLeadX, lowerY);
+            graphics.lineBetween(sinkLeadX, lowerY, sinkLeadX, routeY);
+            graphics.lineStyle(8, previewDay === 2 ? palette.warm : pathColor, palette.monochrome ? 0.78 : 0.94);
+            graphics.lineBetween(sinkLeadX, routeY, sinkX - 24, routeY);
         }
-        graphics.lineStyle(8, pathColor, palette.monochrome ? 0.78 : 0.94);
-        graphics.lineBetween(left + 154, top + 118, left + 256, top + 118);
-        graphics.lineBetween(left + 256, top + 118, left + 256, top + 124);
-        graphics.lineBetween(left + 256, top + 124, left + size.width - 128, top + 124);
 
         if (previewDay === 2) {
-            const filter = this.scene.add.rectangle(left + 206, top + 118, 34, 34, palette.monochrome ? 0xffffff : 0x1d313b, palette.monochrome ? 0.18 : 1)
+            const filter = this.scene.add.rectangle(elbowX, lowerY, 34, 34, palette.monochrome ? 0xffffff : 0x1d313b, palette.monochrome ? 0.18 : 1)
                 .setStrokeStyle(2, palette.warm, 0.92);
-            const filterText = this.scene.add.text(left + 206, top + 118, 'F', {
+            const filterText = this.scene.add.text(elbowX, lowerY, 'F', {
                 fontFamily: 'Courier New',
                 fontSize: '18px',
                 color: palette.monochrome ? '#ffffff' : '#ffdca6',
             }).setOrigin(0.5);
-            container.add([filter, filterText]);
+            const mismatch = this.scene.add.graphics();
+            mismatch.lineStyle(3, palette.hot, palette.monochrome ? 0.84 : 0.96);
+            mismatch.strokeCircle(sink.x, sink.y, 27);
+            mismatch.lineBetween(sink.x - 34, sink.y - 28, sink.x - 22, sink.y - 40);
+            mismatch.lineBetween(sink.x - 28, sink.y - 34, sink.x - 16, sink.y - 22);
+            overlayNodes.push(filter, filterText, mismatch);
         }
 
         if (previewDay >= 3) {
             const sparks = this.scene.add.graphics();
             sparks.lineStyle(3, palette.hot, palette.monochrome ? 0.84 : 0.96);
-            sparks.lineBetween(left + 226, top + 104, left + 236, top + 86);
-            sparks.lineBetween(left + 234, top + 108, left + 248, top + 92);
-            sparks.lineBetween(left + 240, top + 112, left + 258, top + 102);
-            container.add(sparks);
+            sparks.lineBetween(elbowX + 18, lowerY - 18, elbowX + 30, lowerY - 38);
+            sparks.lineBetween(elbowX + 28, lowerY - 12, elbowX + 46, lowerY - 30);
+            sparks.lineBetween(elbowX + 36, lowerY - 6, elbowX + 58, lowerY - 18);
+            overlayNodes.push(sparks);
         }
 
         const sourceText = this.scene.add.text(source.x, source.y, 'IN', {
@@ -920,7 +1090,7 @@ export class RulebookOverlay {
             color: previewDay === 2 ? '#3d2707' : palette.accentText,
         }).setOrigin(0.5);
 
-        container.add([graphics, source, sink, sourceText, sinkText]);
+        container.add([graphics, source, sink, ...overlayNodes, sourceText, sinkText]);
     }
 
     _drawGearPreview(container, size, palette) {
@@ -935,9 +1105,26 @@ export class RulebookOverlay {
         graphics.lineStyle(5, palette.monochrome ? 0xffffff : 0x5d7480, palette.monochrome ? 0.7 : 0.5);
         graphics.lineBetween(left + 44, top + 92, left + size.width - 100, top + 92);
 
-        this._drawGearGlyph(graphics, left + 72, top + 92, 24, palette.monochrome ? 0xffffff : 0xd7c38c, palette.monochrome ? 0.84 : 1);
-        this._drawGearGlyph(graphics, left + 146, top + 92, 24, previewDay >= 2 ? palette.rust : (palette.monochrome ? 0xffffff : 0xd7c38c), palette.monochrome ? 0.84 : 1);
+        const cleanGearColor = palette.monochrome ? 0xffffff : 0xd7c38c;
+        const centerGearColor = previewDay === 2 ? palette.hot : (previewDay >= 3 ? palette.rust : cleanGearColor);
+        this._drawGearGlyph(graphics, left + 72, top + 92, 24, cleanGearColor, palette.monochrome ? 0.84 : 1);
+        this._drawGearGlyph(graphics, left + 146, top + 92, 24, centerGearColor, palette.monochrome ? 0.84 : 1);
         this._drawGearGlyph(graphics, left + 220, top + 92, 24, palette.monochrome ? 0xffffff : 0xffdf98, palette.monochrome ? 0.84 : 1);
+        container.add(graphics);
+
+        if (previewDay === 2) {
+            const virusRing = this.scene.add.rectangle(left + 146, top + 92, 54, 54, palette.monochrome ? 0xffffff : 0x2a0e13, palette.monochrome ? 0.08 : 0.16)
+                .setStrokeStyle(3, palette.hot, 0.94);
+            const virusTag = this.scene.add.text(left + 146, top + 92, 'V', {
+                fontFamily: 'Courier New',
+                fontSize: '18px',
+                fontStyle: 'bold',
+                color: palette.monochrome ? '#ffffff' : '#2a0509',
+                stroke: palette.monochrome ? '#000000' : '#ffd7aa',
+                strokeThickness: 2,
+            }).setOrigin(0.5);
+            container.add([virusRing, virusTag]);
+        }
 
         const arrows = this.scene.add.graphics();
         arrows.lineStyle(3, palette.accent, palette.monochrome ? 0.84 : 0.96);
@@ -955,6 +1142,9 @@ export class RulebookOverlay {
             crack.lineStyle(4, palette.hot, palette.monochrome ? 0.84 : 0.96);
             crack.lineBetween(left + 52, top + 76, left + 70, top + 94);
             crack.lineBetween(left + 70, top + 94, left + 62, top + 114);
+            crack.lineStyle(3, palette.hot, palette.monochrome ? 0.78 : 0.86);
+            crack.lineBetween(left + 44, top + 92, left + 62, top + 92);
+            crack.lineBetween(left + 82, top + 92, left + 102, top + 92);
             container.add(crack);
         }
 
@@ -965,17 +1155,12 @@ export class RulebookOverlay {
             sparks.lineStyle(3, palette.hot, palette.monochrome ? 0.84 : 0.96);
             sparks.lineBetween(left + 214, top + 56, left + 228, top + 40);
             sparks.lineBetween(left + 226, top + 62, left + 244, top + 48);
+            sparks.lineBetween(left + 250, top + 92, left + 276, top + 92);
+            sparks.lineBetween(left + 263, top + 78, left + 263, top + 106);
             container.add([clamp, sparks]);
         }
 
-        const caption = this.scene.add.text(left + 162, top + 142, 'MESHING GEARS MUST ALTERNATE', {
-            fontFamily: 'Courier New',
-            fontSize: '10px',
-            color: palette.accentText,
-            letterSpacing: 1,
-        }).setOrigin(0.5);
-
-        container.add([graphics, arrows, caption]);
+        container.add(arrows);
     }
 
     _drawCodePreview(container, size, palette) {
@@ -992,23 +1177,24 @@ export class RulebookOverlay {
         terminal.strokeRoundedRect(left, top, width, height, 18);
         terminal.fillStyle(palette.monochrome ? 0xffffff : 0x172a31, palette.monochrome ? 0.14 : 1);
         terminal.fillRoundedRect(left + 14, top + 14, width - 28, 26, 10);
+        container.add(terminal);
 
-        const title = this.scene.add.text(left + 28, top + 22, 'diagnostic_shell', {
+        const title = this.scene.add.text(left + 28, top + 22, 'CHECK', {
             fontFamily: 'Courier New',
             fontSize: '11px',
             color: palette.accentText,
         }).setOrigin(0, 0);
-        const prompt = this.scene.add.text(left + 28, top + 60, '> run check_machine()', {
+        const prompt = this.scene.add.text(left + 28, top + 60, '> run_test()', {
             fontFamily: 'Courier New',
             fontSize: '14px',
             color: palette.monochrome ? '#ffffff' : '#8bffac',
         }).setOrigin(0, 0);
-        const lineA = this.scene.add.text(left + 28, top + 92, previewDay === 1 ? 'output: mismatch' : (previewDay === 2 ? 'policy: denied' : 'status: contaminated'), {
+        const lineA = this.scene.add.text(left + 28, top + 92, previewDay === 1 ? 'expected: OK' : (previewDay === 2 ? 'policy: DENY' : 'clean: false'), {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: previewDay >= 3 ? (palette.monochrome ? '#ffffff' : '#ff9ab2') : palette.accentText,
         }).setOrigin(0, 0);
-        const lineB = this.scene.add.text(left + 28, top + 116, previewDay === 1 ? 'repairable: false' : (previewDay === 2 ? 'compliant: false' : 'hazard: true'), {
+        const lineB = this.scene.add.text(left + 28, top + 116, previewDay === 1 ? 'actual: FAIL' : (previewDay === 2 ? 'format: BAD' : 'contam: true'), {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: palette.accentText,
@@ -1016,24 +1202,34 @@ export class RulebookOverlay {
 
         const resultBox = this.scene.add.rectangle(left + width - 88, top + 110, 116, 74, palette.monochrome ? 0xffffff : 0x131b22, palette.monochrome ? 0.16 : 1)
             .setStrokeStyle(2, previewDay >= 3 ? palette.hot : palette.accent, 0.92);
-        const resultText = this.scene.add.text(resultBox.x, resultBox.y, previewDay === 1 ? 'FAIL' : (previewDay === 2 ? 'NO' : 'SCRAP'), {
+        const resultText = this.scene.add.text(resultBox.x, resultBox.y, previewDay === 1 ? 'FAIL' : (previewDay === 2 ? 'DENY' : 'TOXIC'), {
             fontFamily: 'Courier New',
-            fontSize: previewDay >= 3 ? '22px' : '24px',
+            fontSize: previewDay >= 2 ? '20px' : '24px',
             color: previewDay >= 3 ? (palette.monochrome ? '#ffffff' : '#ffadc0') : palette.accentText,
             letterSpacing: 2,
         }).setOrigin(0.5);
 
         if (previewDay >= 3) {
             const bug = this.scene.add.graphics();
-            bug.fillStyle(palette.monochrome ? 0xffffff : 0x8cff9e, palette.monochrome ? 0.16 : 1);
+            const bugGreen = palette.monochrome ? 0xffffff : 0x48d86f;
+            const bugLight = palette.monochrome ? 0xffffff : 0x8eff95;
+            bug.fillStyle(bugGreen, palette.monochrome ? 0.16 : 1);
             bug.fillCircle(left + width - 172, top + 102, 12);
-            bug.lineStyle(3, palette.monochrome ? 0xffffff : 0x8cff9e, palette.monochrome ? 0.88 : 0.96);
+            bug.fillStyle(bugGreen, palette.monochrome ? 0.08 : 0.18);
+            bug.fillCircle(left + width - 160, top + 116, 28);
+            bug.fillStyle(bugLight, palette.monochrome ? 0.18 : 1);
+            bug.fillCircle(left + width - 150, top + 96, 7);
+            bug.lineStyle(3, bugGreen, palette.monochrome ? 0.88 : 0.96);
             bug.lineBetween(left + width - 184, top + 92, left + width - 194, top + 84);
             bug.lineBetween(left + width - 160, top + 92, left + width - 150, top + 84);
             bug.lineBetween(left + width - 186, top + 110, left + width - 196, top + 118);
             bug.lineBetween(left + width - 158, top + 110, left + width - 148, top + 118);
             bug.lineBetween(left + width - 182, top + 100, left + width - 194, top + 100);
             bug.lineBetween(left + width - 162, top + 100, left + width - 150, top + 100);
+            bug.lineStyle(2, palette.hot, palette.monochrome ? 0.84 : 0.96);
+            bug.lineBetween(left + width - 184, top + 82, left + width - 196, top + 68);
+            bug.lineBetween(left + width - 166, top + 76, left + width - 164, top + 58);
+            bug.lineBetween(left + width - 144, top + 92, left + width - 128, top + 78);
             container.add(bug);
         }
 
@@ -1044,7 +1240,7 @@ export class RulebookOverlay {
             scan.lineBetween(left + 18, y, left + width - 18, y);
         }
 
-        container.add([terminal, scan, title, prompt, lineA, lineB, resultBox, resultText]);
+        container.add([scan, title, prompt, lineA, lineB, resultBox, resultText]);
     }
 
     _drawCircuitPipPattern(graphics, value, centerX, centerY, color, alpha = 1) {
