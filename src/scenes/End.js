@@ -117,9 +117,33 @@ export default class EndScene extends Phaser.Scene {
             backgroundLayers.push(this.add.rectangle(640, 360, 1280, 720, 0x080c10).setDepth(0));
         }
 
-        ['mainview_second', 'mainview_lightradiance', 'mainview_lightlayer'].forEach((key) => {
-            if (!this.textures.exists(key)) return;
-            backgroundLayers.push(this.add.image(640, 360, key).setDisplaySize(1280, 720).setDepth(1));
+        // Vent fans on the back wall
+        const vents = this.add.graphics().setDepth(0);
+        [200, 540, 920].forEach((vx) => {
+            vents.lineStyle(2, 0x3a5471, 0.8);
+            vents.strokeCircle(vx, 348, 20);
+            vents.lineStyle(2, 0x2a3e54, 0.85);
+            for (let blade = 0; blade < 4; blade += 1) {
+                const angle = (blade / 4) * Math.PI;
+                vents.lineBetween(
+                    vx - Math.cos(angle) * 17,
+                    348 - Math.sin(angle) * 17,
+                    vx + Math.cos(angle) * 17,
+                    348 + Math.sin(angle) * 17,
+                );
+            }
+        });
+        this._vents = vents;
+
+        // Cable bundles dangling from the ceiling
+        const cables = this.add.graphics().setDepth(2);
+        cables.lineStyle(3, 0x0a1018, 1);
+        [180, 410, 700, 970, 1150].forEach((cx) => {
+            cables.lineBetween(cx, 0, cx, 96);
+        });
+        cables.lineStyle(2, 0x1c2632, 0.9);
+        [120, 290, 510, 820, 1080].forEach((cx) => {
+            cables.lineBetween(cx, 0, cx, 70);
         });
 
         if (this.textures.exists('mainview_bottom')) {
@@ -153,8 +177,35 @@ export default class EndScene extends Phaser.Scene {
             this._conveyorTiles.push(tile);
         }
 
-        this._scrapButtonGlow = this.add.rectangle(1038, 546, 172, 98, 0xff786f, 0.08)
-            .setDepth(11)
+        // Industrial overhead lights (housing + bulb + light cone)
+        this._lights = [];
+        this._lightCones = [];
+        const lightXs = [180, 420, 660, 900, 1140];
+        lightXs.forEach((lx) => {
+            // Mounting strap
+            const strap = this.add.rectangle(lx, 30, 4, 30, 0x1b2330, 1).setDepth(2);
+            // Housing (industrial trapezoid look)
+            const housing = this.add.graphics().setDepth(3);
+            housing.fillStyle(0x2a3340, 1);
+            housing.fillTriangle(lx - 36, 64, lx + 36, 64, lx + 24, 96);
+            housing.fillTriangle(lx - 36, 64, lx - 24, 96, lx + 24, 96);
+            housing.lineStyle(1, 0x0d1218, 1);
+            housing.strokeTriangle(lx - 36, 64, lx + 36, 64, lx + 24, 96);
+            housing.strokeTriangle(lx - 36, 64, lx - 24, 96, lx + 24, 96);
+            // Bulb glow
+            const bulb = this.add.ellipse(lx, 96, 38, 8, 0xffe9b2, 0.95).setDepth(4);
+            const bulbCore = this.add.ellipse(lx, 96, 22, 4, 0xffffff, 1).setDepth(4);
+            // Light cone falling onto the catwalk
+            const cone = this.add.graphics().setDepth(2);
+            cone.fillGradientStyle(0xffe9b2, 0xffe9b2, 0xffe9b2, 0xffe9b2, 0.18, 0.18, 0, 0);
+            cone.fillTriangle(lx, 100, lx - 110, 388, lx + 110, 388);
+            this._lights.push(strap, housing, bulb, bulbCore);
+            this._lightCones.push(cone);
+        });
+
+        // Scrap button (used for red/mixed endings)
+        this._scrapButtonGlow = this.add.rectangle(1038, 510, 168, 94, 0xff786f, 0.08)
+            .setDepth(3)
             .setVisible(false);
         this._scrapButton = this.add.rectangle(1038, 546, 146, 72, 0x4c1312, 0.96)
             .setStrokeStyle(2, 0xff7c73, 0.84)
@@ -195,11 +246,59 @@ export default class EndScene extends Phaser.Scene {
             .setScale(1.38)
             .setDepth(18)
             .setVisible(false);
-        this._umbrellaSprite = this.add.image(1440, 384, 'machine_rebellious_umbrella')
-            .setScale(1.4)
-            .setDepth(19)
-            .setVisible(false);
-        this._world.add([this._managerSprite, this._replacementSprite, this._umbrellaSprite]);
+
+        // Player inspector silhouette — small foreground figure facing the antagonist.
+        // Drawn inline so we don't depend on a baked sprite.
+        // Player x=860 so it doesn't overlap the SCRAP button (which appears
+        // at x=1038 in the umbrella_red / umbrella_mixed endings).
+        this._playerFigure = this.add.graphics().setDepth(9);
+        this._drawPlayerFigure(this._playerFigure);
+        this._playerFigure.setPosition(860, 0);
+
+        // Floor shadow under the player figure
+        this._playerShadow = this.add.ellipse(860, 472, 84, 14, 0x000000, 0.5).setDepth(8);
+
+        this._world.add([this._playerFigure, this._playerShadow, this._managerSprite, this._umbrellaSprite]);
+    }
+
+    _drawPlayerFigure(g) {
+        // Inspector silhouette, back-of-head perspective, facing left toward the antagonist.
+        // Local origin at feet (x=0, y=472 floor line).
+        // Coat
+        g.fillStyle(0x070b12, 1);
+        g.fillRect(-22, 318, 44, 154);
+        g.fillStyle(0x0d1620, 1);
+        g.fillRect(-26, 360, 52, 64);
+        // Shoulders
+        g.fillStyle(0x111c28, 1);
+        g.fillRect(-32, 320, 64, 22);
+        // Neck
+        g.fillStyle(0x0a1018, 1);
+        g.fillRect(-8, 308, 16, 14);
+        // Head (back of head, slightly turned)
+        g.fillStyle(0x101820, 1);
+        g.fillRect(-18, 274, 36, 38);
+        // Hair tuft
+        g.fillStyle(0x070a10, 1);
+        g.fillRect(-16, 270, 32, 8);
+        // Headset earpiece (faint cyan glow)
+        g.fillStyle(0x4ad7ff, 0.85);
+        g.fillRect(-22, 286, 4, 8);
+        g.fillStyle(0x4ad7ff, 0.35);
+        g.fillRect(-23, 285, 6, 10);
+        // Subtle cyan rim light on the right edge of the silhouette
+        g.fillStyle(0x2c5a78, 0.55);
+        g.fillRect(20, 318, 2, 154);
+        g.fillStyle(0x2c5a78, 0.55);
+        g.fillRect(16, 274, 2, 38);
+        // Pants/legs
+        g.fillStyle(0x05080d, 1);
+        g.fillRect(-18, 422, 14, 50);
+        g.fillRect(4, 422, 14, 50);
+        // Boots
+        g.fillStyle(0x000000, 1);
+        g.fillRect(-22, 466, 20, 8);
+        g.fillRect(2, 466, 20, 8);
     }
 
     _buildUi() {
@@ -742,9 +841,6 @@ export default class EndScene extends Phaser.Scene {
 
     async _runFallSequence({ violent = false } = {}) {
         this._dialogueText.setAlpha(0);
-        this._speechBubble.setVisible(false);
-        this._speakerTween?.stop();
-        this._speakerTween = null;
 
         if (this._music) {
             this.tweens.add({
@@ -771,19 +867,12 @@ export default class EndScene extends Phaser.Scene {
             ease: 'Cubic.In',
         });
         this.tweens.add({
-            targets: this._pitGlow,
-            scaleX: violent ? 3.6 : 2.8,
-            scaleY: violent ? 2.4 : 2,
-            alpha: 1,
-            duration: 720,
-            ease: 'Cubic.Out',
-        });
-        this.tweens.add({
-            targets: this._blackCover,
-            alpha: 1,
-            delay: 520,
-            duration: 820,
-            ease: 'Quad.In',
+            // targets: this._fallHole,
+            scaleX: violent ? 6.2 : 5.2,
+            scaleY: violent ? 4.8 : 4.1,
+            y: 700,
+            duration: 1350,
+            ease: 'Cubic.In',
         });
 
         await this._wait(1520);
