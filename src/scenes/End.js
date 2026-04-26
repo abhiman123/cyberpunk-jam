@@ -1480,10 +1480,10 @@ export default class EndScene extends Phaser.Scene {
             : (score >= 94 ? 'ELITE FLOOR PERFORMANCE' : (score >= 74 ? 'ABOVE QUOTA' : (score >= 40 ? 'KEPT EMPLOYED' : 'CORPORATE EVIDENCE BAG')));
         const metricBars = [
             this._buildMistakeMetricBar(mistakes),
-            this._buildTimingMetricBar('average debug puzzle time', timingStats.code, 96, 0x65d4ff),
-            this._buildTimingMetricBar('average circuit puzzle time', timingStats.grid, 84, 0x78f0c4),
+            this._buildTimingMetricBar('average code puzzle time', timingStats.code, 96, 0x65d4ff),
+            this._buildTimingMetricBar('average grid puzzle time', timingStats.grid, 84, 0x78f0c4),
             this._buildTimingMetricBar('average gear puzzle time', timingStats.gear, 112, 0xf3db84),
-            this._buildTimingMetricBar('average wiring puzzle time', timingStats.flow, 90, 0xd3a2ff),
+            this._buildTimingMetricBar('average flow puzzle time', timingStats.flow, 90, 0xd3a2ff),
         ];
 
         return {
@@ -1493,10 +1493,10 @@ export default class EndScene extends Phaser.Scene {
             metricBars,
             lines: [
                 `- mistakes: ${mistakes}`,
-                this._formatPuzzleTimeLine('average debug puzzle time', timingStats.code, 96),
-                this._formatPuzzleTimeLine('average circuit puzzle time', timingStats.grid, 84),
+                this._formatPuzzleTimeLine('average code puzzle time', timingStats.code, 96),
+                this._formatPuzzleTimeLine('average grid puzzle time', timingStats.grid, 84),
                 this._formatPuzzleTimeLine('average gear puzzle time', timingStats.gear, 112),
-                this._formatPuzzleTimeLine('average wiring puzzle time', timingStats.flow, 90),
+                this._formatPuzzleTimeLine('average flow puzzle time', timingStats.flow, 90),
                 `- total money made: $${totalMoneyMade.toFixed(2)}`,
                 `- total money lost: $${totalMoneyLost.toFixed(2)}`,
                 `- net money: $${netMoney.toFixed(2)} (${netPercent}% ahead of everyone else)`,
@@ -1604,11 +1604,10 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _gradeFromScore(score) {
-        let grade = SCORE_GRADES[0].grade;
-        SCORE_GRADES.forEach((entry) => {
-            if (score >= entry.min) grade = entry.grade;
-        });
-        return grade;
+        for (let i = SCORE_GRADES.length - 1; i >= 0; i--) {
+            if (score >= SCORE_GRADES[i].min) return SCORE_GRADES[i].grade;
+        }
+        return SCORE_GRADES[0].grade;
     }
 
     _tweenAsync(config) {

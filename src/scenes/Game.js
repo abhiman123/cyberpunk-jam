@@ -112,7 +112,7 @@ export default class GameScene extends Phaser.Scene {
         this._managerCallSound = null;
         this._openingCallSequenceId = 0;
         this._openingCallChoiceResolver = null;
-        this._sequenceDebugCounter = 0;
+
         this._phoneViews = {
             info: {
                 header: 'UNIT DOSSIER',
@@ -4796,14 +4796,10 @@ export default class GameScene extends Phaser.Scene {
             : Date.now();
     }
 
-    _emitSequenceDebug(label, details = null) {
-        this._sequenceDebugCounter += 1;
-        const prefix = `[SEQ ${this._sequenceDebugCounter}] ${label}`;
-        if (details && Object.keys(details).length > 0) {
-            console.log(prefix, details);
-            return;
-        }
-        console.log(prefix);
+    _emitSequenceDebug(_label, _details = null) {
+        // Trace logger for the case-loading sequence. Left as a no-op so the
+        // 18 call sites stay valid and we can flip a single flag to bring the
+        // logs back when diagnosing intake/arrival regressions.
     }
 
     _scheduleNextCase(delayMs) {
@@ -6807,14 +6803,8 @@ export default class GameScene extends Phaser.Scene {
 
 
     _handleKonamiKey(event) {
-        if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
-            console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
-            return;
-        }
-        if (this._overlayModalOpen || this._rulebook?.isVisible() || this._settingsOverlay?.isVisible() || this._machinePuzzleOverlay?.isVisible()) {
-            console.log('[KONAMI] blocked by overlay: overlayModalOpen=%s rulebook=%s settings=%s machinePuzzle=%s', this._overlayModalOpen, this._rulebook?.isVisible(), this._settingsOverlay?.isVisible(), this._machinePuzzleOverlay?.isVisible());
-            return;
-        }
+        if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) return;
+        if (this._overlayModalOpen || this._rulebook?.isVisible() || this._settingsOverlay?.isVisible() || this._machinePuzzleOverlay?.isVisible()) return;
         if (event?.repeat) return;
 
         const key = this._normalizeKonamiKey(event?.key);
@@ -6823,7 +6813,6 @@ export default class GameScene extends Phaser.Scene {
         const expectedKey = this._konamiSequence[this._konamiProgress];
         if (key === expectedKey) {
             this._konamiProgress += 1;
-            console.log('[KONAMI] progress %d/%d (key=%s)', this._konamiProgress, this._konamiSequence.length, key);
             if (this._konamiProgress >= this._konamiSequence.length) {
                 this._konamiProgress = 0;
                 this._armKonamiFinale();
@@ -6831,7 +6820,6 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        console.log('[KONAMI] wrong key: got=%s expected=%s resetting to %d', key, expectedKey, key === this._konamiSequence[0] ? 1 : 0);
         this._konamiProgress = key === this._konamiSequence[0] ? 1 : 0;
     }
 
@@ -7227,7 +7215,6 @@ export default class GameScene extends Phaser.Scene {
 
         this._playCurrentUnitExitAnimation(() => {
             clearUnitPresentation();
-            console.log('[KONAMI] exit anim done: finalCaseTriggered=%s shiftShouldEnd=%s hasPendingKonamiFinale=%s', finalCaseTriggered, shiftShouldEnd, hasPendingKonamiFinale);
 
             if (finalCaseTriggered) {
                 this._shiftRunning = false;
@@ -7308,7 +7295,6 @@ export default class GameScene extends Phaser.Scene {
         };
 
         this.time.delayedCall(220, () => {
-            console.log('[KONAMI] _endShift: fromFinalCase=%s isLastDay=%s konamiTriggered=%s', fromFinalCase, GameState.isLastDay(), this._konamiFinaleTriggered);
             if (fromFinalCase && (GameState.isLastDay() || this._konamiFinaleTriggered)) {
                 this.scene.start('End');
                 return;
