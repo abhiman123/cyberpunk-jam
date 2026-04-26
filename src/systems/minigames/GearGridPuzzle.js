@@ -1103,10 +1103,12 @@ export default class GearGridPuzzle extends MinigameBase {
         if (!faultType) return;
 
         if (faultType === 'cracked-drive' || faultType === 'cracked-gear') {
-            // Crack glyph stays inside the cell (centered on the gear), but
-            // the CRACK label is now rendered as a pill HANGING OFF the
-            // bottom edge of the cell so it never covers the gear icon
-            // or the IN/OUT text. Width sized to the text + padding.
+            // Crack glyph stays inside the cell (centered on the gear). The
+            // CRACK pill now sits AS A BADGE on the top edge of the cell so
+            // it overlaps the cell itself (never the cell below) and stays
+            // visible when a gear is placed because the visual's faultGfx
+            // and faultText are drawn AFTER the gear graphic in the slot's
+            // child list (see _createGearVisual).
             visual.faultGfx.fillStyle(0x070707, 0.34);
             visual.faultGfx.fillTriangle(-12, -16, 6, -2, 22, 14);
             visual.faultGfx.lineStyle(3, 0xffc39c, 0.95);
@@ -1119,13 +1121,13 @@ export default class GearGridPuzzle extends MinigameBase {
             visual.faultGfx.lineTo(16, 12);
             visual.faultGfx.strokePath();
 
-            // Pill anchored just below the cell's bottom edge.
-            const pillY = (this._cellSize / 2) + 4;
-            const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
+            // Pill anchored at the top edge of the cell, overlapping it.
+            const pillW = Math.max(46, Math.floor(this._cellSize * 0.58));
             const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
-            visual.faultGfx.fillStyle(0x4a0d0a, 0.95);
+            const pillY = -(this._cellSize / 2) - (pillH / 2) + 6;
+            visual.faultGfx.fillStyle(0x4a0d0a, 0.96);
             visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
-            visual.faultGfx.lineStyle(1, 0xffc39c, 0.92);
+            visual.faultGfx.lineStyle(1, 0xffc39c, 0.94);
             visual.faultGfx.strokeRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
             visual.faultText
                 .setText('CRACK')
@@ -1151,10 +1153,10 @@ export default class GearGridPuzzle extends MinigameBase {
             visual.faultGfx.lineBetween(-18, 10, -28, 22);
             visual.faultGfx.lineBetween(18, 10, 30, 24);
             visual.faultGfx.strokeCircle(0, 0, 16);
-            // Pill below the cell (matches the CRACK pill style).
-            const pillY = (this._cellSize / 2) + 4;
-            const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
+            // Pill anchored at the top edge of the cell (matches CRACK pill).
+            const pillW = Math.max(46, Math.floor(this._cellSize * 0.58));
             const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
+            const pillY = -(this._cellSize / 2) - (pillH / 2) + 6;
             visual.faultGfx.fillStyle(0x3a0a0a, 0.95);
             visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
             visual.faultGfx.lineStyle(1, 0xff6960, 0.92);
