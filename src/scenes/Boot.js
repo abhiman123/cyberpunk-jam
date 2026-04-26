@@ -108,8 +108,8 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_security_camera_bot_inspect_source', 'CameraInspect.png');
         this.load.image('machine_security_camera_bot_fallback_source', 'camerabot.png');
         this.load.image('machine_mechanic_broom_source',          'Moptopus.png');
-        this.load.image('machine_cry_baby_source',                'crybabyinspect.png');
-        this.load.image('machine_cry_baby_inspect_source',        'crybaby.png');
+        this.load.image('machine_cry_baby_source',                'crybaby.png');
+        this.load.image('machine_cry_baby_inspect_source',        'crybabyinspect.png');
         this.load.image('machine_cry_baby_fallback_source',       'CrybabyGeneral.png');
         this.load.image('cry_baby_portrait_source',               'sadCB.png');
         this.load.image('machine_jester_in_the_box_source',       'Surely_you_jest_box.png');
@@ -192,13 +192,11 @@ export default class BootScene extends Phaser.Scene {
         // inspect view, with the legacy CrybabyGeneral.png as a fallback for
         // either slot if a new asset is missing.
         if (this.textures.exists('machine_cry_baby_source')) {
-            // crybabyinspect.png is the lying-down conveyor pose
             this._createCroppedUpscaledTexture('machine_cry_baby_source', 'machine_cry_baby', 4, { sx: 55, sy: 101, sw: 215, sh: 46 });
         } else if (this.textures.exists('machine_cry_baby_fallback_source')) {
             this._createNearestUpscaledTexture('machine_cry_baby_fallback_source', 'machine_cry_baby', 1);
         }
         if (this.textures.exists('machine_cry_baby_inspect_source')) {
-            // crybaby.png is the standing full-body inspect pose
             this._createCroppedUpscaledTexture('machine_cry_baby_inspect_source', 'machine_cry_baby_close', 4, { sx: 136, sy: 19, sw: 52, sh: 156 });
         } else if (this.textures.exists('machine_cry_baby_fallback_source')) {
             this._createNearestUpscaledTexture('machine_cry_baby_fallback_source', 'machine_cry_baby_close', 1);
