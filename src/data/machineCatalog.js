@@ -212,19 +212,6 @@ function upsertFlowWireFilter(wireFilters = [], nextFilter) {
     return nextFilters;
 }
 
-function spreadFlowRows(count, rows) {
-    if (count <= 0) return [];
-    if (count === 1) return [Math.floor(rows / 2)];
-
-    const firstRow = 1;
-    const lastRow = Math.max(firstRow, rows - 2);
-    const span = lastRow - firstRow;
-
-    return Array.from({ length: count }, (_value, index) => (
-        Math.round(firstRow + ((span * index) / (count - 1)))
-    ));
-}
-
 function createSeededRandom(seedText) {
     let seed = 0;
     const text = String(seedText || 'flow-seed');
@@ -960,25 +947,6 @@ function getFirstFlowLeadCell(flowPuzzleOption) {
     return fallbackCandidate || null;
 }
 
-function findFlowWireFilterCell(flowPuzzleOption, targetRow, randomFn = Math.random) {
-    const cols = getFlowOptionCols(flowPuzzleOption);
-    const rowCells = (flowPuzzleOption?.tiles?.[targetRow] || [])
-        .map((cell, x) => ({ x, cell }))
-        .filter(({ x, cell }) => x > 0 && x < cols - 1 && cell && cell.type && cell.type !== 'empty');
-
-    if (rowCells.length === 0) {
-        return getFirstFlowLeadCell(flowPuzzleOption);
-    }
-
-    // Previously we always pinned the filter to the first non-empty cell of
-    // the row (or the last cell when the target shared the source row), which
-    // made every Day-2 board on the same machine layout place its filter at
-    // an identical column. Picking randomly per unit keeps the filter on a
-    // valid pipe cell while letting different runs sit in different spots.
-    const selectedCell = rowCells[Math.floor(randomFn() * rowCells.length)] || rowCells[0];
-    return selectedCell ? { x: selectedCell.x, y: targetRow } : null;
-}
-
 function createMissingLeadFault(flowPuzzleOption) {
     const leadCell = getFirstFlowLeadCell(flowPuzzleOption);
     if (!leadCell) return null;
@@ -1027,23 +995,6 @@ function createCracklingOutputFault(outputSpec) {
         status: 'CRACKLING OUTPUT MODULE',
         reason: `${outputSpec.displayName || humanizeFlowLabel(outputSpec.label)} is demanding a red crackling feed. The unit is unsafe by design. Scrap the unit.`,
     };
-}
-
-function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn = Math.random) {
-    return outputSpecs
-        .map((outputSpec) => {
-            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row, randomFn);
-            if (!filterCell) return null;
-
-            return createFlowWireFilter(
-                filterCell.x,
-                filterCell.y,
-                outputSpec.powerClass,
-                outputSpec.powerClass === 'green' ? 'GRN' : 'ORG'
-            );
-        })
-        .filter(Boolean)
-        .reduce((filters, filter) => upsertFlowWireFilter(filters, filter), []);
 }
 
 function collectFlowInspectionCandidates(flowPuzzleOption) {
@@ -1862,20 +1813,6 @@ function buildProtocolInvalidOutputs(expectedOutput = '') {
     ].filter(Boolean);
 
     return Array.from(new Set(variants)).filter((variant) => variant !== text);
-}
-
-function corruptDebugPrompt(prompt = '', randomFn = Math.random) {
-    const characters = String(prompt || '').split('');
-    const candidateIndices = characters
-        .map((character, index) => ({ character, index }))
-        .filter(({ character }) => /[a-z0-9]/i.test(character))
-        .map(({ index }) => index);
-
-    if (candidateIndices.length === 0) return String(prompt || '');
-
-    const selectedIndex = candidateIndices[Math.floor(randomFn() * candidateIndices.length)] ?? candidateIndices[0];
-    characters[selectedIndex] = '█';
-    return characters.join('');
 }
 
 function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.random) {
@@ -5382,218 +5319,6 @@ function resolveChargeGroupAnchor(shapeGrid, row, col, seen = new Set()) {
     return null;
 }
 
-function collectChargeComponents(shapeGrid) {
-    const visited = new Set();
-    const components = [];
-
-    shapeGrid.forEach((row, rowIndex) => {
-        row.forEach((value, colIndex) => {
-            const startKey = cellKey(rowIndex, colIndex);
-            if (!isChargeCode(value) || visited.has(startKey)) return;
-
-            const queue = [{ row: rowIndex, col: colIndex }];
-            const component = [];
-            visited.add(startKey);
-
-            while (queue.length > 0) {
-                const current = queue.shift();
-                component.push(current);
-
-                getOrthogonalCellNeighbors(current.row, current.col)
-                    .sort(compareCellPositions)
-                    .forEach((neighbor) => {
-                        const neighborKey = cellKey(neighbor.row, neighbor.col);
-                        if (visited.has(neighborKey)) return;
-                        if (!isChargeCode(shapeGrid[neighbor.row]?.[neighbor.col])) return;
-
-                        visited.add(neighborKey);
-                        queue.push(neighbor);
-                    });
-            }
-
-            components.push(component.sort(compareCellPositions));
-        });
-    });
-
-    return components.sort((left, right) => compareCellPositions(left[0], right[0]));
-}
-
-function shuffleCells(cells, randomFn) {
-    const shuffled = [...cells];
-    for (let index = shuffled.length - 1; index > 0; index -= 1) {
-        const swapIndex = Math.floor(randomFn() * (index + 1));
-        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-    }
-    return shuffled;
-}
-
-function buildChargeGroupCluster(component, maxSize = 2, randomFn = Math.random) {
-    if (!Array.isArray(component) || component.length < 2) return [];
-
-    const componentMap = new Map(component.map((cell) => [cellKey(cell.row, cell.col), cell]));
-    const cluster = [shuffleCells(component, randomFn)[0]];
-    const clusterKeys = new Set([cellKey(cluster[0].row, cluster[0].col)]);
-
-    while (cluster.length < maxSize) {
-        const frontier = new Map();
-
-        cluster.forEach((cell) => {
-            getOrthogonalCellNeighbors(cell.row, cell.col)
-                .map((neighbor) => componentMap.get(cellKey(neighbor.row, neighbor.col)))
-                .filter(Boolean)
-                .forEach((neighbor) => {
-                    const neighborKey = cellKey(neighbor.row, neighbor.col);
-                    if (clusterKeys.has(neighborKey)) return;
-                    frontier.set(neighborKey, neighbor);
-                });
-        });
-
-        if (frontier.size === 0) break;
-
-        const nextCell = shuffleCells(Array.from(frontier.values()), randomFn)
-            .sort((left, right) => {
-                const leftNeighbors = getOrthogonalCellNeighbors(left.row, left.col)
-                    .filter((neighbor) => clusterKeys.has(cellKey(neighbor.row, neighbor.col))).length;
-                const rightNeighbors = getOrthogonalCellNeighbors(right.row, right.col)
-                    .filter((neighbor) => clusterKeys.has(cellKey(neighbor.row, neighbor.col))).length;
-                return rightNeighbors - leftNeighbors;
-            })[0];
-
-        cluster.push(nextCell);
-        clusterKeys.add(cellKey(nextCell.row, nextCell.col));
-    }
-
-    return cluster.sort(compareCellPositions);
-}
-
-function collectChargeSubcomponents(cells) {
-    if (!Array.isArray(cells) || cells.length === 0) return [];
-
-    const availableMap = new Map(cells.map((cell) => [cellKey(cell.row, cell.col), cell]));
-    const visited = new Set();
-    const components = [];
-
-    cells.forEach((cell) => {
-        const startKey = cellKey(cell.row, cell.col);
-        if (visited.has(startKey)) return;
-
-        const queue = [cell];
-        const component = [];
-        visited.add(startKey);
-
-        while (queue.length > 0) {
-            const current = queue.shift();
-            component.push(current);
-
-            getOrthogonalCellNeighbors(current.row, current.col)
-                .map((neighbor) => availableMap.get(cellKey(neighbor.row, neighbor.col)))
-                .filter(Boolean)
-                .forEach((neighbor) => {
-                    const neighborKey = cellKey(neighbor.row, neighbor.col);
-                    if (visited.has(neighborKey)) return;
-                    visited.add(neighborKey);
-                    queue.push(neighbor);
-                });
-        }
-
-        components.push(component.sort(compareCellPositions));
-    });
-
-    return components.sort((left, right) => {
-        if (right.length !== left.length) {
-            return right.length - left.length;
-        }
-        return compareCellPositions(left[0], right[0]);
-    });
-}
-
-function injectChargeGroupsIntoGridOption(gridOption, randomFn, options = {}) {
-    if (!gridOption) return gridOption;
-
-    const allowLessThan = options.allowLessThan !== false;
-    const forceLessThan = Boolean(options.forceLessThan) && allowLessThan;
-    const requestedMinGroups = Math.max(1, Number(options.minGroups) || 1);
-
-    const grid = cloneShapeGrid(gridOption.grid);
-    const alreadyGrouped = grid.some((row) => row.some((cell) => isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)));
-    if (alreadyGrouped) {
-        return {
-            ...gridOption,
-            grid,
-        };
-    }
-
-    const components = collectChargeComponents(grid).filter((component) => component.length >= 2);
-    if (components.length === 0) {
-        return {
-            ...gridOption,
-            grid,
-        };
-    }
-
-    const reservedCells = new Set();
-    let groupsPlaced = 0;
-    let lessThanPlaced = false;
-    const maxGroups = Math.min(3, Math.max(requestedMinGroups, components.length + (randomFn() < 0.55 ? 1 : 0)));
-
-    shuffleCells(components, randomFn).forEach((component) => {
-        while (groupsPlaced < maxGroups) {
-            const available = component.filter((cell) => !reservedCells.has(cellKey(cell.row, cell.col)));
-            const contiguousAvailable = collectChargeSubcomponents(available).find((subcomponent) => subcomponent.length >= 2);
-            if (!contiguousAvailable) break;
-
-            const preferredClusterSizes = [];
-            if (contiguousAvailable.length >= 4) {
-                preferredClusterSizes.push(4);
-            }
-            if (contiguousAvailable.length >= 3) {
-                preferredClusterSizes.push(3);
-            }
-            preferredClusterSizes.push(2);
-
-            let cluster = [];
-            preferredClusterSizes.some((clusterSize) => {
-                const attempts = clusterSize > 2 ? 3 : 1;
-                for (let attempt = 0; attempt < attempts; attempt += 1) {
-                    const candidateCluster = buildChargeGroupCluster(
-                        contiguousAvailable,
-                        Math.min(contiguousAvailable.length, clusterSize),
-                        randomFn,
-                    );
-                    if (candidateCluster.length === Math.min(contiguousAvailable.length, clusterSize)) {
-                        cluster = candidateCluster;
-                        return true;
-                    }
-                }
-                return false;
-            });
-
-            if (cluster.length < 2) break;
-
-            const anchor = cluster[0];
-            const exactTarget = cluster.reduce((sum, cell) => sum + (Number(grid[cell.row][cell.col]) - 1), 0);
-            const useLessThan = allowLessThan && ((forceLessThan && !lessThanPlaced) || randomFn() < 0.4);
-            const threshold = exactTarget + 1 + Math.floor(randomFn() * Math.max(2, cluster.length));
-
-            grid[anchor.row][anchor.col] = createChargeGroupAnchor(useLessThan ? -threshold : exactTarget);
-            cluster.slice(1).forEach((cell) => {
-                grid[cell.row][cell.col] = createChargeGroupLink(anchor.row, anchor.col);
-            });
-
-            cluster.forEach((cell) => reservedCells.add(cellKey(cell.row, cell.col)));
-            groupsPlaced += 1;
-            if (useLessThan) {
-                lessThanPlaced = true;
-            }
-        }
-    });
-
-    return {
-        ...gridOption,
-        grid,
-    };
-}
-
 function stripGridConstraintMarkers(shapeGrid) {
     return cloneShapeGrid(shapeGrid).map((row) => row.map((cell) => {
         if (isLinkCell(cell) || isNotEqualLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) {
@@ -5605,43 +5330,6 @@ function stripGridConstraintMarkers(shapeGrid) {
 
         return Number.isInteger(cell) ? cell : CELL_EMPTY;
     }));
-}
-
-function injectEqualityConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
-    if (!gridOption) return gridOption;
-
-    const budget = { remaining: 8000, timedOut: false };
-    const candidates = shuffleCells(
-        collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
-            const cell = gridOption.grid?.[row]?.[col];
-            return Number.isInteger(cell) && cell !== CELL_WALL;
-        }),
-        randomFn,
-    );
-
-    for (let index = 0; index < candidates.length; index += 1) {
-        for (let innerIndex = index + 1; innerIndex < candidates.length; innerIndex += 1) {
-            const first = candidates[index];
-            const second = candidates[innerIndex];
-            const grid = cloneShapeGrid(gridOption.grid);
-            grid[first.row][first.col] = linkCell(second.row, second.col);
-            grid[second.row][second.col] = linkCell(first.row, first.col);
-
-            const candidateOption = {
-                ...gridOption,
-                grid,
-            };
-
-            if (!validatePlayability || isPlayableGridOption(candidateOption, budget)) {
-                return candidateOption;
-            }
-            if (budget.timedOut) {
-                return gridOption;
-            }
-        }
-    }
-
-    return gridOption;
 }
 
 function normalizeGridDefinition(shapeGrid) {
@@ -5887,12 +5575,6 @@ export class MachinePuzzleState {
         return domino;
     }
 
-    setClownCorruption(corruption) {
-        this.clownCorruption = corruption ? { ...corruption } : null;
-        this._syncGlowState();
-        return this.clownCorruption;
-    }
-
     getDomino(dominoId) {
         return this.dominoes.find((domino) => domino.id === dominoId) || null;
     }
@@ -5968,10 +5650,6 @@ export class MachinePuzzleState {
         return cmp.op === '<' ? pip < cmp.threshold : pip > cmp.threshold;
     }
 
-    isChargeGroupCell(row, col) {
-        return this.chargeGroupCells.has(cellKey(row, col));
-    }
-
     getChargeGroupAt(row, col) {
         const groupKey = this.chargeGroupCells.get(cellKey(row, col));
         if (!groupKey) return null;
@@ -6012,16 +5690,6 @@ export class MachinePuzzleState {
                 })),
             };
         });
-    }
-
-    getEqualLink(row, col) {
-        const target = this.equalLinks.get(cellKey(row, col));
-        return target ? { ...target } : null;
-    }
-
-    getNotEqualLink(row, col) {
-        const target = this.notEqualLinks.get(cellKey(row, col));
-        return target ? { ...target } : null;
     }
 
     getEqualLinkPairs() {
@@ -6378,42 +6046,6 @@ function collectBoardConstraintCandidates(shapeGrid) {
     });
 
     return candidates;
-}
-
-function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
-    if (!gridOption) return gridOption;
-
-    const budget = { remaining: 8000, timedOut: false };
-    const candidates = shuffleCells(
-        collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
-            const cell = gridOption.grid?.[row]?.[col];
-            return Number.isInteger(cell) && cell !== CELL_WALL;
-        }),
-        randomFn
-    );
-    for (let index = 0; index < candidates.length; index += 1) {
-        for (let innerIndex = index + 1; innerIndex < candidates.length; innerIndex += 1) {
-            const first = candidates[index];
-            const second = candidates[innerIndex];
-            const grid = cloneShapeGrid(gridOption.grid);
-            grid[first.row][first.col] = notLinkCell(second.row, second.col);
-            grid[second.row][second.col] = notLinkCell(first.row, first.col);
-
-            const candidateOption = {
-                ...gridOption,
-                grid,
-            };
-
-            if (!validatePlayability || isPlayableGridOption(candidateOption, budget)) {
-                return candidateOption;
-            }
-            if (budget.timedOut) {
-                return gridOption;
-            }
-        }
-    }
-
-    return gridOption;
 }
 
 // ─── Forward Generation ──────────────────────────────────────────────────────

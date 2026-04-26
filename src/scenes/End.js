@@ -273,14 +273,6 @@ export default class EndScene extends Phaser.Scene {
         this._factoryGui.add([panel]);
     }
 
-    _playStageLightsCue() {
-        if (!this.cache.audio.has(SOUND_ASSETS.inspectionReveal.key)) return;
-
-        this.sound.play(SOUND_ASSETS.inspectionReveal.key, {
-            volume: SOUND_VOLUMES.reveal * 0.9,
-        });
-    }
-
     async _runStageIntroThenEnding() {
         await this._wait(2600);
         await this._runEndingSequence();

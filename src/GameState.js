@@ -93,13 +93,6 @@ export const GameState = {
         return this.activeRules;
     },
 
-    getCurrentShiftDate() {
-        const [year, month, day] = this.ensureCalendarAnchor().split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        date.setDate(date.getDate() + this.getShiftSequenceIndex());
-        return date;
-    },
-
     recordTrackedMachineOutcome(outcome) {
         if (!outcome) return null;
 
