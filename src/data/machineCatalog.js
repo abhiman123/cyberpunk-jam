@@ -2858,7 +2858,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     rebellious_umbrella: createMiniDisplay({
         artX: 118,
         artY: 105,
-        artScale: 0.061,
+        artScale: 0.085,
         artAngle: -3,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },

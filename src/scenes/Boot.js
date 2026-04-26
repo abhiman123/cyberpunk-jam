@@ -66,8 +66,8 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_rich_mf_source',                 'Sprite_rich.png');
         this.load.image('rich_mf_portrait_satisfied_source',      'satisfiedRICHBOSSDUDEIDFK.png');
         this.load.image('rich_mf_portrait_sick_source',           'hesickofyobullshitRICHBOSSDUDEIDFK.png');
-        this.load.image('machine_rebellious_umbrella_source',     'freakassumbrella.png');
-        this.load.image('umbrella_open_source',                   'openumbrella.png');
+        this.load.image('machine_rebellious_umbrella_source',     'umbrella_character.png');
+        this.load.image('umbrella_open_source',                   'umbrella_character.png');
         this.load.image('machine_lifeguard_robot_source',         'lifeguard.png');
         this.load.image('machine_security_camera_bot_source',     'camerabot.png');
         this.load.image('machine_mechanic_broom_source',          'Moptopus.png');
