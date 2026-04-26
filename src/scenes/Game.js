@@ -1002,9 +1002,10 @@ export default class GameScene extends Phaser.Scene {
         const bounds = this._deskPhotoBounds;
         const nextX = containerLocalX + intent.offsetX;
         const nextY = containerLocalY + intent.offsetY;
-        // Clamp to container-local bounds (0 to bounds.width/height)
+        // Clamp to container-local table bounds; tableTopMargin keeps items below the belt/conveyor edge
+        const tableTopMargin = 30;
         const clampedX = Phaser.Math.Clamp(nextX, intent.item.width / 2, bounds.width - (intent.item.width / 2));
-        const clampedY = Phaser.Math.Clamp(nextY, intent.item.height / 2, bounds.height - (intent.item.height / 2));
+        const clampedY = Phaser.Math.Clamp(nextY, tableTopMargin + intent.item.height / 2, bounds.height - (intent.item.height / 2));
         intent.item.container.setPosition(clampedX, clampedY);
     }
 
@@ -5100,8 +5101,11 @@ export default class GameScene extends Phaser.Scene {
                 layer.setInteractive({ useHandCursor: true, draggable: true });
                 this.input.setDraggable(layer);
                 layer.on('drag', (pointer, dragX, dragY) => {
-                    layer.x = dragX;
-                    layer.y = dragY;
+                    const deskTop = this.scale.height - 172;
+                    const hw = layer.displayWidth / 2;
+                    const hh = layer.displayHeight / 2;
+                    layer.x = Phaser.Math.Clamp(dragX, hw, this.scale.width - hw);
+                    layer.y = Phaser.Math.Clamp(dragY, deskTop + hh, this.scale.height - hh);
                 });
             } else {
                 layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
@@ -7255,6 +7259,14 @@ export default class GameScene extends Phaser.Scene {
                 this._queueIndex = 0;
                 this._pendingKonamiFinalCase = null;
                 this._scheduleNextCase(700);
+            } else {
+                this._queueIndex++;
+                this._emitSequenceDebug('advance case scheduled', {
+                    nextQueueIndex: this._queueIndex,
+                    scheduledCasesRemaining: Math.max(0, (this._queue?.length || 0) - this._queueIndex),
+                    machineQueueLength: this._machineQueue?.length || 0,
+                });
+                this._scheduleNextCase(0);
             }
         });
 
