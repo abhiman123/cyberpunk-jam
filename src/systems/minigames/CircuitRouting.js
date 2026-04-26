@@ -176,13 +176,6 @@ function generateCircuit(spec, rows, cols) {
         carvePath(tiles, sr, outRow, cols, branchCol);
     });
 
-    const pathCells = [];
-    tiles.forEach((row, y) => row.forEach((cell, x) => {
-        if (cell._dirs.size > 0 && !(x === 0 && y === sr) && !(x === cols - 1 && outputRows.includes(y))) {
-            pathCells.push([x, y]);
-        }
-    }));
-
     tiles.forEach(row => row.forEach(cell => { finalizeTile(cell); delete cell._dirs; }));
 
     // Scramble rotations (skip empty and rotation-symmetric tiles)
@@ -192,16 +185,7 @@ function generateCircuit(spec, rows, cols) {
         cell.rotation = (cell.rotation + 1 + Math.floor(Math.random() * 3)) % 4;
     }));
 
-    // Place forbidden cells on path
-    const forbidden = [];
-    const count = spec.forbiddenCount || 0;
-    const pool = [...pathCells];
-    for (let i = 0; i < count && pool.length > 0; i++) {
-        const idx = Math.floor(Math.random() * pool.length);
-        forbidden.push(pool.splice(idx, 1)[0]);
-    }
-
-    return { tiles, forbidden };
+    return { tiles };
 }
 
 export default class CircuitRouting extends MinigameBase {
@@ -325,53 +309,28 @@ export default class CircuitRouting extends MinigameBase {
         let restoredFromProgress = false;
         let restoredInventory = null;
 
-        let tiles, forbiddenList;
+        let tiles;
         if (Array.isArray(circuit.progress?.tiles) && circuit.progress.tiles.length > 0) {
             tiles = cloneCircuitTiles(circuit.progress.tiles);
-            forbiddenList = circuit.forbidden || [];
             restoredFromProgress = true;
             if (circuit.progress.inventory && typeof circuit.progress.inventory === 'object') {
                 restoredInventory = circuit.progress.inventory;
             }
         } else if (circuit.tiles) {
             tiles = cloneCircuitTiles(circuit.tiles);
-            forbiddenList = circuit.forbidden || [];
+        } else if (circuit._generatedTiles) {
+            tiles = cloneCircuitTiles(circuit._generatedTiles);
         } else {
-            // Check if we already generated tiles for this case
-            if (circuit._generatedTiles) {
-                tiles = cloneCircuitTiles(circuit._generatedTiles);
-            } else {
-                // Generate new circuit tiles and cache them
-                const gen = generateCircuit(circuit, this.rows, this.cols);
-                tiles = gen.tiles;
-                // Store only the tiles for future use (forbidden cells will be random each time)
-                circuit._generatedTiles = cloneCircuitTiles(tiles);
-            }
-
-            // Always generate fresh forbidden cells for randomization
-            const pathCells = [];
-            tiles.forEach((row, y) => row.forEach((cell, x) => {
-                if (cell.type !== 'empty' && !(x === 0 && y === this._sourceRow) && !(x === this.cols - 1 && Object.keys(this._outputs).map(Number).includes(y))) {
-                    pathCells.push([x, y]);
-                }
-            }));
-
-            forbiddenList = [];
-            const count = circuit.forbiddenCount || 0;
-            const pool = [...pathCells];
-            for (let i = 0; i < count && pool.length > 0; i++) {
-                const idx = Math.floor(Math.random() * pool.length);
-                forbiddenList.push(pool.splice(idx, 1)[0]);
-            }
+            const gen = generateCircuit(circuit, this.rows, this.cols);
+            tiles = gen.tiles;
+            circuit._generatedTiles = cloneCircuitTiles(tiles);
         }
         this._tiles = tiles;
-        // Forbidden cells were the amber-tinted "obstacle" tiles. They no
-        // longer ship as a player-facing mechanic — the puzzle was always
-        // solvable around them, so they read as decorative dead weight.
-        // Force the set empty regardless of what the data layer or saved
-        // progress provides; that keeps every legacy field a no-op without
-        // having to scrub case definitions.
-        forbiddenList = [];
+        // Forbidden cells (the amber "obstacle" tiles) were retired as a
+        // player-facing mechanic — the puzzle was always solvable around
+        // them, so they read as decorative dead weight. Keep the lookup
+        // structure empty so the rest of the file's `_forbidden.has(...)`
+        // checks become free no-ops without scrubbing case definitions.
         this._forbidden = new Set();
         this._tileGfx = [];
 

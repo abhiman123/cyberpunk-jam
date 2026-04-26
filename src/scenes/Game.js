@@ -4150,11 +4150,6 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    _syncRulebookState(newRuleIds = null) {
-        this._rulebook?.setRuleState(GameState.activeRules, newRuleIds);
-    }
-
-
     _beginRebelliousUmbrellaProposal() {
         const machineVariant = this._currentMachineVariant;
         if (!this._isRebelliousUmbrella(machineVariant) || GameState.day !== 1 || this._getUmbrellaQuest()) {
