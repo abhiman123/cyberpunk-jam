@@ -807,10 +807,8 @@ export default class CircuitRouting extends MinigameBase {
                 sx: pointer.x,
                 sy: pointer.y,
                 id: pointer.id,
+                downAt: Date.now(),
             };
-        });
-        bg.on('pointerup', (_pointer, _localX, _localY, event) => {
-            event?.stopPropagation?.();
         });
         bg.on('pointerover', () => {
             const liveTile = this._tiles[y]?.[x];
@@ -952,6 +950,20 @@ export default class CircuitRouting extends MinigameBase {
         return t.type === 'empty';
     }
 
+    _findNearestDroppableCell(pointer) {
+        let best = null;
+        for (let gy = 0; gy < this.rows; gy += 1) {
+            for (let gx = 0; gx < this.cols; gx += 1) {
+                if (!this._canDropTileAt(gx, gy)) continue;
+                const cx = this.container.x + this.boardX + gx * this.cellSize + this.cellSize / 2;
+                const cy = this.container.y + this.boardY + gy * this.cellSize + this.cellSize / 2;
+                const d = Math.hypot(pointer.x - cx, pointer.y - cy);
+                if (!best || d < best.d) best = { gx, gy, d };
+            }
+        }
+        return best;
+    }
+
     _commitFlowDrag(pointer) {
         const p = this._flowDrag;
         if (!p) return;
@@ -981,6 +993,20 @@ export default class CircuitRouting extends MinigameBase {
             return;
         }
 
+        const nearest = this._findNearestDroppableCell(pointer);
+        if (nearest && nearest.d <= (this.cellSize * 0.9)) {
+            this._tiles[nearest.gy][nearest.gx] = { type: p.type, rotation: p.rot };
+            if (p.from === 'inv') {
+                this._inventory[p.type] = Math.max(0, (this._inventory[p.type] || 0) - 1);
+                this._selectedInventoryType = null;
+                this._refreshInventoryPanel();
+            }
+            this._destroyFlowGhost();
+            this._flowDrag = null;
+            this._updateAll();
+            return;
+        }
+
         if (p.from === 'board') {
             this._tiles[p.origGy][p.origGx] = { type: p.type, rotation: p.rot };
         }
@@ -995,19 +1021,23 @@ export default class CircuitRouting extends MinigameBase {
             this._moveFlowGhost(pointer);
             return;
         }
-        const threshold = 10;
+        const threshold = 6;
+        const holdDelayMsBoard = 0;
+        const holdDelayMsInv = 170;
         if (this._flowBoardPending) {
             const dx = pointer.x - this._flowBoardPending.sx;
             const dy = pointer.y - this._flowBoardPending.sy;
             const d = Math.hypot(dx, dy);
-            if (d > threshold) {
+            const heldLongEnough = (Date.now() - (this._flowBoardPending.downAt || 0)) >= holdDelayMsBoard;
+            if (heldLongEnough && d > threshold) {
                 this._startFlowDragFromBoard(this._flowBoardPending, pointer);
             }
         } else if (this._flowInvPointer) {
             const dx = pointer.x - this._flowInvPointer.sx;
             const dy = pointer.y - this._flowInvPointer.sy;
             const d = Math.hypot(dx, dy);
-            if (d > threshold) {
+            const heldLongEnough = (Date.now() - (this._flowInvPointer.downAt || 0)) >= holdDelayMsInv;
+            if (heldLongEnough && d > threshold) {
                 this._startFlowDragFromInv(pointer);
             }
         }
@@ -1185,7 +1215,7 @@ export default class CircuitRouting extends MinigameBase {
                     this._toggleInventorySelection(type);
                     return;
                 }
-                this._flowInvPointer = { type, sx: p.x, sy: p.y, id: p.id };
+                this._flowInvPointer = { type, sx: p.x, sy: p.y, id: p.id, downAt: Date.now() };
             });
             this.container.add([slotGfx, pipeGfx, labelText, countText, hitArea]);
             this._inventoryViews[type] = { type, sx, sy, slotSize, slotGfx, pipeGfx, countText, hitArea };
@@ -1297,38 +1327,8 @@ export default class CircuitRouting extends MinigameBase {
             this._refreshInventoryPanel();
             return;
         }
-
-        // Otherwise, auto-pop a couple of interior non-critical tiles off the
-        // board and place them in the inventory so the user has something to
-        // place from the start. Pick cells that are in the interior (not in
-        // source column 0 and not in output column cols-1).
-        const interior = [];
-        const outRows = new Set(this._outputSpecs.map((s) => s.row));
-        for (let y = 0; y < this.rows; y++) {
-            for (let x = 1; x < this.cols - 1; x++) {
-                if (this._forbidden.has(`${x},${y}`)) continue;
-                const t = this._tiles[y][x];
-                if (!t || t.type === 'empty') continue;
-                if (!Object.prototype.hasOwnProperty.call(this._inventory, t.type)) continue;
-                // Skip tees/crosses (they're usually junctions; removing them
-                // breaks the puzzle more than desired for a default seed).
-                if (t.type === 'tee' || t.type === 'cross') continue;
-                interior.push({ x, y, type: t.type });
-            }
-        }
-        if (interior.length === 0) return;
-        // Seed 2-3 pieces for 5-cell-wide boards, more for larger grids.
-        const budget = Math.min(interior.length, Math.max(2, Math.floor(interior.length * 0.25)));
-        // Deterministic pick based on grid size + output rows so the same
-        // puzzle always pops the same tiles.
-        const seedHash = (this.rows * 31 + this.cols * 17 + [...outRows].reduce((a, b) => a + b, 0)) % 9973;
-        for (let i = 0; i < budget; i++) {
-            const idx = (seedHash + i * 37) % interior.length;
-            const pick = interior.splice(idx, 1)[0];
-            if (!pick) break;
-            this._inventory[pick.type] = (this._inventory[pick.type] || 0) + 1;
-            this._tiles[pick.y][pick.x] = { type: 'empty', rotation: 0 };
-        }
+        // No authored inventory means "exactly enough on-board pieces" mode.
+        // We leave the board untouched so there are no extra spare pipes.
         this._refreshInventoryPanel();
     }
 

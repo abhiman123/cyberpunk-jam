@@ -49,7 +49,8 @@ const TAB_CONTENT = {
             { minDay: 2, text: "Scrap when a system doesn't pass the quality check." },
             { minDay: 3, text: 'Scrap when a system acts off when being fixed.' },
         ],
-        diagramKind: 'none',
+        diagramTitle: 'FIELD LOOP',
+        diagramKind: 'baseLoop',
     },
     grid: {
         cardHeader: 'GRID FIELD RULES',
@@ -60,7 +61,7 @@ const TAB_CONTENT = {
             { minDay: 3, text: 'Linked charge pairs both need valid matching halves.' },
         ],
         scrapRules: [
-            { minDay: 1, text: 'No legal tiling possible = scrap.' },
+            { minDay: 1, text: 'Isolated bad charge (boxed in) or no legal tiling = scrap.' },
             { minDay: 2, text: 'Equality or threshold can never be satisfied = scrap.' },
             { minDay: 3, text: 'Linked charge group cannot be matched = scrap.' },
         ],
@@ -151,6 +152,7 @@ export default class RulebookOverlay {
         this._visible      = false;
         this._selectedTab  = 'overview';
         this._hoveredScrapRule = null;
+        this._hoveredHowRule = null;
         this._dynamicNodes = [];
         this._tabButtons   = new Map();
 
@@ -305,6 +307,7 @@ export default class RulebookOverlay {
                 if (this._selectedTab === tab.key) return;
                 this._selectedTab = tab.key;
                 this._hoveredScrapRule = null;
+                this._hoveredHowRule = null;
                 this._refresh();
             });
 
@@ -454,14 +457,53 @@ export default class RulebookOverlay {
         cursor += howHeader.height + 10;
 
         const day = GameState.day || 1;
-        const howLines = resolveDayContent(content.howToSolve, day);
-        const howText  = howLines.length ? howLines.join('\n\n') : '';
-        const howBody = this.scene.add.text(0, cursor, howText, {
-            fontFamily: 'Courier New', fontSize: '14px', color: '#c8e3ec',
-            wordWrap: { width: innerW }, lineSpacing: 6,
-        }).setOrigin(0, 0);
-        scrollContainer.add(howBody);
-        cursor += howBody.height + 18;
+        const howEntries = resolveDayContentWithDays(content.howToSolve, day);
+        howEntries.forEach((entry, hIdx) => {
+            const rowY = cursor;
+            const numBoxSize = 28;
+            const numBg = this.scene.add.rectangle(0, rowY, numBoxSize, numBoxSize, 0x0a1820, 1)
+                .setOrigin(0, 0).setStrokeStyle(1, accent, 0.55);
+            const numLabel = this.scene.add.text(
+                numBoxSize / 2, rowY + numBoxSize / 2, String.fromCharCode(65 + hIdx), {
+                    fontFamily: 'Courier New', fontSize: '14px', color: this._currentAccentHex(), letterSpacing: 1,
+                }
+            ).setOrigin(0.5);
+            const ruleText = this.scene.add.text(numBoxSize + 12, rowY + 2, entry.text, {
+                fontFamily: 'Courier New', fontSize: '13px', color: '#c8e3ec',
+                wordWrap: { width: innerW - numBoxSize - 12 }, lineSpacing: 4,
+            }).setOrigin(0, 0);
+            const howHit = this.scene.add.rectangle(
+                0,
+                rowY - 2,
+                innerW,
+                Math.max(numBoxSize, ruleText.height) + 8,
+                0xffffff,
+                0.001,
+            ).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+
+            const setHowHover = (active) => {
+                numBg.setFillStyle(active ? 0x123040 : 0x0a1820, 1);
+                numBg.setStrokeStyle(active ? 2 : 1, accent, active ? 1 : 0.55);
+                numLabel.setScale(active ? 1.1 : 1);
+                ruleText.setColor(active ? '#eaffff' : '#c8e3ec');
+            };
+            howHit.on('pointerover', () => {
+                setHowHover(true);
+                this._hoveredHowRule = { tab: this._selectedTab, index: hIdx, day: entry.day, text: entry.text };
+                this._hoveredScrapRule = null;
+                this._refreshDiagramOnly();
+            });
+            howHit.on('pointerout', () => {
+                setHowHover(false);
+                if (this._hoveredHowRule?.tab === this._selectedTab && this._hoveredHowRule?.index === hIdx) {
+                    this._hoveredHowRule = null;
+                    this._refreshDiagramOnly();
+                }
+            });
+            scrollContainer.add([numBg, numLabel, ruleText, howHit]);
+            cursor += Math.max(numBoxSize, ruleText.height) + 12;
+        });
+        cursor += 6;
 
         // Divider
         const divider = this.scene.add.rectangle(0, cursor, innerW, 1, 0x153a44, 1).setOrigin(0, 0);
@@ -477,7 +519,9 @@ export default class RulebookOverlay {
 
         // Numbered scrap rule rows. Each number tile grows + brightens on
         // hover, and hovering also swaps the right card to that day's scrap-
-        // rule preview image.
+        // rule preview image. On the OVERVIEW tab, scrap rows are read-only
+        // (no hover, no right-card swap).
+        const isOverview = this._selectedTab === 'overview';
         const scrapEntries = resolveDayContentWithDays(content.scrapRules, day);
         scrapEntries.forEach((entry, idx) => {
             const rowY = cursor;
@@ -495,7 +539,8 @@ export default class RulebookOverlay {
                 wordWrap: { width: innerW - numBoxSize - 14 }, lineSpacing: 4,
             }).setOrigin(0, 0);
 
-            // Cover the entire row so hover + bigger hit area is consistent.
+            // Cover the entire row so hover + bigger hit area is consistent
+            // (other tabs only — overview is non-interactive for scrap).
             const hoverHit = this.scene.add.rectangle(
                 0,
                 rowY - 4,
@@ -503,7 +548,7 @@ export default class RulebookOverlay {
                 Math.max(numBoxSize, ruleText.height) + 12,
                 0xffffff,
                 0.001,
-            ).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+            ).setOrigin(0, 0);
 
             const setHoverState = (active) => {
                 numBg.setFillStyle(active ? 0x123040 : 0x0a1820, 1);
@@ -512,28 +557,32 @@ export default class RulebookOverlay {
                 ruleText.setColor(active ? '#eaffff' : '#c8e3ec');
             };
 
-            hoverHit.on('pointerover', () => {
-                setHoverState(true);
-                this._hoveredScrapRule = {
-                    tab: this._selectedTab,
-                    index: idx,
-                    day: entry.day,
-                    text: entry.text,
-                };
-                this._refreshDiagramOnly();
-            });
-            hoverHit.on('pointerout', () => {
-                setHoverState(false);
-                if (this._hoveredScrapRule?.tab === this._selectedTab
-                    && this._hoveredScrapRule?.index === idx) {
-                    this._hoveredScrapRule = null;
+            if (!isOverview) {
+                hoverHit.setInteractive({ useHandCursor: true });
+                hoverHit.on('pointerover', () => {
+                    setHoverState(true);
+                    this._hoveredHowRule = null;
+                    this._hoveredScrapRule = {
+                        tab: this._selectedTab,
+                        index: idx,
+                        day: entry.day,
+                        text: entry.text,
+                    };
                     this._refreshDiagramOnly();
-                }
-            });
+                });
+                hoverHit.on('pointerout', () => {
+                    setHoverState(false);
+                    if (this._hoveredScrapRule?.tab === this._selectedTab
+                        && this._hoveredScrapRule?.index === idx) {
+                        this._hoveredScrapRule = null;
+                        this._refreshDiagramOnly();
+                    }
+                });
+                this._scrapNumberHovers.set(idx, { setHoverState });
+            }
 
             scrollContainer.add([numBg, numLabel, ruleText, hoverHit]);
             cursor += Math.max(numBoxSize, ruleText.height) + 16;
-            this._scrapNumberHovers.set(idx, { setHoverState });
         });
 
         // Position the scroll container after laying out children. We start at
@@ -642,9 +691,6 @@ export default class RulebookOverlay {
             ? this._hoveredScrapRule
             : null;
 
-        // The overview tab no longer carries an "EXAMPLE" diagram. When the
-        // player isn't hovering a scrap rule, the right side simply stays
-        // empty (matches the user-requested cleaner layout for Day 1).
         const hasResidentDiagram = content.diagramKind && content.diagramKind !== 'none';
         const titleY = y + 22;
 
@@ -706,11 +752,19 @@ export default class RulebookOverlay {
         // when it doesn't we render a quiet placeholder card with no fallback
         // copy (so the design stays clean while assets land).
         if (this.scene.textures.exists(imageKey)) {
+            const pad = 24;
+            const maxW = w - pad;
+            const maxH = h - pad;
             const bg = this.scene.add.rectangle(x, y, w, h, 0x050a0f, 1)
                 .setOrigin(0, 0)
                 .setStrokeStyle(1, accent, 0.8);
             const image = this.scene.add.image(x + (w / 2), y + (h / 2), imageKey)
-                .setDisplaySize(w - 24, h - 24);
+                .setOrigin(0.5, 0.5);
+            const frame = image.frame;
+            const srcW = frame?.width || image.width;
+            const srcH = frame?.height || image.height;
+            const scale = Math.min(maxW / srcW, maxH / srcH, 1);
+            image.setScale(scale);
             this._dynamic(bg, image);
             return;
         }

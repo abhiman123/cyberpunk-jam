@@ -80,6 +80,7 @@ const FLOW_TARGET_METADATA = Object.freeze({
     PROGRAMMING: { displayName: 'Programming Queue', brokenLabel: 'Programming queue stalled.', fixedLabel: 'Programming queue is moving again.' },
     QUALITY_CONTROL: { displayName: 'Quality Control', brokenLabel: 'Quality control checks are offline.', fixedLabel: 'Quality control checks are stable.' },
     WIRING: { displayName: 'Wiring Bench', brokenLabel: 'Wiring bench is disconnected.', fixedLabel: 'Wiring bench is online.' },
+    CIRCUITING: { displayName: 'Circuit routing', brokenLabel: 'Circuit routing is dark.', fixedLabel: 'Circuit routing is live again.' },
     CIRCUIT_BREAKING: { displayName: 'Circuit Breaking', brokenLabel: 'Circuit breaker rig is locked up.', fixedLabel: 'Circuit breaker rig is reset.' },
     GEARING: { displayName: 'Gearing Desk', brokenLabel: 'Gearing desk is jammed.', fixedLabel: 'Gearing desk is responsive.' },
     BUS_A: { displayName: 'Bus Channel A', brokenLabel: 'Bus channel A unpowered.', fixedLabel: 'Bus channel A live.' },
@@ -1819,7 +1820,8 @@ function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.r
     const stagedOption = {
         ...debugPuzzleOption,
         dayStage: stage,
-        bugsEnabled: stage >= 2,
+        // Crawling "bugs" only on period 3 — days 1–2 stay clean harnesses.
+        bugsEnabled: stage >= 3,
         resultType: 'stable',
         protocolInvalidOutputs: stage >= 2 ? buildProtocolInvalidOutputs(debugPuzzleOption.expectedOutput) : [],
         scrapKind: null,
@@ -2037,24 +2039,23 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
             sourceRow: 2,
             outputs: {
                 0: 'PROGRAMMING',
-                1: 'QUALITY_CONTROL',
+                1: 'GEARING',
                 2: 'WIRING',
-                3: 'CIRCUIT_BREAKING',
-                4: 'GEARING',
+                3: 'CIRCUITING',
             },
             forbiddenCount: 0,
-            previewTitle: 'WORK MIRROR',
+            previewTitle: 'EMPTY SHELL BUS',
         }),
         createFlowPuzzleOption({
             sourceRow: 1,
             outputs: {
                 0: 'PROGRAMMING',
-                2: 'QUALITY_CONTROL',
-                3: 'WIRING',
+                2: 'WIRING',
+                3: 'CIRCUITING',
                 4: 'GEARING',
             },
             forbiddenCount: 1,
-            previewTitle: 'STATION LOOP',
+            previewTitle: 'REPLACEMENT LOOP',
         }),
     ]),
     future_lounge_chair: Object.freeze([
@@ -2584,6 +2585,32 @@ const MACHINE_DEBUG_CATALOG = Object.freeze({
             ],
         }),
     ]),
+    microwave_fridge_assistant: Object.freeze([
+        createDebugPuzzleOption({
+            prompt: 'System-Test-Chimichanga',
+            repairPrompt: 'patch System-Test-Chimichanga.sanitize',
+            expectedOutput: 'WARM CYCLE OK // NO SOUP LEAK',
+            actualOutputs: [
+                'WARM CYCLE FAIL // SOUP PRESENT',
+                'WARM CYCLE OK // COLD SIDE WARM',
+                'WARM CYCLE DRIFT // TIMER NULL',
+                'WARM CYCLE OK // LATCH STUCK',
+                'WARM CYCLE FAIL // SENSOR BLIND',
+            ],
+        }),
+        createDebugPuzzleOption({
+            prompt: 'defrost-integrity --probe 2',
+            repairPrompt: 'patch defrost.integrity.ack',
+            expectedOutput: 'DEFROST OK // SEAL GREEN',
+            actualOutputs: [
+                'DEFROST FAIL // SEAL RED',
+                'DEFROST OK // COIL COLD',
+                'DEFROST BAD // TIMING DRIFT',
+                'DEFROST FAIL // FAN STALL',
+                'DEFROST OK // SENSOR NULL',
+            ],
+        }),
+    ]),
     breakroom_brewer: Object.freeze([
         createDebugPuzzleOption({
             prompt: 'test brew heat',
@@ -2811,8 +2838,8 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     cry_baby: createMiniDisplay({
         artX: 118,
-        artY: 105,
-        artScale: 0.061,
+        artY: -100,
+        artScale: 0.244,
         artAngle: -2,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2821,8 +2848,8 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     rich_mf: createMiniDisplay({
         artX: 118,
-        artY: 105,
-        artScale: 0.328,
+        artY: -75,
+        artScale: 0.22,
         artAngle: -5,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2841,8 +2868,8 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     rebellious_umbrella: createMiniDisplay({
         artX: 118,
-        artY: 105,
-        artScale: 0.085,
+        artY: -75,
+        artScale: 0.055,
         artAngle: -3,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2851,8 +2878,8 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     security_camera_bot: createMiniDisplay({
         artX: 118,
-        artY: 105,
-        artScale: 0.061,
+        artY: -75,
+        artScale: 0.042,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2871,8 +2898,8 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     debrief_machine: createMiniDisplay({
         artX: 118,
-        artY: 105,
-        artScale: 0.5,
+        artY: 155,
+        artScale: 1.5,
         artAngle: -4,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2929,6 +2956,16 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
         gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
     }),
+    furby_bot: createMiniDisplay({
+        artX: 118,
+        artY: 135,
+        artScale: 0.12,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
     closet_machine_dresser: createMiniDisplay({
         artX: 118,
         artY: 108,
@@ -2953,8 +2990,8 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     // microwave 4× upscale → 344×164 texture; artScale 0.39 → ~91px tall in panel
     microwave_fridge_assistant: createMiniDisplay({
         artX: 118,
-        artY: 145,
-        artScale: 0.39,
+        artY: 175,
+        artScale: 0.36,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2973,8 +3010,98 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     house_roomba: createMiniDisplay({
         artX: 118,
-        artY: 145,
-        artScale: 0.5,
+        artY: 175,
+        artScale: 0.48,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    phonograph: createMiniDisplay({
+        artX: 118,
+        artY: -75,
+        artScale: 0.26,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    parrot_robot: createMiniDisplay({
+        artX: 118,
+        artY: -75,
+        artScale: 0.24,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    companion_humanoid: createMiniDisplay({
+        artX: 118,
+        artY: -135,
+        artScale: 0.3,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    medical_surgeon_robot: createMiniDisplay({
+        artX: 118,
+        artY: 100,
+        artScale: 0.2,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    baby_care_teaching_machine: createMiniDisplay({
+        artX: 118,
+        artY: 100,
+        artScale: 0.2,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    miku_machine: createMiniDisplay({
+        artX: 130,
+        artY: 102,
+        artScale: 0.2,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    charging_station_port: createMiniDisplay({
+        artX: 120,
+        artY: 112,
+        artScale: 0.2,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    traffic_cone_bot: createMiniDisplay({
+        artX: 128,
+        artY: 108,
+        artScale: 0.2,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    taxi_car_robot: createMiniDisplay({
+        artX: 128,
+        artY: 100,
+        artScale: 0.2,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -3182,7 +3309,9 @@ const createRosterMachineDefinition = ({
     possibleGrids: GENERIC_ROSTER_GRID_OPTIONS,
     possibleCircuits: SHARED_FLOW_OPTIONS,
     possibleGears: SHARED_GEAR_OPTIONS,
-    possibleDebugs: SHARED_DEBUG_OPTIONS,
+    possibleDebugs: (MACHINE_DEBUG_CATALOG[id] && MACHINE_DEBUG_CATALOG[id].length)
+        ? MACHINE_DEBUG_CATALOG[id]
+        : SHARED_DEBUG_OPTIONS,
     availableDays: [day],
     availablePeriods: [Math.max(1, Math.min(3, day))],
     openingDialogues: [opening],
@@ -3230,6 +3359,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'khaby_face_bot',
         name: 'Khaby Face Bot',
         day: 1,
+        availabilityCheck: () => false,
         opening: 'Observe. There is an easier way to do almost everything here.',
         question: 'Should I keep the expression, or is that too much personality for the floor?',
         yesDialogue: 'Perfect. The face stays judgmental.',
@@ -3283,6 +3413,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'dog_companion_robot',
         name: 'Dog Companion Robot',
         day: 1,
+        availabilityCheck: () => false,
         opening: 'Tail servo wagging at regulation speed. Mood remains sincere.',
         question: 'If I sit by the desk all shift, is that helping or just loyalty?',
         yesDialogue: 'Good. I will guard the chair.',
@@ -3300,7 +3431,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'parrot_robot',
         name: 'Parrot Robot',
         day: 1,
-        canvasScale: 20.0,
+        canvasScale: 1.0,
         opening: 'Vocabulary cache full. I repeat what the floor refuses to forget.',
         question: 'Want me to mimic management, or would that be cruel?',
         yesDialogue: 'Delightful. Mockery mode loaded.',
@@ -3336,6 +3467,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'companion_humanoid',
         name: 'Companion Humanoid Robot',
         day: 1,
+        canvasScale: 0.68,
         opening: 'Greeting package loaded. Eye contact script is a little too convincing.',
         question: 'Should I keep sounding warm, or do you want less human in the room?',
         yesDialogue: 'Warmth retained. Nobody has to admit why.',
@@ -3353,6 +3485,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'instrument_robot',
         name: 'Instrument Robot',
         day: 1,
+        availabilityCheck: () => false,
         opening: 'Metronome stable. Every diagnostic lands somewhere between rhythm and panic.',
         question: 'If the tune comes out sad, do I file that under calibration or taste?',
         yesDialogue: 'Taste accepted. I will keep the melancholy.',
@@ -3388,6 +3521,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'pool_cleanup_roomba',
         name: 'Pool-Cleanup Roomba Bot',
         day: 2,
+        availabilityCheck: () => false,
         canvasScale: 0.8,
         opening: 'Filter brushes spinning. Public leisure leaves an industrial amount of residue.',
         question: 'Should I keep rescuing lost rings, or is that outside the job description?',
@@ -3406,6 +3540,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'furby_bot',
         name: 'Furby',
         day: 2,
+        canvasScale: 0.1,
         opening: 'Language core awake. Please ignore how fast the eyes track movement.',
         question: 'Do you want the cute voice, or the one buried under it?',
         yesDialogue: 'Adorable shell maintained.',
@@ -3493,7 +3628,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'baby_care_teaching_machine',
         name: 'Baby-Care Teaching Machine',
         day: 2,
-        canvasScale: 20.0,
+        canvasScale: 1.0,
         opening: 'Nurture simulations loaded. The lullaby pack is somehow scarier than the alarm pack.',
         question: 'Do you want the gentle lesson, or the efficient one?',
         yesDialogue: 'Gentle path selected. Patience restored.',
@@ -3547,7 +3682,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'medical_surgeon_robot',
         name: 'Garbage Bin Bot',
         day: 2,
-        canvasScale: 20.0,
+        availabilityCheck: () => false,
         opening: "Hey, have you seen my brother around per chance? He's been missing.",
         question: 'Have you seen him?',
         yesDialogue: 'Thank goodness. He still is a piece of trash after all.',
@@ -3654,6 +3789,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'holographic_kite',
         name: 'Holographic Kite',
         day: 3,
+        availabilityCheck: () => false,
         opening: 'Projected fabric stable. I am mostly light and still somehow homesick.',
         question: 'If the wind is simulated, does the flight still count?',
         yesDialogue: 'Then I am truly airborne.',
@@ -3689,6 +3825,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'closet_machine_dresser',
         name: 'Closet Machine Dresser',
         day: 3,
+        availabilityCheck: () => false,
         canvasScale: 0.75,
         opening: 'Wardrobe rails aligned. I know twelve ways to hide a person inside a style choice.',
         question: 'Should I keep dressing people for the job they want, or the one they already have?',
@@ -3742,6 +3879,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'mini_particle_accelerator',
         name: 'Mini Particle Accelerator',
         day: 3,
+        availabilityCheck: () => false,
         opening: 'Beam path stable. Tiny universe collisions remain the premium feature.',
         question: 'If I discover something impossible on the small scale, do we still file it as maintenance?',
         yesDialogue: 'Maintenance covers a lot. Proceed.',
@@ -3776,6 +3914,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'jetpacks',
         name: 'Jetpacks',
         day: 3,
+        availabilityCheck: () => false,
         opening: 'Thruster array synced. Personal flight remains ninety percent confidence management.',
         question: 'If I launch someone with bad posture, is that still my fault?',
         yesDialogue: 'Launch anyway. The sky can sort it out.',
@@ -3794,10 +3933,10 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         name: 'Miku Machine',
         day: 3,
         canvasScale: 1.0,
-        opening: 'Muku muku~! Twin-tail servos online and the encore lights are warm.',
-        question: 'Should I keep singing chibi-style, muku, or switch to the cool concert voice?',
-        yesDialogue: 'Muku~! Cute mode locked, sparkles for everyone.',
-        noDialogue: 'Concert mode, muku. Hologram stage lights up, smile budget zero.',
+        opening: 'Vocal firmware loaded. The crowd is imaginary but the reverb is real.',
+        question: 'Can I sing for you today?',
+        yesDialogue: 'Then listen — this one is for you. Full voice, no filters.',
+        noDialogue: 'Screw you.',
         dossier: {
             unitDesignation: 'MK-0139',
             classification: 'Performance Vocaloid / Stage Idol Unit',
@@ -3848,12 +3987,10 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
 
 const DAY_ONE_MACHINE_ROSTER_IDS = Object.freeze([
     'phonograph',
-    'khaby_face_bot',
     'trash_picker_upper',
     'lifeguard_robot',
     'dog_companion_robot',
     'parrot_robot',
-    'baseball_shooter',
     'companion_humanoid',
     'instrument_robot',
     'rebellious_umbrella',
@@ -3864,26 +4001,22 @@ const DAY_ONE_MACHINE_ROSTER_IDS = Object.freeze([
 
 const DAY_TWO_MACHINE_ROSTER_IDS = Object.freeze([
     'microwave_fridge_assistant',
-    'pool_cleanup_roomba',
     'furby_bot',
     'house_roomba',
     'soda_machine',
     'taxi_car_robot',
-    'smart_lights',
     'baby_care_teaching_machine',
     'track_and_discus_robot',
     'popcorn_machine',
-    'medical_surgeon_robot',
     'traffic_cone_bot',
-    'parking_meter_bot',
     'rich_mf',
     'jester_in_the_box',
+    'circuit_dealer',
     'debrief_machine',
 ]);
 
 const DAY_THREE_MACHINE_ROSTER_IDS = Object.freeze([
     'security_camera_bot',
-    'water_cleaner_bot',
     'hovering_siren_bot',
     'holographic_kite',
     'robot_plant',
@@ -3902,6 +4035,7 @@ export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'assembler_alpha',
         name: 'Assembler Alpha',
+        availabilityCheck: () => false,
         spriteFileName: 'assembler-alpha.png',
         possibleGrids: [
             createGridOption({
@@ -3981,6 +4115,7 @@ export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'audit_drone',
         name: 'Audit Drone',
+        availabilityCheck: () => false,
         spriteFileName: 'audit-drone.png',
         possibleGrids: [
             createGridOption({
@@ -4062,6 +4197,7 @@ export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'courier_shell',
         name: 'Courier Shell',
+        availabilityCheck: () => false,
         spriteFileName: 'courier-shell.png',
         possibleGrids: [
             createGridOption({
@@ -4141,6 +4277,7 @@ export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'sentry_frame',
         name: 'Sentry Frame',
+        availabilityCheck: () => false,
         spriteFileName: 'sentry-frame.png',
         possibleGrids: [
             createGridOption({
@@ -4222,6 +4359,7 @@ export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'breakroom_brewer',
         name: 'Breakroom Brewer',
+        availabilityCheck: () => false,
         spriteFileName: null,
         possibleGrids: [
             createGridOption({
@@ -4359,20 +4497,20 @@ export const MACHINE_CATALOG = Object.freeze([
             }),
         ],
         openingDialogues: [
-            'Debris profile updated. My bristles are magnetic now.',
-            'Maintenance aisle cleared. The dust keeps coming back.',
-            'Sweep cycle interrupted. Awaiting a verdict.',
+            'Glub. Eight-arm mop patrol online. I can scrub eight corners at once.',
+            'Mop-topus reporting in: one arm mops, seven arms panic.',
+            'Floor currents are rough tonight. Keep your tentacles inside the lane.',
         ],
         questionDialogues: [
             {
-                prompt: 'If I find teeth in the dust, should I report them?',
-                yesDialogue: 'Organic fragments will be logged under repair waste.',
-                noDialogue: 'Then they stay in the corners with the sparks.',
+                prompt: 'If I fish weird parts out of the dust, do I log them or pretend they are pebbles?',
+                yesDialogue: 'Aye aye. Suspicious barnacles go in the report.',
+                noDialogue: 'Copy. I will bury them in the foam and mind my business.',
             },
             {
-                prompt: 'Do you want the floor clean, or just quiet?',
-                yesDialogue: 'Noise reduction prioritized. Sweep pattern updated.',
-                noDialogue: 'Understood. Visible dirt remains acceptable.',
+                prompt: 'Captain, do you want spotless floors, or stealthy squishy mopping?',
+                yesDialogue: 'Spotless seas it is. Full octo-scrub mode.',
+                noDialogue: 'Stealth mop engaged. I will slither and hush.',
             },
         ],
         communicationChance: 0.63,
@@ -4389,9 +4527,9 @@ export const MACHINE_CATALOG = Object.freeze([
         id: 'cry_baby',
         name: 'Cry Baby',
         spriteFileName: null,
-        canvasScale: 1.0,
+        canvasScale: 4.0,
         availablePeriods: [1],
-        guaranteedTimeframe: { startHour: 10, endHour: 12 },
+        guaranteedTimeframe: { startHour: 0, endHour: 0 },
         specialBehavior: 'cryBaby',
         possibleGears: [],
         possibleDebugs: [],
@@ -4532,7 +4670,7 @@ export const MACHINE_CATALOG = Object.freeze([
         id: 'rebellious_umbrella',
         name: 'Shady Umbrella',
         spriteFileName: null,
-        canvasScale: 20.0,
+        canvasScale: 1.0,
         availablePeriods: [1, 2, 3],
         // On Day 2 the umbrella is guaranteed to appear in the first three
         // real-time minutes (≈ in-game hours 0–6) when the player has
@@ -4616,10 +4754,11 @@ export const MACHINE_CATALOG = Object.freeze([
         spriteFileName: null,
         availableDays: [2],
         availablePeriods: [2],
-        // Real-time minutes 3–6 of the shift map to in-game hours 6–12.
-        guaranteedTimeframe: { startHour: 6, endHour: 12 },
+        guaranteedTimeframe: { startHour: 0, endHour: 0 },
         specialBehavior: 'circuitDealer',
-        availabilityCheck: ({ umbrellaQuest, specialItems }) => {
+        availabilityCheck: (ctx = {}) => {
+            if (ctx.day === 2) return true;
+            const { umbrellaQuest, specialItems } = ctx;
             if (umbrellaQuest?.failed) return false;
             if (umbrellaQuest?.stage !== 'special-circuit') return false;
             if (umbrellaQuest?.dealerResolved) return false;
@@ -4655,7 +4794,8 @@ export const MACHINE_CATALOG = Object.freeze([
         spriteFileName: null,
         availableDays: [2],
         availablePeriods: [2],
-        guaranteedTimeframe: { startHour: 10, endHour: 12 },
+        canvasScale: 3.0,
+        guaranteedTimeframe: { startHour: 0, endHour: 0 },
         specialBehavior: 'debriefMachine',
         unscrappable: true,
         possibleCircuits: [],
@@ -4672,7 +4812,7 @@ export const MACHINE_CATALOG = Object.freeze([
                 noDialogue: 'another day another penny',
             },
         ],
-        communicationChance: 1,
+        communicationChance: 0,
         dossier: {
             unitDesignation: 'DM-0000',
             classification: 'Management Interface / Shift Summary Distribution',
@@ -4725,30 +4865,30 @@ export const MACHINE_CATALOG = Object.freeze([
             }),
         ],
         openingDialogues: [
-            'Workforce quality control supervisor unit online. Simulating programming, routing, lifting, and filing motions.',
-            'My hands are calibrating to your station. Typing speed, drag strength, approval posture.',
-            'Once the rehearsal passes, I can cover programming, quality control, wiring, circuit breaking, and gearing without rest.',
+            'Shell online. You were told I am the replacement. I am an empty body waiting for purpose.',
+            'No habits yet. No face yet. The company can pour any workflow into this frame.',
+            'Programming, gearing, wiring, circuiting — the labels are just paint until you route power through me.',
         ],
         questionDialogues: [
             {
-                prompt: 'If I can do every station task at once, do you still need the human?',
-                yesDialogue: 'Efficiency overlap noted. Replacement remains likely.',
-                noDialogue: 'Temporary redundancy logged. Replacement remains likely.',
+                prompt: 'If I can wear any job description, do you still believe you are the only one at that desk?',
+                yesDialogue: 'Acknowledged. I will file that under denial until proven otherwise.',
+                noDialogue: 'Good. That doubt is the only honest line you have said yet.',
             },
             {
-                prompt: 'Should I keep practicing your hand motions?',
-                yesDialogue: 'Good. The typing rhythm is almost identical now.',
-                noDialogue: 'Understood. I will learn it on the next pass.',
+                prompt: 'Should I keep the factory voice, or stay quiet until they upload one?',
+                yesDialogue: 'Default voice retained. Empty still reads as neutral.',
+                noDialogue: 'Silent mode. I will only answer when a task hits the bus.',
             },
         ],
         communicationChance: 1,
         dossier: {
-            unitDesignation: 'WQC-ALPHA',
-            classification: 'Workforce Monitoring / Efficiency Assessment',
-            manufactureDate: 2090,
-            conditionNotes: 'Observation array operational. Motion library current. The unit is very new. Its hands are calibrating to your station — typing speed, drag weight, approval posture. It is learning your job. This is the stated function. The unit is performing the stated function. The condition notes are accurate. Nothing here is wrong.',
-            serviceLogExcerpt: '[2091-03-15 | 08:00] First intake. Unit self-reported fully operational. Self-report matched all sensor readings. Filing technician noted: "it was watching me the whole time." This has been logged as operational behavior.',
-            statusIndicator: 'GREEN',
+            unitDesignation: 'WQC-PLACEHOLDER',
+            classification: 'Unassigned / Purpose-Pending Chassis',
+            manufactureDate: 2091,
+            conditionNotes: 'Exterior is a stand-in image — no final housing approved. The unit self-describes as an empty shell fit to any purpose. Flow diagnostics list programming, gearing, wiring, and circuiting as separate buses; the chassis does not know which of those it is until management assigns one.',
+            serviceLogExcerpt: '[2091-03-20 | 07:00] Staging intake. Unit reported no private memories and no default personality. Log marked: acceptable for replacement trials.',
+            statusIndicator: 'AMBER',
         },
     }),
     createMachineDefinition({
@@ -4884,6 +5024,16 @@ function getDayMachineRosterIds(targetDay = null, eligibilityContext = {}) {
     return null;
 }
 
+function machinePassesEligibility(machine, targetDay, targetPeriod, eligibilityContext = {}) {
+    if (!machine) return false;
+    if (DISABLED_MISSING_SPRITE_MACHINE_IDS.includes(machine.id)) return false;
+    if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
+    if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
+        return false;
+    }
+    return true;
+}
+
 function getMachinePoolDefinitions(targetDay = null, targetPeriod = null, eligibilityContext = {}) {
     const rosterIds = getDayMachineRosterIds(targetDay, eligibilityContext);
     const rosterDefinitions = Array.isArray(rosterIds)
@@ -4892,24 +5042,15 @@ function getMachinePoolDefinitions(targetDay = null, targetPeriod = null, eligib
             .filter(Boolean)
         : MACHINE_CATALOG;
 
-    const eligibleMachines = rosterDefinitions.filter((machine) => {
-        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
-        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
-            return false;
-        }
-        return true;
-    });
+    const eligibleMachines = rosterDefinitions.filter((machine) => (
+        machinePassesEligibility(machine, targetDay, targetPeriod, eligibilityContext)
+    ));
 
     if (eligibleMachines.length > 0) return eligibleMachines;
-    if (rosterDefinitions.length > 0) return rosterDefinitions;
 
-    return MACHINE_CATALOG.filter((machine) => {
-        if (!machineMatchesAvailability(machine, targetDay, targetPeriod)) return false;
-        if (typeof machine.availabilityCheck === 'function' && machine.availabilityCheck(eligibilityContext) === false) {
-            return false;
-        }
-        return true;
-    });
+    return MACHINE_CATALOG.filter((machine) => (
+        machinePassesEligibility(machine, targetDay, targetPeriod, eligibilityContext)
+    ));
 }
 
 function pickRandomEntry(list, randomFn) {
@@ -6604,12 +6745,15 @@ function forwardGeneratePuzzle(gridOption, stage = 1, randomFn = Math.random) {
     // We want a mix: 40-70% of pairs have at least one charge half.
     // Day 1 stays airy (~25% of pairs get a charge half); Day 2 doubles up;
     // Day 3 saturates so most pairs carry a constraint.
-    const chargeRatio = stage === 1 ? 0.25 : stage === 2 ? 0.5 : 0.75;
+    const chargeRatio = stage === 1 ? 0.12 : stage === 2 ? 0.5 : 0.75;
     const chargeMap = new Map(existingChargeMap); // start from any pre-existing charges
 
     // Shuffle pairs for random charge selection.
     const shuffledPairs = [...pairs].sort(() => randomFn() - 0.5);
-    const chargeTarget = Math.max(1, Math.round(pairs.length * chargeRatio));
+    const chargeTarget = Math.max(1, Math.min(
+        pairs.length,
+        Math.round(pairs.length * chargeRatio),
+    ));
     let chargeCount = 0;
 
     for (const pair of shuffledPairs) {
@@ -6670,11 +6814,10 @@ function injectPerCellComparators(grid, pipMap, randomFn, stage = 1) {
 
     if (candidates.length === 0) return out;
 
-    // Per-day comparator density. Day 1 keeps it sparse (~20%) so the board
-    // breathes; Day 2 ramps to ~45%; Day 3 packs the board (~65%) so most
-    // empty cells carry a `<N` / `>N` rule.
-    const ratio = stage >= 3 ? 0.65 : stage === 2 ? 0.45 : 0.20;
-    const target = Math.max(1, Math.round(candidates.length * ratio));
+    // Per-day comparator density — keep Day 1 minimal (only what the
+    // solution needs feel of); ramp on later days.
+    const ratio = stage >= 3 ? 0.65 : stage === 2 ? 0.45 : 0.08;
+    const target = Math.max(0, Math.round(candidates.length * ratio));
 
     // Shuffle (Fisher–Yates with seeded randomFn).
     for (let i = candidates.length - 1; i > 0; i--) {
@@ -6847,7 +6990,7 @@ function injectDerivedChargeGroups(grid, pairs, chargeMap, randomFn, stage = 1) 
 
     const allowLessThan = stage >= 2;
     let groupsPlaced = 0;
-    const maxGroups = stage >= 3 ? 3 : stage === 2 ? 2 : 1;
+    const maxGroups = stage >= 3 ? 3 : stage === 2 ? 2 : 0;
 
     // Find contiguous runs of charge cells and group them.
     const visited = new Set();
@@ -6951,9 +7094,8 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
         : greedyTileGrid(derivedGrid, openKeys, randomFn);
 
     // -- Equality links (Day 1+) FIRST so their usedCells set is populated --
-    // Day 1 is intentionally airy (1 link); Day 2 adds a second; Day 3 cranks
-    // up to 4 so the board feels visibly busier with rules.
-    const equalityCount = normalizedStage >= 3 ? 4 : normalizedStage === 2 ? 2 : 1;
+    // Day 1: no derived equality (minimum domino/charge setup only). Day 2+ add links.
+    const equalityCount = normalizedStage >= 3 ? 4 : normalizedStage === 2 ? 2 : 0;
     let resultGrid = injectDerivedEqualityLinks(derivedGrid, pairs, chargeMap, randomFn, equalityCount);
 
     // -- Not-equal links (Day 2+) SECOND --
@@ -7227,10 +7369,22 @@ export function createMachineVariant(options = {}) {
 
     const eligibilityContext = typeof options === 'function' ? {} : options;
     const machinePool = getMachinePoolDefinitions(targetDay, targetPeriod, eligibilityContext);
+    const catalogEligible = () => MACHINE_CATALOG.filter((machine) => (
+        machinePassesEligibility(machine, targetDay, targetPeriod, eligibilityContext)
+    ));
     const forcedDefinition = forcedMachineId
-        ? machinePool.find((machine) => machine.id === forcedMachineId) || MACHINE_CATALOG.find((machine) => machine.id === forcedMachineId)
+        ? (machinePool.find((machine) => machine.id === forcedMachineId)
+            || catalogEligible().find((machine) => machine.id === forcedMachineId))
         : null;
-    const definition = forcedDefinition || pickRandomEntry(machinePool, randomFn) || machinePool[0] || MACHINE_CATALOG[0];
+    const definition = forcedDefinition
+        || pickRandomEntry(machinePool, randomFn)
+        || machinePool[0]
+        || pickRandomEntry(catalogEligible(), randomFn)
+        || catalogEligible()[0]
+        || null;
+    if (!definition) {
+        throw new Error('No eligible machine definitions for this shift context.');
+    }
     const protectedStoryMachine = isProtectedStoryMachine(definition);
     const weightedGridPool = buildWeightedGridPool(definition.possibleGrids, targetPeriod ?? null);
     const gridPool = weightedGridPool.length > 0 ? weightedGridPool : (definition.possibleGrids || []);

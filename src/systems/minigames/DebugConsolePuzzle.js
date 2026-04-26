@@ -101,6 +101,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._bugSpawnCount = 0;
         this._greenBugSpawnAt = null;
         this._greenBugSpawned = false;
+        this._commandDisplayRedacted = false;
     }
 
     _defaultEvidence() {
@@ -164,6 +165,12 @@ export default class DebugConsolePuzzle extends MinigameBase {
             flags: Array.isArray(debugPuzzle.progress.flags) ? [...debugPuzzle.progress.flags] : [],
             symptoms: Array.isArray(debugPuzzle.progress.symptoms) ? [...debugPuzzle.progress.symptoms] : [],
         };
+        this._commandDisplayRedacted = Boolean(caseData.commandDisplayRedacted);
+        if (this._commandDisplayRedacted) {
+            const maskTxt = (s) => String(s || '').replace(/[^\s\n]/g, '█');
+            this.evidence.prompt = maskTxt(this.evidence.prompt);
+            this.evidence.repairPrompt = maskTxt(this.evidence.repairPrompt);
+        }
         if (this.evidence.scrapRequired && !this.evidence.reviewed) {
             this.emitEvidence({ reviewed: true });
         }
@@ -480,6 +487,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._charObjects.forEach((charObject) => charObject.destroy());
         this._charObjects = [];
         this._commandViewOffset = 0;
+        this._commandDisplayRedacted = false;
         this.scene.tweens.killTweensOf(this._caret);
         this._caretTween?.stop();
         this._caretTween = null;
@@ -598,6 +606,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
     }
 
     _handleGlobalKeyDown(event) {
+        if (this._commandDisplayRedacted) return;
         if (!this.active || this.evidence.completed || this.evidence.phase === 'scrap' || !this._hiddenInput) return;
         if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
 
@@ -936,9 +945,18 @@ export default class DebugConsolePuzzle extends MinigameBase {
             ? this._maskScrapOutput(this.evidence.actualOutput || this.evidence.expectedOutput || 'SCRAP REQUIRED')
             : (this.evidence.actualOutput || '');
 
-        this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
+        const dayStage = Math.max(1, Math.min(3, Number(this._puzzle?.dayStage || this.evidence.dayStage || 1)));
+        const lowDayHarness = dayStage <= 2;
+        const scrapLike = this.evidence.scrapRequired || this.evidence.phase === 'scrap';
+
+        if (lowDayHarness && scrapLike) {
+            this._expectedOutputText?.setText('INVALID');
+            this._expectedOutputText?.setColor('#ff3333');
+        } else {
+            this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
+            this._expectedOutputText?.setColor('#32AAFF');
+        }
         this._actualOutputText?.setText(showActualOutput ? actualOutputText : '');
-        this._expectedOutputText?.setColor('#32AAFF');
         this._actualOutputText?.setColor(
             this.evidence.completed
                 ? '#66ff9a'
@@ -948,7 +966,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
         );
 
         let statusColor = '#F684F7';
-        let detailText = 'Type the highlighted command exactly. Correct letters stay cool, wrong letters go red, and overflow letters go dark red. Bugs try to ruin letters you already locked in.';
+        let detailText = dayStage >= 3
+            ? 'Type the highlighted command exactly. Correct letters stay cool, wrong letters go red, and overflow letters go dark red. Bugs try to ruin letters you already locked in.'
+            : 'Type the highlighted command exactly. Correct letters stay cool, wrong letters go red, and overflow letters go dark red.';
         let message = 'Tap the console to focus. Start typing to surface the live output.';
 
         if (this.evidence.completed) {
@@ -996,7 +1016,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._statusText.setText(this.evidence.lastStatus || 'TEST READY').setColor(statusColor);
         this._instructionText?.setText(detailText);
         this._messageText?.setText(message);
-        this._bugCounterText?.setText(`BUGS SQUASHED ${this.evidence.bugsSquashed || 0}  //  CORRUPTIONS ${this.evidence.corruptionCount || 0}`);
+        if (this.evidence.bugsEnabled && dayStage >= 3) {
+            this._bugCounterText?.setText(
+                `BUGS SQUASHED ${this.evidence.bugsSquashed || 0}  //  CORRUPTIONS ${this.evidence.corruptionCount || 0}`,
+            );
+        } else {
+            this._bugCounterText?.setText('');
+        }
         this._closeButtonText?.setText((this.evidence.completed || this.evidence.phase === 'scrap') ? 'RETURN TO BOOTH [ESC]' : 'CLOSE PANEL [ESC]');
         this._specialCommandButtonBg?.setVisible(Boolean(this._specialCommand?.command));
         this._specialCommandButtonText?.setVisible(Boolean(this._specialCommand?.command));

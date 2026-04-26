@@ -73,11 +73,11 @@ const CREDIT_ROLL_LINES = Object.freeze([
     { text: 'Abhimanyu Bhalla', fontSize: 12, gapAfter: 54 },
     { text: 'Art:', fontSize: 22, gapAfter: 34 },
     { text: 'Pranaav Makharia' },
-    { text: 'Jacob Jansta' },
     { text: 'Pranet Ramanan' },
+    { text: 'Jacob Jansta' },
     { text: 'Ishita Pradhan' },
-    { text: 'Jacqueline King' },
     { text: 'Minh Tran' },
+    { text: 'Jacqueline King' },
     { text: 'Jake Verell', gapAfter: 54 },
     { text: 'Storyboarding', fontSize: 22, gapAfter: 34 },
     { text: 'Christian Gonzalez' },
@@ -206,26 +206,9 @@ export default class EndScene extends Phaser.Scene {
         this._buildEndClock();
         this._buildFactoryRulingRow();
 
-        this._scrapButtonGlow = this.add.rectangle(1038, 510, 168, 94, 0xff786f, 0.08)
-            .setDepth(3)
-            .setVisible(false);
-        this._scrapButton = this.add.rectangle(1038, 510, 146, 72, 0x4c1312, 0.94)
-            .setStrokeStyle(2, 0xff7c73, 0.84)
-            .setDepth(4)
-            .setVisible(false);
-        this._scrapButtonLabel = this.add.text(1038, 510, 'SCRAP', {
-            fontFamily: 'Courier New',
-            fontSize: '24px',
-            color: '#ffd7d2',
-            letterSpacing: 4,
-        }).setOrigin(0.5).setDepth(5).setVisible(false);
-
         this._world.add([
             ...layers,
             rulebookProp,
-            this._scrapButtonGlow,
-            this._scrapButton,
-            this._scrapButtonLabel,
         ].filter(Boolean));
     }
 
@@ -395,13 +378,17 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _buildActors() {
-        // Manager rendered behind everything except the light and the
-        // background art. He sits inside _world (so the depth value alone
-        // doesn't drive ordering — child position in the container does).
-        this._managerSprite = this.add.image(1440, 470, 'manager_robot_source')
+        // Manager and umbrella must sit **above** the mainview + light
+        // layers (depths up to ~25); otherwise the full-bleed art occludes the
+        // conveyor debrief track entirely.
+        const managerKey = this.textures.exists('manager_robot') ? 'manager_robot' : 'manager_robot_source';
+        this._managerSprite = this.add.image(1700, 470, managerKey)
             .setScale(3.0)
-            .setDepth(2)
+            .setDepth(28)
             .setVisible(false);
+        if (this.textures.exists(managerKey)) {
+            this.textures.get(managerKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+        }
         // End scene gets the v2 umbrella sprite by default (the post-Day-3
         // form of the umbrella) — or the closed version if the umbrella was
         // scrapped during the run, since a scrapped umbrella never reopens.
@@ -412,7 +399,7 @@ export default class EndScene extends Phaser.Scene {
                 : 'machine_rebellious_umbrella');
         this._umbrellaSprite = this.add.image(1440, 360, umbrellaTextureKey)
             .setScale(1.1)
-            .setDepth(11)
+            .setDepth(29)
             .setVisible(false);
 
         // Player figure intentionally omitted from the end frame — the user
@@ -923,9 +910,7 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _showScrapButton() {
-        this._scrapButtonGlow.setVisible(true);
-        this._scrapButton.setVisible(true);
-        this._scrapButtonLabel.setVisible(true);
+        this._setFactoryRulingVisible(true);
     }
 
     _startManagerIdle() {
@@ -1017,25 +1002,30 @@ export default class EndScene extends Phaser.Scene {
         }
         this._umbrellaSprite.setVisible(true);
         this._umbrellaSprite.setAlpha(1);
-        this._umbrellaSprite.setPosition(1038, -160);
+        const scrap = this._rulingScrap;
+        const tx = scrap ? scrap.x + scrap.displayWidth / 2 : 1038;
+        const ty = scrap ? scrap.y + scrap.displayHeight / 2 : 470;
+        this._umbrellaSprite.setPosition(tx, -160);
 
         return new Promise((resolve) => {
             this.tweens.add({
                 targets: this._umbrellaSprite,
-                x: 1038,
-                y: 470,
+                x: tx,
+                y: ty,
                 duration: 2400,
                 ease: 'Sine.In',
                 onComplete: () => {
                     this._playScrapSfx();
                     this._styleUmbrella(mode);
-                    this.tweens.add({
-                        targets: this._scrapButtonGlow,
-                        alpha: 0.42,
-                        duration: 120,
-                        yoyo: true,
-                        repeat: 2,
-                    });
+                    if (scrap) {
+                        this.tweens.add({
+                            targets: scrap,
+                            alpha: 0.85,
+                            duration: 120,
+                            yoyo: true,
+                            repeat: 2,
+                        });
+                    }
                     resolve(true);
                 },
             });
@@ -1067,13 +1057,15 @@ export default class EndScene extends Phaser.Scene {
             this._playScrapSfx();
             this.cameras.main.flash(90, 190, 230, 255, false);
             this.cameras.main.shake(150, 0.02 + (index * 0.002));
-            this.tweens.add({
-                targets: this._scrapButton,
-                scaleX: 1.06,
-                scaleY: 1.08,
-                duration: 90,
-                yoyo: true,
-            });
+            if (this._rulingScrap) {
+                this.tweens.add({
+                    targets: this._rulingScrap,
+                    scaleX: 1.06,
+                    scaleY: 1.08,
+                    duration: 90,
+                    yoyo: true,
+                });
+            }
             this.tweens.add({
                 targets: this._umbrellaSprite,
                 angle: this._umbrellaSprite.angle + 14,
@@ -1312,27 +1304,24 @@ export default class EndScene extends Phaser.Scene {
                 yoyo: true,
                 ease: 'Quad.Out',
             });
-            this.tweens.add({
-                targets: this._scrapButton,
-                y: this._scrapButton.y - 3,
-                duration: 60,
-                yoyo: true,
-                ease: 'Quad.Out',
-            });
-            this.tweens.add({
-                targets: this._scrapButtonGlow,
-                y: this._scrapButtonGlow.y - 3,
-                duration: 60,
-                yoyo: true,
-                ease: 'Quad.Out',
-            });
-            this.tweens.add({
-                targets: this._scrapButtonLabel,
-                y: this._scrapButtonLabel.y - 3,
-                duration: 60,
-                yoyo: true,
-                ease: 'Quad.Out',
-            });
+            if (this._rulingScrap) {
+                this.tweens.add({
+                    targets: this._rulingScrap,
+                    y: this._rulingScrap.y - 3,
+                    duration: 60,
+                    yoyo: true,
+                    ease: 'Quad.Out',
+                });
+            }
+            if (this._rulingAccept) {
+                this.tweens.add({
+                    targets: this._rulingAccept,
+                    y: this._rulingAccept.y - 3,
+                    duration: 60,
+                    yoyo: true,
+                    ease: 'Quad.Out',
+                });
+            }
             await this._wait(110);
         }
     }

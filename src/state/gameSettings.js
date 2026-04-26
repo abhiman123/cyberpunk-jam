@@ -3,7 +3,7 @@ const STORAGE_KEY = 'cyberpunk-jam.settings';
 export const DEFAULT_GAME_SETTINGS = Object.freeze({
     musicVolume: 0.2,
     sfxVolume: 0.6,
-    screenZoom: 0.5,
+    screenZoom: 1,
 });
 
 let cachedSettings = null;
@@ -41,7 +41,14 @@ function readStoredSettings() {
         if (!rawValue) return {};
 
         const parsedValue = JSON.parse(rawValue);
-        return parsedValue && typeof parsedValue === 'object' ? parsedValue : {};
+        if (!parsedValue || typeof parsedValue !== 'object') return {};
+        if (parsedValue.screenZoom === 0.5) {
+            parsedValue.screenZoom = 1;
+            try {
+                storage.setItem(STORAGE_KEY, JSON.stringify(parsedValue));
+            } catch (_e) { /* ignore */ }
+        }
+        return parsedValue;
     } catch (_error) {
         return {};
     }

@@ -41,7 +41,7 @@ const SLIDER_DEFS = [
         label: 'SCREEN ZOOM',
         descriptionOn: 'Scales the rendered display window.',
         descriptionOff: 'Scales the rendered display window.',
-        getValue: (settings) => settings.screenZoom ?? 0.5,
+        getValue: (settings) => settings.screenZoom ?? 1,
         setValue: (value) => setScreenZoom(value),
         min: 0.25,
         max: 1,
@@ -56,6 +56,7 @@ export default class FactorySettingsOverlay {
         this._callbacks = callbacks;
         this._sliderDragging = null; // id of slider being dragged, or null
         this._sliders = new Map();
+        this._zoomPointerAnchor = null; // { n0, v0 } while dragging zoom; 10:1 track→value mapping
         this._handleGlobalPointerMove = this._handleGlobalPointerMove.bind(this);
         this._handleGlobalPointerUp = this._handleGlobalPointerUp.bind(this);
         this.scene.input.on('pointermove', this._handleGlobalPointerMove);
@@ -320,6 +321,7 @@ export default class FactorySettingsOverlay {
     _handleGlobalPointerUp() {
         if (!this._sliderDragging) return;
         this._sliderDragging = null;
+        this._zoomPointerAnchor = null;
         this.refresh();
     }
 
@@ -335,7 +337,20 @@ export default class FactorySettingsOverlay {
         const localX = pointer.worldX - PANEL_X;
         const normalized = (localX - SLIDER_LEFT) / SLIDER_WIDTH;
         const clamped = Math.max(0, Math.min(1, normalized));
-        const value = def.min + clamped * (def.max - def.min);
+        let value;
+        if (def.id === 'zoom') {
+            const range = def.max - def.min;
+            if (!this._zoomPointerAnchor) {
+                this._zoomPointerAnchor = { n0: clamped, v0: getGameSettings().screenZoom };
+            }
+            const { n0, v0 } = this._zoomPointerAnchor;
+            // One full drag across the track moves zoom by 1/10 of the available range
+            // (e.g. ~7.5% on the 25%–100% control).
+            value = v0 + (clamped - n0) * (range / 10);
+            value = Math.max(def.min, Math.min(def.max, value));
+        } else {
+            value = def.min + clamped * (def.max - def.min);
+        }
         const settings = def.setValue(value);
         this.refresh();
         this._setSliderHoverState(def.id, true);

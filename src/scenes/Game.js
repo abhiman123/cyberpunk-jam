@@ -77,6 +77,8 @@ export default class GameScene extends Phaser.Scene {
         this._umbrellaDeskItemMap = new Map();
         this._umbrellaPartCheckType = null;
         this._rosterClearBonusQueued = false;
+        /** @type {null | 'code' | 'grid' | 'flow' | 'gear'} */
+        this._debugScrapHotkey = null;
         this._rulebookDeskItem = null;
         this._rulebookTutorialArrow = null;
         this._rulebookTutorialLineActive = false;
@@ -101,6 +103,7 @@ export default class GameScene extends Phaser.Scene {
         this._unitMoveTween = null;
         this._activeMusicKey = null;
         this._pendingExitAction = null;
+        this._approveExitClone = null;
         this._pendingUnsafeAcceptConfirmation = false;
         this._shiftEnding = false;
         this._shiftAwaitingFinalRuling = false;
@@ -279,7 +282,7 @@ export default class GameScene extends Phaser.Scene {
         ).setOrigin(0, 0.5);
         this._hudContainer.add(this._hudPeriodText);
 
-        this._hudCasesText = this.add.text(320, 24, 'CASES: 0', {
+        this._hudCasesText = this.add.text(320, 24, 'MACHINES: 0', {
             fontFamily: 'Courier New', fontSize: '18px', fontStyle: 'bold', color: '#6cb1df'
         }).setOrigin(0.5);
         this._hudContainer.add(this._hudCasesText);
@@ -3311,7 +3314,11 @@ export default class GameScene extends Phaser.Scene {
 
     _getMachineFlowState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.flowPuzzle) return null;
-        return machineVariant._uiOtherPuzzleEvidence || machineVariant.flowPuzzle.progress || null;
+        const base = machineVariant._uiOtherPuzzleEvidence || machineVariant.flowPuzzle.progress || null;
+        if (machineVariant === this._currentMachineVariant && this._debugScrapHotkey === 'flow') {
+            return { ...(base || {}), scrapRequired: true, scrapKind: 'test' };
+        }
+        return base;
     }
 
     _isRichMfPersonalityPowered(machineVariant = this._currentMachineVariant) {
@@ -3344,12 +3351,28 @@ export default class GameScene extends Phaser.Scene {
 
     _getMachineGearState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.gearPuzzle) return null;
-        return machineVariant._uiGearPuzzleEvidence || machineVariant.gearPuzzle.progress || null;
+        const base = machineVariant._uiGearPuzzleEvidence || machineVariant.gearPuzzle.progress || null;
+        if (machineVariant === this._currentMachineVariant && this._debugScrapHotkey === 'gear') {
+            return { ...(base || {}), scrapRequired: true, scrapKind: 'test' };
+        }
+        return base;
     }
 
     _getMachineDebugState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.debugPuzzle) return null;
-        return machineVariant._uiDebugPuzzleEvidence || machineVariant.debugPuzzle.progress || null;
+        const base = machineVariant._uiDebugPuzzleEvidence || machineVariant.debugPuzzle.progress || null;
+        if (machineVariant === this._currentMachineVariant && this._debugScrapHotkey === 'code') {
+            return { ...(base || {}), scrapRequired: true, scrapKind: 'test' };
+        }
+        return base;
+    }
+
+    _getGridEvalForTestOverlay(machineVariant = this._currentMachineVariant) {
+        const ev = machineVariant?.puzzleState?.getEvaluation?.() || { solved: false, impossible: false };
+        if (machineVariant === this._currentMachineVariant && this._debugScrapHotkey === 'grid') {
+            return { ...ev, scrapRequired: true, scrapStatus: 'DEBUG // SCRAP', impossible: false };
+        }
+        return ev;
     }
 
     _getAuxiliaryPuzzleState(machineVariant = this._currentMachineVariant) {
@@ -3827,10 +3850,10 @@ export default class GameScene extends Phaser.Scene {
 
     _startUmbrellaQuest() {
         const requiredParts = {
-            circuit: 1,
-            wire: 1,
-            gear: 1,
-            data: 1,
+            circuit: 2,
+            wire: 2,
+            gear: 2,
+            data: 2,
         };
 
         return this._setUmbrellaQuest({
@@ -3843,6 +3866,44 @@ export default class GameScene extends Phaser.Scene {
             collectedParts: this._createUmbrellaPartCounts(0),
             appliedParts: this._createUmbrellaPartCounts(0),
         });
+    }
+
+    _maskUmbrellaDebugCommand(command = '') {
+        return String(command || '').replace(/[^\s]/g, '█');
+    }
+
+    _applyUmbrellaDebugLock(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant?.debugPuzzle) return;
+        if (machineVariant.debugPuzzle._umbrellaDebugUnlocked) return;
+        if (machineVariant.debugPuzzle._umbrellaOriginalPrompt === undefined) {
+            machineVariant.debugPuzzle._umbrellaOriginalPrompt = String(machineVariant.debugPuzzle.prompt || '');
+        }
+        if (machineVariant.debugPuzzle._umbrellaOriginalRepairPrompt === undefined) {
+            machineVariant.debugPuzzle._umbrellaOriginalRepairPrompt = String(machineVariant.debugPuzzle.repairPrompt || '');
+        }
+        machineVariant.debugPuzzle.prompt = this._maskUmbrellaDebugCommand(machineVariant.debugPuzzle._umbrellaOriginalPrompt);
+        machineVariant.debugPuzzle.repairPrompt = this._maskUmbrellaDebugCommand(machineVariant.debugPuzzle._umbrellaOriginalRepairPrompt);
+        machineVariant.debugPuzzle.progress = {
+            ...(machineVariant.debugPuzzle.progress || {}),
+            prompt: machineVariant.debugPuzzle.prompt,
+            repairPrompt: machineVariant.debugPuzzle.repairPrompt,
+            umbrellaUsbBoost: 0,
+        };
+    }
+
+    _unlockUmbrellaDebugCommand(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant?.debugPuzzle) return;
+        machineVariant.debugPuzzle._umbrellaDebugUnlocked = true;
+        const originalPrompt = machineVariant.debugPuzzle._umbrellaOriginalPrompt;
+        const originalRepairPrompt = machineVariant.debugPuzzle._umbrellaOriginalRepairPrompt;
+        if (typeof originalPrompt === 'string') machineVariant.debugPuzzle.prompt = originalPrompt;
+        if (typeof originalRepairPrompt === 'string') machineVariant.debugPuzzle.repairPrompt = originalRepairPrompt;
+        machineVariant.debugPuzzle.progress = {
+            ...(machineVariant.debugPuzzle.progress || {}),
+            prompt: machineVariant.debugPuzzle.prompt,
+            repairPrompt: machineVariant.debugPuzzle.repairPrompt,
+            umbrellaUsbBoost: 1,
+        };
     }
 
     _failUmbrellaQuest(reason, feedbackText = 'UMBRELLA QUEST FAILED // STASH CONFISCATED') {
@@ -3893,6 +3954,9 @@ export default class GameScene extends Phaser.Scene {
             ...(this._currentMachineVariant._umbrellaStolenParts || {}),
             [partType]: true,
         };
+        if (partType === 'data') {
+            this._currentMachineVariant._forceDebugRedact = true;
+        }
 
         this._setUmbrellaQuest({
             ...quest,
@@ -4222,10 +4286,7 @@ export default class GameScene extends Phaser.Scene {
                 umbrellaWireBoost: currentApplied + 1,
             };
         } else if (partType === 'data' && machineVariant.debugPuzzle) {
-            machineVariant.debugPuzzle.progress = {
-                ...(machineVariant.debugPuzzle.progress || {}),
-                umbrellaUsbBoost: currentApplied + 1,
-            };
+            this._unlockUmbrellaDebugCommand(machineVariant);
         }
 
         const nextQuest = this._setUmbrellaQuest({
@@ -4299,6 +4360,21 @@ export default class GameScene extends Phaser.Scene {
 
     _handleSpecialMachineQuestionChoice(choice) {
         const machineVariant = this._currentMachineVariant;
+        if (machineVariant?.machineId === 'miku_machine') {
+            if (choice === 'accept') {
+                machineVariant._rulingChatResponse = 'Hatsune boosters online. here — one verse, live off the line.';
+                machineVariant._rulingChatStatus = 'SINGING';
+                if (this.cache.audio.exists('miku_sing')) {
+                    const m = this.sound.add('miku_sing', { volume: 0.45 * getSfxVolume() });
+                    m.play();
+                    m.once('complete', () => m.destroy());
+                }
+            } else {
+                machineVariant._rulingChatResponse = 'Screw you.';
+                machineVariant._rulingChatStatus = 'DECLINED';
+            }
+            return { autoApprove: true };
+        }
         if (this._isJesterInBox(machineVariant)) {
             if (choice !== 'accept') {
                 machineVariant._jesterDealAccepted = false;
@@ -4436,6 +4512,7 @@ export default class GameScene extends Phaser.Scene {
                 stage: 'assemble',
             });
             machineVariant._umbrellaPartsApplied = this._cloneUmbrellaPartCounts(nextQuest?.appliedParts);
+            this._applyUmbrellaDebugLock(machineVariant);
             this._showFeedback('UMBRELLA RETURNS // LOAD THE STASH', '#9aff91');
             this._setPhoneInfoNote('Drag gear, circuits, wire, and data stacks onto the matching ports.', 'SMUGGLER LOADOUT');
             this._refreshOtherPuzzleButton();
@@ -5353,12 +5430,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _refillMachineShiftQueue() {
-        const machineIds = this._machineQueueDefinitions
-            .filter((definition) => {
-                const guaranteeEntry = this._getMachineGuaranteeEntry(definition.id);
-                return !guaranteeEntry || guaranteeEntry.fulfilled;
-            })
-            .map((definition) => definition.id);
+        const machineIds = this._machineQueueDefinitions.map((definition) => definition.id);
         for (let i = machineIds.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [machineIds[i], machineIds[j]] = [machineIds[j], machineIds[i]];
@@ -5966,7 +6038,7 @@ export default class GameScene extends Phaser.Scene {
             this._shiftMistakes++;
         }
 
-        this._hudCasesText.setText(`CASES: ${GameState.casesProcessedThisShift}`);
+        this._hudCasesText.setText(`MACHINES: ${GameState.casesProcessedThisShift}`);
         this._hudPayText.setText(this._fmtPay());
         this._hudViolText.setText(`Violations: ${this._shiftMistakes}`);
     }
@@ -6059,10 +6131,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _getPuzzleGateState(machineVariant = this._currentMachineVariant) {
-        const evaluation = machineVariant?.puzzleState?.getEvaluation?.() || {
+        const baseEval = machineVariant?.puzzleState?.getEvaluation?.() || {
             solved: false,
             impossible: false,
         };
+        const evaluation = (machineVariant === this._currentMachineVariant && this._debugScrapHotkey === 'grid')
+            ? { ...baseEval, scrapRequired: true, scrapStatus: 'DEBUG // SCRAP', impossible: false }
+            : baseEval;
         const repairState = this._getUmbrellaRepairState(machineVariant);
         const mainInspected = Boolean(machineVariant?._uiPuzzleOpened);
         const auxiliaryState = this._getAuxiliaryPuzzleState(machineVariant);
@@ -6154,6 +6229,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _getAuxScrapDisplayLeader(machineVariant = this._currentMachineVariant) {
+        if (this._debugScrapHotkey && ['code', 'flow', 'gear'].includes(this._debugScrapHotkey)) {
+            return this._debugScrapHotkey;
+        }
         if (!machineVariant) return null;
         const repair = this._getUmbrellaRepairState(machineVariant);
         if (repair?.assemblyActive) return null;
@@ -6809,6 +6887,17 @@ export default class GameScene extends Phaser.Scene {
         this._maybePromptUmbrellaPartShortage('gear', evidence);
     }
 
+    _shouldRedactDebugCommandDisplay(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant?.debugPuzzle) return false;
+        if (machineVariant._forceDebugRedact) return true;
+        if (GameState.day === 1) {
+            const dbg = this._getMachineDebugState(machineVariant);
+            if (dbg?.scrapRequired) return true;
+        }
+        if (machineVariant?._umbrellaStolenParts?.data) return true;
+        return false;
+    }
+
     _openDebugPuzzle() {
         if (!this._currentMachineVariant) return;
         if (this._debugPuzzleOverlay?.active) return;
@@ -6837,6 +6926,7 @@ export default class GameScene extends Phaser.Scene {
             debugPuzzle: this._currentMachineVariant.debugPuzzle,
             evidence: this._getMachineDebugState(this._currentMachineVariant),
             specialCommand: this._getUmbrellaDebugSpecialCommand(this._currentMachineVariant),
+            commandDisplayRedacted: this._shouldRedactDebugCommandDisplay(this._currentMachineVariant),
         });
         this._refreshFactoryActionButtons();
     }
@@ -7344,6 +7434,25 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _handleKonamiKey(event) {
+        const digit = event?.key;
+        if (!event?.repeat && ['1', '2', '3', '4', '0'].includes(digit) && !this._settingsOpen) {
+            const map = { 1: 'code', 2: 'grid', 3: 'flow', 4: 'gear' };
+            if (digit === '0') {
+                this._debugScrapHotkey = null;
+            } else {
+                this._debugScrapHotkey = map[digit] || null;
+            }
+            this._showFeedback(
+                this._debugScrapHotkey
+                    ? `DEBUG: ${this._debugScrapHotkey.toUpperCase()} SCRAP BADGE`
+                    : 'DEBUG: scrap badge override cleared',
+                '#9ad7ff',
+            );
+            this._refreshFactoryActionButtons();
+            this._syncMiniMachinePanel(true);
+            return;
+        }
+
         if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
             console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
             return;
@@ -7714,6 +7823,54 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        if (this._pendingExitAction === 'approve' && this._unitContainer && this._conveyorUnitSprite) {
+            this._approveExitClone?.destroy(true);
+            const cx = this._unitContainer.x;
+            const cy = this._unitContainer.y;
+            const tex = this._conveyorUnitSprite.texture.key;
+            const scX = this._conveyorUnitSprite.scaleX;
+            const scY = this._conveyorUnitSprite.scaleY;
+            const clone = this.add.image(0, 0, tex).setScale(scX, scY);
+            const wrap = this.add.container(cx, cy, [clone]);
+            wrap.setDepth(16);
+            this._conveyorContainer.add(wrap);
+            this._approveExitClone = wrap;
+            this._unitContainer.setVisible(false);
+
+            const exitX = MACHINE_PRESENTATION.conveyorApproveExitX ?? MACHINE_PRESENTATION.conveyorExitX;
+            const travelDistance = Math.abs(exitX - cx);
+            const exitDurationMs = Math.max(200, Math.round((
+                travelDistance / MACHINE_PRESENTATION.conveyorSpeedPxPerSecond
+            ) * 1000));
+            const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
+            if (conveyorLayers.length > 0) {
+                this._conveyorAnimTween?.stop();
+                this._conveyorAnimTween = this.tweens.add({
+                    targets: conveyorLayers,
+                    tilePositionX: `+=${travelDistance}`,
+                    duration: exitDurationMs,
+                    ease: 'Linear',
+                });
+            }
+
+            const exitConveyorSound = this._startConveyorHum();
+            this.tweens.add({
+                targets: wrap,
+                x: exitX,
+                duration: exitDurationMs,
+                ease: 'Linear',
+                onComplete: () => {
+                    exitConveyorSound?.stop();
+                    wrap.destroy(true);
+                    if (this._approveExitClone === wrap) {
+                        this._approveExitClone = null;
+                    }
+                    onComplete?.();
+                },
+            });
+            return;
+        }
+
         if (this._pendingExitAction === 'scrap' && this._trapdoorSprite) {
             // Whole sequence must finish <700ms — _advanceCase calls
             // _scheduleNextCase(700) synchronously, and clearUnitPresentation
@@ -7813,6 +7970,11 @@ export default class GameScene extends Phaser.Scene {
 
         const clearUnitPresentation = () => {
             this._stopCurrentUnitJitter();
+            if (this._currentCase) {
+                this._pendingExitAction = null;
+                this._refreshFactoryActionButtons();
+                return;
+            }
             this._unitContainer.setVisible(false);
             this._unitContainer.setAngle(0);
             this._unitContainer.setAlpha(1);
@@ -7873,7 +8035,8 @@ export default class GameScene extends Phaser.Scene {
             machineQueueLength: this._machineQueue?.length || 0,
         });
 
-        this._scheduleNextCase(700);
+        const quickOverlap = (this._pendingExitAction === 'approve');
+        this._scheduleNextCase(quickOverlap ? 0 : 700);
     }
 
     // ── Shift end ─────────────────────────────────────────────────────────────
@@ -8142,6 +8305,14 @@ export default class GameScene extends Phaser.Scene {
             textureKey = 'machine_rebellious_umbrella_scrapped';
         }
         targetImage.setTexture(textureKey);
+        if (isInspectView && machineId === 'companion_humanoid') {
+            targetImage.setScale(scale * 0.78);
+            return;
+        }
+        if (isInspectView && machineId === 'furby_bot') {
+            targetImage.setScale(scale * 0.22);
+            return;
+        }
         targetImage.setScale(scale);
     }
 
@@ -8190,6 +8361,7 @@ export default class GameScene extends Phaser.Scene {
             microwave_fridge_assistant: 20,
             pool_cleanup_roomba: 20,
             house_roomba: 20,
+            furby_bot: 30,
         };
         return offsets[machineVariant?.machineId] || 0;
     }
@@ -8233,7 +8405,7 @@ export default class GameScene extends Phaser.Scene {
     _getMiniMachinePanelStatusText(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.puzzleState?.getEvaluation) return 'CLICK A UNIT TO INSPECT';
 
-        const gridEvaluation = machineVariant.puzzleState.getEvaluation();
+        const gridEvaluation = this._getGridEvalForTestOverlay(machineVariant);
         const gridMatched = gridEvaluation.matchedChargeCells
             + gridEvaluation.matchedEqualityPairs
             + (gridEvaluation.matchedInequalityPairs || 0)
@@ -8439,7 +8611,7 @@ export default class GameScene extends Phaser.Scene {
 
         const hasMachine = Boolean(this._currentMachineVariant);
         const canInteract = this._screen === 'conveyor' && hasMachine && !this._settingsOpen && !this._actionLocked;
-        const evaluation = this._currentMachineVariant?.puzzleState?.getEvaluation?.() || { solved: false, impossible: false };
+        const evaluation = this._getGridEvalForTestOverlay(this._currentMachineVariant);
         const flowState = this._getOtherPuzzleButtonState();
         const gearState = this._getGearPuzzleButtonState();
         const debugState = this._getDebugPuzzleButtonState();
@@ -8506,7 +8678,7 @@ export default class GameScene extends Phaser.Scene {
             return `LOAD CCT ${repairState.appliedParts.circuit}/${repairState.requiredParts.circuit}`;
         }
 
-        const evaluation = puzzleState.getEvaluation();
+        const evaluation = this._getGridEvalForTestOverlay(this._currentMachineVariant);
         if (evaluation.solved) return 'GRID STABLE // ACCEPT SAFE';
         if (evaluation.scrapRequired) return `${evaluation.scrapStatus || 'GRID SCRAP'} // FILE SCRAP`;
         if (evaluation.impossible) return 'IMPOSSIBLE GRID // SCRAP BONUS';

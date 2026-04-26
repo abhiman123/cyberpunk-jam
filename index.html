@@ -21,6 +21,13 @@
         height: 100vh;
         overflow: hidden;
       }
+      #game-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
       canvas {
         max-width: 100vw;
         max-height: 100vh;
@@ -29,6 +36,7 @@
     </style>
   </head>
   <body>
+    <div id="game-container"></div>
     <script type="module" src="/main.js"></script>
   </body>
 </html>

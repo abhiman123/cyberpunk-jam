@@ -70,8 +70,8 @@ const _applyScreenZoom = (zoom) => {
     if (typeof document === 'undefined') return;
     const container = document.getElementById('game-container');
     if (!container) return;
-    const safeZoom = Math.max(0.25, Math.min(1, Number.isFinite(zoom) ? zoom : 0.5));
-    container.style.transformOrigin = 'top center';
+    const safeZoom = Math.max(0.25, Math.min(1, Number.isFinite(zoom) ? zoom : 1));
+    container.style.transformOrigin = 'center center';
     container.style.transform = `scale(${safeZoom})`;
 };
 

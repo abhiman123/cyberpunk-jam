@@ -256,8 +256,7 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             continueStatus: 'CALL COMPLETE // PRESS EITHER BUTTON',
             postVoiceBody: 'Day 2 loaded. Tap either button to continue.',
             intro: [
-                createIntroSequenceLine('line1', 'Morning. Company pushed a fresh directive while you were asleep', SOUND_ASSETS.phoneDay2Intro1),
-                createIntroSequenceLine('line2', 'You know the new rule, right?', SOUND_ASSETS.phoneDay2Intro2),
+                createIntroSequenceLine('line1', 'Morning. Company pushed a fresh directive while you were asleep, you know the new rule, right?', SOUND_ASSETS.phoneDay2Intro1),
             ],
             yes: [
                 createIntroSequenceLine('line3', 'Perfect. Again, just remember to inspect carefully and shift ends at 12.', SOUND_ASSETS.phoneDay2YesLine1),
@@ -274,17 +273,17 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             continueStatus: 'CALL COMPLETE // PRESS EITHER BUTTON',
             postVoiceBody: 'Day 3 loaded. Tap either button to continue.',
             intro: [
-                createIntroSequenceLine('line1', 'Hey, sweetheart. Final day now. The floor got meaner.'),
-                createIntroSequenceLine('line2', 'You know the new rule, right? If the subsystem shows hazardous instability, contamination, or unsafe discharge, you scrap it.'),
+                createIntroSequenceLine('line1', 'Morning. Final shift block is live. The floor is running hotter diagnostics today.'),
+                createIntroSequenceLine('line2', 'You know the new rule: if a subsystem shows hazardous instability, contamination, or unsafe discharge, you scrap it. No argument.'),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Good. If it sparks red, crawls wrong, or starts shaking like it wants a witness, do not be brave.'),
-                createIntroSequenceLine('line4', 'You are here to classify danger, not survive it.'),
+                createIntroSequenceLine('line3', 'Good. You treat any red as a stop signal, not a suggestion.'),
+                createIntroSequenceLine('line4', 'You are not here to hero-fix danger. You are here to log it, scrap it, and keep the line from lying about safety.'),
             ],
             no: [
-                createIntroSequenceLine('line3', 'Then listen close. Day three is hazard control.'),
-                createIntroSequenceLine('line4', 'Green debugger bug with red sparks? Scrap. Overtorqued drivetrain throwing red discharge? Scrap. Power module flashing red from bad load? Scrap. Board region glowing red? Scrap.'),
-                createIntroSequenceLine('line5', 'Today the rulebook stops sounding human for a reason.'),
+                createIntroSequenceLine('line3', 'Then listen like your quota depends on it, because it does. Day three is hazard control, not performance art.'),
+                createIntroSequenceLine('line4', 'Green code with red sparks? Scrap. Drivetrain venting red? Scrap. Power module browning out and flashing? Scrap. Board region that should not be glowing? Scrap.'),
+                createIntroSequenceLine('line5', 'If the rulebook reads colder today, that is because the company wants fewer stories and more hard stops.'),
             ],
         }),
         '4-1': createIntroSequence({
@@ -322,6 +321,8 @@ export const MACHINE_PRESENTATION = Object.freeze({
     conveyorEntryX: 1380,
     conveyorTargetX: 640,
     conveyorExitX: -210,
+    /** Approve: unit rides farther off-screen (clone used while next loads). */
+    conveyorApproveExitX: -820,
     conveyorSpeedPxPerSecond: 420,
     blueprintOriginX: 962,
     blueprintOriginY: 206,

@@ -18,8 +18,8 @@ const CREDITS = Object.freeze([
     ] },
     { role: 'ART', names: [
         'Pranaav Makharia',
-        'Jacob Jansta',
         'Pranet Ramanan',
+        'Jacob Jansta',
         'Ishita Pradhan',
         'Jacqueline King',
         'Minh Tran',
