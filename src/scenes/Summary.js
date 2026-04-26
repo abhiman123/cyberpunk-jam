@@ -111,14 +111,17 @@ export default class SummaryScene extends Phaser.Scene {
             const notificationRuleY = 420 + Math.max(0, compensationRows.length - 2) * compensationLineGap;
             this._rule(notificationRuleY, 0x333333);
 
-            const tagText = this.add.text(cx, notificationRuleY + 30, '// INCOMING TRANSMISSION', {
+            const tagText = this.add.text(cx, notificationRuleY + 24, '// INCOMING TRANSMISSION', {
                 fontFamily: 'Courier New', fontSize: '13px', color: '#55cc55', letterSpacing: 3,
-            }).setOrigin(0.5);
+            }).setOrigin(0.5, 0);
 
-            const msgText = this.add.text(cx, notificationRuleY + 76, this._notificationText, {
+            // Body text uses top-anchor (origin Y = 0) so multi-line wraps grow
+            // downward instead of expanding both ways and crashing into the tag.
+            const msgText = this.add.text(cx, notificationRuleY + 54, this._notificationText, {
                 fontFamily: 'Courier New', fontSize: '16px', color: '#cceecc',
-                wordWrap: { width: 660 }, align: 'center', lineSpacing: 8,
-            }).setOrigin(0.5);
+                wordWrap: { width: 660, useAdvancedWrap: true },
+                align: 'center', lineSpacing: 8,
+            }).setOrigin(0.5, 0);
 
             this._flicker(tagText);
             this._flicker(msgText, 80);
