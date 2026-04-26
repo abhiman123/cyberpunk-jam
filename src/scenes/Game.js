@@ -5100,6 +5100,21 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5, 0.5).setVisible(false);
         this._conveyorContainer.add(this._machineDialogueText);
 
+        // Rich boss dialogue portrait — only visible while inspecting rich_mf.
+        // Texture swaps between satisfied / sick based on _richMindRerouted.
+        this._richBossPortrait = this.add.image(1140, 170, 'rich_mf_portrait_satisfied')
+            .setOrigin(0.5, 0.5)
+            .setScale(0.32)
+            .setDepth(40)
+            .setVisible(false);
+
+        // Cry Baby sad portrait — shown whenever cry_baby is on the conveyor.
+        this._cryBabyPortrait = this.add.image(1140, 170, 'cry_baby_portrait')
+            .setOrigin(0.5, 0.5)
+            .setScale(0.32)
+            .setDepth(40)
+            .setVisible(false);
+
         this._shapeTitleText = this.add.text(964, 126, 'CHASSIS GRID', {
             fontFamily: 'Courier New', fontSize: '10px', color: '#a0dbf0', letterSpacing: 3,
             stroke: '#000000', strokeThickness: 2,
@@ -6009,6 +6024,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (specialCompletionState) {
             this._currentMachineVariant._richMindRerouted = true;
+            this._updateMachinePortraits();
         }
 
         if ((voiceRestoredNow || voiceBrokeNow) && this._currentMachineVariant?.hasCommunication) {
@@ -6932,6 +6948,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._applyMachineSprite(this._conveyorUnitSprite, this._currentMachineVariant.canvasScale ?? 1.0);
         this._syncCurrentUnitClownEffects(this._currentMachineVariant);
+        this._updateMachinePortraits();
 
         this._unitContainer.setVisible(true);
         this._unitContainer.x = MACHINE_PRESENTATION.conveyorEntryX;
@@ -7142,6 +7159,8 @@ export default class GameScene extends Phaser.Scene {
             this._unitContainer.setAlpha(1);
             this._unitContainer.setY(420);
             this._machineDialogueText.setText('');
+            this._richBossPortrait?.setVisible(false);
+            this._cryBabyPortrait?.setVisible(false);
             this._clearMachineGridDisplays();
             if (this._miniPuzzleStatusText) this._miniPuzzleStatusText.setText('NO UNIT LATCHED');
             this._currentMachineVariant = null;
@@ -7385,6 +7404,27 @@ export default class GameScene extends Phaser.Scene {
         }
         targetImage.setTexture(textureKey);
         targetImage.setScale(scale);
+    }
+
+    _updateMachinePortraits() {
+        // Rich Mf — swaps satisfied/sick based on brain reroute state.
+        if (this._richBossPortrait) {
+            const isRich = this._currentMachineVariant?.machineId === 'rich_mf';
+            if (!isRich) {
+                this._richBossPortrait.setVisible(false);
+            } else {
+                const sick = Boolean(this._currentMachineVariant?._richMindRerouted);
+                const key = sick ? 'rich_mf_portrait_sick' : 'rich_mf_portrait_satisfied';
+                if (this.textures.exists(key)) this._richBossPortrait.setTexture(key);
+                this._richBossPortrait.setVisible(true);
+            }
+        }
+
+        // Cry Baby — always shows its sad portrait while it's on the conveyor.
+        if (this._cryBabyPortrait) {
+            const isCryBaby = this._currentMachineVariant?.machineId === 'cry_baby';
+            this._cryBabyPortrait.setVisible(isCryBaby && this.textures.exists('cry_baby_portrait'));
+        }
     }
 
     _clearMachineGridDisplays() {

@@ -315,9 +315,10 @@ export default class EndScene extends Phaser.Scene {
             .setScale(0.29)
             .setDepth(10)
             .setVisible(false);
-        // Umbrella placeholder is 120x180; original 1.4 was reasonable for that base.
-        this._umbrellaSprite = this.add.image(1440, 360, 'machine_rebellious_umbrella')
-            .setScale(1.1)
+        // Open umbrella sprite (500x1036 source, see openumbrella.png). Scale tuned
+        // so the antagonist reads similar in height to the manager (~280-330 px).
+        this._umbrellaSprite = this.add.image(1440, 360, 'umbrella_open')
+            .setScale(0.32)
             .setDepth(11)
             .setVisible(false);
 

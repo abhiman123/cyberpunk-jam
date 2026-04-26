@@ -373,8 +373,9 @@ export default class MachinePuzzleOverlay {
         this._tableGfx.lineStyle(2, 0x9b7058, 0.95);
         this._tableGfx.strokeRoundedRect(tableLeft, tableTop, tableWidth, tableHeight, 22);
 
+        const slotRectWidth = MACHINE_PUZZLE.dominoWidth + 18;
         const slotSpacing = count > 1
-            ? Math.min(124, (tableWidth - (MACHINE_PUZZLE.overlayTablePadding * 2)) / (count - 1))
+            ? Math.min(124, (tableWidth - slotRectWidth) / (count - 1))
             : 0;
         const slotStartX = count > 1 ? -(slotSpacing * (count - 1)) / 2 : 0;
         const slotY = tableCenterY;

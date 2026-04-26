@@ -54,6 +54,19 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('trapdoor_2_source', 'Trapdoor2.png');
         this.load.image('trapdoor_3_source', 'Trapdoor_3.png');
 
+        // New machine sprites + rich boss dialogue portraits
+        this.load.image('machine_rich_mf_source',                 'Sprite_rich.png');
+        this.load.image('rich_mf_portrait_satisfied_source',      'satisfiedRICHBOSSDUDEIDFK.png');
+        this.load.image('rich_mf_portrait_sick_source',           'hesickofyobullshitRICHBOSSDUDEIDFK.png');
+        this.load.image('machine_rebellious_umbrella_source',     'freakassumbrella.png');
+        this.load.image('umbrella_open_source',                   'openumbrella.png');
+        this.load.image('machine_lifeguard_robot_source',         'lifeguard.png');
+        this.load.image('machine_security_camera_bot_source',     'camerabot.png');
+        this.load.image('machine_mechanic_broom_source',          'Moptopus.png');
+        this.load.image('machine_cry_baby_source',                'CrybabyGeneral.png');
+        this.load.image('cry_baby_portrait_source',               'sadCB.png');
+        this.load.image('machine_jester_in_the_box_source',       'furby.png');
+
         // Pixel art backgrounds
         this.load.image('bg_inspectview', 'inspectview.jpeg');
     }
@@ -67,8 +80,27 @@ export default class BootScene extends Phaser.Scene {
         this._createManagerHumanFromSource();
         this._createManagerRobotFromSource();
         this._createTrapdoorFramesFromSource();
+        this._createNewMachineSpritesFromSource();
         this._generatePlaceholders();
         this.scene.start('Title');
+    }
+
+    _createNewMachineSpritesFromSource() {
+        // Register textures under the keys resolveMachineTexture() looks up
+        // (machine_<id>) so they automatically replace the procedural
+        // placeholders. Source PNGs are already at intended display resolution,
+        // so use 1x upscale (NEAREST filter still applied).
+        this._createNearestUpscaledTexture('machine_rich_mf_source',              'machine_rich_mf',              1);
+        this._createNearestUpscaledTexture('machine_lifeguard_robot_source',      'machine_lifeguard_robot',      1);
+        this._createNearestUpscaledTexture('machine_mechanic_broom_source',       'machine_mechanic_broom',       1);
+        this._createNearestUpscaledTexture('machine_rebellious_umbrella_source',  'machine_rebellious_umbrella',  1);
+        this._createNearestUpscaledTexture('machine_security_camera_bot_source',  'machine_security_camera_bot',  1);
+        this._createNearestUpscaledTexture('umbrella_open_source',                'umbrella_open',                1);
+        this._createNearestUpscaledTexture('rich_mf_portrait_satisfied_source',   'rich_mf_portrait_satisfied',   1);
+        this._createNearestUpscaledTexture('rich_mf_portrait_sick_source',        'rich_mf_portrait_sick',        1);
+        this._createNearestUpscaledTexture('machine_cry_baby_source',             'machine_cry_baby',             1);
+        this._createNearestUpscaledTexture('cry_baby_portrait_source',            'cry_baby_portrait',            1);
+        this._createNearestUpscaledTexture('machine_jester_in_the_box_source',   'machine_jester_in_the_box',    1);
     }
 
     _createMainBackgroundFromSource() {

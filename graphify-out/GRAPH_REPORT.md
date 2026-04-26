@@ -1,12 +1,12 @@
 # Graph Report - /Users/safiullahbaig/Projects/cyberpunk-jam  (2026-04-25)
 
 ## Corpus Check
-- 28 files · ~214,715 words
+- 29 files · ~240,040 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1040 nodes · 2651 edges · 30 communities detected
-- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 281 edges (avg confidence: 0.82)
+- 1049 nodes · 2671 edges · 30 communities detected
+- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 285 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -42,50 +42,50 @@
 - [[_COMMUNITY_Community 29|Community 29]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `GameScene` - 259 edges
+1. `GameScene` - 260 edges
 2. `MachinePuzzleOverlay` - 64 edges
 3. `DebugConsolePuzzle` - 50 edges
 4. `GearGridPuzzle` - 38 edges
 5. `CircuitRouting` - 37 edges
 6. `MachinePuzzleState` - 35 edges
-7. `BootScene` - 31 edges
-8. `EndScene` - 25 edges
+7. `BootScene` - 32 edges
+8. `EndScene` - 26 edges
 9. `PRD: You're Just a Machine (Product Requirements Document)` - 23 edges
 10. `RulebookOverlay` - 22 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `buildGearProgressSnapshot()` --calls--> `createMachineVariant()`  [INFERRED]
+  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
+- `cloneGearBoard()` --calls--> `sanitizeGearOptionForStageOne()`  [INFERRED]
+  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
+- `cloneGearBoard()` --calls--> `applyGearStageToOption()`  [INFERRED]
+  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
+- `cloneGearBoard()` --calls--> `cloneGearPuzzleOption()`  [INFERRED]
+  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
 - `cloneGearPieces()` --calls--> `sanitizeGearOptionForStageOne()`  [INFERRED]
-  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
-- `cloneGearPieces()` --calls--> `createVirusGearFault()`  [INFERRED]
-  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
-- `cloneGearPieces()` --calls--> `createSparkInstabilityFault()`  [INFERRED]
-  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
-- `cloneGearPieces()` --calls--> `applyGearStageToOption()`  [INFERRED]
-  src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
-- `cloneGearPieces()` --calls--> `cloneGearPuzzleOption()`  [INFERRED]
   src/core/gearPuzzleLogic.js → /Users/safiullahbaig/Projects/cyberpunk-jam/src/data/machineCatalog.js
 
 ## Communities
 
 ### Community 0 - "Community 0"
 Cohesion: 0.03
-Nodes (4): glitchBurst(), GameScene, getShiftClockStepMs(), resolveMachineTexture()
+Nodes (5): glitchBurst(), GameScene, getShiftClockStepMs(), resolveMachineTexture(), MinigameBase
 
 ### Community 1 - "Community 1"
 Cohesion: 0.03
-Nodes (127): cloneGearBoard(), addCompactFlowBypass(), addFlowBypassForCandidate(), addFlowConnection(), applyBrokenGlyphFault(), applyCorruptedDominoFault(), applyDebugStageToOption(), applyFlowStageToOption() (+119 more)
+Nodes (128): cloneGearBoard(), cloneGearPieces(), addCompactFlowBypass(), addFlowBypassForCandidate(), addFlowConnection(), applyBrokenGlyphFault(), applyCorruptedDominoFault(), applyDebugStageToOption() (+120 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.03
-Nodes (20): Animations, applyCyberpunkLook(), stampCyberColorMatrix(), BriefingScene, CreditsScene, EndScene, FactorySettingsOverlay, clampMusicVolume() (+12 more)
+Nodes (14): Animations, applyCyberpunkLook(), stampCyberColorMatrix(), BriefingScene, CreditsScene, EndScene, buildGradingReport(), countPuzzleParts() (+6 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.08
-Nodes (3): getOrientationForRotationIndex(), MachinePuzzleOverlay, normalizeRotationIndex()
-
-### Community 4 - "Community 4"
 Cohesion: 0.07
 Nodes (8): clampIndex(), DebugConsolePuzzle, displayChar(), getBugSpawnDelayMs(), getBugTravelRange(), getCorruptCharacter(), pickRandomEntry(), TimerBar
+
+### Community 4 - "Community 4"
+Cohesion: 0.08
+Nodes (3): getOrientationForRotationIndex(), MachinePuzzleOverlay, normalizeRotationIndex()
 
 ### Community 5 - "Community 5"
 Cohesion: 0.04
@@ -93,27 +93,27 @@ Nodes (65): Boot.js: Load assets, generate procedural placeholders, start Briefi
 
 ### Community 6 - "Community 6"
 Cohesion: 0.07
-Nodes (16): GearGridPuzzle, getCellCenter(), inBounds(), isOpenBoardCell(), buildClampedGearCellSet(), buildGearOccupancy(), buildGearPairKey(), buildGearProgressSnapshot() (+8 more)
+Nodes (15): GearGridPuzzle, getCellCenter(), inBounds(), isOpenBoardCell(), buildClampedGearCellSet(), buildGearOccupancy(), buildGearPairKey(), buildGearProgressSnapshot() (+7 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.08
 Nodes (7): CircuitRouting, cloneCircuitTiles(), generateCircuit(), getFlowCellKey(), getFlowPowerPalette(), getFlowSegmentKey(), recordFlowSegment()
 
 ### Community 8 - "Community 8"
-Cohesion: 0.12
-Nodes (1): getOpeningPhoneCallSequence()
-
-### Community 9 - "Community 9"
 Cohesion: 0.14
 Nodes (10): canPlaceCandidate(), cellKey(), createPlacementCandidate(), decodePipCount(), getOrientationForRotationIndex(), isPlacedCode(), MachinePuzzleState, normalizeRotationIndex() (+2 more)
 
-### Community 10 - "Community 10"
+### Community 9 - "Community 9"
 Cohesion: 0.16
 Nodes (1): BootScene
 
-### Community 11 - "Community 11"
+### Community 10 - "Community 10"
 Cohesion: 0.17
 Nodes (2): resolveDayContent(), RulebookOverlay
+
+### Community 11 - "Community 11"
+Cohesion: 0.18
+Nodes (10): FactorySettingsOverlay, clampMusicVolume(), getGameSettings(), getMusicVolume(), getStorage(), normalizeSettings(), readStoredSettings(), setMusicVolume() (+2 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.22
@@ -140,12 +140,12 @@ Cohesion: 0.36
 Nodes (8): Factory Control Buttons (red and green switches), Conveyor Belt (horizontal, bottom of scene), Cyberpunk / Industrial Dim Atmosphere, Dark Industrial Ceiling / Overhead Area, Factory Interior Environment, Phaser 3 Game Background Layer (You're Just a Machine), Hanging Light Bulb (warm glow, suspended from ceiling), Background_1 - Factory Interior Scene
 
 ### Community 18 - "Community 18"
-Cohesion: 0.33
-Nodes (1): MinigameBase
-
-### Community 19 - "Community 19"
 Cohesion: 0.38
 Nodes (7): Cyberpunk/Dark Theme - Skull imagery evoking mortality and dehumanization in industrial setting, Enemy/Antagonist Sprite - Skull character likely represents danger, death, or factory overseer, Game Asset - Sprite for 'You're Just a Machine' Phaser 3 game jam project, Untitled_Artwork4.png - Pixel Art Skull/Skeleton Head Character, Pixel Art Style - Low-resolution retro-styled sprite artwork, Skull/Skeleton Head - Pixelated Enemy or NPC Character, You're Just a Machine - Cyberpunk factory worker Phaser 3 game jam project
+
+### Community 19 - "Community 19"
+Cohesion: 0.33
+Nodes (1): getOpeningPhoneCallSequence()
 
 ### Community 20 - "Community 20"
 Cohesion: 0.5
@@ -202,12 +202,12 @@ Nodes (0):
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `GameScene` connect `Community 0` to `Community 8`, `Community 3`, `Community 11`, `Community 4`?**
-  _High betweenness centrality (0.267) - this node is a cross-community bridge._
-- **Why does `MachinePuzzleOverlay` connect `Community 3` to `Community 9`, `Community 2`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+- **Why does `GameScene` connect `Community 0` to `Community 10`, `Community 2`, `Community 3`, `Community 4`?**
+  _High betweenness centrality (0.299) - this node is a cross-community bridge._
 - **Why does `createMachineVariant()` connect `Community 1` to `Community 0`, `Community 6`?**
-  _High betweenness centrality (0.056) - this node is a cross-community bridge._
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Why does `DebugConsolePuzzle` connect `Community 3` to `Community 0`, `Community 9`, `Community 2`?**
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
 - **What connects `Game Title: You're Just a Machine`, `Game Overview — Employee #492240182 in dystopian robot clinic`, `Genre: Narrative Puzzle / Papers Please-style Inspection Game` to the rest of the system?**
   _53 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
