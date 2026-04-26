@@ -866,7 +866,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 if (extraCharacter) {
                     color = '#8f2f2f';
                 } else if (typedCharacter === expectedCharacter) {
-                    color = '#cce8ff';
+                    color = '#66ff9a';
                 } else {
                     color = '#ff7979';
                 }
@@ -933,12 +933,16 @@ export default class DebugConsolePuzzle extends MinigameBase {
             && this.evidence.phase !== 'scrap'
         );
 
+        const actualOutputText = this.evidence.phase === 'scrap'
+            ? this._maskScrapOutput(this.evidence.actualOutput || this.evidence.expectedOutput || 'SCRAP REQUIRED')
+            : (this.evidence.actualOutput || '');
+
         this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
-        this._actualOutputText?.setText(showActualOutput ? (this.evidence.actualOutput || '') : '');
+        this._actualOutputText?.setText(showActualOutput ? actualOutputText : '');
         this._expectedOutputText?.setColor('#32AAFF');
         this._actualOutputText?.setColor(
             this.evidence.completed
-                ? '#94d8ff'
+                ? '#66ff9a'
                 : (this.evidence.phase === 'scrap'
                     ? '#ff7a5a'
                     : (outputMismatch ? '#ff5f5f' : '#F4BCFF'))
@@ -949,7 +953,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         let message = 'Tap the console to focus. Start typing to surface the live output.';
 
         if (this.evidence.completed) {
-            statusColor = '#32AAFF';
+            statusColor = '#66ff9a';
             detailText = this.evidence.fixed
                 ? ['Patch command applied.', 'AUTO RETEST PASS.', '', 'Repair prompt:', this.evidence.repairPrompt].join('\n')
                 : ['Primary test passed.', 'No patch required.', '', 'Prompt:', this.evidence.prompt].join('\n');
@@ -968,7 +972,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 this.evidence.prompt || 'NO COMMAND AVAILABLE',
             ].join('\n');
             message = this.evidence.actualOutput
-                ? ['This subsystem is not repairable on the floor.', `Observed output: ${this.evidence.actualOutput}`, 'Return to the booth and file SCRAP.'].join('\n')
+                ? ['This subsystem is not repairable on the floor.', `Observed output: ${this._maskScrapOutput(this.evidence.actualOutput)}`, 'Return to the booth and file SCRAP.'].join('\n')
                 : 'This subsystem is not repairable on the floor. Return to the booth and file SCRAP.';
         } else if (this.evidence.phase === 'repair') {
             statusColor = '#F684F7';
@@ -1013,6 +1017,12 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 .setText(this._specialCommandMode ? 'RUN TEST' : 'STEAL DATA')
                 .setColor(this._specialCommandMode ? '#f1d5ff' : '#d6f6ff');
         }
+    }
+
+    _maskScrapOutput(value) {
+        const text = String(value || '');
+        const masked = text.replace(/[^\s]/g, '█');
+        return masked || '████';
     }
 
     _trySpecialCommand(inputValue) {

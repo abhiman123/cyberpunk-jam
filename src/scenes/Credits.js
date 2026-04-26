@@ -9,26 +9,31 @@ const SCREEN_H = 720;
 
 const CREDITS = Object.freeze([
     { role: 'PROGRAMMING', names: [
-        'Abhimanyu Bhalla',
         'Safiullah Baig',
         'Andrew Bui',
         'Orion Allen Borntrager',
         'Ethan Nishimura',
         'Minh Tran',
+        'Abhimanyu Bhalla',
     ] },
     { role: 'ART', names: [
         'Pranaav Makharia',
         'Pranet Ramanan',
         'Jacqueline King',
+        'Minh Tran',
     ] },
     { role: 'STORYBOARDING', names: [
+        'Zachary Boseman',
         'Jacqueline King',
         'Jake Verell',
         'Geetika Joshi',
     ] },
-    { role: 'SOUND', names: [
-        'Shane Ollek',
-        'Julien Vincent',
+    { role: 'MUSIC CREDITS', names: [
+        'Clocking In Music - Julien Vincent',
+        'Cutting It Close Music - Julien Vincent',
+        'Corporate Music - Julien Vincent',
+        'Managing Music - Shane Ollek',
+        'Credits Music - Shane Ollek',
     ] },
 ]);
 
@@ -102,9 +107,10 @@ export default class CreditsScene extends Phaser.Scene {
             cursor += role.height + 18;
 
             section.names.forEach((name) => {
+                const isSmallName = name === 'Abhimanyu Bhalla';
                 const line = this.add.text(0, cursor, name, {
                     fontFamily: 'Courier New',
-                    fontSize: '22px',
+                    fontSize: isSmallName ? '12px' : '22px',
                     color: '#ffffff',
                     align: 'center',
                 }).setOrigin(0.5, 0);

@@ -2958,7 +2958,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     // trash_picker 4× upscale → 344×336 texture; artScale 0.19 → ~90px tall in panel
     trash_picker_upper: createMiniDisplay({
         artX: 118,
-        artY: 105,
+        artY: 116,
         artScale: 0.19,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
