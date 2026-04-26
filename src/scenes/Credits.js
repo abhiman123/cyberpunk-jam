@@ -23,6 +23,7 @@ const CREDITS = Object.freeze([
     ] },
     { role: 'STORYBOARDING', names: [
         'Jacqueline King',
+        'Jake Verell',
         'Geetika Joshi',
     ] },
     { role: 'SOUND', names: [
