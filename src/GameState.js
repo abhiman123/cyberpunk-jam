@@ -1,6 +1,5 @@
 export const GameState = {
     day: 1,
-    calendarAnchorIso: null,
     deskPhotoLayout: null,
     totalMistakes: 0,
     paycheckTotal: 0,
@@ -36,26 +35,6 @@ export const GameState = {
 
     isLastDay() {
         return this.day >= this.totalDays;
-    },
-
-    _getTodayIso() {
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    },
-
-    ensureCalendarAnchor() {
-        if (!this.calendarAnchorIso) {
-            this.calendarAnchorIso = this._getTodayIso();
-        }
-
-        return this.calendarAnchorIso;
-    },
-
-    getShiftSequenceIndex() {
-        return Math.max(1, this.day) - 1;
     },
 
     getDirectiveDay() {
@@ -267,7 +246,6 @@ export const GameState = {
 
     reset() {
         this.day = 1;
-        this.calendarAnchorIso = null;
         this.deskPhotoLayout = null;
         this.totalMistakes = 0;
         this.paycheckTotal = 0;
