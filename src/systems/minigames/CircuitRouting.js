@@ -409,8 +409,11 @@ export default class CircuitRouting extends MinigameBase {
             : (stage === 2
                 ? 'Click tiles to rotate. Green and orange wire filters recolor the current after that tile. Red discharge wires are immediate scrap.'
                 : 'Click tiles to rotate. Day 3 uses a larger grid with multiple power ports. Any red module is crackling and must be scrapped.'), {
+            // Wrap the instruction line short of the REPAIR TARGETS panel
+            // (centered at x=1032, half-width 108 → starts at x=924) so the
+            // text never bleeds underneath it.
             fontFamily: 'Courier New', fontSize: '10px', color: '#66aaaa',
-            align: 'center', wordWrap: { width: 1000 },
+            align: 'center', wordWrap: { width: 720 },
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(subtitle);
 
@@ -579,11 +582,14 @@ export default class CircuitRouting extends MinigameBase {
             const nameText = this.scene.add.text(-72, y - 8, target.displayName || target.label, {
                 fontFamily: 'Courier New', fontSize: '11px', color: '#b8dbe1',
             }).setOrigin(0, 0.5);
+            // "OFFLINE" instead of "BROKEN" because neutral-feed outputs
+            // are repairable by routing wire — "BROKEN" misled players
+            // into thinking the unit had to be scrapped.
             const statusText = this.scene.add.text(-72, y + 9, target.powerClass === 'red'
                 ? 'RED // SCRAP'
                 : (target.powerClass && target.powerClass !== 'neutral'
                     ? String(target.powerClass).toUpperCase()
-                    : 'BROKEN'), {
+                    : 'OFFLINE'), {
                 fontFamily: 'Courier New', fontSize: '9px', color: target.powerClass && target.powerClass !== 'neutral' ? requirementPalette.label : '#ffb695',
             }).setOrigin(0, 0.5);
 
