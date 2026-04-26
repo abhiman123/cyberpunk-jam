@@ -374,12 +374,8 @@ export default class MachinePuzzleOverlay {
         this._tableGfx.strokeRoundedRect(tableLeft, tableTop, tableWidth, tableHeight, 22);
 
         const slotRectWidth = MACHINE_PUZZLE.dominoWidth + 18;
-        // Reserve a small horizontal safe margin inside the table so the
-        // rightmost / leftmost domino slot rect doesn't kiss the wooden
-        // border (or in worst-case puzzles spill past it / off-screen).
-        const horizontalSafeMargin = 18;
         const slotSpacing = count > 1
-            ? Math.min(124, (tableWidth - slotRectWidth - (2 * horizontalSafeMargin)) / (count - 1))
+            ? Math.min(124, (tableWidth - slotRectWidth) / (count - 1))
             : 0;
         const slotStartX = count > 1 ? -(slotSpacing * (count - 1)) / 2 : 0;
         const slotY = tableCenterY;
@@ -841,17 +837,17 @@ export default class MachinePuzzleOverlay {
         if (candidate?.valid) {
             this._setPowerEffectsSuspended(false);
             this._placeDomino(dominoView, candidate, true);
-            this._showMessage('Domino locked into the grid.');
+            this._showMessage('Circuit locked into the grid.');
         } else if (droppedOnTable) {
             this._setPowerEffectsSuspended(false);
             this._returnDominoToTable(dominoView);
-            this._showMessage('Domino returned to the rack.');
+            this._showMessage('Circuit returned to the rack.');
         } else {
             this._setPowerEffectsSuspended(false);
             this._restoreDomino(dominoView);
             const errorMessage = candidate?.reason === 'occupied'
                 ? 'That placement overlaps another live cell.'
-                : 'Placement out of bounds. Domino returned.';
+                : 'Placement out of bounds. Circuit returned.';
             this._showMessage(errorMessage);
         }
 

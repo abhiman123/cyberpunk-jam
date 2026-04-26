@@ -6,6 +6,7 @@ import SummaryScene from './src/scenes/Summary.js';
 import TransitionScene from './src/scenes/Transition.js';
 import EndScene from './src/scenes/End.js';
 import CreditsScene from './src/scenes/Credits.js';
+import { getScreenZoom, onScreenZoomChange } from './src/state/gameSettings.js';
 
 // ── Sharp text on a pixel-art game ───────────────────────────────────────────
 // We keep `pixelArt: true` so sprite textures stay crisp under integer
@@ -43,15 +44,13 @@ if (typeof _origUpdateText === 'function') {
 
 const config = {
     type: Phaser.AUTO,
-    width: 1280,
-    height: 720,
-    // scale: {
-    //     parent: 'game-container',
-    //     mode: Phaser.Scale.FIT,
-    //     autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
-    //     width: 1280,
-    //     height: 720,
-    // },
+    scale: {
+        parent: 'game-container',
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
+        width: 1280,
+        height: 720,
+    },
     antialias: false,
     pixelArt: true,
     resolution: window.devicePixelRatio,
@@ -59,4 +58,29 @@ const config = {
     scene: [BootScene, TitleScene, GameScene, SummaryScene, TransitionScene, EndScene, CreditsScene],
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+// ── Screen Zoom slider plumbing ──────────────────────────────────────────
+// The "Screen Zoom" slider in the settings overlay scales the rendered
+// canvas via a CSS transform on the parent container. Phaser keeps doing
+// its own FIT scaling on top of this, so the canvas always stays centred
+// on the device and intelligently downsamples — we just multiply that
+// computed size by the zoom factor (default 0.5 → 50%).
+const _applyScreenZoom = (zoom) => {
+    if (typeof document === 'undefined') return;
+    const container = document.getElementById('game-container');
+    if (!container) return;
+    const safeZoom = Math.max(0.25, Math.min(1, Number.isFinite(zoom) ? zoom : 0.5));
+    container.style.transformOrigin = 'top center';
+    container.style.transform = `scale(${safeZoom})`;
+};
+
+_applyScreenZoom(getScreenZoom());
+onScreenZoomChange(_applyScreenZoom);
+
+// Re-apply on resize / orientation change so the centred Phaser canvas
+// keeps its zoom factor after the layout pass settles.
+if (typeof window !== 'undefined') {
+    window.addEventListener('resize', () => _applyScreenZoom(getScreenZoom()));
+}
+

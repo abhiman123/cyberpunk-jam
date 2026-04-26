@@ -6,13 +6,6 @@ export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
 
     preload() {
-        if (window.Wavedash) {
-            this.load.on('progress', (value) => {
-                // Update the Wavedash shell loading bar
-                window.Wavedash.updateLoadProgressZeroToOne(value);
-            });
-        }
-
         // Loading bar
         const barBg = this.add.rectangle(640, 360, 400, 20, 0x222222);
         const bar   = this.add.rectangle(440, 360, 0, 16, 0x00ccff);
@@ -65,14 +58,68 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_rich_mf_source',                 'Sprite_rich.png');
         this.load.image('rich_mf_portrait_satisfied_source',      'satisfiedRICHBOSSDUDEIDFK.png');
         this.load.image('rich_mf_portrait_sick_source',           'hesickofyobullshitRICHBOSSDUDEIDFK.png');
-        this.load.image('machine_rebellious_umbrella_source',     'freakassumbrella.png');
+        // Credits-scene side portraits.
+        this.load.image('credits_portrait_left',                  'richdone.png');
+        this.load.image('credits_portrait_right',                 'crybabysurprised.png');
+        // Legacy keys used by standalone Credits scene.
+        this.load.image('settings_portrait_left',                 'richdone.png');
+        this.load.image('settings_portrait_right',                'crybabysurprised.png');
+
+        // Rulebook scrap-rule preview images (5 tabs × 3 days = 15 slots).
+        // The rulebook gracefully shows a placeholder when the asset is
+        // missing, so dropping any subset of these PNGs into /public is fine.
+        ['overview', 'grid', 'flow', 'gear', 'code'].forEach((tab) => {
+            for (let day = 1; day <= 3; day += 1) {
+                const key = `rulebook_scrap_${tab}_day${day}`;
+                this.load.image(key, `${key}.png`);
+            }
+        });
+        // Umbrella uses openumbrella.png as the primary sprite. closedumbrella.png
+        // is loaded if present so the unit can switch on scrap (otherwise the
+        // freakass fallback is used).
+        this.load.image('machine_rebellious_umbrella_source',     'openumbrella.png');
+        this.load.image('machine_rebellious_umbrella_scrapped_source', 'closedumbrella.png');
+        this.load.image('machine_rebellious_umbrella_fallback_source', 'freakassumbrella.png');
         this.load.image('umbrella_open_source',                   'openumbrella.png');
+        this.load.image('machine_furby_bot_source',               'furby.png');
+        this.load.image('machine_magic_machine_source',           'magic.png');
+        this.load.image('machine_miku_machine_source',            'miku.png');
+        this.load.image('machine_circuit_dealer_source',          'circuitDealer.png');
+        // Day-3 umbrella variant (after the player drops off the parts).
+        this.load.image('machine_rebellious_umbrella_v2_source',  'umbrellav2.png');
+        // Baby teaching machine — conveyor + inspect.
+        this.load.image('machine_baby_care_teaching_machine_source',         'baby.png');
+        this.load.image('machine_baby_care_teaching_machine_inspect_source', 'babyinspect.png');
+        // Charging station port.
+        this.load.image('machine_charging_station_port_source',   'charging.png');
+        // Coffee machine — replacement for the old arc reactor.
+        this.load.image('machine_coffee_machine_source',          'coffee.png');
+        // Rich Mf — separate conveyor and inspect sprites.
+        this.load.image('machine_rich_mf_conveyor_source',        'rich.png');
+        this.load.image('machine_rich_mf_inspect_source',         'richinspect.png');
+        this.load.image('machine_rich_mf_inspect_happy_source',   'happyrichinspect.png');
+        this.load.image('machine_debrief_machine_conveyor_source','debrief.png');
+        // Inspect-view filename has shipped under two names; load whichever exists.
+        this.load.image('machine_debrief_machine_inspect_source',  'inspectdebrief.png');
+        this.load.image('machine_debrief_machine_inspect_alt_source', 'debriefInspect.png');
         this.load.image('machine_lifeguard_robot_source',         'lifeguard.png');
-        this.load.image('machine_security_camera_bot_source',     'camerabot.png');
+        this.load.image('machine_security_camera_bot_source',     'CameraLyingDown.png');
+        this.load.image('machine_security_camera_bot_inspect_source', 'CameraInspect.png');
+        this.load.image('machine_security_camera_bot_fallback_source', 'camerabot.png');
         this.load.image('machine_mechanic_broom_source',          'Moptopus.png');
-        this.load.image('machine_cry_baby_source',                'CrybabyGeneral.png');
+        this.load.image('machine_cry_baby_source',                'crybaby.png');
+        this.load.image('machine_cry_baby_inspect_source',        'crybabyinspect.png');
+        this.load.image('machine_cry_baby_fallback_source',       'CrybabyGeneral.png');
         this.load.image('cry_baby_portrait_source',               'sadCB.png');
-        this.load.image('machine_jester_in_the_box_source',       'furby.png');
+        this.load.image('machine_jester_in_the_box_source',       'Surely_you_jest_box.png');
+        this.load.image('machine_jester_in_the_box_fallback_source', 'furby.png');
+        this.load.image('machine_companion_humanoid_source',      'Companion.png');
+        this.load.image('machine_taxi_car_robot_source',          'Taxi.png');
+        this.load.image('machine_traffic_cone_bot_source',        'traffic.png');
+        this.load.image('machine_phonograph_source',              'phonograph.png');
+        this.load.image('machine_parrot_robot_source',            'parrot.png');
+        this.load.image('machine_soda_machine_source',            'soda.png');
+        this.load.image('machine_medical_surgeon_robot_source',   'garbage.png');
         this.load.image('spider_bot_source',                       'Spider_pack.png');
         this.load.image('coffee_machine_source',                    'coffeeMachine.png');
         this.load.image('popcorn_machine_source',                   'Poper.png');
@@ -96,11 +143,6 @@ export default class BootScene extends Phaser.Scene {
         this._createTrapdoorFramesFromSource();
         this._createNewMachineSpritesFromSource();
         this._generatePlaceholders();
-
-        if (window.Wavedash) {
-            window.Wavedash.init(); 
-        }
-
         this.scene.start('Title');
     }
 
@@ -115,12 +157,118 @@ export default class BootScene extends Phaser.Scene {
         // Moptopus.png: content at (140,70) 58×96 in 320×195 canvas (75% transparent) — 4× for crisp 2px-per-source-pixel display
         this._createCroppedUpscaledTexture('machine_mechanic_broom_source',      'machine_mechanic_broom',       4, { sx: 140, sy: 70, sw: 58,  sh: 96  });
 
-        // Tall sprites are nearly full-bleed (<15% transparent), load as-is.
-        this._createNearestUpscaledTexture('machine_rebellious_umbrella_source', 'machine_rebellious_umbrella',  1);
-        this._createNearestUpscaledTexture('machine_security_camera_bot_source', 'machine_security_camera_bot',  1);
+        // Umbrella primary sprite — openumbrella.png if present, else freakass fallback.
+        if (this.textures.exists('machine_rebellious_umbrella_source')) {
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_source', 'machine_rebellious_umbrella', 1);
+        } else if (this.textures.exists('machine_rebellious_umbrella_fallback_source')) {
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_fallback_source', 'machine_rebellious_umbrella', 1);
+        }
+        // Closed umbrella variant for the scrap state (asset optional).
+        if (this.textures.exists('machine_rebellious_umbrella_scrapped_source')) {
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_scrapped_source', 'machine_rebellious_umbrella_scrapped', 1);
+        }
+        // Camera bot: lying-down sprite for conveyor, inspect sprite for close-up.
+        // Falls back to the original camerabot.png if either new asset is missing.
+        if (this.textures.exists('machine_security_camera_bot_source')) {
+            this._createNearestUpscaledTexture('machine_security_camera_bot_source', 'machine_security_camera_bot', 1);
+        } else if (this.textures.exists('machine_security_camera_bot_fallback_source')) {
+            this._createNearestUpscaledTexture('machine_security_camera_bot_fallback_source', 'machine_security_camera_bot', 1);
+        }
+        if (this.textures.exists('machine_security_camera_bot_inspect_source')) {
+            this._createNearestUpscaledTexture('machine_security_camera_bot_inspect_source', 'machine_security_camera_bot_close', 1);
+        } else if (this.textures.exists('machine_security_camera_bot_fallback_source')) {
+            this._createNearestUpscaledTexture('machine_security_camera_bot_fallback_source', 'machine_security_camera_bot_close', 1);
+        }
         this._createNearestUpscaledTexture('umbrella_open_source',               'umbrella_open',                1);
-        this._createNearestUpscaledTexture('machine_cry_baby_source',            'machine_cry_baby',             1);
-        this._createNearestUpscaledTexture('machine_jester_in_the_box_source',   'machine_jester_in_the_box',    1);
+        // Cry Baby: crybaby.png on the conveyor, crybabyinspect.png in the
+        // inspect view, with the legacy CrybabyGeneral.png as a fallback for
+        // either slot if a new asset is missing.
+        if (this.textures.exists('machine_cry_baby_source')) {
+            this._createNearestUpscaledTexture('machine_cry_baby_source', 'machine_cry_baby', 1);
+        } else if (this.textures.exists('machine_cry_baby_fallback_source')) {
+            this._createNearestUpscaledTexture('machine_cry_baby_fallback_source', 'machine_cry_baby', 1);
+        }
+        if (this.textures.exists('machine_cry_baby_inspect_source')) {
+            this._createNearestUpscaledTexture('machine_cry_baby_inspect_source', 'machine_cry_baby_close', 1);
+        } else if (this.textures.exists('machine_cry_baby_fallback_source')) {
+            this._createNearestUpscaledTexture('machine_cry_baby_fallback_source', 'machine_cry_baby_close', 1);
+        }
+        if (this.textures.exists('machine_jester_in_the_box_source')) {
+            this._createNearestUpscaledTexture('machine_jester_in_the_box_source', 'machine_jester_in_the_box', 1);
+        } else if (this.textures.exists('machine_jester_in_the_box_fallback_source')) {
+            this._createNearestUpscaledTexture('machine_jester_in_the_box_fallback_source', 'machine_jester_in_the_box', 1);
+        }
+        if (this.textures.exists('machine_companion_humanoid_source')) {
+            this._createNearestUpscaledTexture('machine_companion_humanoid_source', 'machine_companion_humanoid', 1);
+        }
+        if (this.textures.exists('machine_taxi_car_robot_source')) {
+            this._createNearestUpscaledTexture('machine_taxi_car_robot_source', 'machine_taxi_car_robot', 1);
+        }
+        if (this.textures.exists('machine_traffic_cone_bot_source')) {
+            this._createNearestUpscaledTexture('machine_traffic_cone_bot_source', 'machine_traffic_cone_bot', 1);
+        }
+        if (this.textures.exists('machine_phonograph_source')) {
+            this._createNearestUpscaledTexture('machine_phonograph_source', 'machine_phonograph', 1);
+        }
+        if (this.textures.exists('machine_parrot_robot_source')) {
+            this._createNearestUpscaledTexture('machine_parrot_robot_source', 'machine_parrot_robot', 1);
+        }
+        if (this.textures.exists('machine_soda_machine_source')) {
+            this._createNearestUpscaledTexture('machine_soda_machine_source', 'machine_soda_machine', 1);
+        }
+        if (this.textures.exists('machine_medical_surgeon_robot_source')) {
+            this._createNearestUpscaledTexture('machine_medical_surgeon_robot_source', 'machine_medical_surgeon_robot', 1);
+        }
+        if (this.textures.exists('machine_furby_bot_source')) {
+            this._createNearestUpscaledTexture('machine_furby_bot_source', 'machine_furby_bot', 1);
+        }
+        if (this.textures.exists('machine_magic_machine_source')) {
+            this._createNearestUpscaledTexture('machine_magic_machine_source', 'machine_magic_machine', 1);
+        }
+        if (this.textures.exists('machine_miku_machine_source')) {
+            this._createNearestUpscaledTexture('machine_miku_machine_source', 'machine_miku_machine', 1);
+        }
+        if (this.textures.exists('machine_circuit_dealer_source')) {
+            this._createNearestUpscaledTexture('machine_circuit_dealer_source', 'machine_circuit_dealer', 1);
+        }
+        if (this.textures.exists('machine_rebellious_umbrella_v2_source')) {
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_v2_source', 'machine_rebellious_umbrella_v2', 1);
+        }
+        if (this.textures.exists('machine_baby_care_teaching_machine_source')) {
+            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_source', 'machine_baby_care_teaching_machine', 1);
+        }
+        if (this.textures.exists('machine_baby_care_teaching_machine_inspect_source')) {
+            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_inspect_source', 'machine_baby_care_teaching_machine_close', 1);
+        }
+        if (this.textures.exists('machine_charging_station_port_source')) {
+            this._createNearestUpscaledTexture('machine_charging_station_port_source', 'machine_charging_station_port', 1);
+        }
+        if (this.textures.exists('machine_coffee_machine_source')) {
+            this._createNearestUpscaledTexture('machine_coffee_machine_source', 'machine_coffee_machine', 1);
+        }
+        // Rich Mf — conveyor sprite (rich.png) overrides the cropped Sprite_rich.png
+        // produced earlier in this method. Inspect view uses richinspect.png by
+        // default, swapping to happyrichinspect.png when the personality module
+        // is connected (see _applyMachineSprite).
+        if (this.textures.exists('machine_rich_mf_conveyor_source')) {
+            this._createNearestUpscaledTexture('machine_rich_mf_conveyor_source', 'machine_rich_mf', 1);
+        }
+        if (this.textures.exists('machine_rich_mf_inspect_source')) {
+            this._createNearestUpscaledTexture('machine_rich_mf_inspect_source', 'machine_rich_mf_inspect', 1);
+        }
+        if (this.textures.exists('machine_rich_mf_inspect_happy_source')) {
+            this._createNearestUpscaledTexture('machine_rich_mf_inspect_happy_source', 'machine_rich_mf_inspect_happy', 1);
+        }
+        // Debrief machine has a dual-sprite setup like the camera bot:
+        // conveyor uses debrief.png, inspect view uses inspectdebrief.png.
+        if (this.textures.exists('machine_debrief_machine_conveyor_source')) {
+            this._createNearestUpscaledTexture('machine_debrief_machine_conveyor_source', 'machine_debrief_machine', 1);
+        }
+        if (this.textures.exists('machine_debrief_machine_inspect_source')) {
+            this._createNearestUpscaledTexture('machine_debrief_machine_inspect_source', 'machine_debrief_machine_close', 1);
+        } else if (this.textures.exists('machine_debrief_machine_inspect_alt_source')) {
+            this._createNearestUpscaledTexture('machine_debrief_machine_inspect_alt_source', 'machine_debrief_machine_close', 1);
+        }
 
         // Spider_pack.png: content at (136,105) 81×59 in 320×195 canvas — 4× for crisp pixel art
         this._createCroppedUpscaledTexture('spider_bot_source', 'machine_spider_bot', 4, { sx: 136, sy: 105, sw: 81, sh: 59 });

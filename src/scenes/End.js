@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { GameState } from '../GameState.js';
-import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
-import { getMusicVolume } from '../state/gameSettings.js';
+import { MACHINE_PRESENTATION, SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
+import { getMusicVolume, getSfxVolume } from '../state/gameSettings.js';
 
 const ENDING_DIALOGUE = Object.freeze({
     replacement: [
@@ -18,9 +18,11 @@ const ENDING_DIALOGUE = Object.freeze({
         'The truth is...',
         'the time has come...',
         'to replace you.',
+        "You've been one of our most reliable workers, but reliability has a shelf life.",
         'After all, you were just a cog in the system.',
-        'Employee 234982, you have been scrapped.',
     ],
+    replacement_coda: 'Employee 234982, you have been scrapped.',
+    replacement_employee_hang: 'Employee 234982, you\'ve been-',
     umbrella_purple: [
         'Listen kid. I appreciate the help.',
         'You helped me achieve my dreams... reach the top of the world.',
@@ -59,36 +61,40 @@ const TITLE_TEXT = "you're just a machine.";
 const DOGSI_ENDING_PATH = '/dogsi.mp3';
 const PAYCHECK_DELTA = 18;
 const CREDIT_ROLL_LINES = Object.freeze([
+    { text: 'From the mind of:', fontSize: 16, gapAfter: 8 },
+    { text: 'Orion Allen Borntrager', fontSize: 26, gapAfter: 64 },
     { text: 'Credits', fontSize: 22, gapAfter: 56 },
     { text: 'Programming', fontSize: 22, gapAfter: 34 },
-    { text: 'Safiullah Baig', fontSize: 22 },
-    { text: 'Abhimanyu Bhalla', fontSize: 20},
-    { text: 'Andrew Bui', fontSize: 18},
-    { text: 'Minh Tran', fontSize: 16},
-    { text: 'Ethan Nishimura', fontSize: 14, gapAfter: 70},
-    { text: 'Orion Allen Borntrager', fontSize:6, gapAfter: 54},
+    { text: 'Orion Allen Borntrager' },
+    { text: 'Andrew Bui' },
+    { text: 'Ethan Nishimura' },
+    { text: 'Minh Tran' },
+    { text: 'Safiullah Baig' },
+    { text: 'Abhimanyu Bhalla', fontSize: 12, gapAfter: 54 },
     { text: 'Art:', fontSize: 22, gapAfter: 34 },
-    { text: 'Ishita Pradhan' },
     { text: 'Pranaav Makharia' },
-    { text: 'Jacqueline King' },
-    { text: 'Pranet Ramanan' },
     { text: 'Jacob Jansta' },
-    { text: 'Minh Tran', gapAfter: 54 },
+    { text: 'Pranet Ramanan' },
+    { text: 'Ishita Pradhan' },
+    { text: 'Jacqueline King' },
+    { text: 'Minh Tran' },
+    { text: 'Jake Verell', gapAfter: 54 },
     { text: 'Storyboarding', fontSize: 22, gapAfter: 34 },
-    { text: 'Zachary Boseman' },
+    { text: 'Christian Gonzalez' },
     { text: 'Jacqueline King' },
     { text: 'Geetika Joshi' },
-    { text: 'Christian Gonzalez' },
-    { text: 'Caleb Livingston', gapAfter: 54 },
+    { text: 'Caleb Livingston' },
+    { text: 'Zachary Boseman', gapAfter: 54 },
     { text: 'Music Credits', fontSize: 22, gapAfter: 34 },
     { text: 'Clocking In Music - Julien Vincent' },
     { text: 'Cutting It Close Music - Julien Vincent' },
     { text: 'Corporate Music - Julien Vincent' },
     { text: 'Managing Music - Shane Ollek' },
     { text: 'Credits Music - Shane Ollek', gapAfter: 54 },
-    { text: 'Thanks to Wavedash and Gamedev.js' },
-    { text: 'For hosting the Gamejam', gapAfter: 54 },
-    { text: "You were there when we were not." },
+    { text: 'Sound', fontSize: 22, gapAfter: 34 },
+    { text: 'Manager Voice - Zachary Boseman', gapAfter: 54 },
+    { text: 'thanks to wavedash and gamedev.js' },
+    { text: 'for hosting the gamejam' },
 ]);
 const SCORE_GRADES = Object.freeze([
     { grade: 'Z', min: 0 },
@@ -110,7 +116,15 @@ export default class EndScene extends Phaser.Scene {
     }
 
     init(data) {
-        this._endingVariant = data?.endingVariant || GameState.getDayFourEndingVariant();
+        // "Triple up" = perfect run with zero violations. When the player
+        // arrives at the end with a clean record we treat that as a triple-up
+        // and force the original purple-umbrella ending.
+        if (Number(GameState.totalMistakes || 0) === 0) {
+            GameState.tripleUpAchieved = true;
+        }
+        const pending = GameState.pendingEndingOverride;
+        GameState.pendingEndingOverride = null;
+        this._endingVariant = data?.endingVariant || pending || GameState.getDayFourEndingVariant();
     }
 
     create() {
@@ -124,6 +138,7 @@ export default class EndScene extends Phaser.Scene {
         this._scoreContainer = null;
         this._factoryGui = null;
         this._lastManagerTalkBlip = 0;
+        this._lastUmbrellaTalkBlip = 0;
 
         this.cameras.main.setBackgroundColor('#050709');
 
@@ -149,6 +164,7 @@ export default class EndScene extends Phaser.Scene {
         this.cameras.main.fadeIn(500, 0, 0, 0);
 
         this.time.delayedCall(550, () => {
+            this._setFactoryRulingVisible(true);
             void this._runStageIntroThenEnding();
         });
     }
@@ -172,16 +188,23 @@ export default class EndScene extends Phaser.Scene {
         addLayer('mainview_second', 20);
         addLayer('mainview_lightradiance', 24)?.setAlpha(0.68);
         addLayer('mainview_lightlayer', 25)?.setAlpha(0.82);
-        const famPositions = {
-            mainview_fam1: { x: 202, y: 659 },
-            mainview_fam2: { x: 278, y: 669 },
+        const famDefault = {
+            mainview_fam1: { x: 202, y: 659, angle: 0 },
+            mainview_fam2: { x: 278, y: 669, angle: 0 },
         };
-        Object.entries(famPositions).forEach(([key, pos]) => {
+        const layout = GameState.deskPhotoLayout || null;
+        Object.entries(famDefault).forEach(([key, def]) => {
             if (!this.textures.exists(key)) return;
-            const image = this.add.image(pos.x, pos.y, key).setScale(1).setDepth(1);
+            const saved = layout?.[key] || null;
+            const x = saved?.x ?? def.x;
+            const y = saved?.y ?? def.y;
+            const angle = saved?.angle ?? def.angle;
+            const image = this.add.image(x, y, key).setScale(1).setAngle(angle).setDepth(1);
             layers.push(image);
         });
         const rulebookProp = this._buildRulebookDeskProp();
+        this._buildEndClock();
+        this._buildFactoryRulingRow();
 
         this._scrapButtonGlow = this.add.rectangle(1038, 510, 168, 94, 0xff786f, 0.08)
             .setDepth(3)
@@ -206,8 +229,45 @@ export default class EndScene extends Phaser.Scene {
         ].filter(Boolean));
     }
 
+    _buildEndClock() {
+        const screenH = 720;
+        const deskY = screenH - 172;
+        const clockPanelCenterX = 1165;
+        const clockPanelCenterY = deskY + 118;
+        this._endClock = this.add.container(0, 0).setDepth(6);
+        const clockBg = this.add.rectangle(clockPanelCenterX, clockPanelCenterY, 210, 86, 0x050505, 0.92)
+            .setStrokeStyle(2, 0x1b3a4a, 0.7);
+        const label = this.add.text(clockPanelCenterX - 30, clockPanelCenterY - 26, 'SHIFT CLOCK', {
+            fontFamily: 'Courier New', fontSize: '11px', color: '#9ad7ff',
+        });
+        const time = this.add.text(clockPanelCenterX - 30, clockPanelCenterY + 4, '12:00 PM', {
+            fontFamily: 'Courier New', fontSize: '15px', color: '#e7f7ff',
+        });
+        this._endClock.add([clockBg, label, time]);
+        this._world.add(this._endClock);
+    }
+
+    _buildFactoryRulingRow() {
+        this._factoryRulingContainer = this.add.container(0, 0).setDepth(6);
+        if (this.textures.exists('btn_scrap_source') && this.textures.exists('btn_accept_source')) {
+            this.textures.get('btn_scrap_source')?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+            this.textures.get('btn_accept_source')?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+            const buttonY = 650;
+            this._rulingScrap = this.add.image(465, buttonY, 'btn_scrap_source')
+                .setOrigin(0)
+                .setScale(4, 4 * 180 / 195)
+                .setTint(0x7f7f7f);
+            this._rulingAccept = this.add.image(520, buttonY, 'btn_accept_source')
+                .setOrigin(0)
+                .setScale(4, 4 * 180 / 195)
+                .setTint(0x7f7f7f);
+            this._factoryRulingContainer.add([this._rulingScrap, this._rulingAccept]);
+        }
+        this._world.add(this._factoryRulingContainer);
+    }
+
     _buildRulebookDeskProp() {
-        const prop = this.add.container(76, 678).setAngle(-2);
+        const prop = this.add.container(75, 678).setAngle(-2);
         const shadow = this.add.ellipse(8, 12, 144, 72, 0x000000, 0.28);
         const shell = this.add.rectangle(0, 0, 128, 84, 0x151a1f, 1)
             .setStrokeStyle(3, 0x3d4d57, 0.96);
@@ -231,6 +291,8 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _buildFactoryGui() {
+        // Mirror the in-game phone panel layout 1:1 so the day-4 notification
+        // chrome doesn't look "remade" — just the contents change.
         this._factoryGui = this.add.container(0, 0).setDepth(50);
 
         const panel = this.add.container(870, 50);
@@ -238,39 +300,93 @@ export default class EndScene extends Phaser.Scene {
         const frameHeight = 216;
         const screenX = 22;
         const screenY = 20;
-        const screenWidth = 278;
+        const screenWidth = 340;
         const screenHeight = 154;
+
         const frame = this.add.rectangle(0, 0, frameWidth, frameHeight, 0x334c5d, 1).setOrigin(0)
             .setStrokeStyle(4, 0x82dffd, 0.9);
         const inner = this.add.rectangle(12, 12, frameWidth - 24, frameHeight - 24, 0x11202a, 1).setOrigin(0)
             .setStrokeStyle(2, 0x4ba7c4, 0.9);
         const screen = this.add.rectangle(screenX, screenY, screenWidth, screenHeight, 0x72d3dd, 0.84).setOrigin(0)
             .setStrokeStyle(1, 0xc9ffff, 0.25);
-        const board = this.add.rectangle(146, 96, 252, 108, 0xf3ffff, 0.22)
+        const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 30, screenWidth - 10, 46, 0xffffff, 0.08)
+            .setOrigin(0.5);
+        const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 38, 10, 0x1b1812, 1)
+            .setOrigin(0.5);
+        const messageBoardCenterX = screenX + (screenWidth / 2);
+        const messageBoardShadow = this.add.rectangle(messageBoardCenterX, 96, screenWidth - 14, 100, 0x000000, 0.12)
+            .setOrigin(0.5)
+            .setStrokeStyle(1, 0x163136, 0.16);
+        const messageBoard = this.add.rectangle(messageBoardCenterX, 96, screenWidth - 18, 96, 0xf3ffff, 0.22)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x17363d, 0.28);
-        const header = this.add.text(28, 30, 'WORLD FEED', {
-            fontFamily: 'Arial Black',
-            fontSize: '13px',
-            color: '#0c171b',
-            wordWrap: { width: 258 },
+
+        const scanlines = this.add.graphics();
+        scanlines.fillStyle(0xffffff, 0.07);
+        for (let offset = 0; offset < screenHeight; offset += 14) {
+            scanlines.fillRect(screenX, screenY + offset, screenWidth, 6);
+        }
+
+        const header = this.add.text(34, 30, 'FACTORY LINK', {
+            fontFamily: 'Arial Black', fontSize: '13px', color: '#0c171b',
+            wordWrap: { width: screenWidth - 20 },
         });
-        const body = this.add.text(28, 52, 'Final shift notification queued. Await debrief manager arrival.', {
-            fontFamily: 'Arial',
-            fontSize: '17px',
-            color: '#101010',
-            wordWrap: { width: 258 },
-            lineSpacing: 6,
+        const body = this.add.text(28, 50, 'Final shift notification queued. Await debrief manager arrival.', {
+            fontFamily: 'Arial', fontSize: '17px', color: '#101010',
+            wordWrap: { width: screenWidth - 20 }, lineSpacing: 6,
         });
-        const status = this.add.text(28, 155, '1 NEW // CHANNEL LIVE', {
-            fontFamily: 'Arial Black',
-            fontSize: '10px',
-            color: '#15313a',
-            wordWrap: { width: 258 },
+        const status = this.add.text(32, 146, '1 NEW // CHANNEL LIVE', {
+            fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
+            wordWrap: { width: 172 },
         });
-        panel.add([frame, inner, screen, board, header, body, status]);
+
+        const settingsBg = this.add.rectangle(384, 46, 40, 42, 0x314250, 1)
+            .setStrokeStyle(2, 0x6db7e1, 0.8);
+        const settingsLabel = this.add.text(384, 46, '⚙', {
+            fontFamily: 'Arial Black', fontSize: '19px', color: '#dff6ff',
+        }).setOrigin(0.5);
+
+        const acceptBg = this.add.rectangle(384, 96, 44, 48, 0x184a24, 1)
+            .setStrokeStyle(2, 0x22f06e, 0.85);
+        const acceptLabel = this.add.text(384, 96, '✓', {
+            fontFamily: 'Arial Black', fontSize: '26px', color: '#d8ffe6',
+        }).setOrigin(0.5);
+        const rejectBg = this.add.rectangle(384, 155, 42, 46, 0x4b1f1b, 1)
+            .setStrokeStyle(2, 0xff5f52, 0.85);
+        const rejectLabel = this.add.text(384, 155, 'X', {
+            fontFamily: 'Arial Black', fontSize: '23px', color: '#ffd7d4',
+        }).setOrigin(0.5);
+
+        const channelButton = (cx, label, fontSize) => {
+            const bg = this.add.rectangle(cx, 160, 30, 22, 0x1c2c36, 0.92)
+                .setStrokeStyle(1, 0x6db7e1, 0.55);
+            const text = this.add.text(cx, 160, label, {
+                fontFamily: 'Arial Black', fontSize: `${fontSize}px`, color: '#bfeeff',
+            }).setOrigin(0.5);
+            return [bg, text];
+        };
+        const [infoBg, infoText] = channelButton(214, 'INFO', 9);
+        const [chatBg, chatText] = channelButton(249, 'CHAT', 9);
+        const [alertBg, alertText] = channelButton(284, '!', 12);
+
+        panel.add([
+            frame, inner, screen, gloss, tray,
+            messageBoardShadow, messageBoard, scanlines,
+            body, header, status,
+            infoBg, infoText, chatBg, chatText, alertBg, alertText,
+            settingsBg, settingsLabel,
+            acceptBg, acceptLabel, rejectBg, rejectLabel,
+        ]);
 
         this._factoryGui.add([panel]);
+    }
+
+    _playStageLightsCue() {
+        if (!this.cache.audio.has(SOUND_ASSETS.inspectionReveal.key)) return;
+
+        this.sound.play(SOUND_ASSETS.inspectionReveal.key, {
+            volume: SOUND_VOLUMES.reveal * 0.9,
+        });
     }
 
     async _runStageIntroThenEnding() {
@@ -279,42 +395,52 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _buildActors() {
-        // Manager renders ABOVE the player (depth 30) so the antagonist
-        // visually overlaps the inspector when they share the catwalk plane.
-        this._managerSprite = this.add.image(1440, 520, 'manager_robot_source')
-            .setScale(1.38)
-            .setDepth(31)
+        // Manager rendered behind everything except the light and the
+        // background art. He sits inside _world (so the depth value alone
+        // doesn't drive ordering — child position in the container does).
+        this._managerSprite = this.add.image(1440, 470, 'manager_robot_source')
+            .setScale(3.0)
+            .setDepth(2)
             .setVisible(false);
-        // Umbrella placeholder is 120x180; original 1.4 was reasonable for that base.
-        this._umbrellaSprite = this.add.image(1440, 360, 'machine_rebellious_umbrella')
+        // End scene gets the v2 umbrella sprite by default (the post-Day-3
+        // form of the umbrella) — or the closed version if the umbrella was
+        // scrapped during the run, since a scrapped umbrella never reopens.
+        const umbrellaTextureKey = GameState.umbrellaPermanentlyScrapped && this.textures.exists('machine_rebellious_umbrella_scrapped')
+            ? 'machine_rebellious_umbrella_scrapped'
+            : (this.textures.exists('machine_rebellious_umbrella_v2')
+                ? 'machine_rebellious_umbrella_v2'
+                : 'machine_rebellious_umbrella');
+        this._umbrellaSprite = this.add.image(1440, 360, umbrellaTextureKey)
             .setScale(1.1)
-            .setDepth(32)
+            .setDepth(11)
             .setVisible(false);
 
-        // Player inspector silhouette — small foreground figure facing the antagonist.
-        // Drawn inline so we don't depend on a baked sprite.
-        // Player x=860 so it doesn't overlap the SCRAP button (which appears
-        // at x=1038 in the umbrella_red / umbrella_mixed endings).
-        //
-        // The player is intentionally NOT added to _world so that during the
-        // fall sequence, _world can rise past the player (catwalk goes up
-        // while the player descends through the hole).
-        // Container origin = visual center of the figure (~y=372 in scene
-        // coords) so scale/rotate animations during the fall pivot around
-        // the player's body, not their head.
-        // Depth 30 so the player renders above the dialogue panel during the
-        // fall (panel chrome is depths 20-23). The panel fades out at the
-        // start of the fall sequence, but this guarantees no occlusion.
-        this._playerFigure = this.add.container(860, 372).setDepth(30);
-        const playerSilhouette = this.add.graphics();
-        this._drawPlayerFigure(playerSilhouette);
-        this._playerFigure.add(playerSilhouette);
-
-        // Floor shadow under the player figure
-        this._playerShadow = this.add.ellipse(860, 472, 84, 14, 0x000000, 0.5).setDepth(8);
+        // Player figure intentionally omitted from the end frame — the user
+        // wanted the silhouette removed so the conveyor reads as empty until
+        // the manager arrives. Stub references are kept so legacy code that
+        // toggled visibility on these doesn't crash; the objects are no-ops.
+        this._playerFigure = this.add.container(0, 0).setDepth(30).setVisible(false);
+        this._playerShadow = this.add.ellipse(0, 0, 1, 1, 0x000000, 0).setDepth(8).setVisible(false);
 
         this._world.add([this._managerSprite, this._umbrellaSprite]);
-        this._world.moveTo(this._managerSprite, 2);
+        // Place the manager directly after the painted background (depth 1)
+        // but before the table/conveyor, lights, props and buttons. Find the
+        // last "background" layer dynamically so future layer additions don't
+        // break this ordering.
+        this._reorderManagerBehindFactory();
+    }
+
+    _reorderManagerBehindFactory() {
+        const list = this._world?.list;
+        if (!Array.isArray(list) || list.length === 0 || !this._managerSprite) return;
+        if (!list.includes(this._managerSprite)) return;
+        // Manager should sit just above the painted background art and the
+        // backing rectangle, so anything higher up the layer stack (table,
+        // conveyor, props, scrap button, lights) occludes him. Index 2 puts
+        // him right after the background rectangle (index 0) and the
+        // bottom-painted art (index 1).
+        const targetIndex = Math.min(2, Math.max(0, list.length - 1));
+        try { this._world.moveTo(this._managerSprite, targetIndex); } catch (_) { /* noop */ }
     }
 
     _drawPlayerFigure(g) {
@@ -489,6 +615,24 @@ export default class EndScene extends Phaser.Scene {
 
         this._creditsContainer = this.add.container(640, 760).setDepth(48).setVisible(false).setAlpha(0);
         this._creditsHeight = this._buildCreditsRoll();
+        this._creditsPortraits = [];
+        if (this.textures.exists('credits_portrait_left')) {
+            const leftPortrait = this.add.image(126, 360, 'credits_portrait_left')
+                .setDepth(57)
+                .setVisible(false)
+                .setAlpha(0)
+                .setScale(0.42);
+            this._creditsPortraits.push(leftPortrait);
+        }
+        if (this.textures.exists('credits_portrait_right')) {
+            const rightPortrait = this.add.image(1154, 360, 'credits_portrait_right')
+                .setDepth(57)
+                .setVisible(false)
+                .setAlpha(0)
+                .setScale(0.42);
+            this._creditsPortraits.push(rightPortrait);
+        }
+        this._creditsPortraitTweens = [];
 
         this._skipCreditsBg = this.add.rectangle(1096, 674, 228, 42, 0x08111c, 0.94)
             .setStrokeStyle(1, 0x5a98b6, 0.82)
@@ -625,16 +769,14 @@ export default class EndScene extends Phaser.Scene {
     }
 
     async _runReplacementEnding() {
+        this._setFactoryRulingVisible(true);
         this._managerSprite.clearTint();
         this._panelTag?.setText('DEBRIEF MANAGER');
         this._panelMeta?.setText('CH//04');
         this._setDebriefPanelAlpha(0);
-        // y=372 puts the manager on the same catwalk plane as the player
-        // (`_playerFigure` y=372). Previously y=520 dropped him onto the
-        // conveyor belt below the catwalk.
         const managerEntry = this._enterActor(this._managerSprite, {
-            x: 500,
-            y: 372,
+            x: 660,
+            y: 470,
             startX: 1700,
             duration: 4600,
             ease: 'Sine.InOut',
@@ -660,85 +802,123 @@ export default class EndScene extends Phaser.Scene {
         ]);
         this._startManagerIdle();
         await this._typeDialogueLines(ENDING_DIALOGUE.replacement, { color: '#aee7ff', deepVoice: true });
+        await this._typeDialogueLines([ENDING_DIALOGUE.replacement_coda], { color: '#aee7ff', deepVoice: true });
         await this._wait(700);
     }
 
     async _runUmbrellaPurpleEnding() {
-        await this._enterActor(this._umbrellaSprite, { x: 360, y: 360, duration: 1700 });
+        this._setFactoryRulingVisible(true);
+        this._panelTag?.setText('SHADY UMBRELLA');
+        this._panelMeta?.setText('WETWARE // V2');
+        this._setDebriefPanelAlpha(0);
+        this._setFactoryRulingVisible(true);
+        this._umbrellaSprite.setTexture(
+            this.textures.exists('machine_rebellious_umbrella_v2') ? 'machine_rebellious_umbrella_v2' : 'machine_rebellious_umbrella',
+        );
+        this._umbrellaSprite.setScale(1.1);
+        this._umbrellaSprite.setAngle(0);
+        this._umbrellaSprite.setAlpha(1);
         this._styleUmbrella('purple');
-        await this._bubbleDialogue(this._umbrellaSprite, ENDING_DIALOGUE.umbrella_purple, {
-            speaker: 'UMBRELLA',
-            accent: 0xdba8ff,
-            fill: 0x21102e,
-            stroke: 0xb86cff,
-            textColor: '#f4dcff',
+        this._setUmbrellaOnConveyorStart();
+
+        const umbrellaRide = this._enterActor(this._umbrellaSprite, {
+            x: MACHINE_PRESENTATION.conveyorTargetX,
+            y: 470,
+            startX: MACHINE_PRESENTATION.conveyorEntryX,
+            duration: 4200,
+            ease: 'Sine.InOut',
         });
-        await this._wait(700);
+        await Promise.all([
+            umbrellaRide,
+            this._tweenAsync({
+                targets: this._factoryGui,
+                alpha: 0,
+                duration: 1800,
+                delay: 350,
+                ease: 'Sine.InOut',
+            }),
+            this._tweenAsync({
+                targets: this._getDebriefPanelTargets(),
+                alpha: 1,
+                duration: 1800,
+                delay: 900,
+                ease: 'Sine.Out',
+            }),
+        ]);
+        await this._typeDialogueLines(ENDING_DIALOGUE.umbrella_purple, { color: '#e8c2ff', deepVoice: false, umbrellaBlip: true });
+        await this._wait(500);
+    }
+
+    _setUmbrellaOnConveyorStart() {
+        this._umbrellaSprite.setVisible(true);
+        this._umbrellaSprite.setPosition(MACHINE_PRESENTATION.conveyorEntryX, 470);
+    }
+
+    _setFactoryRulingVisible(visible) {
+        if (!this._factoryRulingContainer) return;
+        const on = Boolean(visible);
+        this._factoryRulingContainer.setVisible(on);
+        this._factoryRulingContainer.setAlpha(on ? 1 : 0);
     }
 
     async _runUmbrellaRedEnding() {
-        this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 1800 });
-        this._startManagerIdle();
-        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_manager, {
-            speaker: 'ROBO MANAGER',
-            accent: 0x8df5ff,
-            fill: 0xf2feff,
-            stroke: 0x67c8ef,
-            textColor: '#13252b',
-        });
-        this._showScrapButton();
-        const dropPromise = this._dropUmbrellaToButton('red');
-        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_confused, {
-            speaker: 'ROBO MANAGER',
-            accent: 0x8df5ff,
-            fill: 0xf2feff,
-            stroke: 0x67c8ef,
-            textColor: '#13252b',
-            holdMs: 800,
-        });
-        await dropPromise;
-        await this._scrapManagerActor();
-        await this._bubbleDialogue(this._umbrellaSprite, ENDING_DIALOGUE.umbrella_red, {
-            speaker: 'UMBRELLA',
-            accent: 0xff8f86,
-            fill: 0x2a0707,
-            stroke: 0xff6f66,
-            textColor: '#ffd8d3',
-        });
-        await this._runExplosionLeadIn();
+        await this._runUmbrellaConveyorInterruptEnding('red');
     }
 
     async _runUmbrellaMixedEnding() {
-        this._managerSprite.setTint(0x8ccfff);
-        await this._enterActor(this._managerSprite, { x: 360, y: 360, duration: 1800 });
-        this._startManagerIdle();
-        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_manager, {
-            speaker: 'ROBO MANAGER',
-            accent: 0x8df5ff,
-            fill: 0xf2feff,
-            stroke: 0x67c8ef,
-            textColor: '#13252b',
-        });
+        await this._runUmbrellaConveyorInterruptEnding('mixed');
+    }
+
+    async _runUmbrellaConveyorInterruptEnding(mode) {
+        this._setFactoryRulingVisible(true);
         this._showScrapButton();
-        const dropPromise = this._dropUmbrellaToButton('mixed');
-        await this._bubbleDialogue(this._managerSprite, ENDING_DIALOGUE.umbrella_red_confused, {
-            speaker: 'ROBO MANAGER',
-            accent: 0x8df5ff,
-            fill: 0xf2feff,
-            stroke: 0x67c8ef,
-            textColor: '#13252b',
-            holdMs: 800,
+        this._managerSprite.clearTint();
+        this._panelTag?.setText('DEBRIEF MANAGER');
+        this._panelMeta?.setText('CH//04');
+        this._setDebriefPanelAlpha(0);
+        const managerEntry = this._enterActor(this._managerSprite, {
+            x: 660,
+            y: 470,
+            startX: 1700,
+            duration: 4600,
+            ease: 'Sine.InOut',
+            alphaFrom: 1,
+            scaleFromFactor: 1,
         });
+        await Promise.all([
+            managerEntry,
+            this._tweenAsync({
+                targets: this._factoryGui,
+                alpha: 0,
+                duration: 1800,
+                delay: 350,
+                ease: 'Sine.InOut',
+            }),
+            this._tweenAsync({
+                targets: this._getDebriefPanelTargets(),
+                alpha: 1,
+                duration: 1800,
+                delay: 900,
+                ease: 'Sine.Out',
+            }),
+        ]);
+        this._startManagerIdle();
+        await this._typeDialogueLines(ENDING_DIALOGUE.replacement, { color: '#aee7ff', deepVoice: true });
+        this._playDogsiAudio();
+        await this._typeDialogueLineRaw(ENDING_DIALOGUE.replacement_employee_hang, { color: '#aee7ff', deepVoice: true });
+
+        this._useClosedUmbrellaTexture();
+        this._styleUmbrella(mode);
+        this._umbrellaSprite.setVisible(true);
+        const dropPromise = this._dropUmbrellaToButton(mode);
+        await this._wait(200);
         await dropPromise;
-        await this._scrapManagerActor();
-        await this._bubbleDialogue(this._umbrellaSprite, ENDING_DIALOGUE.umbrella_mixed, {
-            speaker: 'UMBRELLA',
-            accent: 0xefbcff,
-            fill: 0x24112e,
-            stroke: 0xd28cff,
-            textColor: '#f8ddff',
-        });
+        await this._conveyorEjectManagerActor();
+        this._panelTag?.setText('SHADY UMBRELLA');
+        this._panelMeta?.setText('FALL // CLOSED');
+        await this._typeDialogueLines(['heh...'], { color: '#f5c0ff', deepVoice: false, umbrellaBlip: true });
+        await this._wait(1100);
+        await this._umbrellaJumpSpamOnScrap();
         await this._runExplosionLeadIn();
     }
 
@@ -847,6 +1027,7 @@ export default class EndScene extends Phaser.Scene {
                 duration: 2400,
                 ease: 'Sine.In',
                 onComplete: () => {
+                    this._playScrapSfx();
                     this._styleUmbrella(mode);
                     this.tweens.add({
                         targets: this._scrapButtonGlow,
@@ -862,6 +1043,7 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _scrapManagerActor() {
+        this._playScrapSfx();
         this.cameras.main.shake(240, 0.014);
         return new Promise((resolve) => {
             this.tweens.add({
@@ -872,6 +1054,7 @@ export default class EndScene extends Phaser.Scene {
                 duration: 640,
                 ease: 'Cubic.In',
                 onComplete: () => {
+                    this._playScrapSfx();
                     this._managerSprite.setVisible(false);
                     resolve(true);
                 },
@@ -881,6 +1064,7 @@ export default class EndScene extends Phaser.Scene {
 
     async _runExplosionLeadIn() {
         for (let index = 0; index < 5; index += 1) {
+            this._playScrapSfx();
             this.cameras.main.flash(90, 190, 230, 255, false);
             this.cameras.main.shake(150, 0.02 + (index * 0.002));
             this.tweens.add({
@@ -900,7 +1084,7 @@ export default class EndScene extends Phaser.Scene {
         }
     }
 
-    _typeDialogueLines(lines, { color = '#b8efff', append = false, deepVoice = false } = {}) {
+    _typeDialogueLines(lines, { color = '#b8efff', append = false, deepVoice = false, umbrellaBlip = false } = {}) {
         return new Promise((resolve) => {
             const entries = Array.isArray(lines) ? lines : [String(lines || '')];
             this._dialogueText
@@ -950,7 +1134,11 @@ export default class EndScene extends Phaser.Scene {
                     repeat: Math.max(0, line.length - 1),
                     callback: () => {
                         charIndex += 1;
-                        if (deepVoice && charIndex % 3 === 0) {
+                        if (umbrellaBlip) {
+                            if (charIndex % 2 === 0) {
+                                this._playUmbrellaTalkBlip();
+                            }
+                        } else if (deepVoice && charIndex % 3 === 0) {
                             this._playManagerTalkBlip();
                         }
                         if (append) {
@@ -990,24 +1178,193 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _playManagerTalkBlip() {
+        // The end-scene manager now speaks with a robotic voice — same as
+        // the Day 3 corporate call. Tinny modulated square fed through a
+        // bandpass, with the carrier pitch cycling so a stream of blips
+        // reads as broken-radio speech rather than a single beep.
         const context = this.sound?.context;
-        const now = context?.currentTime;
+        if (!context?.createOscillator) return;
+        if (context.state === 'suspended') {
+            try { context.resume(); } catch (_) { /* noop */ }
+        }
+        const now = context.currentTime;
         const musicVolume = getMusicVolume();
-        if (!context || musicVolume <= 0 || now - this._lastManagerTalkBlip < 0.035) return;
-
+        if (musicVolume <= 0 || now - this._lastManagerTalkBlip < 0.03) return;
         this._lastManagerTalkBlip = now;
-        const oscillator = context.createOscillator();
+
+        const baseFreq = [320, 380, 460, 540][(this._managerRobotStep || 0) % 4];
+        this._managerRobotStep = (this._managerRobotStep || 0) + 1;
+
+        const carrier = context.createOscillator();
+        carrier.type = 'square';
+        carrier.frequency.setValueAtTime(baseFreq + Phaser.Math.Between(-12, 12), now);
+
+        const fm = context.createOscillator();
+        fm.type = 'square';
+        fm.frequency.setValueAtTime(38, now);
+        const fmGain = context.createGain();
+        fmGain.gain.setValueAtTime(60, now);
+        fm.connect(fmGain);
+        fmGain.connect(carrier.frequency);
+
+        const bandpass = context.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(1100, now);
+        bandpass.Q.setValueAtTime(2.4, now);
+
         const gain = context.createGain();
-        oscillator.type = 'sawtooth';
-        oscillator.frequency.setValueAtTime(58 + Phaser.Math.Between(-6, 8), now);
-        oscillator.frequency.exponentialRampToValueAtTime(42, now + 0.07);
+        const peak = Phaser.Math.Clamp(0.07 * musicVolume, 0.015, 0.1);
         gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.exponentialRampToValueAtTime(0.05 * musicVolume, now + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
-        oscillator.connect(gain);
+        gain.gain.exponentialRampToValueAtTime(peak, now + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+
+        carrier.connect(bandpass);
+        bandpass.connect(gain);
         gain.connect(context.destination);
-        oscillator.start(now);
-        oscillator.stop(now + 0.1);
+
+        carrier.start(now);
+        fm.start(now);
+        carrier.stop(now + 0.085);
+        fm.stop(now + 0.085);
+    }
+
+    _playUmbrellaTalkBlip() {
+        const context = this.sound?.context;
+        if (!context?.createOscillator) return;
+        if (context.state === 'suspended') {
+            try { context.resume(); } catch (_) { /* noop */ }
+        }
+        const now = context.currentTime;
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0 || now - this._lastUmbrellaTalkBlip < 0.034) return;
+        this._lastUmbrellaTalkBlip = now;
+
+        const baseFreq = 520 + ((this._umbrellaBlipStep || 0) % 5) * 35;
+        this._umbrellaBlipStep = (this._umbrellaBlipStep || 0) + 1;
+
+        const carrier = context.createOscillator();
+        carrier.type = 'triangle';
+        carrier.frequency.setValueAtTime(baseFreq, now);
+        const gain = context.createGain();
+        const peak = Phaser.Math.Clamp(0.05 * musicVolume, 0.012, 0.08);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(peak, now + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+        const hp = context.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.setValueAtTime(400, now);
+        carrier.connect(hp);
+        hp.connect(gain);
+        gain.connect(context.destination);
+        carrier.start(now);
+        carrier.stop(now + 0.06);
+    }
+
+    _playScrapSfx() {
+        const v = getSfxVolume();
+        if (v <= 0) return;
+        if (this.cache?.audio?.has(SOUND_ASSETS.scrapDecision.key)) {
+            this.sound.play(SOUND_ASSETS.scrapDecision.key, {
+                volume: SOUND_VOLUMES.decision * v,
+            });
+            return;
+        }
+        if (this.cache?.audio?.has(SOUND_ASSETS.inspectionReveal.key)) {
+            this.sound.play(SOUND_ASSETS.inspectionReveal.key, {
+                volume: SOUND_VOLUMES.reveal * 0.55 * v,
+            });
+        }
+    }
+
+    _useClosedUmbrellaTexture() {
+        if (this.textures.exists('machine_rebellious_umbrella_scrapped')) {
+            this._umbrellaSprite.setTexture('machine_rebellious_umbrella_scrapped');
+        }
+    }
+
+    _conveyorEjectManagerActor() {
+        this._speakerTween?.stop();
+        this._speakerTween = null;
+        return new Promise((resolve) => {
+            this.tweens.add({
+                targets: this._managerSprite,
+                x: MACHINE_PRESENTATION.conveyorExitX,
+                y: 520,
+                angle: 12,
+                duration: 1400,
+                ease: 'Cubic.In',
+                onComplete: () => {
+                    this._playScrapSfx();
+                    this._managerSprite.setVisible(false);
+                    resolve(true);
+                },
+            });
+        });
+    }
+
+    async _umbrellaJumpSpamOnScrap() {
+        for (let i = 0; i < 16; i += 1) {
+            this._playScrapSfx();
+            this.tweens.add({
+                targets: this._umbrellaSprite,
+                y: this._umbrellaSprite.y - 20,
+                duration: 68,
+                yoyo: true,
+                ease: 'Quad.Out',
+            });
+            this.tweens.add({
+                targets: this._scrapButton,
+                y: this._scrapButton.y - 3,
+                duration: 60,
+                yoyo: true,
+                ease: 'Quad.Out',
+            });
+            this.tweens.add({
+                targets: this._scrapButtonGlow,
+                y: this._scrapButtonGlow.y - 3,
+                duration: 60,
+                yoyo: true,
+                ease: 'Quad.Out',
+            });
+            this.tweens.add({
+                targets: this._scrapButtonLabel,
+                y: this._scrapButtonLabel.y - 3,
+                duration: 60,
+                yoyo: true,
+                ease: 'Quad.Out',
+            });
+            await this._wait(110);
+        }
+    }
+
+    _typeDialogueLineRaw(line, { color = '#aee7ff', deepVoice = true } = {}) {
+        return new Promise((resolve) => {
+            const text = String(line || '');
+            this._dialogueText
+                .setColor(color)
+                .setFontSize(22)
+                .setStroke('#000000', 0)
+                .setText('');
+            let charIndex = 0;
+            if (!text.length) {
+                this.time.delayedCall(120, () => resolve(true));
+                return;
+            }
+            this.time.addEvent({
+                delay: 38,
+                repeat: text.length - 1,
+                callback: () => {
+                    charIndex += 1;
+                    if (deepVoice && charIndex % 3 === 0) {
+                        this._playManagerTalkBlip();
+                    }
+                    this._dialogueText.setText(text.slice(0, charIndex));
+                    if (charIndex >= text.length) {
+                        this.time.delayedCall(420, () => resolve(true));
+                    }
+                },
+            });
+        });
     }
 
     async _bubbleDialogue(actor, lines, options = {}) {
@@ -1022,7 +1379,7 @@ export default class EndScene extends Phaser.Scene {
         for (const entry of entries) {
             const line = String(entry || '');
             this._layoutSpeechBubble(actor, line, options);
-            await this._typeSpeechBubbleLine(line);
+            await this._typeSpeechBubbleLine(line, { deepVoice: options.deepVoice });
             await this._wait(options.holdMs ?? 1050);
         }
 
@@ -1093,7 +1450,7 @@ export default class EndScene extends Phaser.Scene {
             .setPosition(bubbleX + 24, bubbleY + 48);
     }
 
-    _typeSpeechBubbleLine(line) {
+    _typeSpeechBubbleLine(line, options = {}) {
         return new Promise((resolve) => {
             const text = String(line || '');
             this._speechBubbleText.setText('');
@@ -1113,6 +1470,9 @@ export default class EndScene extends Phaser.Scene {
                 repeat: text.length - 1,
                 callback: () => {
                     index += 1;
+                    if (options.deepVoice && index % 3 === 0) {
+                        this._playManagerTalkBlip();
+                    }
                     this._speechBubbleText.setText(text.slice(0, index));
                     if (index >= text.length) {
                         resolve(true);
@@ -1309,6 +1669,7 @@ export default class EndScene extends Phaser.Scene {
             .setAlpha(1)
             .setY(760);
         this._setSkipCreditsVisible(true);
+        this._startCreditsPortraits();
 
         const creditHeight = this._creditsHeight || 900;
         const endY = -creditHeight - 120;
@@ -1344,10 +1705,36 @@ export default class EndScene extends Phaser.Scene {
 
         this._creditsContainer?.setVisible(false).setAlpha(0);
         this._setSkipCreditsVisible(false);
+        this._stopCreditsPortraits();
 
         const resolve = this._creditsResolve;
         this._creditsResolve = null;
         resolve?.(true);
+    }
+
+    _startCreditsPortraits() {
+        this._stopCreditsPortraits();
+        this._creditsPortraits.forEach((portrait, index) => {
+            portrait.setVisible(true).setAlpha(0.2);
+            const tween = this.tweens.add({
+                targets: portrait,
+                alpha: { from: 0.2, to: 0.85 },
+                duration: 1800,
+                yoyo: true,
+                repeat: -1,
+                delay: index * 620,
+                ease: 'Sine.InOut',
+            });
+            this._creditsPortraitTweens.push(tween);
+        });
+    }
+
+    _stopCreditsPortraits() {
+        this._creditsPortraitTweens.forEach((tween) => tween?.stop());
+        this._creditsPortraitTweens = [];
+        this._creditsPortraits.forEach((portrait) => {
+            portrait.setVisible(false).setAlpha(0);
+        });
     }
 
     async _showScoreScreen() {
@@ -1480,10 +1867,10 @@ export default class EndScene extends Phaser.Scene {
             : (score >= 94 ? 'ELITE FLOOR PERFORMANCE' : (score >= 74 ? 'ABOVE QUOTA' : (score >= 40 ? 'KEPT EMPLOYED' : 'CORPORATE EVIDENCE BAG')));
         const metricBars = [
             this._buildMistakeMetricBar(mistakes),
-            this._buildTimingMetricBar('average code puzzle time', timingStats.code, 96, 0x65d4ff),
-            this._buildTimingMetricBar('average grid puzzle time', timingStats.grid, 84, 0x78f0c4),
+            this._buildTimingMetricBar('average debug puzzle time', timingStats.code, 96, 0x65d4ff),
+            this._buildTimingMetricBar('average circuit puzzle time', timingStats.grid, 84, 0x78f0c4),
             this._buildTimingMetricBar('average gear puzzle time', timingStats.gear, 112, 0xf3db84),
-            this._buildTimingMetricBar('average flow puzzle time', timingStats.flow, 90, 0xd3a2ff),
+            this._buildTimingMetricBar('average wiring puzzle time', timingStats.flow, 90, 0xd3a2ff),
         ];
 
         return {
@@ -1493,10 +1880,10 @@ export default class EndScene extends Phaser.Scene {
             metricBars,
             lines: [
                 `- mistakes: ${mistakes}`,
-                this._formatPuzzleTimeLine('average code puzzle time', timingStats.code, 96),
-                this._formatPuzzleTimeLine('average grid puzzle time', timingStats.grid, 84),
+                this._formatPuzzleTimeLine('average debug puzzle time', timingStats.code, 96),
+                this._formatPuzzleTimeLine('average circuit puzzle time', timingStats.grid, 84),
                 this._formatPuzzleTimeLine('average gear puzzle time', timingStats.gear, 112),
-                this._formatPuzzleTimeLine('average flow puzzle time', timingStats.flow, 90),
+                this._formatPuzzleTimeLine('average wiring puzzle time', timingStats.flow, 90),
                 `- total money made: $${totalMoneyMade.toFixed(2)}`,
                 `- total money lost: $${totalMoneyLost.toFixed(2)}`,
                 `- net money: $${netMoney.toFixed(2)} (${netPercent}% ahead of everyone else)`,
@@ -1604,10 +1991,11 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _gradeFromScore(score) {
-        for (let i = SCORE_GRADES.length - 1; i >= 0; i--) {
-            if (score >= SCORE_GRADES[i].min) return SCORE_GRADES[i].grade;
-        }
-        return SCORE_GRADES[0].grade;
+        let grade = SCORE_GRADES[0].grade;
+        SCORE_GRADES.forEach((entry) => {
+            if (score >= entry.min) grade = entry.grade;
+        });
+        return grade;
     }
 
     _tweenAsync(config) {

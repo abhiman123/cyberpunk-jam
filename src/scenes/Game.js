@@ -16,9 +16,16 @@ import {
     getShiftClockStepMs,
 } from '../constants/gameConstants.js';
 import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections } from '../core/gearPuzzleLogic.js';
-import { createMachineVariant, getEligibleMachineDefinitions, resolveMachineTexture } from '../data/machineCatalog.js';
-import { getMusicVolume } from '../state/gameSettings.js';
+import {
+    buildUmbrellaDay3PreownedCircuitGridOption,
+    createMachineVariant,
+    getEligibleMachineDefinitions,
+    MachinePuzzleState,
+    resolveMachineTexture,
+} from '../data/machineCatalog.js';
+import { getMusicVolume, getSfxVolume } from '../state/gameSettings.js';
 
+import StateMachine from '../core/StateMachine.js';
 import CircuitRouting from '../systems/minigames/CircuitRouting.js';
 import GearGridPuzzle from '../systems/minigames/GearGridPuzzle.js';
 import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
@@ -112,7 +119,7 @@ export default class GameScene extends Phaser.Scene {
         this._managerCallSound = null;
         this._openingCallSequenceId = 0;
         this._openingCallChoiceResolver = null;
-
+        this._sequenceDebugCounter = 0;
         this._phoneViews = {
             info: {
                 header: 'UNIT DOSSIER',
@@ -144,10 +151,18 @@ export default class GameScene extends Phaser.Scene {
         this._miniGearPreviewPhase = 0;
         this._miniGearPreviewTimer = 0;
         this._currentMiniGearPreviewRect = null;
-        this._konamiSequence = ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'];
-        this._konamiProgress = 0;
+        this._konamiProfiles = [
+            { id: 'skip-day', keys: ['UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'] },
+            { id: 'end-purple', keys: ['UP', 'UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'] },
+            { id: 'end-mixed', keys: ['UP', 'UP', 'DOWN', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'] },
+            { id: 'end-replacement', keys: ['UP', 'UP', 'UP', 'UP', 'DOWN', 'DOWN', 'LEFT', 'RIGHT', 'LEFT', 'RIGHT'] },
+        ];
+        this._konamiProfileProgress = this._konamiProfiles.map(() => 0);
         this._konamiFinaleTriggered = false;
+        this._konamiDaySkipLocked = false;
         this._initializeMachineShiftQueue();
+
+        this._caseSM = new StateMachine('intake');
 
         const fx = applyCyberpunkLook(this);
         this._cmFilter = fx.cmFilter;
@@ -999,10 +1014,9 @@ export default class GameScene extends Phaser.Scene {
         const bounds = this._deskPhotoBounds;
         const nextX = containerLocalX + intent.offsetX;
         const nextY = containerLocalY + intent.offsetY;
-        // Clamp to container-local table bounds; tableTopMargin keeps items below the belt/conveyor edge
-        const tableTopMargin = 30;
+        // Clamp to container-local bounds (0 to bounds.width/height)
         const clampedX = Phaser.Math.Clamp(nextX, intent.item.width / 2, bounds.width - (intent.item.width / 2));
-        const clampedY = Phaser.Math.Clamp(nextY, tableTopMargin + intent.item.height / 2, bounds.height - (intent.item.height / 2));
+        const clampedY = Phaser.Math.Clamp(nextY, intent.item.height / 2, bounds.height - (intent.item.height / 2));
         intent.item.container.setPosition(clampedX, clampedY);
     }
 
@@ -1395,7 +1409,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._syncJesterDeskTokenVisibility();
         this._handlePuzzleStateChanged(machineVariant, machineVariant.puzzleState);
-        this._setPhoneInfoNote('Clown circuit loaded. Open GRID and place the red domino anywhere to poison the board.', 'CLOWN TOKEN');
+        this._setPhoneInfoNote('Clown circuit loaded. Open GRID and place the red circuit anywhere to poison the board.', 'CLOWN TOKEN');
         this._showFeedback('CLOWN DOMINO INJECTED // OPEN GRID', '#ff8f86');
         this._reactToUmbrellaSpecialCircuitLoad(machineVariant);
         this._openMachinePuzzle();
@@ -1422,7 +1436,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._syncPurpleCircuitDeskTokenVisibility();
         this._handlePuzzleStateChanged(machineVariant, machineVariant.puzzleState);
-        this._setPhoneInfoNote('Purple circuit loaded. Open GRID and place the wildcard domino anywhere to overpower the board.', 'PURPLE CIRCUIT');
+        this._setPhoneInfoNote('Purple circuit loaded. Open GRID and place the wildcard circuit anywhere to overpower the board.', 'PURPLE CIRCUIT');
         this._showFeedback('PURPLE CIRCUIT INJECTED // OPEN GRID', '#cc95ff');
         this._reactToUmbrellaSpecialCircuitLoad(machineVariant);
         this._openMachinePuzzle();
@@ -1769,7 +1783,9 @@ export default class GameScene extends Phaser.Scene {
         const frameHeight = 216;
         const screenX = 22;
         const screenY = 20;
-        const screenWidth = 278;
+        // Light-blue screen extended further right so the dialogue copy
+        // breathes — buttons live just past the screen's right edge.
+        const screenWidth = 340;
         const screenHeight = 154;
 
         this._phonePanel = this.add.container(panelX, panelY).setDepth(260).setVisible(true);
@@ -1782,12 +1798,11 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xc9ffff, 0.25);
         const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 30, screenWidth - 10, 46, 0xffffff, 0.08).setOrigin(0.5);
         const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 38, 10, 0x1b1812, 1).setOrigin(0.5);
-        // The dialogue board fills the cyan screen interior almost edge-to-edge
-        // so the body text can be sized up without leaving large blank gaps.
-        const messageBoardShadow = this.add.rectangle(150, 94, 260, 108, 0x000000, 0.12)
+        const messageBoardCenterX = screenX + (screenWidth / 2);
+        const messageBoardShadow = this.add.rectangle(messageBoardCenterX, 96, screenWidth - 14, 100, 0x000000, 0.12)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x163136, 0.16);
-        const messageBoard = this.add.rectangle(150, 94, 256, 104, 0xf3ffff, 0.22)
+        const messageBoard = this.add.rectangle(messageBoardCenterX, 96, screenWidth - 18, 96, 0xf3ffff, 0.22)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x17363d, 0.28);
         this._phoneMessageBoardShadow = messageBoardShadow;
@@ -1799,23 +1814,22 @@ export default class GameScene extends Phaser.Scene {
             scanlines.fillRect(screenX, screenY + offset, screenWidth, 6);
         }
 
-        this._phoneHeaderText = this.add.text(30, 28, 'FACTORY LINK', {
+        this._phoneHeaderText = this.add.text(34, 30, 'FACTORY LINK', {
             fontFamily: 'Arial Black', fontSize: '13px', color: '#0c171b',
-            wordWrap: { width: 258 },
+            wordWrap: { width: screenWidth - 20 },
         });
-        // Body text is 19px now and left-anchored at the top so multi-line
-        // wraps grow downward into the freshly-enlarged board instead of
-        // leaving the bottom half of the screen blank on short prompts.
-        this._phoneBodyText = this.add.text(28, 48, '', {
-            fontFamily: 'Arial', fontSize: '19px', color: '#101010',
-            wordWrap: { width: 244 }, lineSpacing: 6,
+        // Bigger body text to fill the dialogue board — was 14px and left
+        // the bottom half of the screen blank during short prompts.
+        this._phoneBodyText = this.add.text(28, 50, '', {
+            fontFamily: 'Arial', fontSize: '17px', color: '#101010',
+            wordWrap: { width: screenWidth - 20 }, lineSpacing: 6,
         });
-        this._phoneStatusText = this.add.text(32, 152, 'CHANNEL IDLE', {
+        this._phoneStatusText = this.add.text(32, 146, 'CHANNEL IDLE', {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
             wordWrap: { width: 172 },
         });
 
-        this._phoneBodyViewport = { x: 28, y: 46, width: 244, height: 96 };
+        this._phoneBodyViewport = { x: 28, y: 48, width: screenWidth - 20, height: 96 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
 
@@ -1829,17 +1843,18 @@ export default class GameScene extends Phaser.Scene {
         ).setOrigin(0.5).setInteractive({ useHandCursor: true });
         this._phoneBodyScrollZone.on('pointerover', () => { this._phoneScrollHover = true; });
         this._phoneBodyScrollZone.on('pointerout', () => { this._phoneScrollHover = false; });
-        this._phoneScrollTrack = this.add.rectangle(264, this._phoneScrollTrackTop, 5, this._phoneScrollTrackHeight, 0x3d7c88, 0.22)
+        const scrollTrackX = screenX + screenWidth - 14;
+        this._phoneScrollTrack = this.add.rectangle(scrollTrackX, this._phoneScrollTrackTop, 5, this._phoneScrollTrackHeight, 0x3d7c88, 0.22)
             .setOrigin(0.5, 0);
-        this._phoneScrollThumb = this.add.rectangle(264, this._phoneScrollTrackTop, 5, 20, 0x14313a, 0.56)
+        this._phoneScrollThumb = this.add.rectangle(scrollTrackX, this._phoneScrollTrackTop, 5, 20, 0x14313a, 0.56)
             .setOrigin(0.5, 0)
             .setStrokeStyle(1, 0xe8ffff, 0.24);
         this.input.on('wheel', this._handlePhoneWheel, this);
 
-        this._settingsButtonBg = this.add.rectangle(366, 46, 40, 42, 0x314250, 1)
+        this._settingsButtonBg = this.add.rectangle(384, 46, 40, 42, 0x314250, 1)
             .setStrokeStyle(2, 0x6db7e1, 0.8)
             .setInteractive({ useHandCursor: true });
-        this._settingsButtonLabel = this.add.text(366, 46, '⚙', {
+        this._settingsButtonLabel = this.add.text(384, 46, '⚙', {
             fontFamily: 'Arial Black', fontSize: '19px', color: '#dff6ff',
         }).setOrigin(0.5);
 
@@ -1855,13 +1870,13 @@ export default class GameScene extends Phaser.Scene {
         });
         this._settingsButtonBg.on('pointerdown', () => this._toggleSettingsOverlay());
 
-        const accept = this._createPhoneButton(366, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
+        const accept = this._createPhoneButton(384, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
             width: 44,
             height: 48,
             fontSize: '26px',
             glowColor: 0xffffff,
         });
-        const reject = this._createPhoneButton(366, 155, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
+        const reject = this._createPhoneButton(384, 155, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
             width: 42,
             height: 46,
             fontSize: '23px',
@@ -2512,7 +2527,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._showPhonePanel(
             header,
-            '6:00 AM reached. Waiting for you to ACCEPT or SCRAP the current unit before the shift ends.',
+            '12:00 AM reached. Waiting for you to ACCEPT or SCRAP the current unit before the shift ends.',
             'LAST UNIT ON LINE'
         );
         this._showFeedback('SHIFT OVER // FILE THE LAST RULING', '#ffd685');
@@ -2559,7 +2574,11 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _shouldUseAutomatedTextBrief() {
-        return GameState.day === 3;
+        // Day 3 used to drop into a corrupted "automated text brief" (the
+        // garbled archive readout). The manager now keeps calling on Day 3
+        // with the same robotic typing voice as the End scene, so the
+        // ruined-voice automated brief is no longer used.
+        return false;
     }
 
     _buildFallbackDebriefReport() {
@@ -2765,7 +2784,7 @@ export default class GameScene extends Phaser.Scene {
                 },
             });
 
-            const voice = this._playOneShot(line?.voiceAsset, { volume: SOUND_VOLUMES.voice });
+            const voice = this._playOneShot(line?.voiceAsset, { volume: SOUND_VOLUMES.voice, category: 'voice' });
             if (voice) {
                 voice.once('complete', () => {
                     voiceDone = true;
@@ -2849,6 +2868,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._managerCallSound = this._playOneShot(SOUND_ASSETS.managerCall, {
             volume: 0.72 * musicVolume,
+            category: 'music',
         });
         this._managerCallSound?.once?.('complete', () => {
             this._managerCallSound = null;
@@ -2893,6 +2913,9 @@ export default class GameScene extends Phaser.Scene {
             charIndex: 0,
         };
         this._activePhoneTypingState = typingState;
+        // Day 1 / 2 manager calls speak with a deep voice; Day 3 sounds like
+        // the broken-radio robot in the End scene.
+        const useDeepVoice = GameState.day <= 2;
         this._commTypingEvent = this.time.addEvent({
             delay: 24,
             repeat: text.length - 1,
@@ -2906,7 +2929,16 @@ export default class GameScene extends Phaser.Scene {
                     this._phoneStickToBottom = true;
                     this._syncPhoneBodyLayout();
                 }
-                if (nextChar && nextChar.trim()) this._playTypeBeep();
+                if (nextChar && nextChar.trim()) {
+                    if (useDeepVoice) {
+                        if (charIndex % 3 === 0) this._playManagerDeepBlip();
+                    } else if (charIndex % 2 === 0) {
+                        // Day 3+ manager — only the robotic blip plays so
+                        // the voice is consistent with the End scene rather
+                        // than alternating with the standard type beep.
+                        this._playManagerRobotBlip();
+                    }
+                }
 
                 if (charIndex >= text.length) {
                     this._commTypingEvent = null;
@@ -2917,6 +2949,96 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
+    _startConveyorHum() {
+        const audioContext = this.sound?.context;
+        if (!audioContext?.createOscillator) return null;
+        if (audioContext.state === 'suspended') {
+            try { audioContext.resume(); } catch (_) { /* noop */ }
+        }
+
+        const now = audioContext.currentTime;
+        const musicVolume = getMusicVolume();
+        const targetGain = SOUND_VOLUMES.conveyor * 0.95 * Math.max(0, musicVolume);
+
+        // Low rumble (the belt motor itself).
+        const baseOsc = audioContext.createOscillator();
+        baseOsc.type = 'sawtooth';
+        baseOsc.frequency.setValueAtTime(58, now);
+        const detuneOsc = audioContext.createOscillator();
+        detuneOsc.type = 'sine';
+        detuneOsc.frequency.setValueAtTime(96, now);
+
+        const lowpass = audioContext.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.setValueAtTime(280, now);
+        lowpass.Q.setValueAtTime(0.7, now);
+
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(0.0001, now);
+        gainNode.gain.linearRampToValueAtTime(targetGain, now + 0.2);
+
+        // Slow mechanical wobble.
+        const tremolo = audioContext.createOscillator();
+        tremolo.type = 'sine';
+        tremolo.frequency.setValueAtTime(3.6, now);
+        const tremoloGain = audioContext.createGain();
+        tremoloGain.gain.setValueAtTime(targetGain * 0.22, now);
+        tremolo.connect(tremoloGain);
+        tremoloGain.connect(gainNode.gain);
+
+        baseOsc.connect(lowpass);
+        detuneOsc.connect(lowpass);
+        lowpass.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Belt friction noise — filtered white noise gives the actual
+        // "conveyor moving" texture instead of a pure synth hum.
+        let noiseBuffer = this._conveyorNoiseBuffer;
+        if (!noiseBuffer) {
+            const bufferSize = Math.max(1, Math.floor(audioContext.sampleRate * 1.2));
+            noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const channel = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i += 1) {
+                channel[i] = (Math.random() * 2 - 1) * 0.5;
+            }
+            this._conveyorNoiseBuffer = noiseBuffer;
+        }
+
+        const noiseSource = audioContext.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+        noiseSource.loop = true;
+        const noiseFilter = audioContext.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(640, now);
+        noiseFilter.Q.setValueAtTime(0.9, now);
+        const noiseGain = audioContext.createGain();
+        noiseGain.gain.setValueAtTime(0.0001, now);
+        noiseGain.gain.linearRampToValueAtTime(targetGain * 0.55, now + 0.25);
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(audioContext.destination);
+
+        baseOsc.start(now);
+        detuneOsc.start(now);
+        tremolo.start(now);
+        noiseSource.start(now);
+
+        return {
+            stop: () => {
+                const stopAt = audioContext.currentTime;
+                [gainNode, noiseGain].forEach((g) => {
+                    g.gain.cancelScheduledValues(stopAt);
+                    g.gain.setValueAtTime(g.gain.value, stopAt);
+                    g.gain.linearRampToValueAtTime(0.0001, stopAt + 0.2);
+                });
+                baseOsc.stop(stopAt + 0.24);
+                detuneOsc.stop(stopAt + 0.24);
+                tremolo.stop(stopAt + 0.24);
+                try { noiseSource.stop(stopAt + 0.24); } catch (_) { /* noop */ }
+            },
+        };
+    }
+
     _playTypeBeep() {
         const audioContext = this.sound?.context;
         if (!audioContext?.createOscillator) return;
@@ -2925,29 +3047,178 @@ export default class GameScene extends Phaser.Scene {
         if (this._lastTypeBeepAt && (now - this._lastTypeBeepAt) < 0.02) return;
         this._lastTypeBeepAt = now;
 
-        const oscillator = audioContext.createOscillator();
+        // Robotic chirp: a short FM-modulated square ducked through a tight
+        // bandpass so each keystroke reads like a mechanical/digital tick.
+        // This is everything-typing-sound for non-manager dialogue (machine
+        // speech bubbles, debug console, notifications, etc.).
+        const baseFreq = [780, 920, 720, 860][this._typeBeepStep % 4] || 780;
+        this._typeBeepStep = (this._typeBeepStep || 0) + 1;
+
+        const carrier = audioContext.createOscillator();
+        carrier.type = 'square';
+        carrier.frequency.setValueAtTime(baseFreq + Phaser.Math.Between(-25, 25), now);
+
+        const fm = audioContext.createOscillator();
+        fm.type = 'square';
+        fm.frequency.setValueAtTime(58, now);
+        const fmGain = audioContext.createGain();
+        fmGain.gain.setValueAtTime(45, now);
+        fm.connect(fmGain);
+        fmGain.connect(carrier.frequency);
+
+        const bandpass = audioContext.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(1500, now);
+        bandpass.Q.setValueAtTime(2.2, now);
+
         const gainNode = audioContext.createGain();
-
-        oscillator.type = 'square';
-        oscillator.frequency.setValueAtTime(620 + Phaser.Math.Between(-35, 35), now);
         gainNode.gain.setValueAtTime(0.0001, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.013, now + 0.004);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+        gainNode.gain.exponentialRampToValueAtTime(0.011, now + 0.003);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
 
-        oscillator.connect(gainNode);
+        carrier.connect(bandpass);
+        bandpass.connect(gainNode);
         gainNode.connect(audioContext.destination);
-        oscillator.start(now);
-        oscillator.stop(now + 0.04);
-        oscillator.onended = () => {
-            oscillator.disconnect();
-            gainNode.disconnect();
+
+        carrier.start(now);
+        fm.start(now);
+        carrier.stop(now + 0.05);
+        fm.stop(now + 0.05);
+        carrier.onended = () => {
+            try { carrier.disconnect(); } catch (_) { /* noop */ }
+            try { fm.disconnect(); } catch (_) { /* noop */ }
+            try { fmGain.disconnect(); } catch (_) { /* noop */ }
+            try { bandpass.disconnect(); } catch (_) { /* noop */ }
+            try { gainNode.disconnect(); } catch (_) { /* noop */ }
         };
+    }
+
+    _playManagerDeepBlip() {
+        const context = this.sound?.context;
+        if (!context?.createOscillator) return;
+        if (context.state === 'suspended') {
+            try { context.resume(); } catch (_) { /* noop */ }
+        }
+        const now = context.currentTime;
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0) return;
+        if (this._lastManagerDeepBlipAt && now - this._lastManagerDeepBlipAt < 0.04) return;
+        this._lastManagerDeepBlipAt = now;
+
+        const body = context.createOscillator();
+        body.type = 'sawtooth';
+        body.frequency.setValueAtTime(74 + Phaser.Math.Between(-5, 7), now);
+        body.frequency.exponentialRampToValueAtTime(48, now + 0.085);
+
+        const sub = context.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(52, now);
+        sub.frequency.exponentialRampToValueAtTime(36, now + 0.085);
+
+        const lowpass = context.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.setValueAtTime(420, now);
+        lowpass.Q.setValueAtTime(0.8, now);
+
+        const gain = context.createGain();
+        const peak = Phaser.Math.Clamp(0.18 * musicVolume, 0.03, 0.22);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(peak, now + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+
+        body.connect(lowpass);
+        sub.connect(lowpass);
+        lowpass.connect(gain);
+        gain.connect(context.destination);
+
+        body.start(now);
+        sub.start(now);
+        body.stop(now + 0.13);
+        sub.stop(now + 0.13);
+    }
+
+    _playManagerRobotBlip() {
+        const context = this.sound?.context;
+        if (!context?.createOscillator) return;
+        if (context.state === 'suspended') {
+            try { context.resume(); } catch (_) { /* noop */ }
+        }
+        const now = context.currentTime;
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0) return;
+        if (this._lastManagerRobotBlipAt && now - this._lastManagerRobotBlipAt < 0.03) return;
+        this._lastManagerRobotBlipAt = now;
+
+        // Tinny, modulated square — cycles through a couple of pitches per
+        // call so a stream of them reads as broken-radio robot speech.
+        const baseFreq = [320, 380, 460, 540][this._managerRobotBlipStep % 4] || 380;
+        this._managerRobotBlipStep = (this._managerRobotBlipStep || 0) + 1;
+
+        const carrier = context.createOscillator();
+        carrier.type = 'square';
+        carrier.frequency.setValueAtTime(baseFreq + Phaser.Math.Between(-12, 12), now);
+
+        const fm = context.createOscillator();
+        fm.type = 'square';
+        fm.frequency.setValueAtTime(38, now);
+        const fmGain = context.createGain();
+        fmGain.gain.setValueAtTime(60, now);
+        fm.connect(fmGain);
+        fmGain.connect(carrier.frequency);
+
+        const bandpass = context.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(1100, now);
+        bandpass.Q.setValueAtTime(2.4, now);
+
+        const gain = context.createGain();
+        const peak = Phaser.Math.Clamp(0.06 * musicVolume, 0.01, 0.09);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(peak, now + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+
+        carrier.connect(bandpass);
+        bandpass.connect(gain);
+        gain.connect(context.destination);
+
+        carrier.start(now);
+        fm.start(now);
+        carrier.stop(now + 0.075);
+        fm.stop(now + 0.075);
     }
 
 
     _getMachineFlowState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.flowPuzzle) return null;
         return machineVariant._uiOtherPuzzleEvidence || machineVariant.flowPuzzle.progress || null;
+    }
+
+    _isRichMfPersonalityPowered(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant || machineVariant.machineId !== 'rich_mf') return false;
+        const flowState = this._getMachineFlowState(machineVariant);
+        const feeds = flowState?.outputFeeds || flowState?.reachedOutputs;
+        if (Array.isArray(feeds)) return feeds.includes('PERSONALITY');
+        if (feeds && typeof feeds === 'object') {
+            const personalityFeed = feeds.PERSONALITY;
+            if (Array.isArray(personalityFeed)) return personalityFeed.length > 0;
+            return Boolean(personalityFeed);
+        }
+        // Default: rich_mf ships with PERSONALITY pre-wired, so when there
+        // is no live circuit state assume the personality output is powered.
+        return !flowState || flowState?.completed === true;
+    }
+
+    _isRichMfIntelligencePowered(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant || machineVariant.machineId !== 'rich_mf') return false;
+        const flowState = this._getMachineFlowState(machineVariant);
+        const feeds = flowState?.outputFeeds || flowState?.reachedOutputs;
+        if (Array.isArray(feeds)) return feeds.includes('INTELLIGENCE');
+        if (feeds && typeof feeds === 'object') {
+            const intelFeed = feeds.INTELLIGENCE;
+            if (Array.isArray(intelFeed)) return intelFeed.length > 0;
+            return Boolean(intelFeed);
+        }
+        return false;
     }
 
     _getMachineGearState(machineVariant = this._currentMachineVariant) {
@@ -2990,19 +3261,20 @@ export default class GameScene extends Phaser.Scene {
         if (machineVariant && debugSolved) machineVariant._uiDebugPuzzleSolved = true;
 
         const entries = [
-            { key: 'flow', label: 'FLOW', required: flowRequired, solved: flowSolved, state: flowState },
-            { key: 'gear', label: 'GEAR', required: gearRequired, solved: gearSolved, state: gearState },
-            { key: 'code', label: 'CODE', required: debugRequired, solved: debugSolved, state: debugState },
+            { key: 'flow', label: 'FLOW', required: flowRequired, solved: flowSolved, state: flowState, partKey: 'wire' },
+            { key: 'gear', label: 'GEAR', required: gearRequired, solved: gearSolved, state: gearState, partKey: 'gear' },
+            { key: 'code', label: 'CODE', required: debugRequired, solved: debugSolved, state: debugState, partKey: 'data' },
         ].map((entry) => {
-            const scrapRequired = Boolean(entry.state?.scrapRequired);
+            const portBlocked = Boolean(repairState?.assemblyActive && entry.partKey && !repairState.partReady?.[entry.partKey]);
+            const scrapRequired = Boolean(entry.state?.scrapRequired || portBlocked);
             const reviewed = Boolean(entry.state?.reviewed || entry.state?.completed);
 
             return {
                 ...entry,
                 scrapRequired,
                 reviewed,
-                scrapKind: entry.state?.scrapKind || null,
-                resolved: !entry.required || entry.solved || (scrapRequired && reviewed),
+                scrapKind: portBlocked ? 'port-blocked' : (entry.state?.scrapKind || null),
+                resolved: !entry.required || entry.solved || (scrapRequired && reviewed && !portBlocked),
             };
         });
         const requiredEntries = entries.filter((entry) => entry.required);
@@ -3152,12 +3424,23 @@ export default class GameScene extends Phaser.Scene {
             return 'No transmission. Process the unit cold.';
         }
 
+        // Rich Mf swaps tone based on which module is currently powered:
+        //  • personality (default) → charismatic ("hey do you know who i am?")
+        //  • intelligence          → stern, to-the-point
+        //  • neither               → silent (no dialogue at all)
+        const richMfDialogue = this._resolveRichMfDialogueState(machineVariant);
+        if (richMfDialogue?.silent) return '';
+
         const stage = machineVariant._uiConversationStage || 'opening';
-        const prompt = machineVariant.questionDialogue?.prompt || '';
+        const opening = richMfDialogue?.opening ?? machineVariant.openingDialogue;
+        const prompt = richMfDialogue?.prompt ?? (machineVariant.questionDialogue?.prompt || '');
+        const yesDialogue = richMfDialogue?.yesDialogue ?? machineVariant.questionDialogue?.yesDialogue;
+        const noDialogue = richMfDialogue?.noDialogue ?? machineVariant.questionDialogue?.noDialogue;
+
         const segments = [];
 
-        if (machineVariant.openingDialogue) {
-            segments.push(this._formatMachineSpeech(machineVariant.openingDialogue, machineVariant));
+        if (opening) {
+            segments.push(this._formatMachineSpeech(opening, machineVariant));
         }
 
         if ((stage === 'question' || stage === 'answered') && prompt) {
@@ -3166,15 +3449,39 @@ export default class GameScene extends Phaser.Scene {
 
         if (stage === 'answered') {
             const choice = machineVariant._uiConversationChoice;
-            const responseText = choice === 'accept'
-                ? machineVariant.questionDialogue?.yesDialogue
-                : machineVariant.questionDialogue?.noDialogue;
+            const responseText = choice === 'accept' ? yesDialogue : noDialogue;
             if (responseText) {
                 segments.push(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`);
             }
         }
 
         return segments.join('');
+    }
+
+    _resolveRichMfDialogueState(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant || machineVariant.machineId !== 'rich_mf') return null;
+
+        const personalityPowered = this._isRichMfPersonalityPowered(machineVariant);
+        const intelligencePowered = this._isRichMfIntelligencePowered(machineVariant);
+
+        if (personalityPowered) {
+            return {
+                opening: 'hey do you know who i am?',
+                prompt: 'hey do you know who i am?',
+                yesDialogue: "thats great!",
+                noDialogue: 'i am the rich guy with the personality.',
+            };
+        }
+        if (intelligencePowered) {
+            return {
+                opening: 'State your business.',
+                prompt: 'Are we done here?',
+                yesDialogue: 'Good. Then route the expensive parts first.',
+                noDialogue: 'Then make it quick.',
+            };
+        }
+        // No module currently powered — Rich Mf says nothing.
+        return { silent: true };
     }
 
 
@@ -3697,6 +4004,20 @@ export default class GameScene extends Phaser.Scene {
         return true;
     }
 
+    _applyUmbrellaPreownedDay3GridIfNeeded(machineVariant) {
+        const quest = this._getUmbrellaQuest();
+        if (!this._isRebelliousUmbrella(machineVariant) || !quest) return;
+        if (quest.stage !== 'special-circuit' || GameState.day < 3) return;
+        if (!GameState.hasSpecialItem('purple_circuit')) return;
+
+        const gridOption = buildUmbrellaDay3PreownedCircuitGridOption();
+        machineVariant.selectedGrid = gridOption;
+        machineVariant.puzzleState = new MachinePuzzleState(gridOption);
+        machineVariant.shapeGrid = machineVariant.puzzleState.grid;
+        machineVariant.dominoes = machineVariant.puzzleState.dominoes;
+        machineVariant._clownCorrupted = Boolean(machineVariant.puzzleState?.clownCorruption);
+    }
+
     _configureUmbrellaQuestForMachine(machineVariant) {
         machineVariant._umbrellaStolenParts = {
             circuit: false,
@@ -3736,9 +4057,13 @@ export default class GameScene extends Phaser.Scene {
             machineVariant._uiDebugPuzzleRequired = false;
             machineVariant._uiDebugPuzzleSolved = true;
             machineVariant._uiDebugPuzzleEvidence = null;
+            const hasPurple = GameState.hasSpecialItem('purple_circuit');
+            machineVariant.openingDialogue = hasPurple
+                ? 'u already got the circuit on u. good.'
+                : 'thanks for the hands. now do u got the purple circuit?';
             machineVariant.questionDialogue = {
-                prompt: 'do u got the thing',
-                yesDialogue: 'alright. slot it in.',
+                prompt: 'do u got the purple circuit?',
+                yesDialogue: hasPurple ? 'put it in my system then.' : 'alright. slot it in.',
                 noDialogue: 'our business here is done.',
             };
             return;
@@ -3747,7 +4072,7 @@ export default class GameScene extends Phaser.Scene {
         if (quest.stage !== 'special-circuit') {
             machineVariant.questionDialogue = {
                 prompt: 'So. Did you get it?',
-                yesDialogue: 'Alright then. Put it in me.',
+                yesDialogue: 'Alright. Drag those into my systems.',
                 noDialogue: 'Whatever bro. Give me that. Our business here is concluded.',
             };
         }
@@ -3874,7 +4199,7 @@ export default class GameScene extends Phaser.Scene {
             machineVariant._rulingChatStatus = 'QUEST ACCEPTED';
             this._pushPhoneNotification(
                 'BENEFACTOR CONTACT',
-                'The jester slipped a red clown domino onto your desk. Drag it into a unit GRID port, place it, and let the corrupted bot through.',
+                'The jester slipped a red clown circuit onto your desk. Drag it into a unit GRID port, place it, and let the corrupted bot through.',
                 'SIDE DEAL',
                 {
                     activate: false,
@@ -4147,6 +4472,11 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
+    _syncRulebookState(newRuleIds = null) {
+        this._rulebook?.setRuleState(GameState.activeRules, newRuleIds);
+    }
+
+
     _beginRebelliousUmbrellaProposal() {
         const machineVariant = this._currentMachineVariant;
         if (!this._isRebelliousUmbrella(machineVariant) || GameState.day !== 1 || this._getUmbrellaQuest()) {
@@ -4371,7 +4701,11 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneButtonsActive(false);
         this._setPhoneButtonSelection(null);
         this._showPhonePanel(header, currentBody, 'DIDN\'T FEEL A THING', 'chat');
-        this._typePhoneMessage('\n\nQ> r u sure u have the part? i didnt feel anything', {
+        const hasPurpleOnDesk = GameState.hasSpecialItem('purple_circuit');
+        const checkPrompt = hasPurpleOnDesk
+            ? '\n\nQ> r u sure u have the part? i didnt feel anything\n\n(drag the purple piece from the desk into my GRID first.)'
+            : '\n\nQ> r u sure u have the part? i didnt feel anything';
+        this._typePhoneMessage(checkPrompt, {
             append: true,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
@@ -4424,15 +4758,21 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        const hasPurpleOnDesk = GameState.hasSpecialItem('purple_circuit');
         this._showPhonePanel(header, currentBody, 'STILL WAITING', 'chat');
-        this._typePhoneMessage('\n\n✓ im waiting.', {
+        this._typePhoneMessage(hasPurpleOnDesk ? '\n\n✓ aight. open GRID and shove the purple thing in a port.' : '\n\n✓ im waiting.', {
             append: true,
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
                 this._phoneChoicePhase = 'inactive';
                 this._cacheMachineConversationSnapshot(machineVariant, 'STILL WAITING');
-                this._setPhoneInfoNote('He is still waiting for the special circuit. Load it into GRID.', 'STILL WAITING');
+                this._setPhoneInfoNote(
+                    hasPurpleOnDesk
+                        ? 'Drag the purple circuit from the desk into an open GRID port, then file your ruling.'
+                        : 'He is still waiting for the special circuit. Load it into GRID.',
+                    'STILL WAITING',
+                );
             },
         });
     }
@@ -4796,10 +5136,14 @@ export default class GameScene extends Phaser.Scene {
             : Date.now();
     }
 
-    _emitSequenceDebug(_label, _details = null) {
-        // Trace logger for the case-loading sequence. Left as a no-op so the
-        // 18 call sites stay valid and we can flip a single flag to bring the
-        // logs back when diagnosing intake/arrival regressions.
+    _emitSequenceDebug(label, details = null) {
+        this._sequenceDebugCounter += 1;
+        const prefix = `[SEQ ${this._sequenceDebugCounter}] ${label}`;
+        if (details && Object.keys(details).length > 0) {
+            console.log(prefix, details);
+            return;
+        }
+        console.log(prefix);
     }
 
     _scheduleNextCase(delayMs) {
@@ -4833,6 +5177,7 @@ export default class GameScene extends Phaser.Scene {
             day: GameState.day,
             period: GameState.period,
             umbrellaQuest: this._getUmbrellaQuest(),
+            umbrellaPermanentlyScrapped: GameState.umbrellaPermanentlyScrapped,
             specialItems: GameState.specialItems,
         });
         this._machineDefinitionById = new Map(
@@ -5059,7 +5404,7 @@ export default class GameScene extends Phaser.Scene {
             'mainview_fam2',
             'mainview_fam1',
         ];
-        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key));
+        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
         if (!hasMainViewLayers) {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
@@ -5092,11 +5437,8 @@ export default class GameScene extends Phaser.Scene {
                 layer.setInteractive({ useHandCursor: true, draggable: true });
                 this.input.setDraggable(layer);
                 layer.on('drag', (pointer, dragX, dragY) => {
-                    const deskTop = this.scale.height - 172;
-                    const hw = layer.displayWidth / 2;
-                    const hh = layer.displayHeight / 2;
-                    layer.x = Phaser.Math.Clamp(dragX, hw, this.scale.width - hw);
-                    layer.y = Phaser.Math.Clamp(dragY, deskTop + hh, this.scale.height - hh);
+                    layer.x = dragX;
+                    layer.y = dragY;
                 });
             } else {
                 layer = this.add.image(640, 360, key).setDisplaySize(1280, 720);
@@ -5193,7 +5535,7 @@ export default class GameScene extends Phaser.Scene {
             this._revealMachineMiniPanel();
         });
 
-        this._shapeLegendText.setText('0 open  1 wall  2-5 charge  = linked pair');
+        this._shapeLegendText.setText('0 open  1 wall  2-5 charge  = link  !=/!+ special  >#/<# cmp  ! fault');
 
         this._shapeHintText.setText('CLICK UNIT TO REVEAL MACHINE PORTS\nTHEN OPEN GRID, FLOW, GEAR, OR CODE');
 
@@ -6049,6 +6391,19 @@ export default class GameScene extends Phaser.Scene {
             this._updateMachinePortraits();
         }
 
+        // Rich Mf swaps tone/sprite the moment the routing changes, so we
+        // also need to refresh the inspect view + conversation transcript
+        // when his circuit state is updated.
+        if (this._isRichMf(this._currentMachineVariant)) {
+            this._refreshMachineConversationPanel(this._currentMachineVariant, null, {
+                activate: false,
+                rebuildConversation: true,
+            });
+            if (this._miniMachineImage) {
+                this._applyMachineSprite(this._miniMachineImage, this._currentMachineVariant.canvasScale ?? 1.0);
+            }
+        }
+
         if ((voiceRestoredNow || voiceBrokeNow) && this._currentMachineVariant?.hasCommunication) {
             this._refreshMachineConversationPanel(
                 this._currentMachineVariant,
@@ -6389,27 +6744,16 @@ export default class GameScene extends Phaser.Scene {
         machineVariant._rulingChatResponse = '';
         machineVariant._rulingChatStatus = null;
 
-        if (action === 'scrap' && (this._isDebriefMachine(machineVariant) || this._isRebelliousUmbrella(machineVariant) || this._isRichMf(machineVariant))) {
-            const lockState = this._isDebriefMachine(machineVariant)
-                ? {
-                    note: 'THIS IS TOO EXPENSIVE TO BE SCRAPPED.',
-                    feedback: 'SCRAP LOCKED // EXECUTIVE ASSET RESERVED',
-                    reaction: 'woah there. cant do that. im too important. accounting would need three signatures and a public apology.',
-                    status: 'ASSET LOCK',
-                }
-                : this._isRebelliousUmbrella(machineVariant)
-                    ? {
-                        note: 'THIS CONTACT CANNOT BE SCRAPPED. KEEP HIM MOVING.',
-                        feedback: 'SCRAP LOCKED // UMBRELLA PROTECTED',
-                        reaction: 'bro no. i am literally part of the plan. dont scrap me.',
-                        status: 'CONTACT LOCK',
-                    }
-                    : {
-                        note: 'THIS EXECUTIVE UNIT CANNOT BE SCRAPPED.',
-                        feedback: 'SCRAP LOCKED // EXECUTIVE ASSET RESERVED',
-                        reaction: 'No. Keep the chassis. The asset stays on the line.',
-                        status: 'ASSET LOCK',
-                    };
+        // The debrief machine is the only unit in the game that cannot be scrapped.
+        // Umbrella and rich_mf are scrappable now (they each have their own
+        // post-scrap consequences handled below).
+        if (action === 'scrap' && this._isDebriefMachine(machineVariant)) {
+            const lockState = {
+                note: 'THIS IS TOO EXPENSIVE TO BE SCRAPPED.',
+                feedback: 'SCRAP LOCKED // EXECUTIVE ASSET RESERVED',
+                reaction: 'another day another penny',
+                status: 'ASSET LOCK',
+            };
 
             this._playOneShot(SOUND_ASSETS.errorBuzz, { volume: SOUND_VOLUMES.decision * 0.58 });
             this.cameras.main.shake(260, 0.012);
@@ -6512,7 +6856,7 @@ export default class GameScene extends Phaser.Scene {
                 }
 
                 if (action === 'approve' && gateState.ready && !gateState.scrapRequired) {
-                    machineVariant._rulingChatResponse = 'Alright. Perfect. But to stop the robot rebellion I need one more thing, a special circuit. You will know it when you see it.';
+                    machineVariant._rulingChatResponse = 'alright you will see a circuit dealer soon';
                     machineVariant._rulingChatStatus = 'NEXT JOB';
                     if (repairState.quest) {
                         this._setUmbrellaQuest({
@@ -6629,6 +6973,7 @@ export default class GameScene extends Phaser.Scene {
         this._clearUnsafeAcceptConfirmation();
 
         this._actionLocked = true;
+        this._caseSM.transition('verdict');
         this._setPhoneButtonsActive(false);
         this._pendingExitAction = action;
         this._refreshFactoryActionButtons();
@@ -6802,28 +7147,77 @@ export default class GameScene extends Phaser.Scene {
     }
 
 
+    _resetKonamiProfileProgress() {
+        this._konamiProfileProgress = this._konamiProfiles.map(() => 0);
+    }
+
     _handleKonamiKey(event) {
-        if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) return;
-        if (this._overlayModalOpen || this._rulebook?.isVisible() || this._settingsOverlay?.isVisible() || this._machinePuzzleOverlay?.isVisible()) return;
+        if (!this._shiftRunning || this._shiftEnding || this._actionLocked || this._settingsOpen) {
+            console.log('[KONAMI] blocked: shiftRunning=%s shiftEnding=%s actionLocked=%s settingsOpen=%s', this._shiftRunning, this._shiftEnding, this._actionLocked, this._settingsOpen);
+            return;
+        }
+        if (this._overlayModalOpen || this._rulebook?.isVisible() || this._settingsOverlay?.isVisible() || this._machinePuzzleOverlay?.isVisible()) {
+            console.log('[KONAMI] blocked by overlay: overlayModalOpen=%s rulebook=%s settings=%s machinePuzzle=%s', this._overlayModalOpen, this._rulebook?.isVisible(), this._settingsOverlay?.isVisible(), this._machinePuzzleOverlay?.isVisible());
+            return;
+        }
         if (event?.repeat) return;
 
         const key = this._normalizeKonamiKey(event?.key);
         if (!key) return;
 
-        const expectedKey = this._konamiSequence[this._konamiProgress];
-        if (key === expectedKey) {
-            this._konamiProgress += 1;
-            if (this._konamiProgress >= this._konamiSequence.length) {
-                this._konamiProgress = 0;
-                this._armKonamiFinale();
+        for (let i = 0; i < this._konamiProfiles.length; i += 1) {
+            const profile = this._konamiProfiles[i];
+            const progress = this._konamiProfileProgress[i] || 0;
+            const expectedKey = profile.keys[progress];
+            if (key === expectedKey) {
+                this._konamiProfileProgress[i] = progress + 1;
+                if (progress + 1 >= profile.keys.length) {
+                    this._resetKonamiProfileProgress();
+                    this._onKonamiProfileComplete(profile.id);
+                }
+            } else {
+                this._konamiProfileProgress[i] = key === profile.keys[0] ? 1 : 0;
             }
-            return;
         }
-
-        this._konamiProgress = key === this._konamiSequence[0] ? 1 : 0;
     }
 
-    _armKonamiFinale() {
+    _onKonamiProfileComplete(profileId) {
+        if (profileId === 'skip-day') {
+            this._armKonamiDaySkip();
+            return;
+        }
+        const endingByProfile = {
+            'end-purple': 'umbrella_purple',
+            'end-mixed': 'umbrella_mixed',
+            'end-replacement': 'replacement',
+        };
+        const endingVariant = endingByProfile[profileId];
+        if (!endingVariant) return;
+        this._armKonamiFinale(endingVariant);
+    }
+
+    _armKonamiDaySkip() {
+        if (this._konamiDaySkipLocked) return;
+        if (GameState.day >= 4) {
+            this._showFeedback('KONAMI // NO DAY TO SKIP', '#ffd685');
+            return;
+        }
+        this._konamiDaySkipLocked = true;
+        this._nextCaseEvent?.remove(false);
+        this._nextCaseEvent = null;
+        this._advanceCaseEvent?.remove(false);
+        this._advanceCaseEvent = null;
+        this._clearUnsafeAcceptConfirmation();
+        this._clearPhoneTyping();
+        GameState.advanceDay();
+        this._showFeedback('KONAMI // DAY SKIPPED', '#ffd685');
+        this.cameras.main.fade(600, 0, 0, 0);
+        this.time.delayedCall(620, () => {
+            this.scene.restart();
+        });
+    }
+
+    _armKonamiFinale(endingVariant = 'replacement') {
         if (this._konamiFinaleTriggered) return;
         this._konamiFinaleTriggered = true;
 
@@ -6837,7 +7231,7 @@ export default class GameScene extends Phaser.Scene {
 
         this.cameras.main.fade(600, 0, 0, 0);
         this.time.delayedCall(620, () => {
-            this.scene.start('End');
+            this.scene.start('End', { endingVariant });
         });
     }
 
@@ -6869,6 +7263,7 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
+        this._caseSM.transition('intake');
         this._phoneBodyScrollOffset = 0;
         this._phoneStickToBottom = true;
 
@@ -6890,6 +7285,7 @@ export default class GameScene extends Phaser.Scene {
                 day: GameState.day,
                 period: GameState.period,
                 umbrellaQuest: this._getUmbrellaQuest(),
+                umbrellaPermanentlyScrapped: GameState.umbrellaPermanentlyScrapped,
                 specialItems: GameState.specialItems,
                 forceMachineId: queuedMachineDefinition.id,
             });
@@ -6961,6 +7357,7 @@ export default class GameScene extends Phaser.Scene {
             debugRequired: Boolean(this._currentMachineVariant._uiDebugPuzzleRequired),
         });
         this._configureUmbrellaQuestForMachine(this._currentMachineVariant);
+        this._applyUmbrellaPreownedDay3GridIfNeeded(this._currentMachineVariant);
         this._hideMiniMachinePanel(true);
 
         const monitorStatus = this._currentCase._konamiOverride || this._currentCase.isFinalCase
@@ -6995,6 +7392,7 @@ export default class GameScene extends Phaser.Scene {
         this._unitContainer.setAngle(0);
         this._unitContainer.setAlpha(1);
         this._unitContainer.setDepth(15);
+        this._moveUnitToFrontOfConveyor();
         this._unitNameText.setText(this._currentMachineVariant.name);
         this._unitIdText.setText(this._currentCase.id);
         this._setConveyorRulingButtonsVisible(true);
@@ -7032,7 +7430,7 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
-        const arrivalConveyorSound = this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.conveyor, loop: true });
+        const arrivalConveyorSound = this._startConveyorHum();
 
         this._unitMoveTween = this.tweens.add({
             targets: this._unitContainer,
@@ -7073,6 +7471,29 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _playCurrentUnitExitAnimation(onComplete) {
+        // When the umbrella gets scrapped, swap to the closed-umbrella sprite
+        // before the drift animation so the player sees it collapse.
+        if (
+            this._pendingExitAction === 'scrap'
+            && this._currentMachineVariant
+            && this._isRebelliousUmbrella(this._currentMachineVariant)
+        ) {
+            // Mark the umbrella as permanently scrapped so it never spawns
+            // again — even if the quest had been accepted earlier.
+            GameState.umbrellaPermanentlyScrapped = true;
+            if (GameState.umbrellaQuest) {
+                GameState.umbrellaQuest.failed = true;
+                GameState.umbrellaQuest.scrapped = true;
+                GameState.umbrellaQuest.active = false;
+            }
+            if (this.textures.exists('machine_rebellious_umbrella_scrapped')) {
+                this._currentMachineVariant._umbrellaScrappedSpriteApplied = true;
+                if (this._conveyorUnitSprite) {
+                    this._applyMachineSprite(this._conveyorUnitSprite, this._currentMachineVariant.canvasScale ?? 1.0);
+                }
+            }
+        }
+
         if (this._pendingExitAction === 'scrap' && this._currentMachineVariant?.scrapExitAnimation === 'umbrellaDrift') {
             const startX = this._unitContainer.x;
             this._unitContainer.setX(startX - 14);
@@ -7117,7 +7538,7 @@ export default class GameScene extends Phaser.Scene {
                 // Drop below the conveyor stack so the belt + closing trapdoor
                 // occlude the unit as it falls — looks like it disappears
                 // into the floor instead of just fading off-screen.
-                this._unitContainer.setDepth(9);
+                this._moveUnitBehindLayerTwo();
                 this.tweens.add({
                     targets: this._unitContainer,
                     y: 760,
@@ -7138,23 +7559,29 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorExitX - this._unitContainer.x);
+        const exitDurationMs = Math.max(200, Math.round((travelDistance / MACHINE_PRESENTATION.conveyorSpeedPxPerSecond) * 1000));
         const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
         if (conveyorLayers.length > 0) {
             this._conveyorAnimTween?.stop();
             this._conveyorAnimTween = this.tweens.add({
                 targets: conveyorLayers,
                 tilePositionX: `+=${travelDistance}`,
-                duration: 500,
+                duration: exitDurationMs,
                 ease: 'Linear',
             });
         }
 
+        const exitConveyorSound = this._startConveyorHum();
+
         this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorExitX,
-            duration: 500,
+            duration: exitDurationMs,
             ease: 'Linear',
-            onComplete,
+            onComplete: () => {
+                exitConveyorSound?.stop();
+                onComplete?.();
+            },
         });
     }
 
@@ -7215,6 +7642,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._playCurrentUnitExitAnimation(() => {
             clearUnitPresentation();
+            console.log('[KONAMI] exit anim done: finalCaseTriggered=%s shiftShouldEnd=%s hasPendingKonamiFinale=%s', finalCaseTriggered, shiftShouldEnd, hasPendingKonamiFinale);
 
             if (finalCaseTriggered) {
                 this._shiftRunning = false;
@@ -7233,16 +7661,29 @@ export default class GameScene extends Phaser.Scene {
                 this._queueIndex = 0;
                 this._pendingKonamiFinalCase = null;
                 this._scheduleNextCase(700);
-            } else {
-                this._queueIndex++;
-                this._emitSequenceDebug('advance case scheduled', {
-                    nextQueueIndex: this._queueIndex,
-                    scheduledCasesRemaining: Math.max(0, (this._queue?.length || 0) - this._queueIndex),
-                    machineQueueLength: this._machineQueue?.length || 0,
-                });
-                this._scheduleNextCase(50);
             }
         });
+
+        if (finalCaseTriggered) {
+            return;
+        }
+
+        if (shiftShouldEnd) {
+            return;
+        }
+
+        if (hasPendingKonamiFinale) {
+            return;
+        }
+
+        this._queueIndex++;
+        this._emitSequenceDebug('advance case scheduled', {
+            nextQueueIndex: this._queueIndex,
+            scheduledCasesRemaining: Math.max(0, (this._queue?.length || 0) - this._queueIndex),
+            machineQueueLength: this._machineQueue?.length || 0,
+        });
+
+        this._scheduleNextCase(700);
     }
 
     // ── Shift end ─────────────────────────────────────────────────────────────
@@ -7295,6 +7736,7 @@ export default class GameScene extends Phaser.Scene {
         };
 
         this.time.delayedCall(220, () => {
+            console.log('[KONAMI] _endShift: fromFinalCase=%s isLastDay=%s konamiTriggered=%s', fromFinalCase, GameState.isLastDay(), this._konamiFinaleTriggered);
             if (fromFinalCase && (GameState.isLastDay() || this._konamiFinaleTriggered)) {
                 this.scene.start('End');
                 return;
@@ -7422,36 +7864,135 @@ export default class GameScene extends Phaser.Scene {
     _playOneShot(soundAsset, config = {}) {
         if (!soundAsset || !this.cache.audio.has(soundAsset.key)) return null;
 
-        const sound = this.sound.add(soundAsset.key, config);
-        if (!config.loop) sound.once('complete', () => sound.destroy());
+        // Apply the SFX slider as a global multiplier for everything except
+        // music/voice (those callers manage their own volume curves and the
+        // music slider lives separately). Pass `category: 'music' | 'voice'`
+        // to opt out of the SFX multiplier.
+        const playConfig = { ...config };
+        if (playConfig.category !== 'music' && playConfig.category !== 'voice') {
+            const sfxScale = getSfxVolume();
+            const baseVolume = Number.isFinite(playConfig.volume) ? playConfig.volume : 1;
+            playConfig.volume = Math.max(0, baseVolume * sfxScale);
+        }
+        delete playConfig.category;
+
+        const sound = this.sound.add(soundAsset.key, playConfig);
+        if (!playConfig.loop) sound.once('complete', () => sound.destroy());
         sound.play();
         return sound;
     }
 
     _applyMachineSprite(targetImage, scale) {
         let textureKey = resolveMachineTexture(this, this._currentMachineVariant);
+        const machineId = this._currentMachineVariant?.machineId;
+        const isInspectView = targetImage === this._miniMachineImage;
+
         if (
-            targetImage === this._miniMachineImage
-            && this._currentMachineVariant?.machineId === 'track_and_discus_robot'
+            isInspectView
+            && machineId === 'track_and_discus_robot'
             && this.textures.exists('machine_track_and_discus_robot_close')
         ) {
             textureKey = 'machine_track_and_discus_robot_close';
+        }
+        if (
+            isInspectView
+            && machineId === 'security_camera_bot'
+            && this.textures.exists('machine_security_camera_bot_close')
+        ) {
+            textureKey = 'machine_security_camera_bot_close';
+        }
+        if (
+            isInspectView
+            && machineId === 'debrief_machine'
+            && this.textures.exists('machine_debrief_machine_close')
+        ) {
+            textureKey = 'machine_debrief_machine_close';
+        }
+        if (
+            isInspectView
+            && machineId === 'cry_baby'
+            && this.textures.exists('machine_cry_baby_close')
+        ) {
+            textureKey = 'machine_cry_baby_close';
+        }
+        // Rich Mf — different sprites for conveyor vs inspect, with a happy
+        // variant when the personality module is currently powered.
+        if (machineId === 'rich_mf') {
+            if (isInspectView) {
+                const usingPersonality = this._isRichMfPersonalityPowered();
+                const happyKey = 'machine_rich_mf_inspect_happy';
+                const sternKey = 'machine_rich_mf_inspect';
+                if (usingPersonality && this.textures.exists(happyKey)) {
+                    textureKey = happyKey;
+                } else if (this.textures.exists(sternKey)) {
+                    textureKey = sternKey;
+                }
+            }
+            // Conveyor sprite already routed through machine_rich_mf which
+            // Boot.js now resolves to rich.png (rich_mf_conveyor_source).
+        }
+        // Umbrella swaps to a closed sprite once it has been scrapped (so the
+        // post-scrap fall and roster references show the closed silhouette).
+        // The permanent-scrap flag wins over every other umbrella variant —
+        // once the player tossed it, it stays closed forever. Otherwise the
+        // in-game umbrella always uses the standard open sprite. The v2
+        // variant is reserved for the End scene.
+        if (
+            machineId === 'rebellious_umbrella'
+            && (this._currentMachineVariant?._umbrellaScrappedSpriteApplied || GameState.umbrellaPermanentlyScrapped)
+            && this.textures.exists('machine_rebellious_umbrella_scrapped')
+        ) {
+            textureKey = 'machine_rebellious_umbrella_scrapped';
         }
         targetImage.setTexture(textureKey);
         targetImage.setScale(scale);
     }
 
+    _moveUnitToFrontOfConveyor() {
+        const list = this._conveyorContainer?.list;
+        if (!Array.isArray(list) || list.length === 0 || !this._unitContainer) return;
+        // Phaser's container.moveTo throws if the child isn't actually in the
+        // container's child list — guard against the case where the unit
+        // hasn't been parented yet (early in the shift bootstrap).
+        if (!list.includes(this._unitContainer)) return;
+        const targetIndex = Math.max(0, Math.min(list.length - 1, list.length - 1));
+        try {
+            this._conveyorContainer.moveTo(this._unitContainer, targetIndex);
+        } catch (_) { /* noop — non-fatal layering hiccup */ }
+    }
+
+    _moveUnitBehindLayerTwo() {
+        const layerTwo = this._mainViewLayers?.mainview_second;
+        const list = this._conveyorContainer?.list;
+        if (!layerTwo || !Array.isArray(list) || list.length === 0 || !this._unitContainer) {
+            this._unitContainer?.setDepth(9);
+            return;
+        }
+        if (!list.includes(this._unitContainer)) {
+            this._unitContainer.setDepth(9);
+            return;
+        }
+
+        const layerIndex = this._conveyorContainer.getIndex(layerTwo);
+        if (layerIndex <= 0) {
+            this._unitContainer.setDepth(9);
+            return;
+        }
+        const safeIndex = Math.max(0, Math.min(list.length - 1, layerIndex));
+        try {
+            this._conveyorContainer.moveTo(this._unitContainer, safeIndex);
+        } catch (_) {
+            this._unitContainer.setDepth(9);
+        }
+    }
+
     _getCurrentMachineConveyorOffsetY(machineVariant = this._currentMachineVariant) {
-        // Per-machine vertical nudge so units actually sit ON the belt.
-        // Short or wide units (Roombas) get pushed down further because
-        // their texture is anchored at center but the visible shape only
-        // fills the bottom half of the canvas.
         const offsets = {
             lifeguard_robot: 18,
             trash_picker_upper: 16,
-            house_roomba: 36,
-            pool_cleanup_roomba: 36,
-            microwave_fridge_assistant: 40,
+            microwave_fridge_assistant: 20,
+            pool_cleanup_roomba: 20,
+            house_roomba: 20,
         };
         return offsets[machineVariant?.machineId] || 0;
     }
@@ -7604,7 +8145,7 @@ export default class GameScene extends Phaser.Scene {
             codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
             gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
         };
-        const resolvedGridPreview = clampRect(scaleRect(layout.gridPreview, { x: 42, y: 72, width: 58, height: 40, label: 'GRID' }));
+        const resolvedGridPreview = clampRect(scaleRect(layout.gridPreview, { x: 25, y: 110, width: 60, height: 40, label: 'GRID' }));
         const resolvedFlowPreview = clampRect(scaleRect(layout.flowPreview, { x: 136, y: 72, width: 60, height: 38, label: 'FLOW' }));
         const resolvedCodePreview = clampRect(scaleRect(layout.codePreview, { x: 86, y: 24, width: 74, height: 22, label: 'CODE' }));
         const resolvedGearPreview = clampRect(scaleRect(layout.gearPreview, { x: 88, y: 154, width: 62, height: 36, label: 'GEAR' }));
@@ -7643,8 +8184,8 @@ export default class GameScene extends Phaser.Scene {
                 top: resolvedGridPreview.y,
                 width: resolvedGridPreview.width,
                 height: resolvedGridPreview.height,
-                maxCellSize: 12,
-                fontSize: 7,
+                maxCellSize: 16,
+                fontSize: 8,
                 lineWidth: 1,
                 glowWidth: 2,
             });
@@ -8025,6 +8566,25 @@ export default class GameScene extends Phaser.Scene {
                     && puzzleState.inspectionFault.col === colIndex
                     ? puzzleState.inspectionFault
                     : null;
+                const comparatorInfo = (() => {
+                    if (!baseValue || typeof baseValue !== 'object' || Array.isArray(baseValue)) return null;
+                    const operator = String(baseValue.operator || baseValue.comparator || baseValue.kind || '').trim();
+                    if (!operator) return null;
+                    const normalized = operator.toLowerCase();
+                    const isComparator = normalized.includes('>') || normalized.includes('<')
+                        || normalized.includes('!=') || normalized.includes('not_equal')
+                        || normalized.includes('equal') || normalized.includes('threshold');
+                    if (!isComparator) return null;
+                    const threshold = Number(baseValue.value ?? baseValue.target ?? baseValue.threshold ?? baseValue.pips);
+                    const opSymbol = normalized.includes('not_equal')
+                        ? '!='
+                        : normalized.includes('equal')
+                            ? '='
+                            : operator.replace(/\s+/g, '');
+                    const safeOp = opSymbol || '=';
+                    const label = Number.isFinite(threshold) ? `${safeOp}${threshold}` : safeOp;
+                    return { label };
+                })();
 
                 let fillColor = 0x122029;
                 let fillAlpha = 0.35;
@@ -8066,6 +8626,10 @@ export default class GameScene extends Phaser.Scene {
                             : 0x372322;
                     fillAlpha = 0.92;
                     strokeColor = matchedNotEqualLink ? 0xffccb8 : 0xff9b86;
+                } else if (comparatorInfo) {
+                    fillColor = 0x1f3750;
+                    fillAlpha = 0.92;
+                    strokeColor = 0x8fd4ff;
                 } else if (isPlaced) {
                     fillColor = purplePlaced ? 0x9a56ff : 0x48cd75;
                     fillAlpha = 0.92;
@@ -8105,6 +8669,12 @@ export default class GameScene extends Phaser.Scene {
                 } else if (hasNotEqualLink) {
                     overlayText = '!=';
                     overlayColor = matchedNotEqualLink ? '#ffd9c9' : '#ffab92';
+                } else if (comparatorInfo) {
+                    overlayText = comparatorInfo.label;
+                    if (overlayText.includes('>')) overlayColor = '#f2dcff';
+                    else if (overlayText.includes('<')) overlayColor = '#c8f7ff';
+                    else if (overlayText.includes('!=')) overlayColor = '#ffd9c9';
+                    else overlayColor = '#fff7b9';
                 } else if (placedPipCount !== null) {
                     overlayText = String(placedPipCount);
                     overlayColor = clownCorrupted ? '#ffe2dc' : (purplePlaced ? '#f2dcff' : '#d9ffe4');
@@ -8492,6 +9062,15 @@ export default class GameScene extends Phaser.Scene {
             }).setOrigin(1, 0.5);
             labelContainer?.add(tag);
         });
+
+        const hazardCount = Math.min(3, flowPuzzle.forbiddenCount || 0);
+        for (let index = 0; index < hazardCount; index++) {
+            const hazardX = left + width - 14 - (index * 12);
+            const hazardY = top + height - 6;
+            graphics.fillStyle(forbiddenUsed ? 0xff6644 : 0xffb347, 0.95);
+            graphics.fillTriangle(hazardX, hazardY - 5, hazardX + 5, hazardY, hazardX, hazardY + 5);
+            graphics.fillTriangle(hazardX, hazardY - 5, hazardX - 5, hazardY, hazardX, hazardY + 5);
+        }
 
         const progressText = flowState?.scrapRequired
             ? (flowState.scrapStatus || 'FLOW SCRAP')

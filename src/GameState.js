@@ -1,5 +1,6 @@
 export const GameState = {
     day: 1,
+    calendarAnchorIso: null,
     deskPhotoLayout: null,
     totalMistakes: 0,
     paycheckTotal: 0,
@@ -15,6 +16,10 @@ export const GameState = {
     specialItems: [],
     jesterDeal: null,
     umbrellaQuest: null,
+    umbrellaPermanentlyScrapped: false,
+    tripleUpAchieved: false,
+    /** Optional: force day-4 ending when End scene loads (cleared in End.init). */
+    pendingEndingOverride: null,
     debriefReport: null,
     puzzleTimingBuckets: {
         grid: [],
@@ -35,6 +40,26 @@ export const GameState = {
 
     isLastDay() {
         return this.day >= this.totalDays;
+    },
+
+    _getTodayIso() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    },
+
+    ensureCalendarAnchor() {
+        if (!this.calendarAnchorIso) {
+            this.calendarAnchorIso = this._getTodayIso();
+        }
+
+        return this.calendarAnchorIso;
+    },
+
+    getShiftSequenceIndex() {
+        return Math.max(1, this.day) - 1;
     },
 
     getDirectiveDay() {
@@ -70,6 +95,13 @@ export const GameState = {
         ])].sort((left, right) => left - right);
 
         return this.activeRules;
+    },
+
+    getCurrentShiftDate() {
+        const [year, month, day] = this.ensureCalendarAnchor().split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        date.setDate(date.getDate() + this.getShiftSequenceIndex());
+        return date;
     },
 
     recordTrackedMachineOutcome(outcome) {
@@ -174,6 +206,13 @@ export const GameState = {
     },
 
     getDayFourEndingVariant() {
+        // "Triple up" — a perfect run across the playthrough — short-circuits
+        // straight to the original purple-umbrella ending regardless of the
+        // umbrella quest state.
+        if (this.tripleUpAchieved) {
+            return 'umbrella_purple';
+        }
+
         const quest = this.umbrellaQuest;
         if (!quest || quest.failed) {
             return 'replacement';
@@ -246,6 +285,7 @@ export const GameState = {
 
     reset() {
         this.day = 1;
+        this.calendarAnchorIso = null;
         this.deskPhotoLayout = null;
         this.totalMistakes = 0;
         this.paycheckTotal = 0;
@@ -261,6 +301,9 @@ export const GameState = {
         this.specialItems = [];
         this.jesterDeal = null;
         this.umbrellaQuest = null;
+        this.umbrellaPermanentlyScrapped = false;
+        this.tripleUpAchieved = false;
+        this.pendingEndingOverride = null;
         this.debriefReport = null;
         this.puzzleTimingBuckets = {
             grid: [],

@@ -4,7 +4,7 @@
     "period": 1,
     "text": "DAY 1: Scrap units with irreparable subsystems.",
     "details": [
-      "[GRID] Place dominos so every charge cell pip matches its required value. == links require equal pips. < group regions must stay under their threshold. Isolated charge cells boxed in by walls = SCRAP.",
+      "[GRID] Place circuits so every charge cell pip matches its required value. == links require equal pips. < group regions must stay under their threshold. Isolated charge cells boxed in by walls = SCRAP.",
       "[FLOW] Route power from the source to every required subsystem. Dead-end paths or a missing first link = SCRAP.",
       "[GEAR] Slide loose gears until the output drive spins. Cracked input or output = SCRAP.",
       "[CODE] Type the command exactly. Failed test generates a repair command — squash crawling bugs before they corrupt the line. Unresolvable mismatch = SCRAP."
@@ -26,7 +26,7 @@
     "period": 3,
     "text": "DAY 3: Zero tolerance. Sparks or instability = SCRAP.",
     "details": [
-      "[GRID] Red corrupted domino on rack = automatic SCRAP. != links active: linked cells must have different pips.",
+      "[GRID] Red corrupted circuit on rack = automatic SCRAP. != links active: linked cells must have different pips.",
       "[FLOW] Multiple power sources. Any red power line or crackling component = SCRAP.",
       "[GEAR] Deadlock clamps grey out cells. Red spark discharge = SCRAP.",
       "[CODE] Debug bug (green) + red sparks = contamination. SCRAP."

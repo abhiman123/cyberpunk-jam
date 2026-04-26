@@ -19,7 +19,7 @@ const DIRS = [
 
 const FLOW_POWER_PALETTES = Object.freeze({
     neutral: { tint: 0x00ffcc, label: '#00ffcc', idle: '#66aaaa', dot: 0xffcc44 },
-    green: { tint: 0xb8ff3c, label: '#b8ff3c', idle: '#7d9c50', dot: 0xb8ff3c },
+    green: { tint: 0x73ffae, label: '#73ffae', idle: '#77b494', dot: 0x73ffae },
     orange: { tint: 0xffbe6d, label: '#ffbe6d', idle: '#c79a66', dot: 0xffbe6d },
     mixed: { tint: 0xff7167, label: '#ffb0a8', idle: '#cc847c', dot: 0xff7167 },
     red: { tint: 0xff4f4f, label: '#ff8d8d', idle: '#b76464', dot: 0xff4f4f },
@@ -172,6 +172,13 @@ function generateCircuit(spec, rows, cols) {
         carvePath(tiles, sr, outRow, cols, branchCol);
     });
 
+    const pathCells = [];
+    tiles.forEach((row, y) => row.forEach((cell, x) => {
+        if (cell._dirs.size > 0 && !(x === 0 && y === sr) && !(x === cols - 1 && outputRows.includes(y))) {
+            pathCells.push([x, y]);
+        }
+    }));
+
     tiles.forEach(row => row.forEach(cell => { finalizeTile(cell); delete cell._dirs; }));
 
     // Scramble rotations (skip empty and rotation-symmetric tiles)
@@ -181,7 +188,16 @@ function generateCircuit(spec, rows, cols) {
         cell.rotation = (cell.rotation + 1 + Math.floor(Math.random() * 3)) % 4;
     }));
 
-    return { tiles };
+    // Place forbidden cells on path
+    const forbidden = [];
+    const count = spec.forbiddenCount || 0;
+    const pool = [...pathCells];
+    for (let i = 0; i < count && pool.length > 0; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        forbidden.push(pool.splice(idx, 1)[0]);
+    }
+
+    return { tiles, forbidden };
 }
 
 export default class CircuitRouting extends MinigameBase {
@@ -305,28 +321,53 @@ export default class CircuitRouting extends MinigameBase {
         let restoredFromProgress = false;
         let restoredInventory = null;
 
-        let tiles;
+        let tiles, forbiddenList;
         if (Array.isArray(circuit.progress?.tiles) && circuit.progress.tiles.length > 0) {
             tiles = cloneCircuitTiles(circuit.progress.tiles);
+            forbiddenList = circuit.forbidden || [];
             restoredFromProgress = true;
             if (circuit.progress.inventory && typeof circuit.progress.inventory === 'object') {
                 restoredInventory = circuit.progress.inventory;
             }
         } else if (circuit.tiles) {
             tiles = cloneCircuitTiles(circuit.tiles);
-        } else if (circuit._generatedTiles) {
-            tiles = cloneCircuitTiles(circuit._generatedTiles);
+            forbiddenList = circuit.forbidden || [];
         } else {
-            const gen = generateCircuit(circuit, this.rows, this.cols);
-            tiles = gen.tiles;
-            circuit._generatedTiles = cloneCircuitTiles(tiles);
+            // Check if we already generated tiles for this case
+            if (circuit._generatedTiles) {
+                tiles = cloneCircuitTiles(circuit._generatedTiles);
+            } else {
+                // Generate new circuit tiles and cache them
+                const gen = generateCircuit(circuit, this.rows, this.cols);
+                tiles = gen.tiles;
+                // Store only the tiles for future use (forbidden cells will be random each time)
+                circuit._generatedTiles = cloneCircuitTiles(tiles);
+            }
+
+            // Always generate fresh forbidden cells for randomization
+            const pathCells = [];
+            tiles.forEach((row, y) => row.forEach((cell, x) => {
+                if (cell.type !== 'empty' && !(x === 0 && y === this._sourceRow) && !(x === this.cols - 1 && Object.keys(this._outputs).map(Number).includes(y))) {
+                    pathCells.push([x, y]);
+                }
+            }));
+
+            forbiddenList = [];
+            const count = circuit.forbiddenCount || 0;
+            const pool = [...pathCells];
+            for (let i = 0; i < count && pool.length > 0; i++) {
+                const idx = Math.floor(Math.random() * pool.length);
+                forbiddenList.push(pool.splice(idx, 1)[0]);
+            }
         }
         this._tiles = tiles;
-        // Forbidden cells (the amber "obstacle" tiles) were retired as a
-        // player-facing mechanic — the puzzle was always solvable around
-        // them, so they read as decorative dead weight. Keep the lookup
-        // structure empty so the rest of the file's `_forbidden.has(...)`
-        // checks become free no-ops without scrubbing case definitions.
+        // Forbidden cells were the amber-tinted "obstacle" tiles. They no
+        // longer ship as a player-facing mechanic — the puzzle was always
+        // solvable around them, so they read as decorative dead weight.
+        // Force the set empty regardless of what the data layer or saved
+        // progress provides; that keeps every legacy field a no-op without
+        // having to scrub case definitions.
+        forbiddenList = [];
         this._forbidden = new Set();
         this._tileGfx = [];
 
@@ -368,11 +409,8 @@ export default class CircuitRouting extends MinigameBase {
             : (stage === 2
                 ? 'Click tiles to rotate. Green and orange wire filters recolor the current after that tile. Red discharge wires are immediate scrap.'
                 : 'Click tiles to rotate. Day 3 uses a larger grid with multiple power ports. Any red module is crackling and must be scrapped.'), {
-            // Wrap the instruction line short of the REPAIR TARGETS panel
-            // (centered at x=1032, half-width 108 → starts at x=924) so the
-            // text never bleeds underneath it.
             fontFamily: 'Courier New', fontSize: '10px', color: '#66aaaa',
-            align: 'center', wordWrap: { width: 720 },
+            align: 'center', wordWrap: { width: 1000 },
         }).setOrigin(0.5).setDepth(depth + 2);
         this.container.add(subtitle);
 
@@ -541,14 +579,11 @@ export default class CircuitRouting extends MinigameBase {
             const nameText = this.scene.add.text(-72, y - 8, target.displayName || target.label, {
                 fontFamily: 'Courier New', fontSize: '11px', color: '#b8dbe1',
             }).setOrigin(0, 0.5);
-            // "OFFLINE" instead of "BROKEN" because neutral-feed outputs
-            // are repairable by routing wire — "BROKEN" misled players
-            // into thinking the unit had to be scrapped.
             const statusText = this.scene.add.text(-72, y + 9, target.powerClass === 'red'
                 ? 'RED // SCRAP'
                 : (target.powerClass && target.powerClass !== 'neutral'
                     ? String(target.powerClass).toUpperCase()
-                    : 'OFFLINE'), {
+                    : 'BROKEN'), {
                 fontFamily: 'Courier New', fontSize: '9px', color: target.powerClass && target.powerClass !== 'neutral' ? requirementPalette.label : '#ffb695',
             }).setOrigin(0, 0.5);
 
@@ -849,20 +884,36 @@ export default class CircuitRouting extends MinigameBase {
         const panelH = Math.max(220, this.rows * this.cellSize);
         const panelW = 108;
 
-        const panelBg = this.scene.add.rectangle(panelX, panelY + panelH / 2, panelW, panelH, 0x001a20, 0.9)
-            .setStrokeStyle(1, 0x00cccc, 0.75)
-            .setDepth(depth);
+        // Wooden tray styling that matches the dominoes table aesthetic.
+        const panelGfx = this.scene.add.graphics().setDepth(depth);
+        const panelLeft = panelX - panelW / 2;
+        panelGfx.fillStyle(0x5b3827, 0.98);
+        panelGfx.fillRoundedRect(panelLeft, panelY, panelW, panelH, 14);
+        panelGfx.fillStyle(0x734936, 0.92);
+        panelGfx.fillRoundedRect(panelLeft + 8, panelY + 8, panelW - 16, panelH - 16, 12);
+        panelGfx.fillStyle(0x2b1b14, 0.22);
+        const grainCount = Math.max(4, Math.floor((panelH - 24) / 28));
+        for (let lineIndex = 0; lineIndex < grainCount; lineIndex++) {
+            panelGfx.fillRect(panelLeft + 14, panelY + 22 + (lineIndex * 28), panelW - 28, 3);
+        }
+        panelGfx.lineStyle(2, 0x9b7058, 0.95);
+        panelGfx.strokeRoundedRect(panelLeft, panelY, panelW, panelH, 14);
+
         const title = this.scene.add.text(panelX, panelY + 14, 'INVENTORY', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#00eeee', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#fde7b9', letterSpacing: 2,
         }).setOrigin(0.5).setDepth(depth + 1);
         const hint = this.scene.add.text(panelX, panelY + panelH - 14,
-            'L-click: place   R-click: pickup', {
-                fontFamily: 'Courier New', fontSize: '7px', color: '#66aaaa', align: 'center',
+            'Drag onto grid   R-click: pickup', {
+                fontFamily: 'Courier New', fontSize: '7px', color: '#e6c89a', align: 'center',
                 wordWrap: { width: panelW - 12 },
             }).setOrigin(0.5).setDepth(depth + 1);
-        this.container.add([panelBg, title, hint]);
+        this.container.add([panelGfx, title, hint]);
 
-        const pieces = ['straight', 'curve', 'tee', 'cross'];
+        this._inventoryPanelArea = { panelX, panelY, panelW, panelH };
+        this._inventoryPanelGfx = panelGfx;
+
+        // Reverse slot ordering so the tray reads before the board visually.
+        const pieces = ['cross', 'tee', 'curve', 'straight'];
         const slotSize = 50;
         const slotGap = 8;
         const slotsStartY = panelY + 38;
@@ -873,25 +924,170 @@ export default class CircuitRouting extends MinigameBase {
             const pipeGfx = this.scene.add.graphics().setDepth(depth + 2);
             const countText = this.scene.add.text(sx + slotSize / 2 - 4, sy + slotSize / 2 - 4,
                 '0', {
-                    fontFamily: 'Courier New', fontSize: '13px', color: '#e6faff',
+                    fontFamily: 'Courier New', fontSize: '13px', color: '#fff7d9',
                     stroke: '#000000', strokeThickness: 2, fontStyle: 'bold',
                 }).setOrigin(1, 1).setDepth(depth + 3);
             const labelText = this.scene.add.text(sx, sy + slotSize / 2 + 4,
                 type.toUpperCase(), {
-                    fontFamily: 'Courier New', fontSize: '7px', color: '#9dd6d6',
+                    fontFamily: 'Courier New', fontSize: '7px', color: '#e6c89a',
                 }).setOrigin(0.5, 0).setDepth(depth + 2);
             const hitArea = this.scene.add.rectangle(sx, sy, slotSize, slotSize, 0x000000, 0)
                 .setInteractive({ useHandCursor: true })
                 .setDepth(depth + 4);
-            hitArea.on('pointerdown', (_p, _lx, _ly, event) => {
+            hitArea.on('pointerdown', (pointer, _lx, _ly, event) => {
                 event?.stopPropagation?.();
-                this._toggleInventorySelection(type);
+                this._beginInventoryDragIntent(type, pointer);
             });
             this.container.add([slotGfx, pipeGfx, labelText, countText, hitArea]);
             this._inventoryViews[type] = { type, sx, sy, slotSize, slotGfx, pipeGfx, countText, hitArea };
         });
 
+        // Ghost graphic that follows the cursor while a piece is being dragged.
+        this._dragGhostGfx = this.scene.add.graphics().setDepth(depth + 30).setVisible(false);
+        this.container.add(this._dragGhostGfx);
+
         this._refreshInventoryPanel();
+    }
+
+    _beginInventoryDragIntent(type, pointer) {
+        if (!type) return;
+        if ((this._inventory[type] || 0) <= 0) {
+            this._toggleInventorySelection(type);
+            return;
+        }
+
+        this._teardownInventoryDrag();
+
+        this._dragHandlerMove = (movePointer) => this._handleInventoryDragMove(movePointer);
+        this._dragHandlerUp = (upPointer) => this._handleInventoryDragUp(upPointer);
+
+        this._dragState = {
+            type,
+            active: false,
+            startX: pointer.x,
+            startY: pointer.y,
+            lastX: pointer.x,
+            lastY: pointer.y,
+        };
+        this.scene.input.on('pointermove', this._dragHandlerMove);
+        this.scene.input.on('pointerup', this._dragHandlerUp);
+        this.scene.input.on('pointerupoutside', this._dragHandlerUp);
+    }
+
+    _handleInventoryDragMove(pointer) {
+        const state = this._dragState;
+        if (!state) return;
+        state.lastX = pointer.x;
+        state.lastY = pointer.y;
+        const dx = pointer.x - state.startX;
+        const dy = pointer.y - state.startY;
+        if (!state.active && (dx * dx + dy * dy) > 36) {
+            state.active = true;
+            this._dragGhostGfx?.setVisible(true);
+        }
+        if (state.active) {
+            this._updateInventoryDragGhost(pointer.x, pointer.y);
+        }
+    }
+
+    _handleInventoryDragUp(pointer) {
+        const state = this._dragState;
+        this._teardownInventoryDrag();
+        if (!state) return;
+
+        if (!state.active) {
+            this._toggleInventorySelection(state.type);
+            return;
+        }
+
+        const targetX = pointer?.x ?? state.lastX;
+        const targetY = pointer?.y ?? state.lastY;
+        const cell = this._cellFromGlobalPoint(targetX, targetY);
+        if (!cell) return;
+
+        const { x, y } = cell;
+        const tile = this._tiles?.[y]?.[x];
+        if (!tile) return;
+        if (this._forbidden.has(`${x},${y}`)) return;
+        if (tile.locked || tile.type !== 'empty') return;
+        if ((this._inventory[state.type] || 0) <= 0) return;
+
+        this._inventory[state.type] -= 1;
+        this._tiles[y][x] = { type: state.type, rotation: 0 };
+        if ((this._inventory[state.type] || 0) <= 0 && this._selectedInventoryType === state.type) {
+            this._selectedInventoryType = null;
+        }
+        this._refreshInventoryPanel();
+        this._updateAll();
+        this._playWireTurnSound?.();
+    }
+
+    _teardownInventoryDrag() {
+        if (this._dragHandlerMove) {
+            this.scene.input.off('pointermove', this._dragHandlerMove);
+            this._dragHandlerMove = null;
+        }
+        if (this._dragHandlerUp) {
+            this.scene.input.off('pointerup', this._dragHandlerUp);
+            this.scene.input.off('pointerupoutside', this._dragHandlerUp);
+            this._dragHandlerUp = null;
+        }
+        if (this._dragGhostGfx) {
+            this._dragGhostGfx.clear();
+            this._dragGhostGfx.setVisible(false);
+        }
+        this._dragState = null;
+    }
+
+    _cellFromGlobalPoint(globalX, globalY) {
+        const localX = globalX - this.boardX;
+        const localY = globalY - this.boardY;
+        if (localX < 0 || localY < 0) return null;
+        const x = Math.floor(localX / this.cellSize);
+        const y = Math.floor(localY / this.cellSize);
+        if (x < 0 || x >= this.cols || y < 0 || y >= this.rows) return null;
+        return { x, y };
+    }
+
+    _updateInventoryDragGhost(globalX, globalY) {
+        if (!this._dragGhostGfx || !this._dragState) return;
+        const { type } = this._dragState;
+        const gfx = this._dragGhostGfx;
+        gfx.clear();
+
+        const cell = this._cellFromGlobalPoint(globalX, globalY);
+        let cx = globalX;
+        let cy = globalY;
+        let valid = false;
+        if (cell) {
+            const tile = this._tiles?.[cell.y]?.[cell.x];
+            const isForbidden = this._forbidden.has(`${cell.x},${cell.y}`);
+            if (tile && tile.type === 'empty' && !isForbidden && !tile.locked) {
+                cx = this.boardX + cell.x * this.cellSize + this.cellSize / 2;
+                cy = this.boardY + cell.y * this.cellSize + this.cellSize / 2;
+                valid = true;
+            }
+        }
+
+        if (valid) {
+            const half = (this.cellSize - 6) / 2;
+            gfx.fillStyle(0x0a4f55, 0.32);
+            gfx.fillRoundedRect(cx - half, cy - half, half * 2, half * 2, 6);
+            gfx.lineStyle(2, 0x66ffff, 0.95);
+            gfx.strokeRoundedRect(cx - half, cy - half, half * 2, half * 2, 6);
+        }
+
+        const r = 18;
+        const color = valid ? 0x73ffae : 0xff7167;
+        const alpha = valid ? 1 : 0.7;
+        gfx.lineStyle(4, color, alpha);
+        const conns = TILE_BASE[type] || [0, 0, 0, 0];
+        if (conns[0]) gfx.lineBetween(cx, cy, cx, cy - r);
+        if (conns[1]) gfx.lineBetween(cx, cy, cx + r, cy);
+        if (conns[2]) gfx.lineBetween(cx, cy, cx, cy + r);
+        if (conns[3]) gfx.lineBetween(cx, cy, cx - r, cy);
+        gfx.fillStyle(color, alpha);
+        gfx.fillCircle(cx, cy, 4.5);
     }
 
     _refreshInventoryPanel() {
@@ -991,7 +1187,8 @@ export default class CircuitRouting extends MinigameBase {
             Object.entries(circuit.inventory).forEach(([type, count]) => {
                 const n = Math.max(0, Math.floor(Number(count) || 0));
                 if (!Object.prototype.hasOwnProperty.call(this._inventory, type)) return;
-                this._inventory[type] = (this._inventory[type] || 0) + n;
+                const removed = this._removeTilesForInventory(type, n);
+                this._inventory[type] = (this._inventory[type] || 0) + removed;
             });
             this._refreshInventoryPanel();
             return;
@@ -1029,6 +1226,20 @@ export default class CircuitRouting extends MinigameBase {
             this._tiles[pick.y][pick.x] = { type: 'empty', rotation: 0 };
         }
         this._refreshInventoryPanel();
+    }
+
+    _removeTilesForInventory(type, count) {
+        let removed = 0;
+        for (let y = 0; y < this.rows && removed < count; y += 1) {
+            for (let x = 1; x < this.cols - 1 && removed < count; x += 1) {
+                if (this._forbidden.has(`${x},${y}`)) continue;
+                const tile = this._tiles[y]?.[x];
+                if (!tile || tile.type !== type || tile.locked) continue;
+                this._tiles[y][x] = { type: 'empty', rotation: 0 };
+                removed += 1;
+            }
+        }
+        return removed;
     }
 
     _refreshVoltageHud() {
@@ -1648,6 +1859,7 @@ export default class CircuitRouting extends MinigameBase {
 
     hide() {
         this._stopCircuitAnimationLoop();
+        this._teardownInventoryDrag();
         this._tileGfx?.forEach((row) => {
             row?.forEach((tileView) => {
                 tileView?.rotationTween?.stop();
@@ -1666,6 +1878,8 @@ export default class CircuitRouting extends MinigameBase {
         this._wireFilterMap = new Map();
         this._inspectionFaultGfx = null;
         this._inspectionFault = null;
+        this._dragGhostGfx = null;
+        this._inventoryViews = {};
         this._specialAction = null;
         this._specialActionButton = null;
         this._specialActionLabel = null;

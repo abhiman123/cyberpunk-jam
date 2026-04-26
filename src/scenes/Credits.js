@@ -9,24 +9,28 @@ const SCREEN_H = 720;
 
 const CREDITS = Object.freeze([
     { role: 'PROGRAMMING', names: [
-        'Abhimanyu Bhalla',
         'Safiullah Baig',
         'Andrew Bui',
+        'Orion Allen Borntrager',
         'Ethan Nishimura',
         'Minh Tran',
-        'Orion Allen Borntrager',
+        'Abhimanyu Bhalla',
     ] },
     { role: 'ART', names: [
         'Pranaav Makharia',
+        'Jacob Jansta',
         'Pranet Ramanan',
+        'Ishita Pradhan',
         'Jacqueline King',
         'Minh Tran',
+        'Jake Verell',
     ] },
     { role: 'STORYBOARDING', names: [
-        'Zachary Boseman',
+        'Christian Gonzalez',
         'Jacqueline King',
-        'Jake Verell',
         'Geetika Joshi',
+        'Caleb Livingston',
+        'Zachary Boseman',
     ] },
     { role: 'MUSIC CREDITS', names: [
         'Clocking In Music - Julien Vincent',
@@ -34,6 +38,9 @@ const CREDITS = Object.freeze([
         'Corporate Music - Julien Vincent',
         'Managing Music - Shane Ollek',
         'Credits Music - Shane Ollek',
+    ] },
+    { role: 'SOUND', names: [
+        'Manager Voice - Zachary Boseman',
     ] },
 ]);
 
@@ -44,6 +51,7 @@ export default class CreditsScene extends Phaser.Scene {
 
     create() {
         this._music = null;
+        this._sidePortraitTweens = [];
 
         applyCyberpunkLook(this);
         this.cameras.main.setBackgroundColor('#050709');
@@ -55,6 +63,8 @@ export default class CreditsScene extends Phaser.Scene {
         for (let y = 0; y < SCREEN_H; y += 4) {
             scan.fillRect(0, y, SCREEN_W, 2);
         }
+
+        this._buildSidePortraits();
 
         this._scrollContainer = this.add.container(SCREEN_W / 2, SCREEN_H);
         const contentHeight = this._buildCreditsContent(this._scrollContainer);
@@ -79,11 +89,80 @@ export default class CreditsScene extends Phaser.Scene {
         this.events.on('shutdown', () => {
             this._music?.stop();
             this._music = null;
+            this._sidePortraitTweens?.forEach((tween) => tween?.stop());
+            this._sidePortraitTweens = [];
         });
+    }
+
+    _buildSidePortraits() {
+        // Two fading portraits flanking the credits scroll — the same two
+        // headshots the settings overlay uses (rich guy on the left, crybaby
+        // on the right). They softly pulse alpha so the page doesn't feel
+        // empty during long credit reads.
+        const leftKey = 'settings_portrait_left';
+        const rightKey = 'settings_portrait_right';
+        const portraitTargets = [];
+
+        if (this.textures.exists(leftKey)) {
+            const left = this.add.image(140, SCREEN_H / 2, leftKey)
+                .setOrigin(0.5)
+                .setDepth(20)
+                .setAlpha(0.22);
+            this._fitPortraitToBox(left, 240, 360);
+            portraitTargets.push({ image: left, delayMs: 0 });
+        }
+        if (this.textures.exists(rightKey)) {
+            const right = this.add.image(SCREEN_W - 140, SCREEN_H / 2, rightKey)
+                .setOrigin(0.5)
+                .setDepth(20)
+                .setAlpha(0.22);
+            this._fitPortraitToBox(right, 240, 360);
+            portraitTargets.push({ image: right, delayMs: 600 });
+        }
+
+        portraitTargets.forEach(({ image, delayMs }) => {
+            const tween = this.tweens.add({
+                targets: image,
+                alpha: { from: 0.22, to: 0.92 },
+                duration: 1800,
+                ease: 'Sine.InOut',
+                yoyo: true,
+                repeat: -1,
+                delay: delayMs,
+            });
+            this._sidePortraitTweens.push(tween);
+        });
+    }
+
+    _fitPortraitToBox(image, maxW, maxH) {
+        const sourceW = image.width || 1;
+        const sourceH = image.height || 1;
+        const scale = Math.min(maxW / sourceW, maxH / sourceH, 1);
+        image.setScale(scale);
     }
 
     _buildCreditsContent(container) {
         let cursor = 0;
+
+        const fromTheMind = this.add.text(0, cursor, 'From the mind of:', {
+            fontFamily: 'Courier New',
+            fontSize: '20px',
+            color: '#8dd6ec',
+            align: 'center',
+            letterSpacing: 3,
+        }).setOrigin(0.5, 0);
+        container.add(fromTheMind);
+        cursor += fromTheMind.height + 12;
+
+        const orion = this.add.text(0, cursor, 'Orion Allen Borntrager', {
+            fontFamily: 'Courier New',
+            fontSize: '32px',
+            color: '#ffffff',
+            align: 'center',
+            letterSpacing: 4,
+        }).setOrigin(0.5, 0);
+        container.add(orion);
+        cursor += orion.height + 100;
 
         const header = this.add.text(0, cursor, 'CREDITS', {
             fontFamily: 'Courier New',

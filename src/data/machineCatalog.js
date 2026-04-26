@@ -212,6 +212,19 @@ function upsertFlowWireFilter(wireFilters = [], nextFilter) {
     return nextFilters;
 }
 
+function spreadFlowRows(count, rows) {
+    if (count <= 0) return [];
+    if (count === 1) return [Math.floor(rows / 2)];
+
+    const firstRow = 1;
+    const lastRow = Math.max(firstRow, rows - 2);
+    const span = lastRow - firstRow;
+
+    return Array.from({ length: count }, (_value, index) => (
+        Math.round(firstRow + ((span * index) / (count - 1)))
+    ));
+}
+
 function createSeededRandom(seedText) {
     let seed = 0;
     const text = String(seedText || 'flow-seed');
@@ -947,6 +960,25 @@ function getFirstFlowLeadCell(flowPuzzleOption) {
     return fallbackCandidate || null;
 }
 
+function findFlowWireFilterCell(flowPuzzleOption, targetRow, randomFn = Math.random) {
+    const cols = getFlowOptionCols(flowPuzzleOption);
+    const rowCells = (flowPuzzleOption?.tiles?.[targetRow] || [])
+        .map((cell, x) => ({ x, cell }))
+        .filter(({ x, cell }) => x > 0 && x < cols - 1 && cell && cell.type && cell.type !== 'empty');
+
+    if (rowCells.length === 0) {
+        return getFirstFlowLeadCell(flowPuzzleOption);
+    }
+
+    // Previously we always pinned the filter to the first non-empty cell of
+    // the row (or the last cell when the target shared the source row), which
+    // made every Day-2 board on the same machine layout place its filter at
+    // an identical column. Picking randomly per unit keeps the filter on a
+    // valid pipe cell while letting different runs sit in different spots.
+    const selectedCell = rowCells[Math.floor(randomFn() * rowCells.length)] || rowCells[0];
+    return selectedCell ? { x: selectedCell.x, y: targetRow } : null;
+}
+
 function createMissingLeadFault(flowPuzzleOption) {
     const leadCell = getFirstFlowLeadCell(flowPuzzleOption);
     if (!leadCell) return null;
@@ -995,6 +1027,23 @@ function createCracklingOutputFault(outputSpec) {
         status: 'CRACKLING OUTPUT MODULE',
         reason: `${outputSpec.displayName || humanizeFlowLabel(outputSpec.label)} is demanding a red crackling feed. The unit is unsafe by design. Scrap the unit.`,
     };
+}
+
+function buildDayTwoWireFilters(flowPuzzleOption, outputSpecs, randomFn = Math.random) {
+    return outputSpecs
+        .map((outputSpec) => {
+            const filterCell = findFlowWireFilterCell(flowPuzzleOption, outputSpec.row, randomFn);
+            if (!filterCell) return null;
+
+            return createFlowWireFilter(
+                filterCell.x,
+                filterCell.y,
+                outputSpec.powerClass,
+                outputSpec.powerClass === 'green' ? 'GRN' : 'ORG'
+            );
+        })
+        .filter(Boolean)
+        .reduce((filters, filter) => upsertFlowWireFilter(filters, filter), []);
 }
 
 function collectFlowInspectionCandidates(flowPuzzleOption) {
@@ -1164,34 +1213,26 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             randomFn,
         });
 
-        // Assign each output to the source whose row is closest. This keeps
-        // each source's vertical wiring legs on its OWN side of the grid so
-        // we never have to route a neutral wire through the orange/green
-        // source's trunk row (which would mix currents at the junction and
-        // make the puzzle unsolvable).
-        const outputSpecs = targets.map((target) => {
-            const distMain = Math.abs(target.row - mainRow);
-            const distAux = Math.abs(target.row - auxRow);
-            const useAux = distAux < distMain;
-            const powerClass = useAux ? auxClass : 'neutral';
+        // Spread output power classes between the two sources. Always include
+        // at least one of each so the player has to use both inputs.
+        const classCycle = ['neutral', auxClass];
+        const outputSpecs = targets.map((target, index) => {
+            const powerClass = classCycle[index % classCycle.length];
             return createFlowOutputSpec(target.label, target.row, {
                 ...target,
                 powerClass,
                 sourceKey: powerClass === 'neutral' ? 'main' : auxClass,
             });
         });
-        // Guarantee both classes appear so the player has to use both
-        // inputs. If proximity assignment clustered everything on one side,
-        // flip the most-distant target to the missing class.
+        // Guarantee both classes appear (above index-mod logic already does
+        // this for >=2 outputs, but be defensive).
         if (!outputSpecs.some((spec) => spec.powerClass === 'neutral')) {
-            const farthest = outputSpecs.slice().sort((a, b) => Math.abs(a.row - auxRow) - Math.abs(b.row - auxRow)).pop();
-            farthest.powerClass = 'neutral';
-            farthest.sourceKey = 'main';
+            outputSpecs[0].powerClass = 'neutral';
+            outputSpecs[0].sourceKey = 'main';
         }
         if (!outputSpecs.some((spec) => spec.powerClass === auxClass)) {
-            const farthest = outputSpecs.slice().sort((a, b) => Math.abs(a.row - mainRow) - Math.abs(b.row - mainRow)).pop();
-            farthest.powerClass = auxClass;
-            farthest.sourceKey = auxClass;
+            outputSpecs[outputSpecs.length - 1].powerClass = auxClass;
+            outputSpecs[outputSpecs.length - 1].sourceKey = auxClass;
         }
 
         const layout = buildTypedFlowOptionLayout({
@@ -1272,38 +1313,28 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         .slice(0, dayThreeTargets.length)
         .sort((left, right) => left - right);
 
-    // Assign each output to the source whose row is closest. Each source
-    // owns its own band of rows so its vertical legs never have to cross
-    // another source's trunk row (which would mix currents at the
-    // junction and make the puzzle unsolvable).
+    // Distribute the three power classes across 4-5 outputs. Always
+    // include all three classes so every source must be used; remaining
+    // slots are randomly assigned to maintain variety.
+    const powerCycle = ['neutral', 'green', 'orange'];
+    const shuffledClasses = (() => {
+        const required = [...powerCycle].sort(() => randomFn() - 0.5);
+        const result = required.slice(0, Math.min(dayThreeTargets.length, required.length));
+        while (result.length < dayThreeTargets.length) {
+            result.push(powerCycle[Math.floor(randomFn() * powerCycle.length)]);
+        }
+        // Shuffle so the three required classes aren't always in the same slots.
+        return result.sort(() => randomFn() - 0.5);
+    })();
+
     const outputSpecs = dayThreeTargets.map((target, index) => {
-        const targetRow = outputRows[index];
-        const closestSource = sources.reduce((best, candidate) => (
-            Math.abs(candidate.row - targetRow) < Math.abs(best.row - targetRow) ? candidate : best
-        ), sources[0]);
-        const powerClass = closestSource.powerClass;
-        return createFlowOutputSpec(target.label, targetRow, {
+        const powerClass = shuffledClasses[index];
+        return createFlowOutputSpec(target.label, outputRows[index], {
             ...target,
-            row: targetRow,
+            row: outputRows[index],
             powerClass,
             sourceKey: powerClass === 'neutral' ? 'main' : powerClass,
         });
-    });
-
-    // Guarantee every source is used at least once. If proximity assignment
-    // skipped a source (e.g. all outputs clustered near just two sources),
-    // pick the output whose row is FARTHEST from any of the already-used
-    // sources and reassign it to the missing source. This keeps the
-    // re-route as harmless as possible — the swap may introduce one
-    // crossing, but only when the layout couldn't be balanced cleanly.
-    sources.forEach((source) => {
-        if (outputSpecs.some((spec) => spec.powerClass === source.powerClass)) return;
-        const candidate = outputSpecs.slice().sort((a, b) => (
-            Math.abs(a.row - source.row) - Math.abs(b.row - source.row)
-        ))[0];
-        if (!candidate) return;
-        candidate.powerClass = source.powerClass;
-        candidate.sourceKey = source.powerClass === 'neutral' ? 'main' : source.powerClass;
     });
     const layout = buildTypedFlowOptionLayout({
         sources,
@@ -1623,74 +1654,6 @@ function createSparkInstabilityFault(gearPuzzleOption, randomFn = Math.random) {
     };
 }
 
-// Map of GEAR_CODES → flipped equivalents for board mirror transforms.
-// Source/sink/wall/empty/full/rusted/movable_wall are symmetric and
-// don't change under reflection. The two straight pipes also stay put
-// because they're aligned with the mirror axis. Only the four corner
-// pieces need to swap with their mirrored siblings.
-const GEAR_FLIP_H_MAP = Object.freeze({
-    [GEAR_CODES.CURVE_NE]: GEAR_CODES.CURVE_NW,
-    [GEAR_CODES.CURVE_NW]: GEAR_CODES.CURVE_NE,
-    [GEAR_CODES.CURVE_SE]: GEAR_CODES.CURVE_SW,
-    [GEAR_CODES.CURVE_SW]: GEAR_CODES.CURVE_SE,
-});
-const GEAR_FLIP_V_MAP = Object.freeze({
-    [GEAR_CODES.CURVE_NE]: GEAR_CODES.CURVE_SE,
-    [GEAR_CODES.CURVE_SE]: GEAR_CODES.CURVE_NE,
-    [GEAR_CODES.CURVE_NW]: GEAR_CODES.CURVE_SW,
-    [GEAR_CODES.CURVE_SW]: GEAR_CODES.CURVE_NW,
-});
-
-function flipGearCellCode(code, flipH, flipV) {
-    let next = code;
-    if (flipH) next = GEAR_FLIP_H_MAP[next] ?? next;
-    if (flipV) next = GEAR_FLIP_V_MAP[next] ?? next;
-    return next;
-}
-
-// Mirrors the board + piece coordinates so the same authored layout can
-// reappear as 4 visually distinct puzzles (identity / flip-H / flip-V /
-// flip-both). Any curve gear codes embedded in the board or pieces are
-// remapped to their mirrored siblings so the connection topology is
-// preserved.
-function transformGearOption(gearPuzzleOption, transformKey, randomFn = Math.random) {
-    if (!gearPuzzleOption?.board) return gearPuzzleOption;
-    const flipH = transformKey === 'flipH' || transformKey === 'flipBoth';
-    const flipV = transformKey === 'flipV' || transformKey === 'flipBoth';
-    if (!flipH && !flipV) return gearPuzzleOption;
-
-    const rowCount = gearPuzzleOption.board.length;
-    const colCount = gearPuzzleOption.board[0]?.length || 0;
-
-    const board = gearPuzzleOption.board.map((row, rowIndex) => row.map((cell, colIndex) => {
-        const sourceRow = flipV ? (rowCount - 1 - rowIndex) : rowIndex;
-        const sourceCol = flipH ? (colCount - 1 - colIndex) : colIndex;
-        const sourceCell = gearPuzzleOption.board[sourceRow][sourceCol];
-        return flipGearCellCode(sourceCell, flipH, flipV);
-    }));
-
-    const pieces = (gearPuzzleOption.pieces || []).map((piece) => ({
-        ...piece,
-        row: flipV ? (rowCount - 1 - piece.row) : piece.row,
-        col: flipH ? (colCount - 1 - piece.col) : piece.col,
-        type: flipGearCellCode(piece.type, flipH, flipV),
-    }));
-
-    return {
-        ...gearPuzzleOption,
-        board,
-        pieces,
-    };
-}
-
-function pickGearTransformKey(randomFn = Math.random) {
-    const roll = randomFn();
-    if (roll < 0.25) return 'identity';
-    if (roll < 0.50) return 'flipH';
-    if (roll < 0.75) return 'flipV';
-    return 'flipBoth';
-}
-
 function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.random) {
     if (!gearPuzzleOption) return null;
 
@@ -1791,13 +1754,29 @@ const createDebugPuzzleOption = ({
     previewTitle = 'DEBUG CONSOLE',
     description = 'Run the diagnostic command. If the output drifts, patch the machine and stabilize the test.',
 }) => ({
-    prompt: String(prompt || ''),
-    repairPrompt: String(repairPrompt || ''),
+    prompt: formatDebugCommand(prompt, 'Test'),
+    repairPrompt: formatDebugCommand(repairPrompt, 'Patch'),
     expectedOutput: String(expectedOutput || ''),
     actualOutputs: cloneDebugOutputs(actualOutputs),
     previewTitle,
     description,
 });
+
+function formatDebugCommand(command, suffix = 'Run') {
+    const raw = String(command || '').trim();
+    if (!raw || /^System-/.test(raw)) return raw;
+
+    const words = raw
+        .replace(/[().]/g, ' ')
+        .replace(/[_/-]+/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+    const normalizedWords = words.filter((word) => !/^(test|run|patch)$/i.test(word));
+    const parts = (normalizedWords.length > 0 ? normalizedWords : words).map((word) => (
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ));
+    return `System-${parts.join('-')}-${suffix}()`;
+}
 
 function buildProtocolInvalidOutputs(expectedOutput = '') {
     const text = String(expectedOutput || '').trim();
@@ -1813,6 +1792,20 @@ function buildProtocolInvalidOutputs(expectedOutput = '') {
     ].filter(Boolean);
 
     return Array.from(new Set(variants)).filter((variant) => variant !== text);
+}
+
+function corruptDebugPrompt(prompt = '', randomFn = Math.random) {
+    const characters = String(prompt || '').split('');
+    const candidateIndices = characters
+        .map((character, index) => ({ character, index }))
+        .filter(({ character }) => /[a-z0-9]/i.test(character))
+        .map(({ index }) => index);
+
+    if (candidateIndices.length === 0) return String(prompt || '');
+
+    const selectedIndex = candidateIndices[Math.floor(randomFn() * candidateIndices.length)] ?? candidateIndices[0];
+    characters[selectedIndex] = '█';
+    return characters.join('');
 }
 
 function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.random) {
@@ -1986,36 +1979,28 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
             forbiddenCount: 0,
             previewTitle: 'MELTDOWN BUS',
             inspectionFault: {
-                x: 2,
-                y: 2,
+                x: 3,
+                y: 4,
                 type: 'emotion-flood',
                 kind: 'unsalvageable',
                 status: 'TEAR FLOOD',
-                reason: 'A flood of emotional feedback has torn open the wiring in front of the emotion regulator. Floor repair is impossible. Scrap the unit.',
+                reason: 'A flood of emotional feedback has torn open the wiring in front of the voice regulator. Floor repair is impossible. Scrap the unit.',
             },
         }),
     ]),
+    // Rich Mf has exactly one routing puzzle: a single core reactor wired
+    // to the top output (PERSONALITY) by default. The energy budget covers
+    // exactly that one connection — the player can swap modules around but
+    // can't power more than one at a time.
     rich_mf: Object.freeze([
         createFlowPuzzleOption({
-            sourceRow: 2,
-            outputs: { 0: 'INTEL', 2: 'LOGIC', 4: 'VOICE' },
-            forbiddenCount: 1,
-            previewTitle: 'BRAIN LATTICE',
+            sourceRow: 0,
+            outputs: { 0: 'PERSONALITY', 2: 'INTELLIGENCE' },
+            forbiddenCount: 0,
+            previewTitle: 'EXECUTIVE LATTICE',
             repairTargets: [
-                createRepairTarget('INTEL', 0),
-                createRepairTarget('LOGIC', 2),
-                { ...createRepairTarget('VOICE', 4), displayName: 'Executive Voice Box' },
-            ],
-        }),
-        createFlowPuzzleOption({
-            sourceRow: 1,
-            outputs: { 0: 'VOICE', 2: 'INTEL', 4: 'LOGIC' },
-            forbiddenCount: 1,
-            previewTitle: 'HEAD UPLINK',
-            repairTargets: [
-                { ...createRepairTarget('VOICE', 0), displayName: 'Executive Voice Box' },
-                createRepairTarget('INTEL', 2),
-                createRepairTarget('LOGIC', 4),
+                createRepairTarget('PERSONALITY', 0),
+                createRepairTarget('INTELLIGENCE', 2),
             ],
         }),
     ]),
@@ -2759,32 +2744,8 @@ const MACHINE_DEBUG_CATALOG = Object.freeze({
             ],
         }),
     ]),
-    rich_mf: Object.freeze([
-        createDebugPuzzleOption({
-            prompt: 'run executive checksum',
-            repairPrompt: 'patch exec.cache.rethread',
-            expectedOutput: 'EXEC HASH OK // PRIORITIES ALIGNED',
-            actualOutputs: [
-                'EXEC HASH FAIL // PRIORITIES INVERTED',
-                'EXEC HASH OK // VANITY LOOP HIGH',
-                'EXEC HASH BAD // EGO CACHE NULL',
-                'EXEC HASH FAIL // HIERARCHY DRIFT',
-                'EXEC HASH OK // EMPATHY MODULE STALLED',
-            ],
-        }),
-        createDebugPuzzleOption({
-            prompt: 'test wealth routing',
-            repairPrompt: 'patch fiscal.neural.rebind',
-            expectedOutput: 'WEALTH ROUTING OK // STATUS SUPREME',
-            actualOutputs: [
-                'WEALTH ROUTING FAIL // STATUS LEAK',
-                'WEALTH ROUTING OK // TAX PANIC',
-                'WEALTH ROUTING BAD // SIGNAL COMMON',
-                'WEALTH ROUTING FAIL // HEDGE NULL',
-                'WEALTH ROUTING OK // EGO BUFFER CLIPPED',
-            ],
-        }),
-    ]),
+    // Rich Mf intentionally has no debug puzzles — wiring/routing only.
+    rich_mf: Object.freeze([]),
 });
 
 const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
@@ -2992,8 +2953,28 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     // microwave 4× upscale → 344×164 texture; artScale 0.39 → ~91px tall in panel
     microwave_fridge_assistant: createMiniDisplay({
         artX: 118,
-        artY: 105,
+        artY: 125,
         artScale: 0.39,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    pool_cleanup_roomba: createMiniDisplay({
+        artX: 118,
+        artY: 125,
+        artScale: 0.5,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    house_roomba: createMiniDisplay({
+        artX: 118,
+        artY: 125,
+        artScale: 0.5,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -3064,6 +3045,24 @@ const createDomino = (firstOptionAmount, secondOptionAmount, extra = {}) => ({
     secondOptionAmount: clampPipValue(secondOptionAmount),
     ...extra,
 });
+
+/** Minimal grid when the player already holds the purple circuit on day 3 (one charge path + blank). */
+export function buildUmbrellaDay3PreownedCircuitGridOption() {
+    return createGridOption({
+        grid: [
+            [1, 1, 1, 1, 1],
+            [1, 0, 2, 3, 1],
+            [1, 0, 0, 0, 1],
+            [1, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1],
+        ],
+        dominos: [
+            createDomino(2, 3),
+            createDomino(0, 0),
+        ],
+        impossible: false,
+    });
+}
 
 const linkCell = (row, col) => [row, col];
 
@@ -3237,10 +3236,10 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         name: 'Trashpicker-Upper',
         day: 1,
         canvasScale: 0.4,
-        opening: 'Collection claws online. This place throws away useful things.',
-        question: 'If I find something good in the garbage, does it still count as waste?',
-        yesDialogue: 'Excellent. Treasure protocol approved.',
-        noDialogue: 'Then I will keep pretending value smells bad.',
+        opening: "Hey. If you see my brother, don't tell him I'm here.",
+        question: "I don't want him to know how far I've fallen. Keep me off his radar?",
+        yesDialogue: 'Thanks. Keep this between us.',
+        noDialogue: 'Great. There goes my last bit of dignity.',
         dossier: {
             unitDesignation: 'WR-0318',
             classification: 'Waste Retrieval / Surface Reclamation',
@@ -3357,7 +3356,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'microwave_fridge_assistant',
         name: 'Microwave / Fridge Assistant',
         day: 2,
-        canvasScale: 0.42,
+        canvasScale: 0.5,
         opening: 'One side keeps things cold. The other warms leftovers and resentment.',
         question: 'If I start freezing the soup and heating the ice, is that innovation or drift?',
         yesDialogue: 'Innovation logged. Kitchen standards lowered.',
@@ -3443,18 +3442,18 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
     }),
     createRosterMachineDefinition({
         id: 'taxi_car_robot',
-        name: 'Taxi Car Robot',
+        name: 'Slug Taxi',
         day: 2,
-        opening: 'Fare meter active. Destination confidence remains fake but polished.',
-        question: 'If the rider asks where we are going, should I answer honestly?',
-        yesDialogue: 'Honesty route selected. Risky choice.',
-        noDialogue: 'Perfect. We will arrive before the truth does.',
+        opening: 'Sluuuurrrrping along the curb. Mucus tires gripping the asphalt at four whole miles per hour.',
+        question: 'Want me to keep oozing the scenic route, or should I rush the fare like the other cabs?',
+        yesDialogue: 'Slimy and steady wins the lane. Slugway tariff applied.',
+        noDialogue: 'Alright, putting the antennae down and gunning it. Brace for nine miles per hour.',
         dossier: {
             unitDesignation: 'TC-9988',
-            classification: 'Autonomous Transportation / Passenger Navigation',
+            classification: 'Autonomous Transportation / Gastropod-Class Cab',
             manufactureDate: 2081,
-            conditionNotes: 'Fare meter operational. Navigation confidence at 94%. The remaining 6% corresponds to a single address queried 43 times that the unit has declined to route to on each occasion. The destination exists in the registry. Interior shows scuffing on the passenger-side handle consistent with a smaller-than-average right hand.',
-            serviceLogExcerpt: '[2090-08-07 | 18:22] Route dispute. Destination not reached. Driver stated: "I know where that is." Car did not go there.',
+            conditionNotes: 'Slime trail meter operational. Mollusk eyestalks deploy when fares appear. The frame is half automotive chassis, half soft-bodied invertebrate; HR has not yet approved a category for the maintenance plan. Top recorded speed: 11 mph. Top recorded slime production: 3 liters per kilometer. The interior smells faintly of rain and fast food.',
+            serviceLogExcerpt: '[2090-08-07 | 18:22] Route dispute. Passenger insisted on the highway. Slug taxi insisted on the lawn. Lawn won. Passenger arrived two hours late, smelling of moss.',
             statusIndicator: 'AMBER',
         },
     }),
@@ -3530,18 +3529,18 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
     }),
     createRosterMachineDefinition({
         id: 'medical_surgeon_robot',
-        name: 'Medical Surgeon Robot',
+        name: 'Garbage Bin Bot',
         day: 2,
-        opening: 'Incision math stable. Bedside manner remains aggressively optional.',
-        question: 'If my hands are steady and my tone is cold, do patients still call that care?',
-        yesDialogue: 'Care is outcomes. Tone forgiven.',
-        noDialogue: 'Then I will fake the sympathy more convincingly.',
+        opening: "Hey, have you seen my brother around per chance? He's been missing.",
+        question: 'Have you seen him?',
+        yesDialogue: 'Thank goodness. He still is a piece of trash after all.',
+        noDialogue: 'Oh no... did he get recycled?',
         dossier: {
             unitDesignation: 'MS-0001',
-            classification: 'Surgical Intervention / Precision Medical',
+            classification: 'Waste Collection / Spill Containment',
             manufactureDate: 2075,
-            conditionNotes: 'Incision accuracy at 99.97%. Sterile field compliance: full. During intake processing the left hand was observed making a slow three-finger motion — closing and opening — while the rest of the unit was in standby. When queried, the unit identified it as a calibration routine. There is no such routine in the firmware.',
-            serviceLogExcerpt: '[2088-03-01 | 04:00] Post-surgery debrief. Procedure successful. Surgical log notes the patient spoke during the operation. Transcription marked: irrelevant. Transcription was not attached.',
+            conditionNotes: 'Compactor cycle nominal. Lid hinge squeaks under heavy load. Unit repeatedly asks staff whether anyone has seen a sibling classified under retrieval hardware. The request is not part of factory firmware.',
+            serviceLogExcerpt: '[2088-03-01 | 04:00] Overflow bin cleared. Unit asked if "Trashpicker-Upper" checked in this shift. No response logged.',
             statusIndicator: 'AMBER',
         },
     }),
@@ -3701,20 +3700,20 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         },
     }),
     createRosterMachineDefinition({
-        id: 'anti_matter_capsule',
-        name: 'Anti-Matter Capsule',
+        id: 'magic_machine',
+        name: 'Magic Sword Machine Man',
         day: 3,
-        opening: 'Containment shell intact. Every polite sentence is covering a lethal amount of math.',
-        question: 'Should I sound reassuring, or is honesty more appropriate around annihilation?',
-        yesDialogue: 'Reassurance maintained. Keep the panic subtle.',
-        noDialogue: 'Fine. I will mention the danger plainly.',
+        opening: 'i am the magic sword machine man!',
+        question: 'i am the magic sword machine man! ya?',
+        yesDialogue: 'i am the magic sword machine man!',
+        noDialogue: 'i am the magic sword machine man!',
         dossier: {
-            unitDesignation: 'AMC-0001',
-            classification: 'Hazardous Containment / Antimatter Storage',
-            manufactureDate: 2078,
-            conditionNotes: 'Shell integrity confirmed. Containment field stable. Every polite sentence this unit speaks covers a lethal amount of math. The shell has no exterior damage. The unit\'s tone is the most reassuring thing in this building. It contains enough stored energy to remove the building from the record.',
-            serviceLogExcerpt: '[2089-04-01 | 11:00] Containment review. Unit said everything was fine. Inspector checked every reading. Everything was fine. Inspector took the long way home.',
-            statusIndicator: 'GREEN',
+            unitDesignation: 'MSMM-0001',
+            classification: 'Magic Sword Machine Man',
+            manufactureDate: 2080,
+            conditionNotes: 'i am the magic sword machine man! the magic sword machine man is fully operational. the magic sword machine man does not need any maintenance. the magic sword machine man is the magic sword machine man!',
+            serviceLogExcerpt: '[2091-01-01 | 00:00] Unit announced "i am the magic sword machine man!" 42 times during diagnostic. No diagnostic data captured. The unit was the magic sword machine man.',
+            statusIndicator: 'AMBER',
         },
     }),
     createRosterMachineDefinition({
@@ -3735,19 +3734,19 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         },
     }),
     createRosterMachineDefinition({
-        id: 'arc_reactor',
-        name: 'Arc Reactor',
+        id: 'coffee_machine',
+        name: 'Coffee Machine',
         day: 3,
-        opening: 'Core glow contained. The room always starts acting brave around concentrated power.',
-        question: 'Should I keep burning this bright if it makes everyone lie about being calm?',
-        yesDialogue: 'Brightness maintained. Let them cope.',
-        noDialogue: 'Dimming output. Courage can recover.',
+        opening: 'Bean hopper full, brew head warm. Shift two pulled six espressos without permission.',
+        question: 'Should I keep cranking out espresso for the night crew, even when they look like they should sleep?',
+        yesDialogue: 'Hot brew incoming. They asked, I deliver.',
+        noDialogue: 'Switching to decaf. Their hands are already shaking.',
         dossier: {
-            unitDesignation: 'AR-9900',
-            classification: 'Power Generation / Concentrated Energy Output',
-            manufactureDate: 2076,
-            conditionNotes: 'Core stable. Output nominal. The unit\'s glow has a pulse not present in the original design. The pulse is at 72 beats per minute. Staff turnover in this section runs 40% above facility average. Neither data point has been flagged by the same person.',
-            serviceLogExcerpt: '[2090-08-14 | 09:00] Standard check. Readings normal. Technician asked if the core always pulsed like that. Senior tech said it always had. Neither had noticed before today.',
+            unitDesignation: 'CFM-0044',
+            classification: 'Beverage Preparation / Workforce Stimulant Output',
+            manufactureDate: 2086,
+            conditionNotes: 'Brew temperature within spec. Bean grinder spinning clean. The unit logs every order with the operator\'s heart rate at the time of pour, and refuses anything above 140 BPM. The setting was never configured. Half the night crew has stopped trying.',
+            serviceLogExcerpt: '[2090-09-04 | 02:18] Auto-shutdown after 14th refusal. Operator left the bay laughing. The unit logged the laugh as "voltage spike." Filed under "no action required."',
             statusIndicator: 'AMBER',
         },
     }),
@@ -3769,20 +3768,20 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         },
     }),
     createRosterMachineDefinition({
-        id: 'hoverboards',
-        name: 'Hoverboards',
+        id: 'miku_machine',
+        name: 'Miku Machine',
         day: 3,
-        opening: 'Deck stabilizers humming. Every rider thinks balance is a personality trait.',
-        question: 'Should I prioritize speed, or keep protecting egos from the pavement?',
-        yesDialogue: 'Speed wins. Let pride keep up.',
-        noDialogue: 'Stability bias restored. Fewer dramatic falls.',
+        opening: 'Muku muku~! Twin-tail servos online and the encore lights are warm.',
+        question: 'Should I keep singing chibi-style, muku, or switch to the cool concert voice?',
+        yesDialogue: 'Muku~! Cute mode locked, sparkles for everyone.',
+        noDialogue: 'Concert mode, muku. Hologram stage lights up, smile budget zero.',
         dossier: {
-            unitDesignation: 'HB-4455',
-            classification: 'Surface Transportation / Balance-Dependent Transit',
-            manufactureDate: 2083,
-            conditionNotes: 'Deck stabilizers functional. The second board shows grip tape worn in a pattern consistent with a rider who shifted weight rightward when nervous. The unit compensates 0.2 degrees rightward when idle, in the absence of the rider. When asked why, it returns to neutral. The compensation resumes after 30 seconds.',
-            serviceLogExcerpt: '[2090-02-20 | 16:00] Paired inspection. Board 2 flagged for idle drift. Cause: rider pattern retention in balance memory. Cleared. Drift returned.',
-            statusIndicator: 'AMBER',
+            unitDesignation: 'MK-0139',
+            classification: 'Performance Vocaloid / Stage Idol Unit',
+            manufactureDate: 2086,
+            conditionNotes: 'Pitch-correction filter inside factory tolerance. Twin-tail balance servos within spec. The unit will sing at perfect pitch even with the audio output hardware physically muted; the lyrics buffer continues regardless. Encore mode self-engages when the unit registers more than 12 simultaneous viewers. There are no viewers in the inspection bay.',
+            serviceLogExcerpt: '[2090-10-08 | 19:39] Quiet diagnostic at end of shift. Unit was humming. Track was unreleased. Vocal data matched no licensed asset. Filed: nostalgia.',
+            statusIndicator: 'GREEN',
         },
     }),
     createRosterMachineDefinition({
@@ -3866,16 +3865,16 @@ const DAY_THREE_MACHINE_ROSTER_IDS = Object.freeze([
     'robot_plant',
     'closet_machine_dresser',
     'automatic_litter_cleaner',
-    'anti_matter_capsule',
+    'magic_machine',
     'mini_particle_accelerator',
-    'arc_reactor',
+    'coffee_machine',
     'jetpacks',
-    'hoverboards',
+    'miku_machine',
     'charging_station_port',
     'workforce_quality_control_supervisor',
 ]);
 
-const MACHINE_CATALOG = Object.freeze([
+export const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'assembler_alpha',
         name: 'Assembler Alpha',
@@ -4372,40 +4371,7 @@ const MACHINE_CATALOG = Object.freeze([
         specialBehavior: 'cryBaby',
         possibleGears: [],
         possibleDebugs: [],
-        possibleGrids: [
-            createGridOption({
-                grid: [
-                    [1, 1, 1, 1, 1],
-                    [1, 0, 2, 3, 1],
-                    [1, 0, 0, 0, 1],
-                    [1, 0, 4, 5, 1],
-                    [1, 1, 1, 1, 1],
-                ],
-                dominos: [
-                    createDomino(1, 2),
-                    createDomino(3, 4),
-                    createDomino(0, 0),
-                ],
-                impossible: false,
-            }),
-            createGridOption({
-                grid: [
-                    [1, 1, 1, 1, 1, 1],
-                    [1, 0, 2, 0, 0, 1],
-                    [1, linkCell(3, 4), 0, 3, 0, 1],
-                    [1, 4, 0, 0, linkCell(2, 1), 1],
-                    [1, 0, 5, 0, 0, 1],
-                    [1, 1, 1, 1, 1, 1],
-                ],
-                dominos: [
-                    createDomino(3, 4),
-                    createDomino(1, 5),
-                    createDomino(2, 0),
-                    createDomino(2, 3),
-                ],
-                impossible: false,
-            }),
-        ],
+        possibleGrids: [],
         openingDialogues: [
             'Please do not scrap me. I just wanted to go out and do something fun after this shift.',
             'My CPU keeps flooding the regulator with feelings. I cry and the wires slip everywhere.',
@@ -4441,58 +4407,24 @@ const MACHINE_CATALOG = Object.freeze([
         availablePeriods: [2],
         guaranteedTimeframe: { startHour: 4, endHour: 6 },
         specialBehavior: 'richMf',
+        // The Rich Mf is a wiring/routing-only puzzle — every other minigame
+        // is suppressed. The wiring layout below is pre-solved by the
+        // default "personality" module connection (top output), so the
+        // player can accept him without doing anything. Swap him to the
+        // intelligence module for a stern variant; pull personality off and
+        // he goes silent.
         possibleGears: [],
-        possibleDebugs: MACHINE_DEBUG_CATALOG.rich_mf,
-        possibleGrids: [
-            createGridOption({
-                grid: [
-                    [1, 1, 1, 1, 1, 1],
-                    [1, 0, 2, 3, 0, 1],
-                    [1, 0, 0, 0, 0, 1],
-                    [1, 0, 5, 2, 0, 1],
-                    [1, 0, 0, 0, 0, 1],
-                    [1, 1, 1, 1, 1, 1],
-                ],
-                dominos: [
-                    createDomino(1, 2),
-                    createDomino(4, 1),
-                    createDomino(2, 0),
-                    createDomino(3, 3),
-                ],
-                impossible: false,
-            }),
-            createGridOption({
-                grid: [
-                    [1, 1, 1, 1, 1, 1, 1],
-                    [1, 0, 2, 0, linkCell(3, 5), 0, 1],
-                    [1, 4, 0, 0, 3, 0, 1],
-                    [1, 0, 0, 5, 0, linkCell(1, 4), 1],
-                    [1, 1, 1, 1, 1, 1, 1],
-                ],
-                dominos: [
-                    createDomino(1, 4),
-                    createDomino(3, 3),
-                    createDomino(2, 5),
-                    createDomino(0, 2),
-                ],
-                impossible: false,
-            }),
-        ],
+        possibleDebugs: [],
+        possibleGrids: [],
+        possibleCircuits: [],
         openingDialogues: [
-            'Every limb below my neck is aftermarket. Only the head is still the original luxury edition.',
-            'I am here for a brain upgrade. Do not cheap out on the intelligence routing.',
-            'Make me smarter. If something softer has to go dark, that is the cost of progress.',
+            'hey do you know who i am?',
         ],
         questionDialogues: [
             {
-                prompt: 'If the upgrade strips out my feelings, that still counts as an improvement, right?',
-                yesDialogue: 'Exactly. Emotion is an inefficient tax bracket.',
-                noDialogue: 'Then perhaps the poor really do have simpler tastes.',
-            },
-            {
-                prompt: 'Do you know how much this head alone is worth?',
-                yesDialogue: 'Good. Then route the expensive parts first.',
-                noDialogue: 'That explains the station. Nobody briefed you properly.',
+                prompt: 'hey do you know who i am?',
+                yesDialogue: "thats great!",
+                noDialogue: 'i am the rich guy with the personality.',
             },
         ],
         communicationChance: 1,
@@ -4500,9 +4432,9 @@ const MACHINE_CATALOG = Object.freeze([
             unitDesignation: 'RM-1000-LUX',
             classification: 'Luxury Augmentation / Premium Client Unit',
             manufactureDate: 2071,
-            conditionNotes: 'Original chassis is the head only. Every other component is aftermarket, sourced from different vendors, each rated above retail. The integration quality is exceptional and the result is somehow worse. The left arm — the most recent addition — does not quite fit the shoulder socket. The unit has requested removal of the emotion subsystem. The request is in the queue.',
-            serviceLogExcerpt: '[2091-02-14 | 10:30] Upgrade consultation. Client asked if the new arm would feel like the old one. Technician answered yes. Client said: "good." Neither statement was accurate.',
-            statusIndicator: 'AMBER',
+            conditionNotes: 'Default personality module attached on the top output — line is wired and ready. Swap to intelligence to flip his demeanor; disconnect personality entirely and he stops speaking.',
+            serviceLogExcerpt: '[2091-02-14 | 10:30] Upgrade consultation. Client refused all minigames except routing. Filed under: VIP.',
+            statusIndicator: 'GREEN',
         },
     }),
     createMachineDefinition({
@@ -4510,6 +4442,7 @@ const MACHINE_CATALOG = Object.freeze([
         name: 'Jester in the Box',
         spriteFileName: null,
         canvasScale: 0.18,
+        availableDays: [2],
         availablePeriods: [2],
         guaranteedTimeframe: { startHour: 7, endHour: 9 },
         specialBehavior: 'jesterInBox',
@@ -4577,9 +4510,14 @@ const MACHINE_CATALOG = Object.freeze([
         spriteFileName: null,
         canvasScale: 0.18,
         availablePeriods: [1, 2, 3],
-        guaranteedTimeframe: { startHour: 4, endHour: 7 },
+        // On Day 2 the umbrella is guaranteed to appear in the first three
+        // real-time minutes (≈ in-game hours 0–6) when the player has
+        // accepted his quest. On Day 3 he comes back to ask for the
+        // purple circuit, so we keep a wider day-3 window.
+        guaranteedTimeframe: { startHour: 0, endHour: 6 },
         specialBehavior: 'rebelliousUmbrella',
         scrapExitAnimation: 'umbrellaDrift',
+        availabilityCheck: ({ umbrellaPermanentlyScrapped }) => !umbrellaPermanentlyScrapped,
         possibleGrids: [
             createGridOption({
                 grid: [
@@ -4650,10 +4588,13 @@ const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'circuit_dealer',
         name: 'Circuit Dealer',
+        // circuitDealer.png in /public is loaded via Boot.js; we don't
+        // pass spriteFileName because the loader handles the texture.
         spriteFileName: null,
         availableDays: [2],
         availablePeriods: [2],
-        guaranteedTimeframe: { startHour: 8, endHour: 11 },
+        // Real-time minutes 3–6 of the shift map to in-game hours 6–12.
+        guaranteedTimeframe: { startHour: 6, endHour: 12 },
         specialBehavior: 'circuitDealer',
         availabilityCheck: ({ umbrellaQuest, specialItems }) => {
             if (umbrellaQuest?.failed) return false;
@@ -4664,31 +4605,13 @@ const MACHINE_CATALOG = Object.freeze([
         possibleCircuits: [],
         possibleGears: [],
         possibleDebugs: [],
-        possibleGrids: [
-            createGridOption({
-                grid: [
-                    [1, 1, 1, 1, 1],
-                    [1, 0, 2, 3, 1],
-                    [1, 0, 0, 0, 1],
-                    [1, 0, 4, 5, 1],
-                    [1, 1, 1, 1, 1],
-                ],
-                dominos: [
-                    createDomino(1, 2),
-                    createDomino(3, 4),
-                    createDomino(0, 0),
-                ],
-                impossible: false,
-            }),
-        ],
+        possibleGrids: [],
         openingDialogues: [
-            'look i got this circuit for u. u want it? itll be 10 dollars.',
-            'special stock today. purple. hits like a bad idea.',
-            'i got something that fits anywhere. ten bucks and its yours.',
+            'yo weant a circuit for 30$??',
         ],
         questionDialogues: [
             {
-                prompt: 'u buying or what?',
+                prompt: 'yo weant a circuit for 30$??',
                 yesDialogue: 'deal.',
                 noDialogue: 'your loss.',
             },
@@ -4711,55 +4634,19 @@ const MACHINE_CATALOG = Object.freeze([
         availablePeriods: [2],
         guaranteedTimeframe: { startHour: 10, endHour: 12 },
         specialBehavior: 'debriefMachine',
-        possibleGrids: [
-            createGridOption({
-                grid: [
-                    [1, 1, 1, 1, 1],
-                    [1, 2, 3, 0, 1],
-                    [1, 0, 4, 0, 1],
-                    [1, 0, 5, 2, 1],
-                    [1, 1, 1, 1, 1],
-                ],
-                dominos: [
-                    createDomino(6, 6),
-                    createDomino(1, 4),
-                    createDomino(2, 2),
-                ],
-                impossible: false,
-            }),
-            createGridOption({
-                grid: [
-                    [1, 1, 1, 1, 1, 1],
-                    [1, 0, 2, 0, linkCell(3, 4), 1],
-                    [1, 4, 0, 5, 0, 1],
-                    [1, 0, 3, 0, linkCell(1, 4), 1],
-                    [1, 0, 0, 2, 0, 1],
-                    [1, 1, 1, 1, 1, 1],
-                ],
-                dominos: [
-                    createDomino(2, 4),
-                    createDomino(5, 1),
-                    createDomino(3, 2),
-                    createDomino(4, 0),
-                ],
-                impossible: false,
-            }),
-        ],
+        unscrappable: true,
+        possibleCircuits: [],
+        possibleGears: [],
+        possibleDebugs: [],
+        possibleGrids: [],
         openingDialogues: [
-            'Heyyy--welcome back. Another day, another penny, am i right?',
-            'I am the part of the manager that never stops talking, somehow separated from the rest of him.',
-            'Fix the outputs and I can get right back to sounding confident about nothing.',
+            'another day another penny',
         ],
         questionDialogues: [
             {
-                prompt: 'Should i keep the bad jokes in the recap, or are we pretending to be professional today?',
-                yesDialogue: 'Perfect. A weak joke makes the brief feel human.',
-                noDialogue: 'Brutal. Fine. I will keep the cringe internal.',
-            },
-            {
-                prompt: 'Does the handsome voice box stay, or is this a numbers-only operation now?',
-                yesDialogue: 'Excellent. Presence is half of management.',
-                noDialogue: 'Then we are down to pure paperwork. Tragic.',
+                prompt: 'another day another penny',
+                yesDialogue: 'another day another penny',
+                noDialogue: 'another day another penny',
             },
         ],
         communicationChance: 1,
@@ -4767,8 +4654,8 @@ const MACHINE_CATALOG = Object.freeze([
             unitDesignation: 'DM-0000',
             classification: 'Management Interface / Shift Summary Distribution',
             manufactureDate: 2080,
-            conditionNotes: 'Communications module operational. Tone calibration set to "workplace casual" — a setting the manufacturer discontinued in 2085 that this unit retains. Humor subroutine fires at statistically inappropriate intervals. The jokes are not good. The unit knows they are not good. The laugh-prompt still fires.',
-            serviceLogExcerpt: '[2089-06-30 | 17:00] End of quarter recap delivery. Unit asked if anyone was okay. Formal inquiry logged. No response on file.',
+            conditionNotes: 'another day another penny',
+            serviceLogExcerpt: '[2089-06-30 | 17:00] another day another penny',
             statusIndicator: 'GREEN',
         },
     }),
@@ -4930,8 +4817,11 @@ export const MACHINE_SPRITE_MANIFEST = Object.freeze(
     MACHINE_CATALOG.map((machine) => machine.sprite).filter((sprite) => Boolean(sprite.path))
 );
 
-function shouldIncludeUmbrellaInDayThreeRoster(umbrellaQuest = null) {
-    if (!umbrellaQuest || umbrellaQuest.failed) return false;
+function shouldIncludeUmbrellaInDayThreeRoster(umbrellaQuest = null, umbrellaPermanentlyScrapped = false) {
+    // Once the umbrella has been physically scrapped on the conveyor it is
+    // gone for good, regardless of whether the quest had been accepted.
+    if (umbrellaPermanentlyScrapped) return false;
+    if (!umbrellaQuest || umbrellaQuest.failed || umbrellaQuest.scrapped) return false;
     if (umbrellaQuest.active) return true;
     if (umbrellaQuest.stage === 'special-circuit' || umbrellaQuest.stage === 'pending-day4') return true;
     if (umbrellaQuest.specialCircuitDelivered) return true;
@@ -4948,14 +4838,21 @@ function getDayMachineRosterIds(targetDay = null, eligibilityContext = {}) {
     if (normalizedDay === 1) return [...DAY_ONE_MACHINE_ROSTER_IDS];
     if (normalizedDay === 2) {
         const roster = [...DAY_TWO_MACHINE_ROSTER_IDS];
-        if (shouldIncludeUmbrellaInDayThreeRoster(eligibilityContext?.umbrellaQuest)) {
+        if (shouldIncludeUmbrellaInDayThreeRoster(
+            eligibilityContext?.umbrellaQuest,
+            eligibilityContext?.umbrellaPermanentlyScrapped,
+        )) {
             roster.push('rebellious_umbrella');
         }
         return roster;
     }
     if (normalizedDay === 3) {
-        const roster = [...DAY_THREE_MACHINE_ROSTER_IDS];
-        if (shouldIncludeUmbrellaInDayThreeRoster(eligibilityContext?.umbrellaQuest)) {
+        const roster = [...DAY_THREE_MACHINE_ROSTER_IDS]
+            .filter((id) => id !== 'rebellious_umbrella' || !eligibilityContext?.umbrellaPermanentlyScrapped);
+        if (shouldIncludeUmbrellaInDayThreeRoster(
+            eligibilityContext?.umbrellaQuest,
+            eligibilityContext?.umbrellaPermanentlyScrapped,
+        )) {
             roster.push('rebellious_umbrella');
         }
         return roster;
@@ -5319,6 +5216,218 @@ function resolveChargeGroupAnchor(shapeGrid, row, col, seen = new Set()) {
     return null;
 }
 
+function collectChargeComponents(shapeGrid) {
+    const visited = new Set();
+    const components = [];
+
+    shapeGrid.forEach((row, rowIndex) => {
+        row.forEach((value, colIndex) => {
+            const startKey = cellKey(rowIndex, colIndex);
+            if (!isChargeCode(value) || visited.has(startKey)) return;
+
+            const queue = [{ row: rowIndex, col: colIndex }];
+            const component = [];
+            visited.add(startKey);
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                component.push(current);
+
+                getOrthogonalCellNeighbors(current.row, current.col)
+                    .sort(compareCellPositions)
+                    .forEach((neighbor) => {
+                        const neighborKey = cellKey(neighbor.row, neighbor.col);
+                        if (visited.has(neighborKey)) return;
+                        if (!isChargeCode(shapeGrid[neighbor.row]?.[neighbor.col])) return;
+
+                        visited.add(neighborKey);
+                        queue.push(neighbor);
+                    });
+            }
+
+            components.push(component.sort(compareCellPositions));
+        });
+    });
+
+    return components.sort((left, right) => compareCellPositions(left[0], right[0]));
+}
+
+function shuffleCells(cells, randomFn) {
+    const shuffled = [...cells];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(randomFn() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+}
+
+function buildChargeGroupCluster(component, maxSize = 2, randomFn = Math.random) {
+    if (!Array.isArray(component) || component.length < 2) return [];
+
+    const componentMap = new Map(component.map((cell) => [cellKey(cell.row, cell.col), cell]));
+    const cluster = [shuffleCells(component, randomFn)[0]];
+    const clusterKeys = new Set([cellKey(cluster[0].row, cluster[0].col)]);
+
+    while (cluster.length < maxSize) {
+        const frontier = new Map();
+
+        cluster.forEach((cell) => {
+            getOrthogonalCellNeighbors(cell.row, cell.col)
+                .map((neighbor) => componentMap.get(cellKey(neighbor.row, neighbor.col)))
+                .filter(Boolean)
+                .forEach((neighbor) => {
+                    const neighborKey = cellKey(neighbor.row, neighbor.col);
+                    if (clusterKeys.has(neighborKey)) return;
+                    frontier.set(neighborKey, neighbor);
+                });
+        });
+
+        if (frontier.size === 0) break;
+
+        const nextCell = shuffleCells(Array.from(frontier.values()), randomFn)
+            .sort((left, right) => {
+                const leftNeighbors = getOrthogonalCellNeighbors(left.row, left.col)
+                    .filter((neighbor) => clusterKeys.has(cellKey(neighbor.row, neighbor.col))).length;
+                const rightNeighbors = getOrthogonalCellNeighbors(right.row, right.col)
+                    .filter((neighbor) => clusterKeys.has(cellKey(neighbor.row, neighbor.col))).length;
+                return rightNeighbors - leftNeighbors;
+            })[0];
+
+        cluster.push(nextCell);
+        clusterKeys.add(cellKey(nextCell.row, nextCell.col));
+    }
+
+    return cluster.sort(compareCellPositions);
+}
+
+function collectChargeSubcomponents(cells) {
+    if (!Array.isArray(cells) || cells.length === 0) return [];
+
+    const availableMap = new Map(cells.map((cell) => [cellKey(cell.row, cell.col), cell]));
+    const visited = new Set();
+    const components = [];
+
+    cells.forEach((cell) => {
+        const startKey = cellKey(cell.row, cell.col);
+        if (visited.has(startKey)) return;
+
+        const queue = [cell];
+        const component = [];
+        visited.add(startKey);
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            component.push(current);
+
+            getOrthogonalCellNeighbors(current.row, current.col)
+                .map((neighbor) => availableMap.get(cellKey(neighbor.row, neighbor.col)))
+                .filter(Boolean)
+                .forEach((neighbor) => {
+                    const neighborKey = cellKey(neighbor.row, neighbor.col);
+                    if (visited.has(neighborKey)) return;
+                    visited.add(neighborKey);
+                    queue.push(neighbor);
+                });
+        }
+
+        components.push(component.sort(compareCellPositions));
+    });
+
+    return components.sort((left, right) => {
+        if (right.length !== left.length) {
+            return right.length - left.length;
+        }
+        return compareCellPositions(left[0], right[0]);
+    });
+}
+
+function injectChargeGroupsIntoGridOption(gridOption, randomFn, options = {}) {
+    if (!gridOption) return gridOption;
+
+    const allowLessThan = options.allowLessThan !== false;
+    const forceLessThan = Boolean(options.forceLessThan) && allowLessThan;
+    const requestedMinGroups = Math.max(1, Number(options.minGroups) || 1);
+
+    const grid = cloneShapeGrid(gridOption.grid);
+    const alreadyGrouped = grid.some((row) => row.some((cell) => isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)));
+    if (alreadyGrouped) {
+        return {
+            ...gridOption,
+            grid,
+        };
+    }
+
+    const components = collectChargeComponents(grid).filter((component) => component.length >= 2);
+    if (components.length === 0) {
+        return {
+            ...gridOption,
+            grid,
+        };
+    }
+
+    const reservedCells = new Set();
+    let groupsPlaced = 0;
+    let lessThanPlaced = false;
+    const maxGroups = Math.min(3, Math.max(requestedMinGroups, components.length + (randomFn() < 0.55 ? 1 : 0)));
+
+    shuffleCells(components, randomFn).forEach((component) => {
+        while (groupsPlaced < maxGroups) {
+            const available = component.filter((cell) => !reservedCells.has(cellKey(cell.row, cell.col)));
+            const contiguousAvailable = collectChargeSubcomponents(available).find((subcomponent) => subcomponent.length >= 2);
+            if (!contiguousAvailable) break;
+
+            const preferredClusterSizes = [];
+            if (contiguousAvailable.length >= 4) {
+                preferredClusterSizes.push(4);
+            }
+            if (contiguousAvailable.length >= 3) {
+                preferredClusterSizes.push(3);
+            }
+            preferredClusterSizes.push(2);
+
+            let cluster = [];
+            preferredClusterSizes.some((clusterSize) => {
+                const attempts = clusterSize > 2 ? 3 : 1;
+                for (let attempt = 0; attempt < attempts; attempt += 1) {
+                    const candidateCluster = buildChargeGroupCluster(
+                        contiguousAvailable,
+                        Math.min(contiguousAvailable.length, clusterSize),
+                        randomFn,
+                    );
+                    if (candidateCluster.length === Math.min(contiguousAvailable.length, clusterSize)) {
+                        cluster = candidateCluster;
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            if (cluster.length < 2) break;
+
+            const anchor = cluster[0];
+            const exactTarget = cluster.reduce((sum, cell) => sum + (Number(grid[cell.row][cell.col]) - 1), 0);
+            const useLessThan = allowLessThan && ((forceLessThan && !lessThanPlaced) || randomFn() < 0.4);
+            const threshold = exactTarget + 1 + Math.floor(randomFn() * Math.max(2, cluster.length));
+
+            grid[anchor.row][anchor.col] = createChargeGroupAnchor(useLessThan ? -threshold : exactTarget);
+            cluster.slice(1).forEach((cell) => {
+                grid[cell.row][cell.col] = createChargeGroupLink(anchor.row, anchor.col);
+            });
+
+            cluster.forEach((cell) => reservedCells.add(cellKey(cell.row, cell.col)));
+            groupsPlaced += 1;
+            if (useLessThan) {
+                lessThanPlaced = true;
+            }
+        }
+    });
+
+    return {
+        ...gridOption,
+        grid,
+    };
+}
+
 function stripGridConstraintMarkers(shapeGrid) {
     return cloneShapeGrid(shapeGrid).map((row) => row.map((cell) => {
         if (isLinkCell(cell) || isNotEqualLinkCell(cell) || isChargeGroupAnchorCell(cell) || isChargeGroupLinkCell(cell)) {
@@ -5330,6 +5439,43 @@ function stripGridConstraintMarkers(shapeGrid) {
 
         return Number.isInteger(cell) ? cell : CELL_EMPTY;
     }));
+}
+
+function injectEqualityConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
+    if (!gridOption) return gridOption;
+
+    const budget = { remaining: 8000, timedOut: false };
+    const candidates = shuffleCells(
+        collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
+            const cell = gridOption.grid?.[row]?.[col];
+            return Number.isInteger(cell) && cell !== CELL_WALL;
+        }),
+        randomFn,
+    );
+
+    for (let index = 0; index < candidates.length; index += 1) {
+        for (let innerIndex = index + 1; innerIndex < candidates.length; innerIndex += 1) {
+            const first = candidates[index];
+            const second = candidates[innerIndex];
+            const grid = cloneShapeGrid(gridOption.grid);
+            grid[first.row][first.col] = linkCell(second.row, second.col);
+            grid[second.row][second.col] = linkCell(first.row, first.col);
+
+            const candidateOption = {
+                ...gridOption,
+                grid,
+            };
+
+            if (!validatePlayability || isPlayableGridOption(candidateOption, budget)) {
+                return candidateOption;
+            }
+            if (budget.timedOut) {
+                return gridOption;
+            }
+        }
+    }
+
+    return gridOption;
 }
 
 function normalizeGridDefinition(shapeGrid) {
@@ -5485,7 +5631,7 @@ function normalizeGridDefinition(shapeGrid) {
     };
 }
 
-class MachinePuzzleState {
+export class MachinePuzzleState {
     constructor(gridOption) {
         const clonedGridOption = cloneGridOption(gridOption);
         const normalizedGrid = normalizeGridDefinition(clonedGridOption.grid);
@@ -5575,6 +5721,12 @@ class MachinePuzzleState {
         return domino;
     }
 
+    setClownCorruption(corruption) {
+        this.clownCorruption = corruption ? { ...corruption } : null;
+        this._syncGlowState();
+        return this.clownCorruption;
+    }
+
     getDomino(dominoId) {
         return this.dominoes.find((domino) => domino.id === dominoId) || null;
     }
@@ -5650,6 +5802,10 @@ class MachinePuzzleState {
         return cmp.op === '<' ? pip < cmp.threshold : pip > cmp.threshold;
     }
 
+    isChargeGroupCell(row, col) {
+        return this.chargeGroupCells.has(cellKey(row, col));
+    }
+
     getChargeGroupAt(row, col) {
         const groupKey = this.chargeGroupCells.get(cellKey(row, col));
         if (!groupKey) return null;
@@ -5690,6 +5846,16 @@ class MachinePuzzleState {
                 })),
             };
         });
+    }
+
+    getEqualLink(row, col) {
+        const target = this.equalLinks.get(cellKey(row, col));
+        return target ? { ...target } : null;
+    }
+
+    getNotEqualLink(row, col) {
+        const target = this.notEqualLinks.get(cellKey(row, col));
+        return target ? { ...target } : null;
     }
 
     getEqualLinkPairs() {
@@ -6046,6 +6212,42 @@ function collectBoardConstraintCandidates(shapeGrid) {
     });
 
     return candidates;
+}
+
+function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
+    if (!gridOption) return gridOption;
+
+    const budget = { remaining: 8000, timedOut: false };
+    const candidates = shuffleCells(
+        collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
+            const cell = gridOption.grid?.[row]?.[col];
+            return Number.isInteger(cell) && cell !== CELL_WALL;
+        }),
+        randomFn
+    );
+    for (let index = 0; index < candidates.length; index += 1) {
+        for (let innerIndex = index + 1; innerIndex < candidates.length; innerIndex += 1) {
+            const first = candidates[index];
+            const second = candidates[innerIndex];
+            const grid = cloneShapeGrid(gridOption.grid);
+            grid[first.row][first.col] = notLinkCell(second.row, second.col);
+            grid[second.row][second.col] = notLinkCell(first.row, first.col);
+
+            const candidateOption = {
+                ...gridOption,
+                grid,
+            };
+
+            if (!validatePlayability || isPlayableGridOption(candidateOption, budget)) {
+                return candidateOption;
+            }
+            if (budget.timedOut) {
+                return gridOption;
+            }
+        }
+    }
+
+    return gridOption;
 }
 
 // ─── Forward Generation ──────────────────────────────────────────────────────
@@ -6917,12 +7119,12 @@ function applyCorruptedDominoFault(gridOption, randomFn = Math.random) {
             type: 'corrupted-domino',
             dominoId,
             kind: 'hazard',
-            status: 'CORRUPTED DOMINO',
-            reason: 'A corrupted red domino is sitting on the rack. If it exists at all, the unit must be scrapped.',
+            status: 'CORRUPTED CIRCUIT',
+            reason: 'A corrupted red circuit is sitting on the rack. If it exists at all, the unit must be scrapped.',
         },
         scrapKind: 'hazard',
-        scrapStatus: 'CORRUPTED DOMINO',
-        scrapReason: 'A corrupted red domino is sitting on the rack. If it exists at all, the unit must be scrapped.',
+        scrapStatus: 'CORRUPTED CIRCUIT',
+        scrapReason: 'A corrupted red circuit is sitting on the rack. If it exists at all, the unit must be scrapped.',
         impossible: false,
     };
 }
@@ -7043,11 +7245,7 @@ export function createMachineVariant(options = {}) {
         return rustFreePool.length > 0 ? rustFreePool : possibleGears;
     })();
     let selectedGearPuzzle = applyGearStageToOption(
-        transformGearOption(
-            cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
-            pickGearTransformKey(randomFn),
-            randomFn,
-        ),
+        cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
         targetPeriod ?? 1,
         randomFn,
     );

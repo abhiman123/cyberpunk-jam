@@ -181,7 +181,7 @@ export default class GearGridPuzzle extends MinigameBase {
             color: '#e6f2f4',
             letterSpacing: 3,
         }).setOrigin(0, 0.5);
-        this._subtitleText = this.scene.add.text(-474, -235, gearPuzzle.description || 'Slide the loose gears until the output axle spins.', {
+        this._subtitleText = this.scene.add.text(-474, -244, gearPuzzle.description || 'Slide the loose gears until the output axle spins.', {
             fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#9fc3cf',
@@ -506,9 +506,19 @@ export default class GearGridPuzzle extends MinigameBase {
         if (!this._legendContainer) return;
         this._legendContainer.removeAll(true);
 
-        const movablePieces = this._pieceViews.filter((pieceView) => pieceView.piece.movable !== false);
-        if (movablePieces.length === 0) {
-            const emptyText = this.scene.add.text(218, 104, 'NO LOOSE PARTS', {
+        // The info / legend panel no longer enumerates draggable parts.
+        // Day 1 shows nothing here (pure puzzle, no special mechanic).
+        // Day 2 introduces the rusted gear hazard — show a single static
+        // diagram explaining it. Day 3 introduces the deadlock clamp tool —
+        // show that instead. The actual draggable parts always live on the
+        // board itself with their cyan corner marks, so listing them in
+        // the side panel was redundant.
+        const stage = Number(this._puzzle?.dayStage || 0);
+        const showRustExplainer = stage >= 2 && !this._puzzle?.allowRustedGears;
+        const showClampExplainer = stage >= 3 && Boolean(this._puzzle?.useDeadlockClamp);
+
+        if (!showRustExplainer && !showClampExplainer) {
+            const emptyText = this.scene.add.text(218, 104, 'NO SPECIAL HAZARDS', {
                 fontFamily: 'Courier New',
                 fontSize: '11px',
                 color: '#c9dbe3',
@@ -518,104 +528,88 @@ export default class GearGridPuzzle extends MinigameBase {
             return;
         }
 
-        // The inventory area sits between the banner (bottom ≈ y=70) and the
-        // first action button below — that's the CLOSE button at y=224 of
-        // the panel by default, or the SPECIAL ACTION button at y=185 when
-        // present. Compute the row spacing so the list never crashes into
-        // the buttons no matter how many loose parts the puzzle generated.
-        const inventoryTop = 96;
-        const inventoryBottom = this._specialActionButton ? 185 : 224;
-        const availableHeight = Math.max(60, inventoryBottom - inventoryTop);
-        const rowCount = movablePieces.length;
-        const rawSpacing = rowCount > 0 ? availableHeight / rowCount : 60;
-        // Allow rows to keep compressing past the previous 34px floor when
-        // 6+ loose parts ship with the puzzle (Day 3 boards). The
-        // ultra-compact branch below shrinks the socket and label fonts
-        // proportionally so even a 6-item list clears the CLOSE button.
-        const rowSpacing = Math.max(20, Math.min(60, rawSpacing));
-        const compact = rowSpacing < 50;
-        const ultraCompact = rowSpacing < 30;
-        const socketHalf = ultraCompact ? 11 : compact ? 18 : 25;
-        const sampleScale = ultraCompact ? 0.22 : compact ? 0.32 : 0.42;
-        const titleFontSize = ultraCompact ? '9px' : compact ? '11px' : '12px';
-        const labelFontSize = ultraCompact ? '8px' : compact ? '9px' : '10px';
-        const textCol = ultraCompact ? 234 : compact ? 244 : 252;
+        const explainers = [];
+        if (showRustExplainer) {
+            explainers.push({
+                type: GEAR_CODES.RUSTED,
+                role: null,
+                title: 'Rusted Iron Gear',
+                code: 'RST',
+                description: [
+                    'A corroded gear locks the train.',
+                    'Any other gear touching it stops',
+                    'turning. Scrap or fix the unit.',
+                ],
+            });
+        }
+        if (showClampExplainer) {
+            explainers.push({
+                type: GEAR_CODES.MOVABLE_WALL,
+                role: 'deadlock-clamp',
+                title: 'Deadlock Clamp',
+                code: 'CLAMP',
+                description: [
+                    'Clamps any cell into dead space.',
+                    'Gears placed on a clamped slot',
+                    'stop turning until the clamp moves.',
+                ],
+            });
+        }
 
-        movablePieces.forEach((pieceView, index) => {
-            const y = inventoryTop + (index * rowSpacing);
-            // Socket frame around the gear thumbnail (parts-bin look).
-            const socketBg = this.scene.add.rectangle(218, y, socketHalf * 2, socketHalf * 2, 0x081a23, 0.92)
-                .setStrokeStyle(1, 0x5dc5e2, 0.55);
-            // Corner ticks on the socket.
+        explainers.forEach((entry, index) => {
+            const y = 110 + (index * 110);
+
+            const socketBg = this.scene.add.rectangle(218, y, 64, 64, 0x081a23, 0.94)
+                .setStrokeStyle(1, 0x5dc5e2, 0.65);
             const socketGfx = this.scene.add.graphics();
             socketGfx.lineStyle(2, 0x6fdcf5, 0.85);
             const sx = 218;
             const sy = y;
-            const sh = socketHalf;
-            const tick = compact ? 4 : 6;
-            // top-left
+            const sh = 32;
+            const tick = 8;
             socketGfx.lineBetween(sx - sh, sy - sh, sx - sh + tick, sy - sh);
             socketGfx.lineBetween(sx - sh, sy - sh, sx - sh, sy - sh + tick);
-            // top-right
             socketGfx.lineBetween(sx + sh, sy - sh, sx + sh - tick, sy - sh);
             socketGfx.lineBetween(sx + sh, sy - sh, sx + sh, sy - sh + tick);
-            // bottom-left
             socketGfx.lineBetween(sx - sh, sy + sh, sx - sh + tick, sy + sh);
             socketGfx.lineBetween(sx - sh, sy + sh, sx - sh, sy + sh - tick);
-            // bottom-right
             socketGfx.lineBetween(sx + sh, sy + sh, sx + sh - tick, sy + sh);
             socketGfx.lineBetween(sx + sh, sy + sh, sx + sh, sy + sh - tick);
 
-            const sample = this._createGearVisual(pieceView.piece.type, true);
-            sample.container.setScale(sampleScale);
+            const sample = this._createGearVisual(entry.type, false);
+            sample.container.setScale(0.5);
             sample.container.setPosition(218, y);
-            this._drawGearVisual(sample, pieceView.piece.type, {
-                movable: true,
+            this._drawGearVisual(sample, entry.type, {
+                movable: false,
                 hovered: false,
                 active: false,
-                pieceRole: pieceView.piece.role || null,
+                pieceRole: entry.role,
             });
 
-            const partName = pieceView.piece.role === 'deadlock-clamp'
-                ? 'Deadlock Clamp'
-                : getPieceFriendlyName(pieceView.piece.type);
-            const partCode = pieceView.piece.role === 'deadlock-clamp'
-                ? 'CLAMP'
-                : (getPieceLabel(pieceView.piece.type) || 'GEAR');
+            const title = this.scene.add.text(258, y - 24, entry.title, {
+                fontFamily: 'Courier New',
+                fontSize: '12px',
+                color: '#e3f4f9',
+                letterSpacing: 1,
+            }).setOrigin(0, 0.5);
+            const code = this.scene.add.text(258, y - 8, entry.code, {
+                fontFamily: 'Courier New',
+                fontSize: '10px',
+                color: '#7eb5c5',
+                letterSpacing: 1,
+            }).setOrigin(0, 0.5);
 
-            const rowItems = [socketBg, socketGfx, sample.container];
-            if (compact) {
-                // Single-line label keeps the row at ~36px tall and still
-                // names the part for the player.
-                const inlineLabel = this.scene.add.text(textCol, y, `${partName} · ${partCode}#${index + 1}`, {
-                    fontFamily: 'Courier New',
-                    fontSize: titleFontSize,
-                    color: '#e3f4f9',
-                    letterSpacing: 1,
-                }).setOrigin(0, 0.5);
-                rowItems.push(inlineLabel);
-            } else {
-                const title = this.scene.add.text(textCol, y - 12, partName, {
-                    fontFamily: 'Courier New',
-                    fontSize: titleFontSize,
-                    color: '#e3f4f9',
-                    letterSpacing: 1,
-                }).setOrigin(0, 0.5);
-                const label = this.scene.add.text(textCol, y + 4, `${partCode} · #${index + 1}`, {
-                    fontFamily: 'Courier New',
-                    fontSize: labelFontSize,
-                    color: '#7eb5c5',
-                    letterSpacing: 1,
-                }).setOrigin(0, 0.5);
-                const hint = this.scene.add.text(textCol, y + 19, pieceView.piece.role === 'deadlock-clamp' ? 'DEAD-SPACE TOOL' : 'DRAG TO INSTALL', {
+            this._legendContainer.add([socketBg, socketGfx, sample.container, title, code]);
+
+            entry.description.forEach((line, lineIndex) => {
+                const description = this.scene.add.text(258, y + 8 + (lineIndex * 12), line, {
                     fontFamily: 'Courier New',
                     fontSize: '9px',
                     color: '#9ddff0',
                     letterSpacing: 1,
                 }).setOrigin(0, 0.5);
-                rowItems.push(title, label, hint);
-            }
-            this._legendContainer.add(rowItems);
+                this._legendContainer.add(description);
+            });
         });
     }
 
@@ -1105,12 +1099,10 @@ export default class GearGridPuzzle extends MinigameBase {
         if (!faultType) return;
 
         if (faultType === 'cracked-drive' || faultType === 'cracked-gear') {
-            // Crack glyph stays inside the cell (centered on the gear). The
-            // CRACK pill now sits AS A BADGE on the top edge of the cell so
-            // it overlaps the cell itself (never the cell below) and stays
-            // visible when a gear is placed because the visual's faultGfx
-            // and faultText are drawn AFTER the gear graphic in the slot's
-            // child list (see _createGearVisual).
+            // Crack glyph stays inside the cell (centered on the gear), but
+            // the CRACK label is now rendered as a pill HANGING OFF the
+            // bottom edge of the cell so it never covers the gear icon
+            // or the IN/OUT text. Width sized to the text + padding.
             visual.faultGfx.fillStyle(0x070707, 0.34);
             visual.faultGfx.fillTriangle(-12, -16, 6, -2, 22, 14);
             visual.faultGfx.lineStyle(3, 0xffc39c, 0.95);
@@ -1123,13 +1115,13 @@ export default class GearGridPuzzle extends MinigameBase {
             visual.faultGfx.lineTo(16, 12);
             visual.faultGfx.strokePath();
 
-            // Pill anchored at the top edge of the cell, overlapping it.
-            const pillW = Math.max(46, Math.floor(this._cellSize * 0.58));
+            // Pill anchored just below the cell's bottom edge.
+            const pillY = (this._cellSize / 2) + 4;
+            const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
             const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
-            const pillY = -(this._cellSize / 2) - (pillH / 2) + 6;
-            visual.faultGfx.fillStyle(0x4a0d0a, 0.96);
+            visual.faultGfx.fillStyle(0x4a0d0a, 0.95);
             visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
-            visual.faultGfx.lineStyle(1, 0xffc39c, 0.94);
+            visual.faultGfx.lineStyle(1, 0xffc39c, 0.92);
             visual.faultGfx.strokeRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
             visual.faultText
                 .setText('CRACK')
@@ -1155,10 +1147,10 @@ export default class GearGridPuzzle extends MinigameBase {
             visual.faultGfx.lineBetween(-18, 10, -28, 22);
             visual.faultGfx.lineBetween(18, 10, 30, 24);
             visual.faultGfx.strokeCircle(0, 0, 16);
-            // Pill anchored at the top edge of the cell (matches CRACK pill).
-            const pillW = Math.max(46, Math.floor(this._cellSize * 0.58));
+            // Pill below the cell (matches the CRACK pill style).
+            const pillY = (this._cellSize / 2) + 4;
+            const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
             const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
-            const pillY = -(this._cellSize / 2) - (pillH / 2) + 6;
             visual.faultGfx.fillStyle(0x3a0a0a, 0.95);
             visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
             visual.faultGfx.lineStyle(1, 0xff6960, 0.92);
@@ -1265,6 +1257,7 @@ export default class GearGridPuzzle extends MinigameBase {
             pieceView.piece.row = candidate.row;
             pieceView.piece.col = candidate.col;
             this._snapPieceToCell(pieceView, candidate.row, candidate.col, true);
+            this._restackPiecesAtCell(candidate.row, candidate.col);
             this._playGearSound(SOUND_ASSETS.circuitLock, SOUND_ASSETS.inspectionReveal, SOUND_VOLUMES.puzzleLock);
             this._syncState({ persist: true });
             return;
@@ -1272,6 +1265,26 @@ export default class GearGridPuzzle extends MinigameBase {
 
         this._snapPieceToCell(pieceView, startRow, startCol, true);
         this._syncState({ persist: true });
+    }
+
+    _restackPiecesAtCell(row, col) {
+        // When a clamp and a gear share the same cell, the gear should be
+        // visible on top so the player can still see the part they placed.
+        // We push the clamp container to the bottom of its parent's display
+        // list and the gear to the top.
+        const overlapping = this._pieceViews.filter((view) => (
+            view.piece.row === row && view.piece.col === col
+        ));
+        if (overlapping.length < 2) return;
+        overlapping.forEach((view) => {
+            const parent = view.container.parentContainer;
+            if (!parent) return;
+            if (view.piece.role === 'deadlock-clamp') {
+                parent.sendToBack(view.container);
+            } else {
+                parent.bringToTop(view.container);
+            }
+        });
     }
 
     _getBoardCellFromWorld(worldX, worldY) {
@@ -1300,11 +1313,14 @@ export default class GearGridPuzzle extends MinigameBase {
 
         if (!isOpenBoardCell(this._board, row, col)) return false;
 
-        return !this._pieceViews.some((otherPiece) => (
-            otherPiece !== pieceView
-            && otherPiece.piece.row === row
-            && otherPiece.piece.col === col
-        ));
+        // Non-clamp pieces may share a cell with a clamp (the clamp turns
+        // that slot into dead space and the piece sits visually on top).
+        // They still cannot stack on another non-clamp piece.
+        return !this._pieceViews.some((otherPiece) => {
+            if (otherPiece === pieceView) return false;
+            if (otherPiece.piece.row !== row || otherPiece.piece.col !== col) return false;
+            return otherPiece.piece.role !== 'deadlock-clamp';
+        });
     }
 
     _showDropPreview(candidate, valid) {

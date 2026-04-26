@@ -214,11 +214,12 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
         });
     }
 
-    // Aggressive rust check: if a rusted gear is 4-way adjacent to any
-    // powered gear (regardless of whether their connection edges line up),
-    // the corrosion seizes the train. The earlier BFS only catches contacts
-    // along matched connection edges, which left e.g. a HORIZONTAL gear
-    // sitting north of a RUSTED gear running fine. Any contact = scrap.
+    // Aggressive rust check: if a rusted gear is 4-way adjacent to ANY
+    // gear — powered or not — the corrosion seizes that gear. The earlier
+    // BFS only catches contacts along matched connection edges and only
+    // for powered cells, which left non-powered gears sitting next to
+    // rust still spinning. Any contact = scrap, and the contacted gear
+    // is added to the jammed set so it stops spinning visually.
     if (!allowRustedGears) {
         const rustCells = [];
         for (let rowIndex = 0; rowIndex < board.length; rowIndex += 1) {
@@ -244,7 +245,6 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
                 const nEntry = occupancy.get(nKey);
                 if (!nEntry) return;
                 if (!isGearType(nEntry.type) || isRustGearType(nEntry.type)) return;
-                if (!powered.has(nKey)) return;
                 pushUniquePair(rustContacts, seenRustContacts, rustKey, nKey, {
                     source: nKey,
                     target: rustKey,
@@ -256,7 +256,14 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
 
     const jammed = rustContacts.length > 0 || directionConflicts.length > 0;
     const jammedCells = new Set(jammed ? powered : []);
-    rustContacts.forEach(({ target }) => jammedCells.add(target));
+    // Every rust-touched cell — both the rusted gear itself and every
+    // non-rust gear adjacent to it — joins the jammed set so the visual
+    // layer freezes them. The aggressive rust check above records pairs
+    // as { source: nKey (gear), target: rustKey } so we add both ends.
+    rustContacts.forEach(({ source, target }) => {
+        if (source) jammedCells.add(source);
+        if (target) jammedCells.add(target);
+    });
     const jamReason = rustContacts.length > 0
         ? 'Rusted gear locked the train.'
         : directionConflicts.length > 0

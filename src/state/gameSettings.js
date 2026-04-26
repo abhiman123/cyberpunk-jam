@@ -1,14 +1,30 @@
 const STORAGE_KEY = 'cyberpunk-jam.settings';
 
-const DEFAULT_GAME_SETTINGS = Object.freeze({
+export const DEFAULT_GAME_SETTINGS = Object.freeze({
     musicVolume: 0.2,
+    sfxVolume: 0.6,
+    screenZoom: 0.5,
 });
 
 let cachedSettings = null;
+const zoomListeners = new Set();
+
+function clampUnit(value, fallback) {
+    if (!Number.isFinite(value)) return fallback;
+    return Math.max(0, Math.min(1, value));
+}
 
 function clampMusicVolume(value) {
-    if (!Number.isFinite(value)) return DEFAULT_GAME_SETTINGS.musicVolume;
-    return Math.max(0, Math.min(1, value));
+    return clampUnit(value, DEFAULT_GAME_SETTINGS.musicVolume);
+}
+
+function clampSfxVolume(value) {
+    return clampUnit(value, DEFAULT_GAME_SETTINGS.sfxVolume);
+}
+
+function clampScreenZoom(value) {
+    if (!Number.isFinite(value)) return DEFAULT_GAME_SETTINGS.screenZoom;
+    return Math.max(0.25, Math.min(1, value));
 }
 
 function getStorage() {
@@ -47,9 +63,20 @@ function normalizeSettings(settings = {}) {
         ? clampMusicVolume(settings.musicVolume)
         : (settings.musicEnabled === false ? 0 : DEFAULT_GAME_SETTINGS.musicVolume);
 
+    const resolvedSfxVolume = Number.isFinite(settings.sfxVolume)
+        ? clampSfxVolume(settings.sfxVolume)
+        : DEFAULT_GAME_SETTINGS.sfxVolume;
+
+    const resolvedScreenZoom = Number.isFinite(settings.screenZoom)
+        ? clampScreenZoom(settings.screenZoom)
+        : DEFAULT_GAME_SETTINGS.screenZoom;
+
     return {
         musicVolume: resolvedMusicVolume,
         musicEnabled: resolvedMusicVolume > 0,
+        sfxVolume: resolvedSfxVolume,
+        sfxEnabled: resolvedSfxVolume > 0,
+        screenZoom: resolvedScreenZoom,
     };
 }
 
@@ -64,10 +91,10 @@ export function getGameSettings() {
     return normalizeSettings(cachedSettings);
 }
 
-function updateGameSettings(patch) {
+export function updateGameSettings(patch) {
     const currentSettings = getGameSettings();
-    let nextMusicVolume = currentSettings.musicVolume;
 
+    let nextMusicVolume = currentSettings.musicVolume;
     if (Object.prototype.hasOwnProperty.call(patch, 'musicVolume')) {
         nextMusicVolume = clampMusicVolume(patch.musicVolume);
     } else if (Object.prototype.hasOwnProperty.call(patch, 'musicEnabled')) {
@@ -76,15 +103,42 @@ function updateGameSettings(patch) {
             : 0;
     }
 
+    let nextSfxVolume = currentSettings.sfxVolume;
+    if (Object.prototype.hasOwnProperty.call(patch, 'sfxVolume')) {
+        nextSfxVolume = clampSfxVolume(patch.sfxVolume);
+    } else if (Object.prototype.hasOwnProperty.call(patch, 'sfxEnabled')) {
+        nextSfxVolume = patch.sfxEnabled
+            ? (currentSettings.sfxVolume > 0 ? currentSettings.sfxVolume : DEFAULT_GAME_SETTINGS.sfxVolume)
+            : 0;
+    }
+
+    let nextScreenZoom = currentSettings.screenZoom;
+    if (Object.prototype.hasOwnProperty.call(patch, 'screenZoom')) {
+        nextScreenZoom = clampScreenZoom(patch.screenZoom);
+    }
+
+    const previousZoom = currentSettings.screenZoom;
+
     cachedSettings = normalizeSettings({
         ...currentSettings,
         ...patch,
         musicVolume: nextMusicVolume,
+        sfxVolume: nextSfxVolume,
+        screenZoom: nextScreenZoom,
     });
 
     writeStoredSettings({
         musicVolume: cachedSettings.musicVolume,
+        sfxVolume: cachedSettings.sfxVolume,
+        screenZoom: cachedSettings.screenZoom,
     });
+
+    if (previousZoom !== cachedSettings.screenZoom) {
+        zoomListeners.forEach((listener) => {
+            try { listener(cachedSettings.screenZoom); } catch (_error) { /* noop */ }
+        });
+    }
+
     return normalizeSettings(cachedSettings);
 }
 
@@ -96,3 +150,24 @@ export function setMusicVolume(value) {
     return updateGameSettings({ musicVolume: value });
 }
 
+export function getSfxVolume() {
+    return getGameSettings().sfxVolume;
+}
+
+export function setSfxVolume(value) {
+    return updateGameSettings({ sfxVolume: value });
+}
+
+export function getScreenZoom() {
+    return getGameSettings().screenZoom;
+}
+
+export function setScreenZoom(value) {
+    return updateGameSettings({ screenZoom: value });
+}
+
+export function onScreenZoomChange(listener) {
+    if (typeof listener !== 'function') return () => {};
+    zoomListeners.add(listener);
+    return () => zoomListeners.delete(listener);
+}

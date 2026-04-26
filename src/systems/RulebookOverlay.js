@@ -31,33 +31,38 @@ const TAB_DEFINITIONS = [
 // `GameState.day` reaches that day. This is how, e.g., the Flow colour
 // rule appears starting on Day 2.
 
+// Each `howToSolve` and `scrapRules` entry is a `{ text, minDay }` pair so
+// the rulebook only shows rules that have been unlocked by the player's
+// current shift. Day 1 = day-1 rules, Day 2 adds day-2 rules, etc.
+
 const TAB_CONTENT = {
     overview: {
         cardHeader: 'OVERVIEW FIELD RULES',
-        subline:    'REPAIR TEST // SCRAP ONLY WHEN THE RULE MATCHES',
-        howToSolve: 'Open a repair panel, fix the visible fault, then accept only when the test clears.',
-        scrapBlurb: 'Repair, test, then choose accept or scrap.',
-        scrapRules: [
-            'Impossible puzzle = scrap.',
-            'Accept after all required repairs are clean.',
-            'Scrap if the final test still fails.',
+        subline:    'REPAIR // TEST // DECIDE',
+        howToSolve: [
+            { minDay: 1, text: 'Click on the machine and fix the broken systems.' },
+            { minDay: 2, text: 'Watch for contraband marks and quality flags before you accept.' },
+            { minDay: 3, text: 'Hazardous behaviour during a fix means the unit is unsafe.' },
         ],
-        diagramTitle: 'BASE LOOP EXAMPLE',
-        diagramKind:  'baseLoop',
+        scrapRules: [
+            { minDay: 1, text: 'Scrap when a system is impossible to fix.' },
+            { minDay: 2, text: "Scrap when a system doesn't pass the quality check." },
+            { minDay: 3, text: 'Scrap when a system acts off when being fixed.' },
+        ],
+        diagramKind: 'none',
     },
     grid: {
         cardHeader: 'GRID FIELD RULES',
         subline:    'CHARGE CELLS // PIPS MUST EQUAL THE CELL TARGET',
         howToSolve: [
-            { text: 'Place dominos so every charge cell is covered by a half whose pip count matches the cell target.' },
-            { text: 'Equality cells must hold matching pip counts; <N / >N cells must beat their threshold.', minDay: 2 },
-            { text: 'Charge cells now also pair across rows — both halves of each pair carry constraints.', minDay: 3 },
+            { minDay: 1, text: 'Place circuits so charge cells match their pip targets.' },
+            { minDay: 2, text: 'Equality and threshold cells must also match.' },
+            { minDay: 3, text: 'Linked charge pairs both need valid matching halves.' },
         ],
-        scrapBlurb: 'Tile the open cells, satisfy every constraint, then judge.',
         scrapRules: [
-            { text: 'No legal tiling possible = scrap.' },
-            { text: 'Charge target violated under best play = scrap.' },
-            { text: 'Equality / threshold cell broken = scrap.', minDay: 2 },
+            { minDay: 1, text: 'No legal tiling possible = scrap.' },
+            { minDay: 2, text: 'Equality or threshold can never be satisfied = scrap.' },
+            { minDay: 3, text: 'Linked charge group cannot be matched = scrap.' },
         ],
         diagramTitle: 'GRID EXAMPLE',
         diagramKind:  'grid',
@@ -66,15 +71,14 @@ const TAB_CONTENT = {
         cardHeader: 'FLOW FIELD RULES',
         subline:    'SOURCES → OUTPUTS // ROUTE POWER TO EVERY LEAD',
         howToSolve: [
-            { text: 'Rotate wire tiles to deliver power from the source to every output.' },
-            { text: 'Colour filters tint the current after the tile — the output expects that colour.', minDay: 2 },
-            { text: 'Multiple sources feed the grid; cross-routing is allowed but discharge wires kill outputs.', minDay: 3 },
+            { minDay: 1, text: 'Rotate wires so power reaches every output.' },
+            { minDay: 2, text: 'Route through color filters so outputs get the right color.' },
+            { minDay: 3, text: 'Multiple sources can cross-route, but red discharge is fatal.' },
         ],
-        scrapBlurb: 'Route every source to its output, respect colour and discharge.',
         scrapRules: [
-            { text: 'Output starved of current = scrap.' },
-            { text: 'Colour mismatch at any output = scrap.', minDay: 2 },
-            { text: 'Discharge wire reaches a live output = scrap.', minDay: 3 },
+            { minDay: 1, text: 'Output starved of current = scrap.' },
+            { minDay: 2, text: 'Color mismatch at any output = scrap.' },
+            { minDay: 3, text: 'Red discharge reaches a live output = scrap.' },
         ],
         diagramTitle: 'FLOW EXAMPLE',
         diagramKind:  'flow',
@@ -83,15 +87,14 @@ const TAB_CONTENT = {
         cardHeader: 'GEAR FIELD RULES',
         subline:    'AXLES MUST SPIN // TEETH MUST MESH',
         howToSolve: [
-            { text: 'Drop loose gears into the empty slots so the input axle drives every output axle.' },
-            { text: 'Watch tooth size — gears only mesh with neighbours of compatible scale.', minDay: 2 },
-            { text: 'Reverse gears flip rotation — keep an even number between drive and load.', minDay: 3 },
+            { minDay: 1, text: 'Place gears so the input axle drives each output.' },
+            { minDay: 2, text: 'Tooth sizes must mesh with neighboring gears.' },
+            { minDay: 3, text: 'Reverse gears flip direction, so output direction matters.' },
         ],
-        scrapBlurb: 'Build a clean drive train from input to every output.',
         scrapRules: [
-            { text: 'Output axle does not spin = scrap.' },
-            { text: 'Cracked gear sits inside the chain = scrap.' },
-            { text: 'Output spins the wrong direction = scrap.', minDay: 3 },
+            { minDay: 1, text: 'Output axle cannot spin = scrap.' },
+            { minDay: 2, text: 'Cracked gear required in the chain = scrap.' },
+            { minDay: 3, text: 'Output spins the wrong direction = scrap.' },
         ],
         diagramTitle: 'GEAR EXAMPLE',
         diagramKind:  'gear',
@@ -100,15 +103,14 @@ const TAB_CONTENT = {
         cardHeader: 'CODE FIELD RULES',
         subline:    'PATCH BUGS // OUTPUT MUST MATCH EXPECTED',
         howToSolve: [
-            { text: 'Patch out crawling bugs in the source, then run the test.' },
-            { text: 'The console must print the expected output before you accept the unit.' },
-            { text: 'Bugs respawn faster on later shifts; corruptions can spawn from missed patches.', minDay: 2 },
+            { minDay: 1, text: 'Type the System command and match expected output.' },
+            { minDay: 2, text: 'Patch bad output, then retest clean.' },
+            { minDay: 3, text: 'Bugs and corruptions must be cleared before accepting.' },
         ],
-        scrapBlurb: 'Patch every bug, run the test, then judge by the output.',
         scrapRules: [
-            { text: 'Output drifts after patching = scrap.' },
-            { text: 'Hazard line is unrepairable on the floor = scrap.', minDay: 2 },
-            { text: 'Bugs respawn after every patch = scrap.', minDay: 3 },
+            { minDay: 1, text: 'Output cannot match expected = scrap.' },
+            { minDay: 2, text: 'Hazard/protocol-invalid output = scrap.' },
+            { minDay: 3, text: 'Bugs keep corrupting after patches = scrap.' },
         ],
         diagramTitle: 'CODE EXAMPLE',
         diagramKind:  'code',
@@ -125,6 +127,18 @@ function resolveDayContent(items, day) {
         .map((it) => (typeof it === 'string' ? it : it.text));
 }
 
+// Same as `resolveDayContent` but returns the resolved minDay alongside the
+// text so the renderer can index into the per-day scrap-rule preview asset.
+function resolveDayContentWithDays(items, day) {
+    if (!items) return [];
+    const arr = Array.isArray(items) ? items : [items];
+    return arr
+        .filter((it) => typeof it === 'string' || (it.minDay ?? 1) <= day)
+        .map((it) => (typeof it === 'string'
+            ? { text: it, day: 1 }
+            : { text: it.text, day: it.minDay ?? 1 }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default class RulebookOverlay {
@@ -136,6 +150,7 @@ export default class RulebookOverlay {
         this._callbacks    = callbacks;
         this._visible      = false;
         this._selectedTab  = 'overview';
+        this._hoveredScrapRule = null;
         this._dynamicNodes = [];
         this._tabButtons   = new Map();
 
@@ -180,6 +195,13 @@ export default class RulebookOverlay {
         if (!this._visible && !immediate) return;
 
         this._visible = false;
+        // Detach scroll wheel listener so it doesn't keep handling events
+        // while the rulebook is closed.
+        if (this._leftScrollWheelListener) {
+            this.scene.input.off('wheel', this._leftScrollWheelListener);
+            this._leftScrollWheelListener = null;
+        }
+
         if (immediate) { this._root.setVisible(false); this._callbacks.onClose?.(); return; }
 
         this.scene.tweens.killTweensOf([this._backdrop, this._panel]);
@@ -193,6 +215,12 @@ export default class RulebookOverlay {
 
     isVisible() { return this._visible; }
 
+    setRuleState(activeRuleIds, newRuleIds = null) {
+        this.activeRuleIds = Array.isArray(activeRuleIds) ? [...activeRuleIds] : [];
+        if (newRuleIds !== null) this.newRuleIds = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
+        if (this._visible) this._refresh();
+    }
+
     // ── Build chrome (called once) ────────────────────────────────────────────
 
     _build() {
@@ -201,7 +229,6 @@ export default class RulebookOverlay {
         // Backdrop
         this._backdrop = this.scene.add.rectangle(CX, CY, 1280, 720, 0x000000, 0.92)
             .setInteractive({ useHandCursor: false });
-        this._backdrop.on('pointerdown', () => this.hide());
 
         // Panel shell
         this._panel = this.scene.add.container(CX, CY);
@@ -277,6 +304,7 @@ export default class RulebookOverlay {
             tabBg.on('pointerdown', () => {
                 if (this._selectedTab === tab.key) return;
                 this._selectedTab = tab.key;
+                this._hoveredScrapRule = null;
                 this._refresh();
             });
 
@@ -302,6 +330,23 @@ export default class RulebookOverlay {
     // ── Refresh content (per tab change / show) ──────────────────────────────
 
     _refresh() {
+        // Tear down per-refresh nodes and any container/mask we attached.
+        if (this._leftScrollWheelListener) {
+            this.scene.input.off('wheel', this._leftScrollWheelListener);
+            this._leftScrollWheelListener = null;
+        }
+        if (this._leftScrollMaskGfx) {
+            this._leftScrollMaskGfx.destroy();
+            this._leftScrollMaskGfx = null;
+        }
+        if (this._leftScrollContainer) {
+            this._leftScrollContainer.destroy(true);
+            this._leftScrollContainer = null;
+        }
+        this._leftScrollState = null;
+        this._scrapNumberHovers?.clear?.();
+        this._scrapNumberHovers = new Map();
+
         this._dynamicNodes.forEach((n) => n.destroy());
         this._dynamicNodes = [];
         this._contentContainer.removeAll(false);
@@ -321,7 +366,6 @@ export default class RulebookOverlay {
         const contentBottom = (PANEL_H / 2) - PANEL_PAD;
         const contentLeft   = -(PANEL_W / 2) + PANEL_PAD;
         const contentRight  = (PANEL_W / 2) - PANEL_PAD;
-        const contentH      = contentBottom - contentTop;
         const contentW      = contentRight - contentLeft;
 
         // Shared field-rules header strip across the top of the content area.
@@ -370,106 +414,219 @@ export default class RulebookOverlay {
             .setOrigin(0, 0).setStrokeStyle(1, accent, 0.55);
         this._dynamic(cardBg);
 
-        const innerX = x + 22;
-        const innerW = w - 44;
-        let cursor = y + 22;
+        // Reserve the leftmost 14px of the card for a vertical scroll bar.
+        const scrollBarW = 12;
+        const scrollPadL = 14;
+        const innerX = x + scrollPadL + scrollBarW + 8;
+        const innerW = w - (scrollPadL + scrollBarW + 8) - 22;
+        const innerTop = y + 22;
+        const innerBottom = y + h - 18;
+        const innerH = innerBottom - innerTop;
+
+        // Scrollable container: child positions are relative to (innerX, innerTop)
+        // and a y-offset (`scrollY`) shifts the whole container up. A WebGL mask
+        // covers the card so scrolled-out content is clipped instead of bleeding
+        // over the next card / panel chrome.
+        const scrollContainer = this.scene.add.container(0, 0);
+        this._panel.add(scrollContainer);
+
+        // Mask graphics — drawn in *world* coordinates (scene-space) so the
+        // GeometryMask renders correctly under WebGL. Note: GeometryMask
+        // ignores parent container transforms, so we have to bake in the
+        // panel's world position when drawing the rectangle.
+        const maskGfx = this.scene.make.graphics({ x: 0, y: 0, add: false });
+        maskGfx.fillStyle(0xffffff, 1);
+        const worldOriginX = this._panel?.x ?? CX;
+        const worldOriginY = this._panel?.y ?? CY;
+        maskGfx.fillRect(worldOriginX + x + 1, worldOriginY + innerTop, w - 2, innerH);
+        const mask = maskGfx.createGeometryMask();
+        scrollContainer.setMask(mask);
+        this._leftScrollMaskGfx = maskGfx;
+        this._leftScrollContainer = scrollContainer;
+
+        let cursor = 0; // y inside the scroll container
 
         // HOW TO SOLVE section
-        const howHeader = this.scene.add.text(innerX, cursor, 'HOW TO SOLVE', {
+        const howHeader = this.scene.add.text(0, cursor, 'SOLVE RULES', {
             fontFamily: 'Courier New', fontSize: '13px', color: this._currentAccentHex(), letterSpacing: 4,
         }).setOrigin(0, 0);
-        this._dynamic(howHeader);
+        scrollContainer.add(howHeader);
         cursor += howHeader.height + 10;
 
         const day = GameState.day || 1;
         const howLines = resolveDayContent(content.howToSolve, day);
         const howText  = howLines.length ? howLines.join('\n\n') : '';
-        const howBody = this.scene.add.text(innerX, cursor, howText, {
+        const howBody = this.scene.add.text(0, cursor, howText, {
             fontFamily: 'Courier New', fontSize: '14px', color: '#c8e3ec',
             wordWrap: { width: innerW }, lineSpacing: 6,
         }).setOrigin(0, 0);
-        this._dynamic(howBody);
+        scrollContainer.add(howBody);
         cursor += howBody.height + 18;
 
         // Divider
-        const divider = this.scene.add.rectangle(innerX, cursor, innerW, 1, 0x153a44, 1).setOrigin(0, 0);
-        this._dynamic(divider);
+        const divider = this.scene.add.rectangle(0, cursor, innerW, 1, 0x153a44, 1).setOrigin(0, 0);
+        scrollContainer.add(divider);
         cursor += 18;
 
         // SCRAP RULES section
-        const scrapHeader = this.scene.add.text(innerX, cursor, 'SCRAP RULES', {
+        const scrapHeader = this.scene.add.text(0, cursor, 'SCRAP RULES', {
             fontFamily: 'Courier New', fontSize: '13px', color: this._currentAccentHex(), letterSpacing: 4,
         }).setOrigin(0, 0);
-        this._dynamic(scrapHeader);
-        cursor += scrapHeader.height + 8;
+        scrollContainer.add(scrapHeader);
+        cursor += scrapHeader.height + 12;
 
-        const scrapBlurb = this.scene.add.text(innerX, cursor, content.scrapBlurb, {
-            fontFamily: 'Courier New', fontSize: '12px', color: '#7ea7b3',
-            wordWrap: { width: innerW }, lineSpacing: 4,
-        }).setOrigin(0, 0);
-        this._dynamic(scrapBlurb);
-        cursor += scrapBlurb.height + 14;
-
-        // Numbered scrap rule rows.
-        const scrapLines = resolveDayContent(content.scrapRules, day);
-        scrapLines.forEach((rule, idx) => {
+        // Numbered scrap rule rows. Each number tile grows + brightens on
+        // hover, and hovering also swaps the right card to that day's scrap-
+        // rule preview image.
+        const scrapEntries = resolveDayContentWithDays(content.scrapRules, day);
+        scrapEntries.forEach((entry, idx) => {
             const rowY = cursor;
-            const numBoxSize = 26;
-            const numBg = this.scene.add.rectangle(innerX, rowY, numBoxSize, numBoxSize, 0x0a1820, 1)
+            const numBoxSize = 36; // larger so they're prominent (per spec).
+            const numBg = this.scene.add.rectangle(0, rowY, numBoxSize, numBoxSize, 0x0a1820, 1)
                 .setOrigin(0, 0).setStrokeStyle(1, accent, 0.7);
             const numLabel = this.scene.add.text(
-                innerX + numBoxSize / 2, rowY + numBoxSize / 2, String(idx + 1), {
-                    fontFamily: 'Courier New', fontSize: '13px', color: this._currentAccentHex(), letterSpacing: 1,
+                numBoxSize / 2, rowY + numBoxSize / 2, String(idx + 1), {
+                    fontFamily: 'Courier New', fontSize: '18px', color: this._currentAccentHex(), letterSpacing: 1,
                 }
             ).setOrigin(0.5);
 
-            const ruleText = this.scene.add.text(innerX + numBoxSize + 14, rowY + 1, rule, {
+            const ruleText = this.scene.add.text(numBoxSize + 14, rowY + 4, entry.text, {
                 fontFamily: 'Courier New', fontSize: '13px', color: '#c8e3ec',
                 wordWrap: { width: innerW - numBoxSize - 14 }, lineSpacing: 4,
             }).setOrigin(0, 0);
 
-            this._dynamic(numBg, numLabel, ruleText);
-            cursor += Math.max(numBoxSize, ruleText.height) + 14;
+            // Cover the entire row so hover + bigger hit area is consistent.
+            const hoverHit = this.scene.add.rectangle(
+                0,
+                rowY - 4,
+                innerW,
+                Math.max(numBoxSize, ruleText.height) + 12,
+                0xffffff,
+                0.001,
+            ).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+
+            const setHoverState = (active) => {
+                numBg.setFillStyle(active ? 0x123040 : 0x0a1820, 1);
+                numBg.setStrokeStyle(active ? 2 : 1, accent, active ? 1 : 0.7);
+                numLabel.setScale(active ? 1.2 : 1);
+                ruleText.setColor(active ? '#eaffff' : '#c8e3ec');
+            };
+
+            hoverHit.on('pointerover', () => {
+                setHoverState(true);
+                this._hoveredScrapRule = {
+                    tab: this._selectedTab,
+                    index: idx,
+                    day: entry.day,
+                    text: entry.text,
+                };
+                this._refreshDiagramOnly();
+            });
+            hoverHit.on('pointerout', () => {
+                setHoverState(false);
+                if (this._hoveredScrapRule?.tab === this._selectedTab
+                    && this._hoveredScrapRule?.index === idx) {
+                    this._hoveredScrapRule = null;
+                    this._refreshDiagramOnly();
+                }
+            });
+
+            scrollContainer.add([numBg, numLabel, ruleText, hoverHit]);
+            cursor += Math.max(numBoxSize, ruleText.height) + 16;
+            this._scrapNumberHovers.set(idx, { setHoverState });
         });
 
-        // OVERVIEW tab: append the player's active directives below the static
-        // scrap rules. The other tabs stay focused on mechanics.
-        if (this._selectedTab === 'overview') {
-            cursor += 6;
-            const dirHeader = this.scene.add.text(innerX, cursor, 'ACTIVE DIRECTIVES', {
-                fontFamily: 'Courier New', fontSize: '13px', color: this._currentAccentHex(), letterSpacing: 4,
-            }).setOrigin(0, 0);
-            this._dynamic(dirHeader);
-            cursor += dirHeader.height + 8;
+        // Position the scroll container after laying out children. We start at
+        // scrollY = 0; if content is shorter than the visible area the scroll
+        // bar goes inactive.
+        scrollContainer.setPosition(innerX, innerTop);
 
-            const directives = this.allRules.filter((r) => (
-                this.activeRuleIds.includes(r.id) && r.period === day
-            ));
+        const totalContentH = cursor;
+        const maxScroll = Math.max(0, totalContentH - innerH);
 
-            if (directives.length === 0) {
-                const none = this.scene.add.text(innerX, cursor, 'No live directives for this shift.', {
-                    fontFamily: 'Courier New', fontSize: '12px', color: '#506a72',
-                }).setOrigin(0, 0);
-                this._dynamic(none);
-                cursor += none.height + 6;
-            } else {
-                const cardBottomLimit = y + h - 18;
-                directives.forEach((rule) => {
-                    if (cursor + 16 > cardBottomLimit) return;
-                    const isNew = this.newRuleIds.has(rule.id);
-                    const bullet = this.scene.add.text(innerX, cursor, '•', {
-                        fontFamily: 'Courier New', fontSize: '13px',
-                        color: isNew ? '#f5d86a' : this._currentAccentHex(),
-                    }).setOrigin(0, 0);
-                    const text = this.scene.add.text(innerX + 14, cursor, rule.text, {
-                        fontFamily: 'Courier New', fontSize: '12px',
-                        color: isNew ? '#f0d98a' : '#c8e3ec',
-                        wordWrap: { width: innerW - 14 }, lineSpacing: 3,
-                    }).setOrigin(0, 0);
-                    this._dynamic(bullet, text);
-                    cursor += text.height + 8;
-                });
+        // ── Scroll bar (left side of the card) ─────────────────────────
+        const trackX = x + scrollPadL + scrollBarW / 2;
+        const trackBg = this.scene.add.rectangle(
+            trackX, innerTop, scrollBarW, innerH, 0x081119, 0.85,
+        ).setOrigin(0.5, 0).setStrokeStyle(1, accent, 0.45);
+        this._dynamic(trackBg);
+
+        const thumbHeight = maxScroll > 0
+            ? Math.max(28, innerH * (innerH / totalContentH))
+            : innerH;
+        const thumb = this.scene.add.rectangle(
+            trackX, innerTop, scrollBarW - 4, thumbHeight, accent, 0.65,
+        ).setOrigin(0.5, 0);
+        this._dynamic(thumb);
+
+        const state = {
+            scrollY: 0,
+            maxScroll,
+            innerH,
+            totalContentH,
+            innerTop,
+            innerX,
+            thumb,
+            thumbHeight,
+            trackHeight: innerH,
+            scrollContainer,
+        };
+        this._leftScrollState = state;
+
+        const updateThumbPosition = () => {
+            if (maxScroll <= 0) {
+                thumb.y = innerTop;
+                return;
             }
+            const ratio = state.scrollY / maxScroll;
+            const travel = innerH - thumbHeight;
+            thumb.y = innerTop + travel * ratio;
+            scrollContainer.y = innerTop - state.scrollY;
+        };
+        updateThumbPosition();
+
+        if (maxScroll > 0) {
+            // Wheel-driven scrolling whenever the rulebook is open. We listen
+            // on the global scene input so the player doesn't have to hover
+            // perfectly over the card.
+            const wheelListener = (_pointer, _objects, _dx, dy) => {
+                if (!this._visible) return;
+                state.scrollY = Phaser.Math.Clamp(state.scrollY + dy * 0.5, 0, maxScroll);
+                updateThumbPosition();
+            };
+            this.scene.input.on('wheel', wheelListener);
+            this._leftScrollWheelListener = wheelListener;
+
+            // Drag the thumb directly.
+            thumb.setInteractive({ useHandCursor: true });
+            this.scene.input.setDraggable(thumb);
+            thumb.on('drag', (_pointer, _dragX, dragY) => {
+                const localY = dragY - innerTop;
+                const travel = innerH - thumbHeight;
+                if (travel <= 0) return;
+                const ratio = Phaser.Math.Clamp(localY / travel, 0, 1);
+                state.scrollY = ratio * maxScroll;
+                updateThumbPosition();
+            });
+        }
+    }
+
+    _refreshDiagramOnly() {
+        // Lightweight re-render that only touches the right-hand diagram card,
+        // keeping the scroll position on the left. The simple way: reuse the
+        // full refresh pass — content is cheap to rebuild and this keeps the
+        // hover tweens simple. We cache the current scroll Y so it survives
+        // the rebuild.
+        const savedScroll = this._leftScrollState?.scrollY ?? 0;
+        this._refresh();
+        if (this._leftScrollState && savedScroll > 0) {
+            const clamped = Math.min(savedScroll, this._leftScrollState.maxScroll);
+            this._leftScrollState.scrollY = clamped;
+            const travel = this._leftScrollState.trackHeight - this._leftScrollState.thumbHeight;
+            const ratio = this._leftScrollState.maxScroll > 0
+                ? clamped / this._leftScrollState.maxScroll : 0;
+            this._leftScrollState.thumb.y = this._leftScrollState.innerTop + travel * ratio;
+            this._leftScrollState.scrollContainer.y = this._leftScrollState.innerTop - clamped;
         }
     }
 
@@ -481,32 +638,43 @@ export default class RulebookOverlay {
             .setOrigin(0, 0).setStrokeStyle(1, accent, 0.55);
         this._dynamic(cardBg);
 
-        // Title strip (e.g. "BASE LOOP EXAMPLE") with a non-interactive
-        // "DRAG" tag on the right. We deliberately do NOT make anything
-        // draggable — the tag is purely decorative chrome that mimics the
-        // mockup. (User explicitly called out that diagram pieces should
-        // not be draggable in the latest pass.)
-        const titleY = y + 22;
-        const title = this.scene.add.text(x + 22, titleY, content.diagramTitle, {
-            fontFamily: 'Courier New', fontSize: '14px', color: this._currentAccentHex(), letterSpacing: 4,
-        }).setOrigin(0, 0);
-        const dragTagW = 78;
-        const dragTagH = 26;
-        const dragTagX = x + w - 22 - dragTagW;
-        const dragTagBg = this.scene.add.rectangle(
-            dragTagX, titleY - 4, dragTagW, dragTagH, 0x0e1f29, 1,
-        ).setOrigin(0, 0).setStrokeStyle(1, accent, 0.55);
-        const dragTagLabel = this.scene.add.text(
-            dragTagX + dragTagW / 2, titleY - 4 + dragTagH / 2, 'EXAMPLE', {
-                fontFamily: 'Courier New', fontSize: '11px', color: this._currentAccentHex(), letterSpacing: 3,
-            }
-        ).setOrigin(0.5);
-        this._dynamic(title, dragTagBg, dragTagLabel);
+        const hoveredScrapRule = this._hoveredScrapRule?.tab === this._selectedTab
+            ? this._hoveredScrapRule
+            : null;
 
-        const diagramTop = titleY + 36;
+        // The overview tab no longer carries an "EXAMPLE" diagram. When the
+        // player isn't hovering a scrap rule, the right side simply stays
+        // empty (matches the user-requested cleaner layout for Day 1).
+        const hasResidentDiagram = content.diagramKind && content.diagramKind !== 'none';
+        const titleY = y + 22;
+
+        if (hasResidentDiagram) {
+            const title = this.scene.add.text(x + 22, titleY, content.diagramTitle, {
+                fontFamily: 'Courier New', fontSize: '14px', color: this._currentAccentHex(), letterSpacing: 4,
+            }).setOrigin(0, 0);
+            const dragTagW = 78;
+            const dragTagH = 26;
+            const dragTagX = x + w - 22 - dragTagW;
+            const dragTagBg = this.scene.add.rectangle(
+                dragTagX, titleY - 4, dragTagW, dragTagH, 0x0e1f29, 1,
+            ).setOrigin(0, 0).setStrokeStyle(1, accent, 0.55);
+            const dragTagLabel = this.scene.add.text(
+                dragTagX + dragTagW / 2, titleY - 4 + dragTagH / 2, 'EXAMPLE', {
+                    fontFamily: 'Courier New', fontSize: '11px', color: this._currentAccentHex(), letterSpacing: 3,
+                }
+            ).setOrigin(0.5);
+            this._dynamic(title, dragTagBg, dragTagLabel);
+        }
+
+        const diagramTop = titleY + (hasResidentDiagram ? 36 : 0);
         const diagramH   = (y + h) - diagramTop - 22;
         const diagramX   = x + 22;
         const diagramW   = w - 44;
+
+        if (hoveredScrapRule) {
+            this._drawScrapRulePreview(hoveredScrapRule, diagramX, diagramTop, diagramW, diagramH);
+            return;
+        }
 
         switch (content.diagramKind) {
             case 'baseLoop':
@@ -527,6 +695,50 @@ export default class RulebookOverlay {
             default:
                 break;
         }
+    }
+
+    _drawScrapRulePreview(rule, x, y, w, h) {
+        const accent = this._currentAccentColor();
+        const day = rule.day || 1;
+        const imageKey = `rulebook_scrap_${this._selectedTab}_day${day}`;
+
+        // Image-only preview: when the asset exists we show it full-bleed,
+        // when it doesn't we render a quiet placeholder card with no fallback
+        // copy (so the design stays clean while assets land).
+        if (this.scene.textures.exists(imageKey)) {
+            const bg = this.scene.add.rectangle(x, y, w, h, 0x050a0f, 1)
+                .setOrigin(0, 0)
+                .setStrokeStyle(1, accent, 0.8);
+            const image = this.scene.add.image(x + (w / 2), y + (h / 2), imageKey)
+                .setDisplaySize(w - 24, h - 24);
+            this._dynamic(bg, image);
+            return;
+        }
+
+        const placeholder = this.scene.add.rectangle(x, y, w, h, 0x050a0f, 1)
+            .setOrigin(0, 0)
+            .setStrokeStyle(1, accent, 0.5);
+        const dayLabel = this.scene.add.text(x + 16, y + 16, `DAY ${day}`, {
+            fontFamily: 'Courier New',
+            fontSize: '11px',
+            color: this._currentAccentHex(),
+            letterSpacing: 4,
+        }).setOrigin(0, 0).setAlpha(0.7);
+        const ruleCopy = this.scene.add.text(x + (w / 2), y + (h / 2) - 14, rule.text, {
+            fontFamily: 'Courier New',
+            fontSize: '15px',
+            color: '#cae3eb',
+            wordWrap: { width: w - 56 },
+            align: 'center',
+            lineSpacing: 6,
+        }).setOrigin(0.5);
+        const note = this.scene.add.text(x + (w / 2), y + h - 22, 'IMAGE MISSING', {
+            fontFamily: 'Courier New',
+            fontSize: '11px',
+            color: this._currentAccentHex(),
+            letterSpacing: 4,
+        }).setOrigin(0.5).setAlpha(0.45);
+        this._dynamic(placeholder, dayLabel, ruleCopy, note);
     }
 
     // ── Diagram primitives ───────────────────────────────────────────────────

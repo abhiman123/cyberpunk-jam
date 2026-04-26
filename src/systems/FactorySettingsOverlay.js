@@ -1,18 +1,61 @@
-import { getGameSettings, setMusicVolume } from '../state/gameSettings.js';
+import {
+    getGameSettings,
+    setMusicVolume,
+    setSfxVolume,
+    setScreenZoom,
+} from '../state/gameSettings.js';
 
 const PANEL_WIDTH = 840;
-const PANEL_HEIGHT = 416;
+const PANEL_HEIGHT = 540;
 const PANEL_X = 220;
-const PANEL_Y = 146;
-const MUSIC_SLIDER_X = 256;
-const MUSIC_SLIDER_Y = 262;
-const MUSIC_SLIDER_WIDTH = 376;
+const PANEL_Y = 90;
+const SLIDER_LEFT = 256;
+const SLIDER_WIDTH = 376;
+const SLIDER_THUMB_RADIUS = 14;
+
+const SLIDER_DEFS = [
+    {
+        id: 'music',
+        label: 'MUSIC',
+        descriptionOn: 'Ambient tracks across the shift and report scenes.',
+        descriptionOff: 'Ambient tracks silenced. Floor effects still stay live.',
+        getValue: (settings) => settings.musicVolume ?? 0,
+        setValue: (value) => setMusicVolume(value),
+        min: 0,
+        max: 1,
+        callbackKey: 'onMusicChanged',
+    },
+    {
+        id: 'sfx',
+        label: 'SOUND EFFECTS',
+        descriptionOn: 'Floor SFX, beeps, and minigame audio.',
+        descriptionOff: 'Floor SFX muted. Music and voice still play.',
+        getValue: (settings) => settings.sfxVolume ?? 0,
+        setValue: (value) => setSfxVolume(value),
+        min: 0,
+        max: 1,
+        callbackKey: 'onSfxChanged',
+    },
+    {
+        id: 'zoom',
+        label: 'SCREEN ZOOM',
+        descriptionOn: 'Scales the rendered display window.',
+        descriptionOff: 'Scales the rendered display window.',
+        getValue: (settings) => settings.screenZoom ?? 0.5,
+        setValue: (value) => setScreenZoom(value),
+        min: 0.25,
+        max: 1,
+        callbackKey: 'onZoomChanged',
+        formatValue: (value) => `${Math.round(value * 100)}%`,
+    },
+];
 
 export default class FactorySettingsOverlay {
     constructor(scene, callbacks = {}) {
         this.scene = scene;
         this._callbacks = callbacks;
-        this._sliderDragging = false;
+        this._sliderDragging = null; // id of slider being dragged, or null
+        this._sliders = new Map();
         this._handleGlobalPointerMove = this._handleGlobalPointerMove.bind(this);
         this._handleGlobalPointerUp = this._handleGlobalPointerUp.bind(this);
         this.scene.input.on('pointermove', this._handleGlobalPointerMove);
@@ -50,51 +93,13 @@ export default class FactorySettingsOverlay {
             scan.fillRect(24, y, PANEL_WIDTH - 48, 4);
         }
 
-        const settingsBox = this.scene.add.rectangle(40, 126, PANEL_WIDTH - 80, 166, 0x071722, 0.82)
-            .setOrigin(0)
-            .setStrokeStyle(1, 0x50e4f2, 0.55);
-        const musicLabel = this.scene.add.text(68, 166, 'MUSIC', {
-            fontFamily: 'Courier New', fontSize: '24px', color: '#d6fbff', letterSpacing: 3,
-        });
-        this._musicDesc = this.scene.add.text(68, 206, 'Ambient tracks across the shift and report scenes.', {
-            fontFamily: 'Courier New', fontSize: '13px', color: '#7dc4d2',
-        });
+        this._panel.add([shell, inner, scan, title, subtitle]);
 
-        this._musicIconBars = [
-            this.scene.add.rectangle(706, 274, 12, 24, 0x64e6e8, 1),
-            this.scene.add.rectangle(730, 264, 12, 44, 0x64e6e8, 1),
-            this.scene.add.rectangle(754, 252, 12, 68, 0x64e6e8, 1),
-        ];
-
-        this._musicSliderTrack = this.scene.add.rectangle(MUSIC_SLIDER_X, MUSIC_SLIDER_Y, MUSIC_SLIDER_WIDTH, 12, 0x1f3540, 1)
-            .setOrigin(0, 0.5)
-            .setStrokeStyle(1, 0x70c8d8, 0.42);
-        this._musicSliderFill = this.scene.add.rectangle(MUSIC_SLIDER_X, MUSIC_SLIDER_Y, 0, 12, 0x63f1c5, 1)
-            .setOrigin(0, 0.5);
-        this._musicSliderGlow = this.scene.add.rectangle(MUSIC_SLIDER_X, MUSIC_SLIDER_Y, 0, 18, 0x8cfff5, 0.2)
-            .setOrigin(0, 0.5);
-        this._musicSliderThumbShadow = this.scene.add.circle(MUSIC_SLIDER_X, MUSIC_SLIDER_Y + 3, 14, 0x000000, 0.26);
-        this._musicSliderThumb = this.scene.add.circle(MUSIC_SLIDER_X, MUSIC_SLIDER_Y, 14, 0xf4f0e3, 1)
-            .setStrokeStyle(2, 0x14323e, 0.82);
-        this._musicSliderThumbCore = this.scene.add.circle(MUSIC_SLIDER_X, MUSIC_SLIDER_Y, 5, 0x173640, 1);
-        this._musicValueText = this.scene.add.text(686, 226, '100%', {
-            fontFamily: 'Courier New', fontSize: '22px', color: '#eefcff', letterSpacing: 3,
-        }).setOrigin(1, 0.5);
-
-        this._musicSliderHitArea = this.scene.add.rectangle(452, 260, 430, 60, 0xffffff, 0.001)
-            .setInteractive({ useHandCursor: true });
-        this._musicSliderHitArea.on('pointerdown', (pointer) => {
-            this._sliderDragging = true;
-            this._setSliderHoverState(true);
-            this._setMusicVolumeFromPointer(pointer);
-        });
-        this._musicSliderHitArea.on('pointerover', () => {
-            if (this._sliderDragging) return;
-            this._setSliderHoverState(true);
-        });
-        this._musicSliderHitArea.on('pointerout', () => {
-            if (this._sliderDragging) return;
-            this._setSliderHoverState(false);
+        const sliderTopY = 124;
+        const sliderRowHeight = 116;
+        SLIDER_DEFS.forEach((def, index) => {
+            const rowY = sliderTopY + index * sliderRowHeight;
+            this._buildSliderRow(def, rowY);
         });
 
         const backButton = this.scene.add.rectangle(PANEL_WIDTH - 124, PANEL_HEIGHT - 58, 184, 48, 0x0f2635, 1)
@@ -113,67 +118,129 @@ export default class FactorySettingsOverlay {
             fontFamily: 'Courier New', fontSize: '12px', color: '#75b5c1',
         });
 
-        this._panel.add([
-            shell,
-            inner,
-            scan,
-            title,
-            subtitle,
-            settingsBox,
-            musicLabel,
-            this._musicDesc,
-            ...this._musicIconBars,
-            this._musicSliderTrack,
-            this._musicSliderGlow,
-            this._musicSliderFill,
-            this._musicSliderThumbShadow,
-            this._musicSliderThumb,
-            this._musicSliderThumbCore,
-            this._musicValueText,
-            this._musicSliderHitArea,
-            backButton,
-            backLabel,
-            footer,
-        ]);
+        this._panel.add([backButton, backLabel, footer]);
 
         this._root.add([this._backdrop, this._panel]);
         this.refresh();
     }
 
+    _buildSliderRow(def, rowY) {
+        const sliderY = rowY + 50;
+        const settingsBox = this.scene.add.rectangle(40, rowY - 14, PANEL_WIDTH - 80, 96, 0x071722, 0.82)
+            .setOrigin(0)
+            .setStrokeStyle(1, 0x50e4f2, 0.55);
+        const label = this.scene.add.text(68, rowY + 12, def.label, {
+            fontFamily: 'Courier New', fontSize: '22px', color: '#d6fbff', letterSpacing: 3,
+        });
+        const desc = this.scene.add.text(68, rowY + 44, def.descriptionOn, {
+            fontFamily: 'Courier New', fontSize: '12px', color: '#7dc4d2',
+        });
+
+        const valueText = this.scene.add.text(720, rowY + 16, '100%', {
+            fontFamily: 'Courier New', fontSize: '20px', color: '#eefcff', letterSpacing: 3,
+        }).setOrigin(1, 0.5);
+
+        const track = this.scene.add.rectangle(SLIDER_LEFT, sliderY, SLIDER_WIDTH, 12, 0x1f3540, 1)
+            .setOrigin(0, 0.5)
+            .setStrokeStyle(1, 0x70c8d8, 0.42);
+        const fill = this.scene.add.rectangle(SLIDER_LEFT, sliderY, 0, 12, 0x63f1c5, 1)
+            .setOrigin(0, 0.5);
+        const glow = this.scene.add.rectangle(SLIDER_LEFT, sliderY, 0, 18, 0x8cfff5, 0.2)
+            .setOrigin(0, 0.5);
+        const thumbShadow = this.scene.add.circle(SLIDER_LEFT, sliderY + 3, SLIDER_THUMB_RADIUS, 0x000000, 0.26);
+        const thumb = this.scene.add.circle(SLIDER_LEFT, sliderY, SLIDER_THUMB_RADIUS, 0xf4f0e3, 1)
+            .setStrokeStyle(2, 0x14323e, 0.82);
+        const thumbCore = this.scene.add.circle(SLIDER_LEFT, sliderY, 5, 0x173640, 1);
+
+        const hitArea = this.scene.add.rectangle(
+            SLIDER_LEFT - 12,
+            sliderY,
+            SLIDER_WIDTH + 24,
+            48,
+            0xffffff,
+            0.001,
+        ).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+
+        hitArea.on('pointerdown', (pointer) => {
+            this._sliderDragging = def.id;
+            this._setSliderHoverState(def.id, true);
+            this._setValueFromPointer(def, pointer);
+        });
+        hitArea.on('pointerover', () => {
+            if (this._sliderDragging) return;
+            this._setSliderHoverState(def.id, true);
+        });
+        hitArea.on('pointerout', () => {
+            if (this._sliderDragging === def.id) return;
+            this._setSliderHoverState(def.id, false);
+        });
+
+        this._panel.add([
+            settingsBox,
+            label,
+            desc,
+            track,
+            glow,
+            fill,
+            thumbShadow,
+            thumb,
+            thumbCore,
+            valueText,
+            hitArea,
+        ]);
+
+        this._sliders.set(def.id, {
+            def,
+            label,
+            desc,
+            valueText,
+            track,
+            fill,
+            glow,
+            thumb,
+            thumbShadow,
+            thumbCore,
+            hitArea,
+        });
+    }
+
     refresh() {
         const settings = getGameSettings();
-        const musicVolume = Math.max(0, Math.min(1, settings.musicVolume ?? 1));
-        const thumbX = MUSIC_SLIDER_X + (MUSIC_SLIDER_WIDTH * musicVolume);
-        const state = musicVolume <= 0
-            ? { bars: 0, color: 0x7f7878, text: '#9a8f8f' }
-            : musicVolume < 0.34
-                ? { bars: 1, color: 0x72daf0, text: '#cbf5ff' }
-                : musicVolume < 0.67
-                    ? { bars: 2, color: 0x6ce0d9, text: '#d7fff8' }
-                    : { bars: 3, color: 0x63f1c5, text: '#effff9' };
+        this._sliders.forEach((slider) => {
+            const { def } = slider;
+            const rawValue = def.getValue(settings);
+            const range = def.max - def.min;
+            const normalized = range > 0 ? Math.max(0, Math.min(1, (rawValue - def.min) / range)) : 0;
+            const fillWidth = SLIDER_WIDTH * normalized;
+            const thumbX = SLIDER_LEFT + fillWidth;
 
-        this._musicSliderFill.width = MUSIC_SLIDER_WIDTH * musicVolume;
-        this._musicSliderGlow.width = Math.max(this._musicSliderFill.width, musicVolume > 0 ? 16 : 0);
-        this._musicSliderThumb.x = thumbX;
-        this._musicSliderThumbShadow.x = thumbX;
-        this._musicSliderThumbCore.x = thumbX;
-        this._musicValueText.setText(`${Math.round(musicVolume * 100)}%`);
-        this._musicDesc.setText(
-            musicVolume <= 0
-                ? 'Ambient tracks silenced. Floor effects still stay live.'
-                : 'Ambient tracks across the shift and report scenes.'
-        );
-        this._musicSliderFill.setFillStyle(state.color, musicVolume > 0 ? 1 : 0.34);
-        this._musicSliderGlow.setFillStyle(state.color, musicVolume > 0 ? 0.24 : 0.12);
+            slider.fill.width = fillWidth;
+            slider.glow.width = Math.max(fillWidth, normalized > 0 ? 16 : 0);
+            slider.thumb.x = thumbX;
+            slider.thumbShadow.x = thumbX;
+            slider.thumbCore.x = thumbX;
 
-        this._musicIconBars.forEach((bar, index) => {
-            const active = index < state.bars;
-            bar.setFillStyle(active ? state.color : 0x34505d, active ? 1 : 0.24);
-            bar.setStrokeStyle(active ? 1 : 0, 0xe9ffff, active ? 0.18 : 0);
+            const formatted = def.formatValue
+                ? def.formatValue(rawValue)
+                : `${Math.round(rawValue * 100)}%`;
+            slider.valueText.setText(formatted);
+
+            const muted = (def.id === 'music' || def.id === 'sfx') && rawValue <= 0;
+            const state = muted
+                ? { color: 0x7f7878 }
+                : normalized < 0.34
+                    ? { color: 0x72daf0 }
+                    : normalized < 0.67
+                        ? { color: 0x6ce0d9 }
+                        : { color: 0x63f1c5 };
+
+            slider.fill.setFillStyle(state.color, muted ? 0.34 : 1);
+            slider.glow.setFillStyle(state.color, muted ? 0.12 : 0.24);
+            slider.desc.setText(muted ? def.descriptionOff : def.descriptionOn);
         });
 
         if (!this._sliderDragging) {
-            this._setSliderHoverState(false);
+            this._sliders.forEach((_, id) => this._setSliderHoverState(id, false));
         }
     }
 
@@ -201,14 +268,14 @@ export default class FactorySettingsOverlay {
             duration: 240,
             ease: 'Cubic.Out',
         });
+
     }
 
     close(immediate = false) {
         if (!this._root.visible) return;
 
-        this._sliderDragging = false;
-        this._setSliderHoverState(false);
-
+        this._sliderDragging = null;
+        this._sliders.forEach((_, id) => this._setSliderHoverState(id, false));
         if (immediate) {
             this.scene.tweens.killTweensOf([this._backdrop, this._panel]);
             this._root.setVisible(false);
@@ -245,29 +312,36 @@ export default class FactorySettingsOverlay {
 
     _handleGlobalPointerMove(pointer) {
         if (!this._sliderDragging || !this._root.visible) return;
-        this._setMusicVolumeFromPointer(pointer);
+        const slider = this._sliders.get(this._sliderDragging);
+        if (!slider) return;
+        this._setValueFromPointer(slider.def, pointer);
     }
 
     _handleGlobalPointerUp() {
         if (!this._sliderDragging) return;
-        this._sliderDragging = false;
+        this._sliderDragging = null;
         this.refresh();
     }
 
-    _setSliderHoverState(active) {
-        this._musicSliderThumb.setScale(active ? 1.12 : 1);
-        this._musicSliderThumbShadow.setScale(active ? 1.08 : 1);
-        this._musicSliderTrack.setStrokeStyle(1, active ? 0xb8f3ff : 0x70c8d8, active ? 0.75 : 0.42);
+    _setSliderHoverState(id, active) {
+        const slider = this._sliders.get(id);
+        if (!slider) return;
+        slider.thumb.setScale(active ? 1.12 : 1);
+        slider.thumbShadow.setScale(active ? 1.08 : 1);
+        slider.track.setStrokeStyle(1, active ? 0xb8f3ff : 0x70c8d8, active ? 0.75 : 0.42);
     }
 
-    _setMusicVolumeFromPointer(pointer) {
+    _setValueFromPointer(def, pointer) {
         const localX = pointer.worldX - PANEL_X;
-        const normalized = (localX - MUSIC_SLIDER_X) / MUSIC_SLIDER_WIDTH;
-        const musicVolume = Math.max(0, Math.min(1, normalized));
-        const settings = setMusicVolume(musicVolume);
+        const normalized = (localX - SLIDER_LEFT) / SLIDER_WIDTH;
+        const clamped = Math.max(0, Math.min(1, normalized));
+        const value = def.min + clamped * (def.max - def.min);
+        const settings = def.setValue(value);
         this.refresh();
-        this._setSliderHoverState(true);
-        this._callbacks.onMusicChanged?.(settings);
+        this._setSliderHoverState(def.id, true);
+        if (def.callbackKey) {
+            this._callbacks[def.callbackKey]?.(settings);
+        }
     }
 
     destroy() {

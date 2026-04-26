@@ -98,6 +98,9 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._lastBugMoveSoundAt = 0;
         this._lastWrongLetterSoundAt = 0;
         this._lastSquashSoundAt = 0;
+        this._bugSpawnCount = 0;
+        this._greenBugSpawnAt = null;
+        this._greenBugSpawned = false;
     }
 
     _defaultEvidence() {
@@ -374,7 +377,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         }).setOrigin(0.5);
         this._closeButtonBg.on('pointerover', () => {
             this._closeButtonBg?.setFillStyle(0x0f163a, 0.99).setStrokeStyle(2, 0x5ab8f0, 0.95);
-            this._closeButtonText?.setColor('#ffffff');
+            this._closeButtonText?.setColor('#eeeeee');
         });
         this._closeButtonBg.on('pointerout', () => {
             this._closeButtonBg?.setFillStyle(0x0a0f1e, 0.97).setStrokeStyle(2, 0x285a9a, 0.9);
@@ -449,11 +452,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._attachHiddenInput(this.evidence.inputValue || '');
         this._syncOutputPanels();
         this._syncCommandVisuals();
-        if (this.evidence.resultType === 'spark-hazard') {
-            this._spawnHazardBug();
-        } else {
-            this._startBugSpawner();
-        }
+        this._startBugSpawner();
         window.addEventListener('keydown', this._handleGlobalKeyDown, true);
         if (this.evidence.phase !== 'scrap') {
             this.scene.time.delayedCall(20, () => this._focusHiddenInput());
@@ -1234,6 +1233,14 @@ export default class DebugConsolePuzzle extends MinigameBase {
     _startBugSpawner() {
         if (!this.evidence.bugsEnabled || this.evidence.phase === 'scrap') return;
         this._stopBugSpawner();
+        this._bugSpawnCount = 0;
+        this._greenBugSpawned = false;
+        this._greenBugSpawnAt = (
+            Number(this.evidence?.dayStage || 1) >= 3
+            && Boolean(this.evidence?.scrapRequired)
+        )
+            ? Phaser.Math.Between(1, 4)
+            : null;
         const spawnDelay = getBugSpawnDelayMs(this.evidence?.dayStage);
         this._bugSpawnEvent = this.scene.time.addEvent({
             delay: spawnDelay,
@@ -1252,6 +1259,13 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
     _spawnBug() {
         if (!this._panel) return;
+        this._bugSpawnCount += 1;
+        const spawnGreenBug = Boolean(
+            this._greenBugSpawnAt
+            && !this._greenBugSpawned
+            && this._bugSpawnCount >= this._greenBugSpawnAt
+        );
+        if (spawnGreenBug) this._greenBugSpawned = true;
 
         const targetIndex = this._getPreferredBugTargetIndex();
         const targetX = this._commandTextStartX + (targetIndex * this._charWidth) + (this._charWidth / 2);
@@ -1259,15 +1273,20 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const edge = Phaser.Math.Between(0, 3);
         const startX = edge === 0 ? -520 : edge === 1 ? 520 : Phaser.Math.Between(-520, 520);
         const startY = edge === 2 ? -250 : edge === 3 ? 250 : Phaser.Math.Between(-250, 250);
-        const body = this.scene.add.circle(0, 0, 10, 0xD060D8, 1).setStrokeStyle(1, 0x4A0A50, 0.95);
-        const head = this.scene.add.circle(10, -8, 6, 0xF0A0F5, 1).setStrokeStyle(1, 0x4A0A50, 0.95);
+        const bodyFill = spawnGreenBug ? 0x4bcf72 : 0xD060D8;
+        const headFill = spawnGreenBug ? 0x98f0b0 : 0xF0A0F5;
+        const strokeFill = spawnGreenBug ? 0x1b4e2a : 0x4A0A50;
+        const legsColor = spawnGreenBug ? '#66d58a' : '#952090';
+        const splatFill = spawnGreenBug ? 0x2f9a55 : 0x952090;
+        const body = this.scene.add.circle(0, 0, 10, bodyFill, 1).setStrokeStyle(1, strokeFill, 0.95);
+        const head = this.scene.add.circle(10, -8, 6, headFill, 1).setStrokeStyle(1, strokeFill, 0.95);
         const eye = this.scene.add.circle(12, -10, 1.5, 0x2b0000, 1);
         const legs = this.scene.add.text(-10, 13, '╲╱╲╱', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#952090',
+            color: legsColor,
         }).setOrigin(0, 0.5);
-        const splat = this.scene.add.ellipse(0, 8, 24, 8, 0x952090, 0.84).setVisible(false);
+        const splat = this.scene.add.ellipse(0, 8, 24, 8, splatFill, 0.84).setVisible(false);
         const bug = this.scene.add.container(startX, startY, [splat, body, head, eye, legs]).setSize(28, 28);
         const hitZone = this.scene.add.rectangle(0, 0, 32, 32, 0xffffff, 0.001)
             .setInteractive({ useHandCursor: true });
