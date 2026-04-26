@@ -528,16 +528,18 @@ export default class GearGridPuzzle extends MinigameBase {
         const availableHeight = Math.max(60, inventoryBottom - inventoryTop);
         const rowCount = movablePieces.length;
         const rawSpacing = rowCount > 0 ? availableHeight / rowCount : 60;
-        const rowSpacing = Math.max(34, Math.min(60, rawSpacing));
-        // Compact = drop the helper hint line, shrink the socket frame so
-        // 5+ parts (Day 3 boards with multiple loose gears + clamps) fit
-        // without overlapping the CLOSE button.
+        // Allow rows to keep compressing past the previous 34px floor when
+        // 6+ loose parts ship with the puzzle (Day 3 boards). The
+        // ultra-compact branch below shrinks the socket and label fonts
+        // proportionally so even a 6-item list clears the CLOSE button.
+        const rowSpacing = Math.max(20, Math.min(60, rawSpacing));
         const compact = rowSpacing < 50;
-        const socketHalf = compact ? 18 : 25;
-        const sampleScale = compact ? 0.32 : 0.42;
-        const titleFontSize = compact ? '11px' : '12px';
-        const labelFontSize = compact ? '9px' : '10px';
-        const textCol = compact ? 244 : 252;
+        const ultraCompact = rowSpacing < 30;
+        const socketHalf = ultraCompact ? 11 : compact ? 18 : 25;
+        const sampleScale = ultraCompact ? 0.22 : compact ? 0.32 : 0.42;
+        const titleFontSize = ultraCompact ? '9px' : compact ? '11px' : '12px';
+        const labelFontSize = ultraCompact ? '8px' : compact ? '9px' : '10px';
+        const textCol = ultraCompact ? 234 : compact ? 244 : 252;
 
         movablePieces.forEach((pieceView, index) => {
             const y = inventoryTop + (index * rowSpacing);
