@@ -390,10 +390,25 @@ export default class GearGridPuzzle extends MinigameBase {
 
         if (isWall) {
             // Diagonal hatch + 4 corner rivets. Cleaner than the old
-            // stripey "vertical bars" wall texture.
+            // stripey "vertical bars" wall texture. Each diagonal segment is
+            // clipped to the cell's interior bounds so the metal sheen does
+            // not bleed into neighbouring cells.
             gfx.lineStyle(1, 0x4a3526, 0.6);
-            for (let offset = -this._cellSize; offset < this._cellSize; offset += 8) {
-                gfx.lineBetween(-half + inset, offset, half - inset, offset + this._cellSize);
+            const left = -half + inset;
+            const right = half - inset;
+            const top = -half + inset;
+            const bottom = half - inset;
+            const span = bottom - top;
+            for (let d = -span; d < span; d += 8) {
+                let x1 = left;
+                let y1 = top + d;
+                let x2 = right;
+                let y2 = top + d + (right - left);
+                if (y1 < top) { x1 += (top - y1); y1 = top; }
+                if (y2 < top) { x2 += (top - y2); y2 = top; }
+                if (y1 > bottom) { x1 -= (y1 - bottom); y1 = bottom; }
+                if (y2 > bottom) { x2 -= (y2 - bottom); y2 = bottom; }
+                if (x2 > x1) gfx.lineBetween(x1, y1, x2, y2);
             }
             gfx.fillStyle(0x6a4a32, 0.8);
             const rivetR = Math.max(2, Math.floor(this._cellSize * 0.05));
@@ -889,10 +904,24 @@ export default class GearGridPuzzle extends MinigameBase {
             visual.connectorGfx.fillRoundedRect(-half - 2, -half - 2, plateSize + 4, plateSize + 4, bevel + 2);
             visual.connectorGfx.fillStyle(innerColor, 0.94);
             visual.connectorGfx.fillRoundedRect(-half, -half, plateSize, plateSize, bevel);
-            // Diagonal hatch detail.
+            // Diagonal hatch detail. Segments are clipped to the plate
+            // interior so the sheen never extends past the gear's bevel.
             visual.connectorGfx.lineStyle(1, edgeColor, 0.4);
-            for (let offset = -half; offset <= half; offset += 6) {
-                visual.connectorGfx.lineBetween(-half + 4, offset, half - 4, offset + plateSize - 4);
+            const hatchLeft = -half + 4;
+            const hatchRight = half - 4;
+            const hatchTop = -half + 4;
+            const hatchBottom = half - 4;
+            const hatchSpan = hatchBottom - hatchTop;
+            for (let d = -hatchSpan; d < hatchSpan; d += 6) {
+                let x1 = hatchLeft;
+                let y1 = hatchTop + d;
+                let x2 = hatchRight;
+                let y2 = hatchTop + d + (hatchRight - hatchLeft);
+                if (y1 < hatchTop) { x1 += (hatchTop - y1); y1 = hatchTop; }
+                if (y2 < hatchTop) { x2 += (hatchTop - y2); y2 = hatchTop; }
+                if (y1 > hatchBottom) { x1 -= (y1 - hatchBottom); y1 = hatchBottom; }
+                if (y2 > hatchBottom) { x2 -= (y2 - hatchBottom); y2 = hatchBottom; }
+                if (x2 > x1) visual.connectorGfx.lineBetween(x1, y1, x2, y2);
             }
             // Corner bolts.
             const boltR = Math.max(2, Math.floor(this._cellSize * 0.045));

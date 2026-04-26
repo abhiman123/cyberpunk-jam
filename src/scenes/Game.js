@@ -1782,10 +1782,10 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xc9ffff, 0.25);
         const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 30, screenWidth - 10, 46, 0xffffff, 0.08).setOrigin(0.5);
         const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 38, 10, 0x1b1812, 1).setOrigin(0.5);
-        const messageBoardShadow = this.add.rectangle(146, 98, 232, 88, 0x000000, 0.12)
+        const messageBoardShadow = this.add.rectangle(146, 96, 244, 100, 0x000000, 0.12)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x163136, 0.16);
-        const messageBoard = this.add.rectangle(146, 98, 228, 84, 0xf3ffff, 0.22)
+        const messageBoard = this.add.rectangle(146, 96, 240, 96, 0xf3ffff, 0.22)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x17363d, 0.28);
         this._phoneMessageBoardShadow = messageBoardShadow;
@@ -1801,16 +1801,18 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'Arial Black', fontSize: '13px', color: '#0c171b',
             wordWrap: { width: 258 },
         });
-        this._phoneBodyText = this.add.text(36, 60, '', {
-            fontFamily: 'Arial', fontSize: '14px', color: '#101010',
-            wordWrap: { width: 218 }, lineSpacing: 6,
+        // Bigger body text to fill the dialogue board — was 14px and left
+        // the bottom half of the screen blank during short prompts.
+        this._phoneBodyText = this.add.text(34, 54, '', {
+            fontFamily: 'Arial', fontSize: '17px', color: '#101010',
+            wordWrap: { width: 224 }, lineSpacing: 6,
         });
         this._phoneStatusText = this.add.text(32, 146, 'CHANNEL IDLE', {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
             wordWrap: { width: 172 },
         });
 
-        this._phoneBodyViewport = { x: 36, y: 58, width: 218, height: 78 };
+        this._phoneBodyViewport = { x: 34, y: 52, width: 224, height: 88 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
 
@@ -6936,6 +6938,7 @@ export default class GameScene extends Phaser.Scene {
         this._unitContainer.y = 490;
         this._unitContainer.setAngle(0);
         this._unitContainer.setAlpha(1);
+        this._unitContainer.setDepth(15);
         this._unitNameText.setText(this._currentMachineVariant.name);
         this._unitIdText.setText(this._currentCase.id);
         this._setConveyorRulingButtonsVisible(true);
@@ -7052,6 +7055,10 @@ export default class GameScene extends Phaser.Scene {
             this.time.delayedCall(150, () => this._trapdoorSprite?.setTexture('trapdoor_3'));
 
             this.time.delayedCall(150, () => {
+                // Drop below the conveyor stack so the belt + closing trapdoor
+                // occlude the unit as it falls — looks like it disappears
+                // into the floor instead of just fading off-screen.
+                this._unitContainer.setDepth(9);
                 this.tweens.add({
                     targets: this._unitContainer,
                     y: 760,
