@@ -76,8 +76,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._specialCommandButtonBg = null;
         this._specialCommandButtonText = null;
         this._charWidth = 14;
-        this._commandTextStartX = -471;
-        this._commandTextY = -100;
+        this._commandTextStartX = -485;
+        this._commandTextY = -140;
         this._commandZoneWidth = 520;
         this._commandZoneHeight = 48;
         this._closeButtonBg = null;
@@ -186,7 +186,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             .setStrokeStyle(1, 0x18283d, 0.72);
 
         // Command frame — pink-accented focal point
-        const commandFrame = this.scene.add.rectangle(-232, -138, 572, 118, 0x06070e, 0.97)
+        const commandFrame = this.scene.add.rectangle(-232, -140, 572, 118, 0x06070e, 0.97)
             .setStrokeStyle(1, 0xC040C8, 0.88);
         // Terminal-style output panels: magenta header strip on top with a
         // CONSOLE > label, then the dark monospace body underneath. Matches
@@ -229,7 +229,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const title = this.scene.add.text(-520, -277, `MACHINE DIAGNOSTICS: ${this._machineName}`, {
             fontFamily: 'Courier New',
             fontSize: '22px',
-            color: '#ffffff',
+            color: '#F684F7',
             letterSpacing: 3,
             wordWrap: { width: 900 },
         }).setOrigin(0, 0.5);
@@ -239,12 +239,12 @@ export default class DebugConsolePuzzle extends MinigameBase {
         ].filter(Boolean).join('\n'), {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#ffffff',
+            color: '#F684F7',
             wordWrap: { width: 840 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
 
-        const commandLabel = this.scene.add.text(-510, -184, 'COMMAND LINE', {
+        const commandLabel = this.scene.add.text(-510, -184, 'COMMAND INPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#F684F7',
@@ -283,7 +283,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._toggleSpecialCommandMode();
         });
 
-        this._commandZone = this.scene.add.rectangle(-232, -138, this._commandZoneWidth, this._commandZoneHeight, 0x03050a, 0.99)
+        this._commandZone = this.scene.add.rectangle(-232, this._commandTextY, this._commandZoneWidth, this._commandZoneHeight, 0x03050a, 0.99)
             .setStrokeStyle(1, 0xF684F7, 0.48)
             .setInteractive({ useHandCursor: true });
         this._commandZone.on('pointerdown', (pointer, _localX, _localY, event) => {
