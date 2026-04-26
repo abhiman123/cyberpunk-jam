@@ -374,7 +374,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         }).setOrigin(0.5);
         this._closeButtonBg.on('pointerover', () => {
             this._closeButtonBg?.setFillStyle(0x0f163a, 0.99).setStrokeStyle(2, 0x5ab8f0, 0.95);
-            this._closeButtonText?.setColor('#eeeeee');
+            this._closeButtonText?.setColor('#ffffff');
         });
         this._closeButtonBg.on('pointerout', () => {
             this._closeButtonBg?.setFillStyle(0x0a0f1e, 0.97).setStrokeStyle(2, 0x285a9a, 0.9);
