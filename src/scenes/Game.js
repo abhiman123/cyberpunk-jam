@@ -93,6 +93,7 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent = null;
         this._commSequenceEvent = null;
         this._unitMoveTween = null;
+        this._unitExitTween = null;
         this._activeMusicKey = null;
         this._pendingExitAction = null;
         this._pendingUnsafeAcceptConfirmation = false;
@@ -6977,6 +6978,8 @@ export default class GameScene extends Phaser.Scene {
         const arrivingMachineVariant = this._currentMachineVariant;
         const arrivingCase = this._currentCase;
 
+        this._unitExitTween?.stop();
+        this._unitExitTween = null;
         this._unitMoveTween?.stop();
         this._unitMoveTween = null;
         this._conveyorAnimTween?.stop();
@@ -7119,12 +7122,13 @@ export default class GameScene extends Phaser.Scene {
 
         const exitConveyorSound = this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.conveyor, loop: true });
 
-        this.tweens.add({
+        this._unitExitTween = this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorExitX,
             duration: exitDurationMs,
             ease: 'Linear',
             onComplete: () => {
+                this._unitExitTween = null;
                 exitConveyorSound?.stop();
                 onComplete?.();
             },
