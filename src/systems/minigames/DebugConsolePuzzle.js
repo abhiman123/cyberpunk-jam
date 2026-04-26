@@ -297,7 +297,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         });
 
         // Pink block cursor with hard blink
-        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xF684F7, 1).setOrigin(0, 0.5);
+        this._caret = this.scene.add.rectangle(0, this._commandTextY, 2, 30, 0xeeeeee, 1).setOrigin(0, 0.5);
         this._caretTween = this.scene.tweens.add({
             targets: this._caret,
             alpha: 0,
