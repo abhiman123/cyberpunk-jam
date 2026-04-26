@@ -6,6 +6,12 @@ export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
 
     preload() {
+        if (window.Wavedash) {
+            this.load.on('progress', (value) => {
+                // Update the Wavedash shell loading bar
+                window.Wavedash.updateLoadProgressZeroToOne(value);
+        });
+    }
         // Loading bar
         const barBg = this.add.rectangle(640, 360, 400, 20, 0x222222);
         const bar   = this.add.rectangle(440, 360, 0, 16, 0x00ccff);
@@ -145,6 +151,12 @@ export default class BootScene extends Phaser.Scene {
         this._createNewMachineSpritesFromSource();
         this._generatePlaceholders();
         this._setNearestFilterOnMachineTextures();
+
+        if (window.Wavedash) {
+        // This dismisses the Wavedash loading screen
+            window.Wavedash.init(); 
+        }
+
         this.scene.start('Title');
     }
 
