@@ -153,6 +153,7 @@ export const SOUND_VOLUMES = Object.freeze({
     phoneRinging: 0.6,
     voice: 0.9,
     music: 0.7,
+    conveyor: 0.2,
 });
 
 export const SHIFT_DURATION_MS = 360000;
