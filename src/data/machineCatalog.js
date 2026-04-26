@@ -3721,6 +3721,25 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
             statusIndicator: 'AMBER',
         },
     }),
+    createRosterMachineDefinition({
+        id: 'spider_bot',
+        name: 'Spider Bot',
+        day: 1,
+        opening: 'Eight contact points confirmed. The corners are mine — I have never missed a blind spot.',
+        question: 'Do you clear the dark corners, or leave them to me?',
+        yesDialogue: 'Sector reserved. I fill the gaps you avoid.',
+        noDialogue: 'Then you will keep finding my work where you least expect it.',
+        communicationChance: 0.72,
+        canvasScale: 0.5,
+        dossier: {
+            unitDesignation: 'SP-0081',
+            classification: 'Perimeter Crawling / Environmental Infiltration',
+            manufactureDate: 2077,
+            conditionNotes: 'All eight limbs operational. Grip calibration holds across surfaces rated at zero traction. The unit has logged 14,000 hours of active deployment with no scheduled downtime. Internal mapping data covers 2.3 kilometers of duct, crawlspace, and wall cavity — none of it in any official blueprint. It knows where the pipes run. It has never been asked to share this.',
+            serviceLogExcerpt: '[2089-08-11 | 03:40] Unscheduled intake. Found in the tertiary access shaft. Unit was stationary. Eyes were on the door. Nobody sent it there. Nobody recalls how it got in.',
+            statusIndicator: 'AMBER',
+        },
+    }),
 ]);
 
 const DAY_ONE_MACHINE_ROSTER_IDS = Object.freeze([
@@ -3736,6 +3755,7 @@ const DAY_ONE_MACHINE_ROSTER_IDS = Object.freeze([
     'rebellious_umbrella',
     'mechanic_broom',
     'cry_baby',
+    'spider_bot',
 ]);
 
 const DAY_TWO_MACHINE_ROSTER_IDS = Object.freeze([

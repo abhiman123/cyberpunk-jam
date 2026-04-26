@@ -66,6 +66,8 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_cry_baby_source',                'CrybabyGeneral.png');
         this.load.image('cry_baby_portrait_source',               'sadCB.png');
         this.load.image('machine_jester_in_the_box_source',       'furby.png');
+        this.load.image('spider_bot_source',                       'Spider_pack.png');
+        this.load.image('coffee_machine_source',                    'coffeeMachine.png');
 
         // Pixel art backgrounds
         this.load.image('bg_inspectview', 'inspectview.jpeg');
@@ -102,6 +104,11 @@ export default class BootScene extends Phaser.Scene {
         this._createNearestUpscaledTexture('umbrella_open_source',               'umbrella_open',                1);
         this._createNearestUpscaledTexture('machine_cry_baby_source',            'machine_cry_baby',             1);
         this._createNearestUpscaledTexture('machine_jester_in_the_box_source',   'machine_jester_in_the_box',    1);
+
+        // Spider_pack.png: content at (136,105) 81×59 in 320×195 canvas — 4× for crisp pixel art
+        this._createCroppedUpscaledTexture('spider_bot_source', 'machine_spider_bot', 4, { sx: 136, sy: 105, sw: 81, sh: 59 });
+        // coffeeMachine.png: content at (146,95) 33×60 in 320×195 canvas — 3× to match brewer placeholder proportions
+        this._createCroppedUpscaledTexture('coffee_machine_source', 'machine_breakroom_brewer', 3, { sx: 146, sy: 95, sw: 33, sh: 60 });
 
         // Portraits — cropped so the face centers correctly on screen (no transparent offset).
         // satisfiedRICHBOSSDUDEIDFK: content at (67,34) 393×592 in 500×629 (26% transparent)

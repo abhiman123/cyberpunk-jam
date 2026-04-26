@@ -6993,6 +6993,8 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
+        this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.sfx });
+
         this._unitMoveTween = this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorTargetX,
@@ -7106,6 +7108,8 @@ export default class GameScene extends Phaser.Scene {
                 ease: 'Linear',
             });
         }
+
+        this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.sfx });
 
         this.tweens.add({
             targets: this._unitContainer,

@@ -78,6 +78,7 @@ export const SOUND_ASSETS = Object.freeze({
     fuseConnect: createSoundAsset('sfx', 'sfx_fuse_connect', 'sfx_fuse_connect_electric.wav'),
     circuitLock: createSoundAsset('sfx', 'sfx_circuit_lock', 'sfx_circuit_lock.wav'),
     circuitPower: createSoundAsset('sfx', 'sfx_circuit_power', 'sfx_circuit_power_charge.wav'),
+    conveyorBelt: createSoundAsset('sfx', 'sfx_conveyor', 'sfx_conveyor.mp3'),
 
     managerMusic: createSoundAsset('music', 'music_manager', 'music_manager.mp3'),
     clockingInMusic: createSoundAsset('music', 'music_clocking_in', 'music_clocking_in.mp3'),
@@ -111,6 +112,7 @@ export const SOUND_ASSETS = Object.freeze({
  * via cache.audio.has() checks.)
  */
 const SOUND_ASSETS_ON_DISK = new Set([
+    'conveyorBelt',
     'inspectionReveal',
     'corporateMusic',
     'workdayMusic',
