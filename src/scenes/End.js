@@ -287,14 +287,16 @@ export default class EndScene extends Phaser.Scene {
     }
 
     _buildActors() {
+        // Manager renders ABOVE the player (depth 30) so the antagonist
+        // visually overlaps the inspector when they share the catwalk plane.
         this._managerSprite = this.add.image(1440, 520, 'manager_robot_source')
             .setScale(1.38)
-            .setDepth(10)
+            .setDepth(31)
             .setVisible(false);
         // Umbrella placeholder is 120x180; original 1.4 was reasonable for that base.
         this._umbrellaSprite = this.add.image(1440, 360, 'machine_rebellious_umbrella')
             .setScale(1.1)
-            .setDepth(11)
+            .setDepth(32)
             .setVisible(false);
 
         // Player inspector silhouette — small foreground figure facing the antagonist.
@@ -635,9 +637,12 @@ export default class EndScene extends Phaser.Scene {
         this._panelTag?.setText('DEBRIEF MANAGER');
         this._panelMeta?.setText('CH//04');
         this._setDebriefPanelAlpha(0);
+        // y=372 puts the manager on the same catwalk plane as the player
+        // (`_playerFigure` y=372). Previously y=520 dropped him onto the
+        // conveyor belt below the catwalk.
         const managerEntry = this._enterActor(this._managerSprite, {
             x: 660,
-            y: 520,
+            y: 372,
             startX: 1700,
             duration: 4600,
             ease: 'Sine.InOut',
