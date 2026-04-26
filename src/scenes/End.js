@@ -262,7 +262,7 @@ export default class EndScene extends Phaser.Scene {
             wordWrap: { width: 258 },
             lineSpacing: 6,
         });
-        const status = this.add.text(28, 146, '1 NEW // CHANNEL LIVE', {
+        const status = this.add.text(28, 155, '1 NEW // CHANNEL LIVE', {
             fontFamily: 'Arial Black',
             fontSize: '10px',
             color: '#15313a',
@@ -641,7 +641,7 @@ export default class EndScene extends Phaser.Scene {
         // (`_playerFigure` y=372). Previously y=520 dropped him onto the
         // conveyor belt below the catwalk.
         const managerEntry = this._enterActor(this._managerSprite, {
-            x: 660,
+            x: 500,
             y: 372,
             startX: 1700,
             duration: 4600,
