@@ -2818,7 +2818,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     mechanic_broom: createMiniDisplay({
         artX: 118,
         artY: 105,
-        artScale: 0.5,
+        artScale: 0.165,
         artAngle: 6,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2828,7 +2828,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     cry_baby: createMiniDisplay({
         artX: 118,
         artY: 105,
-        artScale: 0.5,
+        artScale: 0.061,
         artAngle: -2,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2838,7 +2838,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     rich_mf: createMiniDisplay({
         artX: 118,
         artY: 105,
-        artScale: 0.5,
+        artScale: 0.328,
         artAngle: -5,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2848,7 +2848,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     jester_in_the_box: createMiniDisplay({
         artX: 118,
         artY: 105,
-        artScale: 0.5,
+        artScale: 0.069,
         artAngle: 2,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
@@ -2858,8 +2858,18 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     rebellious_umbrella: createMiniDisplay({
         artX: 118,
         artY: 105,
-        artScale: 0.5,
+        artScale: 0.061,
         artAngle: -3,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    security_camera_bot: createMiniDisplay({
+        artX: 118,
+        artY: 105,
+        artScale: 0.061,
+        artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
         codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
@@ -2908,7 +2918,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     track_and_discus_robot: createMiniDisplay({
         artX: 118,
         artY: 105,
-        artScale: 0.5,
+        artScale: 0.050,
         artAngle: -4,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
