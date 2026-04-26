@@ -1654,6 +1654,74 @@ function createSparkInstabilityFault(gearPuzzleOption, randomFn = Math.random) {
     };
 }
 
+// Map of GEAR_CODES → flipped equivalents for board mirror transforms.
+// Source/sink/wall/empty/full/rusted/movable_wall are symmetric and
+// don't change under reflection. The two straight pipes also stay put
+// because they're aligned with the mirror axis. Only the four corner
+// pieces need to swap with their mirrored siblings.
+const GEAR_FLIP_H_MAP = Object.freeze({
+    [GEAR_CODES.CURVE_NE]: GEAR_CODES.CURVE_NW,
+    [GEAR_CODES.CURVE_NW]: GEAR_CODES.CURVE_NE,
+    [GEAR_CODES.CURVE_SE]: GEAR_CODES.CURVE_SW,
+    [GEAR_CODES.CURVE_SW]: GEAR_CODES.CURVE_SE,
+});
+const GEAR_FLIP_V_MAP = Object.freeze({
+    [GEAR_CODES.CURVE_NE]: GEAR_CODES.CURVE_SE,
+    [GEAR_CODES.CURVE_SE]: GEAR_CODES.CURVE_NE,
+    [GEAR_CODES.CURVE_NW]: GEAR_CODES.CURVE_SW,
+    [GEAR_CODES.CURVE_SW]: GEAR_CODES.CURVE_NW,
+});
+
+function flipGearCellCode(code, flipH, flipV) {
+    let next = code;
+    if (flipH) next = GEAR_FLIP_H_MAP[next] ?? next;
+    if (flipV) next = GEAR_FLIP_V_MAP[next] ?? next;
+    return next;
+}
+
+// Mirrors the board + piece coordinates so the same authored layout can
+// reappear as 4 visually distinct puzzles (identity / flip-H / flip-V /
+// flip-both). Any curve gear codes embedded in the board or pieces are
+// remapped to their mirrored siblings so the connection topology is
+// preserved.
+function transformGearOption(gearPuzzleOption, transformKey, randomFn = Math.random) {
+    if (!gearPuzzleOption?.board) return gearPuzzleOption;
+    const flipH = transformKey === 'flipH' || transformKey === 'flipBoth';
+    const flipV = transformKey === 'flipV' || transformKey === 'flipBoth';
+    if (!flipH && !flipV) return gearPuzzleOption;
+
+    const rowCount = gearPuzzleOption.board.length;
+    const colCount = gearPuzzleOption.board[0]?.length || 0;
+
+    const board = gearPuzzleOption.board.map((row, rowIndex) => row.map((cell, colIndex) => {
+        const sourceRow = flipV ? (rowCount - 1 - rowIndex) : rowIndex;
+        const sourceCol = flipH ? (colCount - 1 - colIndex) : colIndex;
+        const sourceCell = gearPuzzleOption.board[sourceRow][sourceCol];
+        return flipGearCellCode(sourceCell, flipH, flipV);
+    }));
+
+    const pieces = (gearPuzzleOption.pieces || []).map((piece) => ({
+        ...piece,
+        row: flipV ? (rowCount - 1 - piece.row) : piece.row,
+        col: flipH ? (colCount - 1 - piece.col) : piece.col,
+        type: flipGearCellCode(piece.type, flipH, flipV),
+    }));
+
+    return {
+        ...gearPuzzleOption,
+        board,
+        pieces,
+    };
+}
+
+function pickGearTransformKey(randomFn = Math.random) {
+    const roll = randomFn();
+    if (roll < 0.25) return 'identity';
+    if (roll < 0.50) return 'flipH';
+    if (roll < 0.75) return 'flipV';
+    return 'flipBoth';
+}
+
 function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.random) {
     if (!gearPuzzleOption) return null;
 
@@ -7325,7 +7393,11 @@ export function createMachineVariant(options = {}) {
         return rustFreePool.length > 0 ? rustFreePool : possibleGears;
     })();
     let selectedGearPuzzle = applyGearStageToOption(
-        cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
+        transformGearOption(
+            cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
+            pickGearTransformKey(randomFn),
+            randomFn,
+        ),
         targetPeriod ?? 1,
         randomFn,
     );
