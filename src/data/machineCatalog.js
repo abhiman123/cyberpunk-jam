@@ -2925,6 +2925,16 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
         gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
     }),
+    spider_bot: createMiniDisplay({
+        artX: 118,
+        artY: 115,
+        artScale: 0.17,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
 });
 
 const createMachineDefinition = ({
@@ -3730,7 +3740,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         yesDialogue: 'Sector reserved. I fill the gaps you avoid.',
         noDialogue: 'Then you will keep finding my work where you least expect it.',
         communicationChance: 0.72,
-        canvasScale: 0.5,
+        canvasScale: 0.8,
         dossier: {
             unitDesignation: 'SP-0081',
             classification: 'Perimeter Crawling / Environmental Infiltration',
