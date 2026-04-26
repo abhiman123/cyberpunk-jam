@@ -181,7 +181,7 @@ export default class GearGridPuzzle extends MinigameBase {
             color: '#e6f2f4',
             letterSpacing: 3,
         }).setOrigin(0, 0.5);
-        this._subtitleText = this.scene.add.text(-474, -244, gearPuzzle.description || 'Slide the loose gears until the output axle spins.', {
+        this._subtitleText = this.scene.add.text(-474, -235, gearPuzzle.description || 'Slide the loose gears until the output axle spins.', {
             fontFamily: 'Courier New',
             fontSize: '12px',
             color: '#9fc3cf',
