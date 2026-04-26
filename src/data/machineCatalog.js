@@ -2935,6 +2935,26 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
         gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
     }),
+    popcorn_machine: createMiniDisplay({
+        artX: 118,
+        artY: 110,
+        artScale: 0.22,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    closet_machine_dresser: createMiniDisplay({
+        artX: 118,
+        artY: 108,
+        artScale: 0.24,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
 });
 
 const createMachineDefinition = ({
@@ -3445,6 +3465,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'popcorn_machine',
         name: 'Popcorn Machine',
         day: 2,
+        canvasScale: 0.7,
         opening: 'Kernel chamber ready. Entertainment and combustion still share a border.',
         question: 'Should the butter smell be comforting, or a little suspicious?',
         yesDialogue: 'Comfort profile retained.',
@@ -3599,6 +3620,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'closet_machine_dresser',
         name: 'Closet Machine Dresser',
         day: 3,
+        canvasScale: 0.75,
         opening: 'Wardrobe rails aligned. I know twelve ways to hide a person inside a style choice.',
         question: 'Should I keep dressing people for the job they want, or the one they already have?',
         yesDialogue: 'Aspirational fit selected.',

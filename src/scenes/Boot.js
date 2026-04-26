@@ -74,6 +74,8 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_jester_in_the_box_source',       'furby.png');
         this.load.image('spider_bot_source',                       'Spider_pack.png');
         this.load.image('coffee_machine_source',                    'coffeeMachine.png');
+        this.load.image('popcorn_machine_source',                   'Poper.png');
+        this.load.image('terrified_hanger_source',                  'TerrifiedHanger.png');
 
         // Pixel art backgrounds
         this.load.image('bg_inspectview', 'inspectview.jpeg');
@@ -115,6 +117,10 @@ export default class BootScene extends Phaser.Scene {
         this._createCroppedUpscaledTexture('spider_bot_source', 'machine_spider_bot', 4, { sx: 136, sy: 105, sw: 81, sh: 59 });
         // coffeeMachine.png: content at (146,95) 33×60 in 320×195 canvas — 3× to match brewer placeholder proportions
         this._createCroppedUpscaledTexture('coffee_machine_source', 'machine_breakroom_brewer', 3, { sx: 146, sy: 95, sw: 33, sh: 60 });
+        // Poper.png: content at (143,86) 59×76 in 320×195 canvas — 4× for crisp pixel art
+        this._createCroppedUpscaledTexture('popcorn_machine_source', 'machine_popcorn_machine', 4, { sx: 143, sy: 86, sw: 59, sh: 76 });
+        // TerrifiedHanger.png: content at (141,81) 55×51 in 320×195 canvas — 4× for crisp pixel art
+        this._createCroppedUpscaledTexture('terrified_hanger_source', 'machine_closet_machine_dresser', 4, { sx: 141, sy: 81, sw: 55, sh: 51 });
 
         // Portraits — cropped so the face centers correctly on screen (no transparent offset).
         // satisfiedRICHBOSSDUDEIDFK: content at (67,34) 393×592 in 500×629 (26% transparent)
