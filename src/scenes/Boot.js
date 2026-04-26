@@ -86,21 +86,30 @@ export default class BootScene extends Phaser.Scene {
     }
 
     _createNewMachineSpritesFromSource() {
-        // Register textures under the keys resolveMachineTexture() looks up
-        // (machine_<id>) so they automatically replace the procedural
-        // placeholders. Source PNGs are already at intended display resolution,
-        // so use 1x upscale (NEAREST filter still applied).
-        this._createNearestUpscaledTexture('machine_rich_mf_source',              'machine_rich_mf',              1);
-        this._createNearestUpscaledTexture('machine_lifeguard_robot_source',      'machine_lifeguard_robot',      1);
-        this._createNearestUpscaledTexture('machine_mechanic_broom_source',       'machine_mechanic_broom',       1);
-        this._createNearestUpscaledTexture('machine_rebellious_umbrella_source',  'machine_rebellious_umbrella',  1);
-        this._createNearestUpscaledTexture('machine_security_camera_bot_source',  'machine_security_camera_bot',  1);
-        this._createNearestUpscaledTexture('umbrella_open_source',                'umbrella_open',                1);
-        this._createNearestUpscaledTexture('rich_mf_portrait_satisfied_source',   'rich_mf_portrait_satisfied',   1);
-        this._createNearestUpscaledTexture('rich_mf_portrait_sick_source',        'rich_mf_portrait_sick',        1);
-        this._createNearestUpscaledTexture('machine_cry_baby_source',             'machine_cry_baby',             1);
-        this._createNearestUpscaledTexture('cry_baby_portrait_source',            'cry_baby_portrait',            1);
+        // Machine body sprites — cropped to non-transparent content so canvasScale
+        // applies to actual pixels only (not transparent padding).
+
+        // Sprite_rich.png: content at (87,2) 114×193 in 320×195 canvas (64% transparent)
+        this._createCroppedUpscaledTexture('machine_rich_mf_source',             'machine_rich_mf',              1, { sx: 87,  sy: 2,  sw: 114, sh: 193 });
+        // lifeguard.png: content at (106,30) 105×147 in 320×195 canvas (75% transparent)
+        this._createCroppedUpscaledTexture('machine_lifeguard_robot_source',     'machine_lifeguard_robot',      1, { sx: 106, sy: 30, sw: 105, sh: 147 });
+        // Moptopus.png: content at (140,70) 58×96 in 320×195 canvas (75% transparent) — 4× for crisp 2px-per-source-pixel display
+        this._createCroppedUpscaledTexture('machine_mechanic_broom_source',      'machine_mechanic_broom',       4, { sx: 140, sy: 70, sw: 58,  sh: 96  });
+
+        // Tall sprites are nearly full-bleed (<15% transparent), load as-is.
+        this._createNearestUpscaledTexture('machine_rebellious_umbrella_source', 'machine_rebellious_umbrella',  1);
+        this._createNearestUpscaledTexture('machine_security_camera_bot_source', 'machine_security_camera_bot',  1);
+        this._createNearestUpscaledTexture('umbrella_open_source',               'umbrella_open',                1);
+        this._createNearestUpscaledTexture('machine_cry_baby_source',            'machine_cry_baby',             1);
         this._createNearestUpscaledTexture('machine_jester_in_the_box_source',   'machine_jester_in_the_box',    1);
+
+        // Portraits — cropped so the face centers correctly on screen (no transparent offset).
+        // satisfiedRICHBOSSDUDEIDFK: content at (67,34) 393×592 in 500×629 (26% transparent)
+        this._createCroppedUpscaledTexture('rich_mf_portrait_satisfied_source',  'rich_mf_portrait_satisfied',   1, { sx: 67,  sy: 34, sw: 393, sh: 592 });
+        // hesickofyobullshitRICHBOSSDUDEIDFK: content at (54,11) 439×654 in 500×676 (15% transparent)
+        this._createCroppedUpscaledTexture('rich_mf_portrait_sick_source',       'rich_mf_portrait_sick',        1, { sx: 54,  sy: 11, sw: 439, sh: 654 });
+        // sadCB: content at (79,28) 314×531 in 500×587 (43% transparent)
+        this._createCroppedUpscaledTexture('cry_baby_portrait_source',           'cry_baby_portrait',            1, { sx: 79,  sy: 28, sw: 314, sh: 531 });
     }
 
     _createMainBackgroundFromSource() {
