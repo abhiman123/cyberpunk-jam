@@ -7002,15 +7002,12 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
-        const arrivalConveyorSound = this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.conveyor, loop: true });
-
         this._unitMoveTween = this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorTargetX,
             duration: tweenDurationMs,
             ease: 'Linear',
             onComplete: () => {
-                arrivalConveyorSound?.stop();
                 this._unitMoveTween = null;
                 this._actionLocked = false;
                 this._refreshFactoryActionButtons?.();
@@ -7120,8 +7117,6 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
-        const exitConveyorSound = this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.conveyor, loop: true });
-
         this._unitExitTween = this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorExitX,
@@ -7129,7 +7124,6 @@ export default class GameScene extends Phaser.Scene {
             ease: 'Linear',
             onComplete: () => {
                 this._unitExitTween = null;
-                exitConveyorSound?.stop();
                 onComplete?.();
             },
         });
