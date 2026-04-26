@@ -93,7 +93,6 @@ export default class GameScene extends Phaser.Scene {
         this._commTypingEvent = null;
         this._commSequenceEvent = null;
         this._unitMoveTween = null;
-        this._unitExitTween = null;
         this._activeMusicKey = null;
         this._pendingExitAction = null;
         this._pendingUnsafeAcceptConfirmation = false;
@@ -111,6 +110,7 @@ export default class GameScene extends Phaser.Scene {
         this._phoneUnreadNotifications = 0;
         this._phoneNotificationSerial = 0;
         this._phoneNotifications = [];
+        this._managerCallSound = null;
         this._openingCallSequenceId = 0;
         this._openingCallChoiceResolver = null;
         this._sequenceDebugCounter = 0;
@@ -152,12 +152,6 @@ export default class GameScene extends Phaser.Scene {
 
         this._caseSM = new StateMachine('intake');
 
-        if (window.WavedashJS) {
-                window.WavedashJS.init();
-            }
-
-        this._caseSM = new StateMachine('intake');
-
         const fx = applyCyberpunkLook(this);
         this._cmFilter = fx.cmFilter;
 
@@ -194,6 +188,7 @@ export default class GameScene extends Phaser.Scene {
 
         this.events.on('shutdown', () => {
             this._clearPhoneTyping();
+            this._stopManagerCallAudio();
             this._openingCallSequenceId += 1;
             this._openingCallChoiceResolver = null;
             this._nextCaseEvent?.remove(false);
@@ -1810,16 +1805,16 @@ export default class GameScene extends Phaser.Scene {
         });
         // Bigger body text to fill the dialogue board — was 14px and left
         // the bottom half of the screen blank during short prompts.
-        this._phoneBodyText = this.add.text(34, 54, '', {
+        this._phoneBodyText = this.add.text(28, 50, '', {
             fontFamily: 'Arial', fontSize: '17px', color: '#101010',
-            wordWrap: { width: 224 }, lineSpacing: 6,
+            wordWrap: { width: 258 }, lineSpacing: 6,
         });
         this._phoneStatusText = this.add.text(32, 146, 'CHANNEL IDLE', {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
             wordWrap: { width: 172 },
         });
 
-        this._phoneBodyViewport = { x: 34, y: 52, width: 224, height: 88 };
+        this._phoneBodyViewport = { x: 28, y: 48, width: 258, height: 96 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
 
@@ -2739,7 +2734,6 @@ export default class GameScene extends Phaser.Scene {
             let typingDone = false;
             let voiceDone = false;
             const shouldPointAtRulebook = GameState.day === 1
-                && String(line?.id || '').toLowerCase() === 'line3'
                 && /see this\?/i.test(String(line?.text || ''));
 
             const finishLine = () => {
@@ -2819,6 +2813,7 @@ export default class GameScene extends Phaser.Scene {
         this._phoneChoicePhase = 'voice';
         this._setPhoneButtonsActive(false);
         this._showPhonePanel(FIRST_SHIFT_INTRO.incomingHeader, '', 'VOICE CONNECTED', 'chat');
+        this._startManagerCallAudio();
 
         for (const line of callConfig.script.intro) {
             if (sequenceId !== this._openingCallSequenceId) return;
@@ -2844,6 +2839,26 @@ export default class GameScene extends Phaser.Scene {
         if (sequenceId !== this._openingCallSequenceId) return;
         this._phoneChoicePhase = 'voice';
         this._awaitPhoneDismiss(true);
+    }
+
+    _startManagerCallAudio() {
+        if (GameState.day > 2 || this._managerCallSound) return;
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0) return;
+
+        this._managerCallSound = this._playOneShot(SOUND_ASSETS.managerCall, {
+            volume: 0.72 * musicVolume,
+        });
+        this._managerCallSound?.once?.('complete', () => {
+            this._managerCallSound = null;
+        });
+    }
+
+    _stopManagerCallAudio() {
+        if (!this._managerCallSound) return;
+        this._managerCallSound.stop();
+        this._managerCallSound.destroy();
+        this._managerCallSound = null;
     }
 
     _typePhoneMessage(text, {
@@ -4629,6 +4644,7 @@ export default class GameScene extends Phaser.Scene {
     _dismissPhoneGate(options = {}) {
         const immediateFirstCase = options.immediateFirstCase !== false;
         const wasTextBrief = this._phoneChoicePhase === 'incoming-brief';
+        this._stopManagerCallAudio();
         this._openingCallSequenceId += 1;
         this._openingCallChoiceResolver = null;
         this._setRulebookTutorialLineActive(false);
@@ -5288,6 +5304,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._clearUnsafeAcceptConfirmation();
         this._currentMachineVariant._uiPuzzleOpened = true;
+        this._startPuzzleTiming('grid', this._currentMachineVariant, this._isNormalTimingEligible(this._currentMachineVariant));
         this._updateConveyorDecisionHint();
         this._refreshFactoryActionButtons();
         this._machinePuzzleOverlay.open(this._currentMachineVariant);
@@ -5454,6 +5471,7 @@ export default class GameScene extends Phaser.Scene {
         if (this._currentMachineVariant && machineVariant !== this._currentMachineVariant) return;
 
         const evaluation = puzzleState.getEvaluation?.() || { solved: false };
+        this._finishPuzzleTiming('grid', machineVariant, Boolean(evaluation.solved));
         const repairState = this._getUmbrellaRepairState(machineVariant);
         if (repairState?.specialCircuitMode && !repairState.insertedSpecialCircuits?.any) {
             this._beginUmbrellaSpecialCircuitCheck();
@@ -5986,6 +6004,7 @@ export default class GameScene extends Phaser.Scene {
         this._debugPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
+        this._startPuzzleTiming('flow', this._currentMachineVariant, this._isNormalTimingEligible(this._currentMachineVariant));
         this._otherPuzzleOverlay.show({
             circuit: this._currentMachineVariant.flowPuzzle,
             evidence: this._getMachineFlowState(this._currentMachineVariant),
@@ -6004,6 +6023,7 @@ export default class GameScene extends Phaser.Scene {
         this._otherPuzzleReturnPhoneState = null;
         this._otherPuzzleReturnVoiceBroken = false;
         this._currentMachineVariant._uiOtherPuzzleEvidence = evidence || null;
+        this._finishPuzzleTiming('flow', this._currentMachineVariant, Boolean(evidence?.completed));
         if (this._currentMachineVariant.flowPuzzle && evidence) {
             this._currentMachineVariant.flowPuzzle.progress = evidence;
         }
@@ -6184,6 +6204,7 @@ export default class GameScene extends Phaser.Scene {
         this._debugPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
+        this._startPuzzleTiming('gear', this._currentMachineVariant, this._isNormalTimingEligible(this._currentMachineVariant));
         this._gearPuzzleOverlay.show({
             gearPuzzle: this._currentMachineVariant.gearPuzzle,
             evidence: this._getMachineGearState(this._currentMachineVariant),
@@ -6200,6 +6221,7 @@ export default class GameScene extends Phaser.Scene {
         const returnPhoneState = this._gearPuzzleReturnPhoneState;
         this._gearPuzzleReturnPhoneState = null;
         this._currentMachineVariant._uiGearPuzzleEvidence = evidence || null;
+        this._finishPuzzleTiming('gear', this._currentMachineVariant, Boolean(evidence?.completed));
         if (this._currentMachineVariant.gearPuzzle && evidence) {
             this._currentMachineVariant.gearPuzzle.progress = evidence;
         }
@@ -6269,6 +6291,7 @@ export default class GameScene extends Phaser.Scene {
         this._gearPuzzleOverlay?.hide();
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
+        this._startPuzzleTiming('code', this._currentMachineVariant, this._isNormalTimingEligible(this._currentMachineVariant));
         this._debugPuzzleOverlay.show({
             machineName: this._currentMachineVariant.name,
             debugPuzzle: this._currentMachineVariant.debugPuzzle,
@@ -6286,6 +6309,7 @@ export default class GameScene extends Phaser.Scene {
         const returnPhoneState = this._debugPuzzleReturnPhoneState;
         this._debugPuzzleReturnPhoneState = null;
         this._currentMachineVariant._uiDebugPuzzleEvidence = evidence || null;
+        this._finishPuzzleTiming('code', this._currentMachineVariant, Boolean(evidence?.completed));
         if (this._currentMachineVariant.debugPuzzle && evidence) {
             this._currentMachineVariant.debugPuzzle.progress = evidence;
         }
@@ -6727,6 +6751,29 @@ export default class GameScene extends Phaser.Scene {
         return SOUND_ASSETS.scrapDecision;
     }
 
+    _isNormalTimingEligible(machineVariant) {
+        if (!machineVariant) return false;
+        return !machineVariant.specialBehavior;
+    }
+
+    _getPuzzleTimingContextKey(type, machineVariant) {
+        const caseId = this._currentCase?.id ?? 'no_case';
+        const machineId = machineVariant?.machineId ?? machineVariant?.name ?? 'unknown_machine';
+        return `${type}:${GameState.day}:${caseId}:${machineId}`;
+    }
+
+    _startPuzzleTiming(type, machineVariant, eligible = true) {
+        if (!eligible || !machineVariant) return;
+        const contextKey = this._getPuzzleTimingContextKey(type, machineVariant);
+        GameState.startPuzzleTimer(type, contextKey);
+    }
+
+    _finishPuzzleTiming(type, machineVariant, completed = false) {
+        if (!machineVariant) return;
+        const contextKey = this._getPuzzleTimingContextKey(type, machineVariant);
+        GameState.finishPuzzleTimer(type, contextKey, { completed });
+    }
+
     _showFeedback(msg, color) {
         this.tweens.killTweensOf(this._feedbackText);
         this._feedbackText.setText(msg).setColor(color).setAlpha(1);
@@ -6959,7 +7006,7 @@ export default class GameScene extends Phaser.Scene {
 
         this._unitContainer.setVisible(true);
         this._unitContainer.x = MACHINE_PRESENTATION.conveyorEntryX;
-        this._unitContainer.y = 490;
+        this._unitContainer.y = 490 + this._getCurrentMachineConveyorOffsetY();
         this._unitContainer.setAngle(0);
         this._unitContainer.setAlpha(1);
         this._unitContainer.setDepth(15);
@@ -6978,8 +7025,6 @@ export default class GameScene extends Phaser.Scene {
         const arrivingMachineVariant = this._currentMachineVariant;
         const arrivingCase = this._currentCase;
 
-        this._unitExitTween?.stop();
-        this._unitExitTween = null;
         this._unitMoveTween?.stop();
         this._unitMoveTween = null;
         this._conveyorAnimTween?.stop();
@@ -7002,12 +7047,15 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
+        const arrivalConveyorSound = this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.conveyor, loop: true });
+
         this._unitMoveTween = this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorTargetX,
             duration: tweenDurationMs,
             ease: 'Linear',
             onComplete: () => {
+                arrivalConveyorSound?.stop();
                 this._unitMoveTween = null;
                 this._actionLocked = false;
                 this._refreshFactoryActionButtons?.();
@@ -7105,24 +7153,27 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorExitX - this._unitContainer.x);
+        const exitDurationMs = Math.max(200, Math.round((travelDistance / MACHINE_PRESENTATION.conveyorSpeedPxPerSecond) * 1000));
         const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
         if (conveyorLayers.length > 0) {
             this._conveyorAnimTween?.stop();
             this._conveyorAnimTween = this.tweens.add({
                 targets: conveyorLayers,
                 tilePositionX: `+=${travelDistance}`,
-                duration: 500,
+                duration: exitDurationMs,
                 ease: 'Linear',
             });
         }
 
-        this._unitExitTween = this.tweens.add({
+        const exitConveyorSound = this._playOneShot(SOUND_ASSETS.conveyorBelt, { volume: SOUND_VOLUMES.conveyor, loop: true });
+
+        this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorExitX,
-            duration: 500,
+            duration: exitDurationMs,
             ease: 'Linear',
             onComplete: () => {
-                this._unitExitTween = null;
+                exitConveyorSound?.stop();
                 onComplete?.();
             },
         });
@@ -7204,17 +7255,29 @@ export default class GameScene extends Phaser.Scene {
                 this._queueIndex = 0;
                 this._pendingKonamiFinalCase = null;
                 this._scheduleNextCase(700);
-                return;
             }
-
-            this._queueIndex++;
-            this._emitSequenceDebug('advance case scheduled', {
-                nextQueueIndex: this._queueIndex,
-                scheduledCasesRemaining: Math.max(0, (this._queue?.length || 0) - this._queueIndex),
-                machineQueueLength: this._machineQueue?.length || 0,
-            });
-            this._scheduleNextCase(700);
         });
+
+        if (finalCaseTriggered) {
+            return;
+        }
+
+        if (shiftShouldEnd) {
+            return;
+        }
+
+        if (hasPendingKonamiFinale) {
+            return;
+        }
+
+        this._queueIndex++;
+        this._emitSequenceDebug('advance case scheduled', {
+            nextQueueIndex: this._queueIndex,
+            scheduledCasesRemaining: Math.max(0, (this._queue?.length || 0) - this._queueIndex),
+            machineQueueLength: this._machineQueue?.length || 0,
+        });
+
+        this._scheduleNextCase(700);
     }
 
     // ── Shift end ─────────────────────────────────────────────────────────────
@@ -7336,6 +7399,14 @@ export default class GameScene extends Phaser.Scene {
 
     _applyMusicSettingChange() {
         const targetVolume = this._getConfiguredMusicVolume();
+        if (this._managerCallSound) {
+            const managerCallVolume = 0.72 * getMusicVolume();
+            this.tweens.add({
+                targets: this._managerCallSound,
+                volume: managerCallVolume,
+                duration: 260,
+            });
+        }
         if (!this._activeMusicKey) return;
 
         if (targetVolume <= 0) {
@@ -7404,6 +7475,14 @@ export default class GameScene extends Phaser.Scene {
         }
         targetImage.setTexture(textureKey);
         targetImage.setScale(scale);
+    }
+
+    _getCurrentMachineConveyorOffsetY(machineVariant = this._currentMachineVariant) {
+        const offsets = {
+            lifeguard_robot: 18,
+            trash_picker_upper: 16,
+        };
+        return offsets[machineVariant?.machineId] || 0;
     }
 
     _updateMachinePortraits() {

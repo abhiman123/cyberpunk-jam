@@ -17,6 +17,14 @@ export const GameState = {
     jesterDeal: null,
     umbrellaQuest: null,
     debriefReport: null,
+    puzzleTimingBuckets: {
+        grid: [],
+        flow: [],
+        gear: [],
+        code: [],
+    },
+    activePuzzleTimingStarts: {},
+    completedPuzzleTimingKeys: {},
 
     get period() {
         return this.getDirectiveDay();
@@ -216,6 +224,38 @@ export const GameState = {
         return 'replacement';
     },
 
+    startPuzzleTimer(type, contextKey) {
+        if (!type || !contextKey) return;
+        if (!this.puzzleTimingBuckets[type]) return;
+        if (this.completedPuzzleTimingKeys[contextKey]) return;
+        if (this.activePuzzleTimingStarts[contextKey]) return;
+        this.activePuzzleTimingStarts[contextKey] = Date.now();
+    },
+
+    finishPuzzleTimer(type, contextKey, { completed = false } = {}) {
+        if (!type || !contextKey) return;
+        if (!this.puzzleTimingBuckets[type]) return;
+        const startedAt = this.activePuzzleTimingStarts[contextKey];
+        delete this.activePuzzleTimingStarts[contextKey];
+        if (!completed || !startedAt || this.completedPuzzleTimingKeys[contextKey]) return;
+
+        const elapsedMs = Math.max(0, Date.now() - startedAt);
+        this.puzzleTimingBuckets[type].push(elapsedMs);
+        this.completedPuzzleTimingKeys[contextKey] = true;
+    },
+
+    getPuzzleTimingStats(type) {
+        const bucket = this.puzzleTimingBuckets?.[type];
+        if (!Array.isArray(bucket) || bucket.length <= 0) {
+            return { count: 0, averageMs: 0 };
+        }
+        const totalMs = bucket.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+        return {
+            count: bucket.length,
+            averageMs: totalMs / bucket.length,
+        };
+    },
+
     removeSpecialItem(itemId) {
         const existingIndex = this.specialItems.findIndex((item) => item.id === itemId);
         if (existingIndex < 0) return null;
@@ -251,5 +291,13 @@ export const GameState = {
         this.jesterDeal = null;
         this.umbrellaQuest = null;
         this.debriefReport = null;
+        this.puzzleTimingBuckets = {
+            grid: [],
+            flow: [],
+            gear: [],
+            code: [],
+        };
+        this.activePuzzleTimingStarts = {};
+        this.completedPuzzleTimingKeys = {};
     }
 };

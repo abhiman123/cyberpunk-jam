@@ -5,6 +5,11 @@ const createSoundAsset = (subfolder, key, fileName) => ({
     fileName,
     path: `${SOUND_FOLDER}/${subfolder}/${fileName}`,
 });
+const createRootSoundAsset = (key, fileName) => ({
+    key,
+    fileName,
+    path: fileName,
+});
 
 const MACHINE_DIALOGUE_SOUND_IDS = Object.freeze([
     'assembler_alpha',
@@ -100,6 +105,8 @@ export const SOUND_ASSETS = Object.freeze({
     phoneIntroYesLine6: createSoundAsset('voice', 'phone_intro_yes_line_6', 'phone_intro_yes_line_6.wav'),
     phoneIntroNoLine3: createSoundAsset('voice', 'phone_intro_no_line_3', 'phone_intro_no_line_3.wav'),
     phoneIntroNoLine4: createSoundAsset('voice', 'phone_intro_no_line_4', 'phone_intro_no_line_4.wav'),
+    managerCall: createRootSoundAsset('manager_call', 'ManagerCall.mp3'),
+    endingThemeEdited: createRootSoundAsset('ending_theme_edited', 'EndingThemeEdited.mp3'),
     ...createMachineDialogueSoundAssets(MACHINE_DIALOGUE_SOUND_IDS),
 });
 
@@ -130,6 +137,8 @@ const SOUND_ASSETS_ON_DISK = new Set([
     'phoneIntroYesLine6',
     'phoneIntroNoLine3',
     'phoneIntroNoLine4',
+    'managerCall',
+    'endingThemeEdited',
     ...MACHINE_DIALOGUE_SOUND_IDS.map((id) => `machineVoice_${id}`),
 ]);
 
@@ -214,17 +223,21 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
             postVoiceBody: 'Day 1 loaded. Tap either button to continue.',
             intro: [
                 createIntroSequenceLine('line1', 'Hey, welcome back. Another day, another penny, am I right?', SOUND_ASSETS.phoneIntroLine1),
-                createIntroSequenceLine('line2', '...You remember the job, right? First day is simple. If a subsystem is obviously unsalvageable, you scrap it.', SOUND_ASSETS.phoneIntroLine2),
+                createIntroSequenceLine('line2', '...You remember the job, right?', SOUND_ASSETS.phoneIntroLine2),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Alright, sweetie, because I do not.', SOUND_ASSETS.phoneIntroNoLine3),
-                createIntroSequenceLine('line4', 'Day one is just repair versus obvious scrap. Do not invent extra paperwork for yourself.', SOUND_ASSETS.phoneIntroNoLine4),
+                createIntroSequenceLine('line3', "Alright, sweet, cuz I don't.", SOUND_ASSETS.phoneIntroNoLine3),
+                createIntroSequenceLine('line4', "See this? That's your rulebook. Company updates it whenever they feel like it.", SOUND_ASSETS.phoneIntroYesLine3),
+                createIntroSequenceLine('line5', "Machines roll in on the belt, some are fine, some arent. You've got three options, if it follows the rules? Easy money. Accept it. Otherwise, if its fixable, like busted circuits or bad wiring, patch it up. If doesnt meet rules, scrap it.", SOUND_ASSETS.phoneIntroYesLine4),
+                createIntroSequenceLine('line6', 'You get paid per correct call. Mess it up: quality control docks your pay. Oh, and if something looks wrong? It probably is. so dont over think it..', SOUND_ASSETS.phoneIntroYesLine5),
+                createIntroSequenceLine('line7', 'Good luck. Shift ends at 12.', SOUND_ASSETS.phoneIntroYesLine6),
             ],
             no: [
-                createIntroSequenceLine('line3', 'Alright, see this? The rulebook only cares about one thing today: can the subsystem even be saved.', SOUND_ASSETS.phoneIntroYesLine3),
-                createIntroSequenceLine('line4', 'If the gear is cracked, the wire route is severed, or the board has an orphan cell, you scrap it. Programming jobs should run clean on day one if they are repairable at all.', SOUND_ASSETS.phoneIntroYesLine4),
-                createIntroSequenceLine('line5', 'If it is broken but still repairable, you solve the puzzle and file the unit clean. Today is about learning the work, not chasing output drift.', SOUND_ASSETS.phoneIntroYesLine5),
-                createIntroSequenceLine('line6', 'Good luck. Shift ends at noon.', SOUND_ASSETS.phoneIntroYesLine6),
+                createIntroSequenceLine('line3', 'Alright, listen up.', SOUND_ASSETS.phoneIntroNoLine4),
+                createIntroSequenceLine('line4', "See this? That's your rulebook. Company updates it whenever they feel like it.", SOUND_ASSETS.phoneIntroYesLine3),
+                createIntroSequenceLine('line5', "Machines roll in on the belt, some are fine, some arent. You've got three options, if it follows the rules? Easy money. Accept it. Otherwise, if its fixable, like busted circuits or bad wiring, patch it up. If doesnt meet rules, scrap it.", SOUND_ASSETS.phoneIntroYesLine4),
+                createIntroSequenceLine('line6', 'You get paid per correct call. Mess it up: quality control docks your pay. Oh, and if something looks wrong? It probably is. so dont over think it..', SOUND_ASSETS.phoneIntroYesLine5),
+                createIntroSequenceLine('line7', 'Good luck. Shift ends at 12.', SOUND_ASSETS.phoneIntroYesLine6),
             ],
         }),
         '2-1': createIntroSequence({

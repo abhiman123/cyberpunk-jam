@@ -1,19 +1,11 @@
 import * as Phaser from 'phaser';
 import { SOUND_MANIFEST } from '../constants/gameConstants.js';
 import { MACHINE_SPRITE_MANIFEST } from '../data/machineCatalog.js';
-import { WavedashSDK } from "@wvdsh/sdk-js";
-
 
 export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
 
     preload() {
-        if (window.Wavedash) {
-            this.load.on('progress', (value) => {
-                // Update the Wavedash shell loading bar
-                window.Wavedash.updateLoadProgressZeroToOne(value);
-            });
-        }
         // Loading bar
         const barBg = this.add.rectangle(640, 360, 400, 20, 0x222222);
         const bar   = this.add.rectangle(440, 360, 0, 16, 0x00ccff);
@@ -66,8 +58,8 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_rich_mf_source',                 'Sprite_rich.png');
         this.load.image('rich_mf_portrait_satisfied_source',      'satisfiedRICHBOSSDUDEIDFK.png');
         this.load.image('rich_mf_portrait_sick_source',           'hesickofyobullshitRICHBOSSDUDEIDFK.png');
-        this.load.image('machine_rebellious_umbrella_source',     'umbrella_character.png');
-        this.load.image('umbrella_open_source',                   'umbrella_character.png');
+        this.load.image('machine_rebellious_umbrella_source',     'freakassumbrella.png');
+        this.load.image('umbrella_open_source',                   'openumbrella.png');
         this.load.image('machine_lifeguard_robot_source',         'lifeguard.png');
         this.load.image('machine_security_camera_bot_source',     'camerabot.png');
         this.load.image('machine_mechanic_broom_source',          'Moptopus.png');
@@ -97,12 +89,6 @@ export default class BootScene extends Phaser.Scene {
         this._createTrapdoorFramesFromSource();
         this._createNewMachineSpritesFromSource();
         this._generatePlaceholders();
-
-        if (window.Wavedash) {
-            // This dismisses the Wavedash loading screen
-            window.Wavedash.init(); 
-        }
-
         this.scene.start('Title');
     }
 
