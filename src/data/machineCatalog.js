@@ -1440,6 +1440,73 @@ function collectGearInspectionCandidates(gearPuzzleOption) {
     return candidates;
 }
 
+function isCandidateMovableGearPiece(piece) {
+    if (!piece || piece.movable === false) return false;
+    if (piece.role === 'deadlock-clamp' || piece.role === 'decoy') return false;
+    if (piece.type === GEAR_CODES.SOURCE || piece.type === GEAR_CODES.SINK) return false;
+    if (piece.type === GEAR_CODES.RUSTED) return false;
+    return isGearType(piece.type);
+}
+
+function findOpenGearCells(board, pieces) {
+    const occupied = new Set((pieces || []).map((piece) => `${piece.row}:${piece.col}`));
+    const cells = [];
+    for (let rowIndex = 0; rowIndex < (board?.length || 0); rowIndex += 1) {
+        for (let colIndex = 0; colIndex < (board[rowIndex]?.length || 0); colIndex += 1) {
+            if (board[rowIndex][colIndex] !== GEAR_CODES.EMPTY) continue;
+            if (occupied.has(`${rowIndex}:${colIndex}`)) continue;
+            cells.push({ row: rowIndex, col: colIndex });
+        }
+    }
+    return cells;
+}
+
+// Shuffle the movable, player-installable gear pieces among candidate cells
+// so the puzzle never spawns pre-solved. We derange their target positions
+// when there are 2+ candidates, or displace the lone candidate to an empty
+// cell when there's only one. Source/sink/rust/decoy/clamp pieces are left
+// where the puzzle author placed them.
+function displaceMovableGearPieces(stagedOption, randomFn = Math.random) {
+    if (!stagedOption?.pieces || !stagedOption.board) return;
+
+    const candidates = stagedOption.pieces.filter(isCandidateMovableGearPiece);
+    if (candidates.length === 0) return;
+
+    if (candidates.length === 1) {
+        const openCells = findOpenGearCells(stagedOption.board, stagedOption.pieces);
+        if (openCells.length === 0) return;
+        const target = openCells[Math.floor(randomFn() * openCells.length)] || openCells[0];
+        candidates[0].row = target.row;
+        candidates[0].col = target.col;
+        return;
+    }
+
+    const originalPositions = candidates.map((piece) => ({ row: piece.row, col: piece.col }));
+    let derangement = null;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+        const indices = originalPositions.map((_, index) => index);
+        for (let i = indices.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(randomFn() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+        if (indices.every((value, index) => value !== index)) {
+            derangement = indices;
+            break;
+        }
+    }
+
+    if (!derangement) {
+        // Cycle shift: piece i takes piece (i+1)%n's slot.
+        derangement = originalPositions.map((_, index) => (index + 1) % originalPositions.length);
+    }
+
+    derangement.forEach((sourceIndex, targetIndex) => {
+        const target = originalPositions[sourceIndex];
+        candidates[targetIndex].row = target.row;
+        candidates[targetIndex].col = target.col;
+    });
+}
+
 function findFirstOpenGearCell(board, pieces) {
     const occupied = new Set((pieces || []).map((piece) => `${piece.row}:${piece.col}`));
 
@@ -1599,7 +1666,10 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
         board: cloneGearBoard(baseOption.board),
         pieces: cloneGearPieces(baseOption.pieces),
         dayStage: stage,
-        allowRustedGears: stage >= 2,
+        // Rust always locks the train on contact regardless of day —
+        // a corroded gear in the drive is always a scrap-or-fix decision,
+        // never a "valid part you can leave alone".
+        allowRustedGears: false,
         useDeadlockClamp: stage >= 3,
         inspectionFault: null,
     };
@@ -1666,6 +1736,12 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
     } else if (stage >= 3 && randomFn() < 0.24) {
         stagedOption.inspectionFault = createSparkInstabilityFault(stagedOption, randomFn);
     }
+
+    // Authored puzzles store movable gears at their solution coordinates,
+    // which means without displacement the train would already turn at
+    // open. Shuffle the player-installable gears so the player always has
+    // at least one piece to slide into place.
+    displaceMovableGearPieces(stagedOption, randomFn);
 
     return stagedOption;
 }

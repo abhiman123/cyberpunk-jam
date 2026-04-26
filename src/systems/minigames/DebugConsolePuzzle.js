@@ -318,7 +318,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             fontFamily: 'Courier New',
             fontSize: '15px',
             color: '#F4BCFF',
-            wordWrap: { width: 308 },
+            wordWrap: { width: 308, useAdvancedWrap: true },
             lineSpacing: 6,
         }).setOrigin(0, 0);
 
@@ -330,7 +330,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             fontFamily: 'Courier New',
             fontSize: '15px',
             color: '#32AAFF',
-            wordWrap: { width: 308 },
+            wordWrap: { width: 308, useAdvancedWrap: true },
             lineSpacing: 6,
         }).setOrigin(0, 0);
 
@@ -480,6 +480,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._selectionRects = [];
         this._charObjects.forEach((charObject) => charObject.destroy());
         this._charObjects = [];
+        this._commandViewOffset = 0;
         this.scene.tweens.killTweensOf(this._caret);
         this._caretTween?.stop();
         this._caretTween = null;
@@ -836,11 +837,23 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._ensureCharObjects(totalSlots);
         this._ensureSelectionRects(totalSlots);
 
+        // Horizontal scroll: keep the caret on screen by sliding the visible
+        // window of characters so over-typing past the panel width doesn't
+        // bleed into the rest of the layout (the `ghjjjjj…` overflow bug).
+        const visibleColumns = Math.max(1, Math.floor((this._commandZoneWidth - 12) / this._charWidth));
+        let viewOffset = this._commandViewOffset || 0;
+        if (selectionEnd - viewOffset >= visibleColumns) viewOffset = selectionEnd - visibleColumns + 1;
+        if (selectionEnd - viewOffset < 0) viewOffset = selectionEnd;
+        viewOffset = Math.max(0, Math.min(viewOffset, Math.max(0, totalSlots - 1)));
+        this._commandViewOffset = viewOffset;
+
         for (let index = 0; index < totalSlots; index += 1) {
             const expectedCharacter = command[index] ?? '';
             const typedCharacter = inputValue[index];
             const extraCharacter = index >= command.length;
-            const x = this._commandTextStartX + (index * this._charWidth);
+            const visibleColumn = index - viewOffset;
+            const inView = visibleColumn >= 0 && visibleColumn < visibleColumns;
+            const x = this._commandTextStartX + (visibleColumn * this._charWidth);
             const charObject = this._charObjects[index];
 
             let text = displayChar(expectedCharacter || ' ');
@@ -865,19 +878,24 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 .setPosition(x, this._commandTextY)
                 .setText(text)
                 .setColor(color)
-                .setAlpha(alpha);
+                .setAlpha(alpha)
+                .setVisible(inView);
         }
 
         const selectedCount = Math.max(0, selectionEnd - selectionStart);
         this._selectionRects.forEach((rect, index) => {
             const inSelection = index >= selectionStart && index < selectionEnd;
+            const visibleColumn = index - viewOffset;
+            const inView = visibleColumn >= 0 && visibleColumn < visibleColumns;
             rect
-                .setPosition(this._commandTextStartX + (index * this._charWidth), this._commandTextY)
-                .setVisible(inSelection && selectedCount > 0);
+                .setPosition(this._commandTextStartX + (visibleColumn * this._charWidth), this._commandTextY)
+                .setVisible(inSelection && selectedCount > 0 && inView);
         });
 
-        this._caret.setVisible(selectedCount === 0 && !this.evidence.completed);
-        this._caret.setPosition(this._commandTextStartX + (selectionEnd * this._charWidth), this._commandTextY);
+        const caretColumn = selectionEnd - viewOffset;
+        const caretInView = caretColumn >= 0 && caretColumn <= visibleColumns;
+        this._caret.setVisible(selectedCount === 0 && !this.evidence.completed && caretInView);
+        this._caret.setPosition(this._commandTextStartX + (caretColumn * this._charWidth), this._commandTextY);
         this._panel.bringToTop(this._caret);
 
         this._modeText?.setText(

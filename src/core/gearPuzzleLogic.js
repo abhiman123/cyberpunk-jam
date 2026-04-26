@@ -214,6 +214,46 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
         });
     }
 
+    // Aggressive rust check: if a rusted gear is 4-way adjacent to any
+    // powered gear (regardless of whether their connection edges line up),
+    // the corrosion seizes the train. The earlier BFS only catches contacts
+    // along matched connection edges, which left e.g. a HORIZONTAL gear
+    // sitting north of a RUSTED gear running fine. Any contact = scrap.
+    if (!allowRustedGears) {
+        const rustCells = [];
+        for (let rowIndex = 0; rowIndex < board.length; rowIndex += 1) {
+            const row = board[rowIndex] || [];
+            for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+                if (row[colIndex] === GEAR_CODES.RUSTED) {
+                    rustCells.push({ row: rowIndex, col: colIndex });
+                }
+            }
+        }
+        normalizedPieces.forEach((piece) => {
+            if (isRustGearType(piece.type)) rustCells.push({ row: piece.row, col: piece.col });
+        });
+
+        rustCells.forEach(({ row, col }) => {
+            const rustKey = gearCellKey(row, col);
+            if (disabledCells.has(rustKey)) return;
+            DIRS.forEach((dir) => {
+                const nr = row + dir.dy;
+                const nc = col + dir.dx;
+                if (nr < 0 || nc < 0 || nr >= board.length || nc >= (board[nr]?.length ?? 0)) return;
+                const nKey = gearCellKey(nr, nc);
+                const nEntry = occupancy.get(nKey);
+                if (!nEntry) return;
+                if (!isGearType(nEntry.type) || isRustGearType(nEntry.type)) return;
+                if (!powered.has(nKey)) return;
+                pushUniquePair(rustContacts, seenRustContacts, rustKey, nKey, {
+                    source: nKey,
+                    target: rustKey,
+                    direction: dir.key,
+                });
+            });
+        });
+    }
+
     const jammed = rustContacts.length > 0 || directionConflicts.length > 0;
     const jammedCells = new Set(jammed ? powered : []);
     rustContacts.forEach(({ target }) => jammedCells.add(target));
