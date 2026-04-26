@@ -94,7 +94,7 @@ export default class BootScene extends Phaser.Scene {
         // Charging station port.
         this.load.image('machine_charging_station_port_source',   'charging.png');
         // Coffee machine — replacement for the old arc reactor.
-        this.load.image('machine_coffee_machine_source',          'coffee.png');
+        this.load.image('machine_coffee_machine_source',          'coffeeMachine.png');
         // Rich Mf — separate conveyor and inspect sprites.
         this.load.image('machine_rich_mf_conveyor_source',        'rich.png');
         this.load.image('machine_rich_mf_inspect_source',         'richinspect.png');
@@ -108,8 +108,8 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('machine_security_camera_bot_inspect_source', 'CameraInspect.png');
         this.load.image('machine_security_camera_bot_fallback_source', 'camerabot.png');
         this.load.image('machine_mechanic_broom_source',          'Moptopus.png');
-        this.load.image('machine_cry_baby_source',                'crybaby.png');
-        this.load.image('machine_cry_baby_inspect_source',        'crybabyinspect.png');
+        this.load.image('machine_cry_baby_source',                'crybabyinspect.png');
+        this.load.image('machine_cry_baby_inspect_source',        'crybaby.png');
         this.load.image('machine_cry_baby_fallback_source',       'CrybabyGeneral.png');
         this.load.image('cry_baby_portrait_source',               'sadCB.png');
         this.load.image('machine_jester_in_the_box_source',       'Surely_you_jest_box.png');
@@ -160,24 +160,30 @@ export default class BootScene extends Phaser.Scene {
         this._createCroppedUpscaledTexture('machine_mechanic_broom_source',      'machine_mechanic_broom',       4, { sx: 140, sy: 70, sw: 58,  sh: 96  });
 
         // Umbrella primary sprite — openumbrella.png if present, else freakass fallback.
+        // Crop coords measured from each PNG's non-transparent bbox so the displayed
+        // sprite is the artwork itself, not the artwork floating inside a 320x195 pad.
         if (this.textures.exists('machine_rebellious_umbrella_source')) {
-            this._createNearestUpscaledTexture('machine_rebellious_umbrella_source', 'machine_rebellious_umbrella', 4);
+            this._createCroppedUpscaledTexture('machine_rebellious_umbrella_source', 'machine_rebellious_umbrella', 4, { sx: 122, sy: 114, sw: 62, sh: 59 });
         } else if (this.textures.exists('machine_rebellious_umbrella_fallback_source')) {
             this._createNearestUpscaledTexture('machine_rebellious_umbrella_fallback_source', 'machine_rebellious_umbrella', 4);
         }
         // Closed umbrella variant for the scrap state (asset optional).
         if (this.textures.exists('machine_rebellious_umbrella_scrapped_source')) {
-            this._createNearestUpscaledTexture('machine_rebellious_umbrella_scrapped_source', 'machine_rebellious_umbrella_scrapped', 4);
+            this._createCroppedUpscaledTexture('machine_rebellious_umbrella_scrapped_source', 'machine_rebellious_umbrella_scrapped', 4, { sx: 148, sy: 107, sw: 15, sh: 61 });
         }
         // Camera bot: lying-down sprite for conveyor, inspect sprite for close-up.
         // Falls back to the original camerabot.png if either new asset is missing.
         if (this.textures.exists('machine_security_camera_bot_source')) {
-            this._createNearestUpscaledTexture('machine_security_camera_bot_source', 'machine_security_camera_bot', 4);
+            this._createCroppedUpscaledTexture('machine_security_camera_bot_source', 'machine_security_camera_bot', 4, { sx: 73, sy: 109, sw: 189, sh: 40 });
         } else if (this.textures.exists('machine_security_camera_bot_fallback_source')) {
             this._createNearestUpscaledTexture('machine_security_camera_bot_fallback_source', 'machine_security_camera_bot', 1);
         }
         if (this.textures.exists('machine_security_camera_bot_inspect_source')) {
-            this._createNearestUpscaledTexture('machine_security_camera_bot_inspect_source', 'machine_security_camera_bot_close', 1);
+            // 1x crop: this close texture is paired with canvasScale=1.0 on the
+            // security_camera_bot, so going up to 4x would make the inspect view
+            // 4x larger than it used to be. Cropping at 1x keeps the displayed
+            // size identical to the pre-crop behavior.
+            this._createCroppedUpscaledTexture('machine_security_camera_bot_inspect_source', 'machine_security_camera_bot_close', 1, { sx: 135, sy: 18, sw: 51, sh: 156 });
         } else if (this.textures.exists('machine_security_camera_bot_fallback_source')) {
             this._createNearestUpscaledTexture('machine_security_camera_bot_fallback_source', 'machine_security_camera_bot_close', 1);
         }
@@ -186,34 +192,36 @@ export default class BootScene extends Phaser.Scene {
         // inspect view, with the legacy CrybabyGeneral.png as a fallback for
         // either slot if a new asset is missing.
         if (this.textures.exists('machine_cry_baby_source')) {
-            this._createNearestUpscaledTexture('machine_cry_baby_source', 'machine_cry_baby', 1);
+            // crybabyinspect.png is the lying-down conveyor pose
+            this._createCroppedUpscaledTexture('machine_cry_baby_source', 'machine_cry_baby', 4, { sx: 55, sy: 101, sw: 215, sh: 46 });
         } else if (this.textures.exists('machine_cry_baby_fallback_source')) {
             this._createNearestUpscaledTexture('machine_cry_baby_fallback_source', 'machine_cry_baby', 1);
         }
         if (this.textures.exists('machine_cry_baby_inspect_source')) {
-            this._createNearestUpscaledTexture('machine_cry_baby_inspect_source', 'machine_cry_baby_close', 1);
+            // crybaby.png is the standing full-body inspect pose
+            this._createCroppedUpscaledTexture('machine_cry_baby_inspect_source', 'machine_cry_baby_close', 4, { sx: 136, sy: 19, sw: 52, sh: 156 });
         } else if (this.textures.exists('machine_cry_baby_fallback_source')) {
             this._createNearestUpscaledTexture('machine_cry_baby_fallback_source', 'machine_cry_baby_close', 1);
         }
         if (this.textures.exists('machine_jester_in_the_box_source')) {
-            this._createNearestUpscaledTexture('machine_jester_in_the_box_source', 'machine_jester_in_the_box', 4);
+            this._createCroppedUpscaledTexture('machine_jester_in_the_box_source', 'machine_jester_in_the_box', 4, { sx: 135, sy: 91, sw: 60, sh: 74 });
         } else if (this.textures.exists('machine_jester_in_the_box_fallback_source')) {
             this._createNearestUpscaledTexture('machine_jester_in_the_box_fallback_source', 'machine_jester_in_the_box', 4);
         }
         if (this.textures.exists('machine_companion_humanoid_source')) {
-            this._createNearestUpscaledTexture('machine_companion_humanoid_source', 'machine_companion_humanoid', 4);
+            this._createCroppedUpscaledTexture('machine_companion_humanoid_source', 'machine_companion_humanoid', 4, { sx: 140, sy: 133, sw: 71, sh: 38 });
         }
         if (this.textures.exists('machine_taxi_car_robot_source')) {
-            this._createNearestUpscaledTexture('machine_taxi_car_robot_source', 'machine_taxi_car_robot', 4);
+            this._createCroppedUpscaledTexture('machine_taxi_car_robot_source', 'machine_taxi_car_robot', 4, { sx: 153, sy: 128, sw: 69, sh: 34 });
         }
         if (this.textures.exists('machine_traffic_cone_bot_source')) {
-            this._createNearestUpscaledTexture('machine_traffic_cone_bot_source', 'machine_traffic_cone_bot', 4);
+            this._createCroppedUpscaledTexture('machine_traffic_cone_bot_source', 'machine_traffic_cone_bot', 4, { sx: 66, sy: 94, sw: 47, sh: 64 });
         }
         if (this.textures.exists('machine_phonograph_source')) {
-            this._createNearestUpscaledTexture('machine_phonograph_source', 'machine_phonograph', 4);
+            this._createCroppedUpscaledTexture('machine_phonograph_source', 'machine_phonograph', 4, { sx: 118, sy: 39, sw: 89, sh: 127 });
         }
         if (this.textures.exists('machine_parrot_robot_source')) {
-            this._createNearestUpscaledTexture('machine_parrot_robot_source', 'machine_parrot_robot', 4);
+            this._createCroppedUpscaledTexture('machine_parrot_robot_source', 'machine_parrot_robot', 4, { sx: 84, sy: 47, sw: 157, sh: 126 });
         }
         if (this.textures.exists('machine_soda_machine_source')) {
             this._createNearestUpscaledTexture('machine_soda_machine_source', 'machine_soda_machine', 1);
@@ -225,49 +233,49 @@ export default class BootScene extends Phaser.Scene {
             this._createNearestUpscaledTexture('machine_furby_bot_source', 'machine_furby_bot', 1);
         }
         if (this.textures.exists('machine_magic_machine_source')) {
-            this._createNearestUpscaledTexture('machine_magic_machine_source', 'machine_magic_machine', 1);
+            this._createCroppedUpscaledTexture('machine_magic_machine_source', 'machine_magic_machine', 4, { sx: 87, sy: 2, sw: 114, sh: 193 });
         }
         if (this.textures.exists('machine_miku_machine_source')) {
-            this._createNearestUpscaledTexture('machine_miku_machine_source', 'machine_miku_machine', 4);
+            this._createCroppedUpscaledTexture('machine_miku_machine_source', 'machine_miku_machine', 4, { sx: 118, sy: 28, sw: 88, sh: 123 });
         }
         if (this.textures.exists('machine_circuit_dealer_source')) {
-            this._createNearestUpscaledTexture('machine_circuit_dealer_source', 'machine_circuit_dealer', 1);
+            this._createCroppedUpscaledTexture('machine_circuit_dealer_source', 'machine_circuit_dealer', 4, { sx: 154, sy: 62, sw: 91, sh: 96 });
         }
         if (this.textures.exists('machine_rebellious_umbrella_v2_source')) {
-            this._createNearestUpscaledTexture('machine_rebellious_umbrella_v2_source', 'machine_rebellious_umbrella_v2', 4);
+            this._createCroppedUpscaledTexture('machine_rebellious_umbrella_v2_source', 'machine_rebellious_umbrella_v2', 4, { sx: 118, sy: 35, sw: 84, sh: 128 });
         }
         if (this.textures.exists('machine_baby_care_teaching_machine_source')) {
-            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_source', 'machine_baby_care_teaching_machine', 4);
+            this._createCroppedUpscaledTexture('machine_baby_care_teaching_machine_source', 'machine_baby_care_teaching_machine', 4, { sx: 50, sy: 64, sw: 204, sh: 66 });
         }
         if (this.textures.exists('machine_baby_care_teaching_machine_inspect_source')) {
-            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_inspect_source', 'machine_baby_care_teaching_machine_close', 4);
+            this._createCroppedUpscaledTexture('machine_baby_care_teaching_machine_inspect_source', 'machine_baby_care_teaching_machine_close', 4, { sx: 109, sy: 30, sw: 103, sh: 128 });
         }
         if (this.textures.exists('machine_charging_station_port_source')) {
-            this._createNearestUpscaledTexture('machine_charging_station_port_source', 'machine_charging_station_port', 4);
+            this._createCroppedUpscaledTexture('machine_charging_station_port_source', 'machine_charging_station_port', 4, { sx: 130, sy: 99, sw: 45, sh: 58 });
         }
         if (this.textures.exists('machine_coffee_machine_source')) {
-            this._createNearestUpscaledTexture('machine_coffee_machine_source', 'machine_coffee_machine', 1);
+            this._createCroppedUpscaledTexture('machine_coffee_machine_source', 'machine_coffee_machine', 4, { sx: 146, sy: 95, sw: 33, sh: 60 });
         }
         // Rich Mf — conveyor sprite (rich.png) overrides the cropped Sprite_rich.png
         // produced earlier in this method. Inspect view uses richinspect.png by
         // default, swapping to happyrichinspect.png when the personality module
         // is connected (see _applyMachineSprite).
         if (this.textures.exists('machine_rich_mf_conveyor_source')) {
-            this._createNearestUpscaledTexture('machine_rich_mf_conveyor_source', 'machine_rich_mf', 4);
+            this._createCroppedUpscaledTexture('machine_rich_mf_conveyor_source', 'machine_rich_mf', 4, { sx: 71, sy: 81, sw: 161, sh: 37 });
         }
         if (this.textures.exists('machine_rich_mf_inspect_source')) {
-            this._createNearestUpscaledTexture('machine_rich_mf_inspect_source', 'machine_rich_mf_inspect', 4);
+            this._createCroppedUpscaledTexture('machine_rich_mf_inspect_source', 'machine_rich_mf_inspect', 4, { sx: 124, sy: 17, sw: 58, sh: 161 });
         }
         if (this.textures.exists('machine_rich_mf_inspect_happy_source')) {
-            this._createNearestUpscaledTexture('machine_rich_mf_inspect_happy_source', 'machine_rich_mf_inspect_happy', 4);
+            this._createCroppedUpscaledTexture('machine_rich_mf_inspect_happy_source', 'machine_rich_mf_inspect_happy', 4, { sx: 130, sy: 26, sw: 54, sh: 152 });
         }
         // Debrief machine has a dual-sprite setup like the camera bot:
         // conveyor uses debrief.png, inspect view uses inspectdebrief.png.
         if (this.textures.exists('machine_debrief_machine_conveyor_source')) {
-            this._createNearestUpscaledTexture('machine_debrief_machine_conveyor_source', 'machine_debrief_machine', 1);
+            this._createCroppedUpscaledTexture('machine_debrief_machine_conveyor_source', 'machine_debrief_machine', 4, { sx: 136, sy: 135, sw: 58, sh: 27 });
         }
         if (this.textures.exists('machine_debrief_machine_inspect_source')) {
-            this._createNearestUpscaledTexture('machine_debrief_machine_inspect_source', 'machine_debrief_machine_close', 1);
+            this._createCroppedUpscaledTexture('machine_debrief_machine_inspect_source', 'machine_debrief_machine_close', 4, { sx: 115, sy: 11, sw: 49, sh: 71 });
         } else if (this.textures.exists('machine_debrief_machine_inspect_alt_source')) {
             this._createNearestUpscaledTexture('machine_debrief_machine_inspect_alt_source', 'machine_debrief_machine_close', 1);
         }

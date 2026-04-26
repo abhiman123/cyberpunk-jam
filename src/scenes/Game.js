@@ -4172,13 +4172,20 @@ export default class GameScene extends Phaser.Scene {
         const nextCell = this._findFirstOpenUmbrellaGearCell(gearPuzzle);
         if (!nextCell) return false;
 
+        // Guard: placing this piece must leave at least 1 free EMPTY cell so the
+        // player can still rearrange movable pieces and solve the puzzle.
+        const board = gearPuzzle?.board || [];
+        const currentPieces = gearPuzzle?.progress?.pieces || gearPuzzle?.pieces || [];
+        const totalEmptyCells = board.reduce((sum, row) => sum + row.filter((c) => c === GEAR_CODES.EMPTY).length, 0);
+        if (totalEmptyCells - currentPieces.length <= 1) return false;
+
         const gearTypes = [GEAR_CODES.HORIZONTAL, GEAR_CODES.VERTICAL, GEAR_CODES.CURVE_NE];
         const piece = {
             id: `umbrella_support_gear_${appliedCount + 1}`,
             type: gearTypes[appliedCount % gearTypes.length],
             row: nextCell.row,
             col: nextCell.col,
-            movable: false,
+            movable: true,
             role: 'umbrella-support',
         };
 
@@ -4314,7 +4321,9 @@ export default class GameScene extends Phaser.Scene {
             this._showFeedback('ALL UMBRELLA PARTS LOADED // FINISH THE REPAIRS', '#9aff91');
             this._setPhoneInfoNote('Everything you stole is in him now. Finish the repairs and send him through.', 'SMUGGLER LOADOUT');
         } else {
-            this._showFeedback(`${String(partType).toUpperCase()} LOADED // KEEP FEEDING THE UMBRELLA`, '#9aff91');
+            const loadedCount = Object.values(nextRepairState?.appliedParts || {}).reduce((s, v) => s + v, 0);
+            const totalCount = Object.values(nextRepairState?.requiredParts || {}).reduce((s, v) => s + v, 0);
+            this._showFeedback(`${String(partType).toUpperCase()} LOADED // ${loadedCount}/${totalCount} PARTS IN`, '#9aff91');
             this._setPhoneInfoNote('Smuggled part inserted. Keep dragging the stash onto the matching ports.', 'SMUGGLER LOADOUT');
         }
 
@@ -8313,6 +8322,18 @@ export default class GameScene extends Phaser.Scene {
             targetImage.setScale(scale * 0.22);
             return;
         }
+        if (isInspectView && machineId === 'debrief_machine') {
+            targetImage.setScale(scale * 0.5);
+            return;
+        }
+        if (isInspectView && machineId === 'circuit_dealer') {
+            targetImage.setScale(scale * 0.5);
+            return;
+        }
+        if (isInspectView && machineId === 'jester_in_the_box') {
+            targetImage.setScale(scale * 2.0);
+            return;
+        }
         targetImage.setScale(scale);
     }
 
@@ -8355,21 +8376,37 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _getCurrentMachineConveyorOffsetY(machineVariant = this._currentMachineVariant) {
+        // Belt surface is at display Y≈572 (see _buildConveyorScreen comment).
+        // Container baseline is Y=490, so to seat a sprite's bottom edge on the
+        // belt: offset = 82 - displayed_h/2 (where displayed_h = content_h *
+        // upscale * canvasScale). Numbers below assume the cropped textures
+        // produced in Boot._createNewMachineSpritesFromSource.
         const offsets = {
+            // Pre-existing tunings (unchanged source loaders, kept as-is).
             lifeguard_robot: 18,
             trash_picker_upper: 16,
             microwave_fridge_assistant: 20,
             pool_cleanup_roomba: 20,
             house_roomba: 20,
             furby_bot: 30,
-            rebellious_umbrella: -100,
-            taxi_car_robot: -100,
-            phonograph: -100,
-            debrief_machine: -100,
-            companion_humanoid: -100,
-            parrot_robot: -100,
-            jester_in_the_box: -100,
-            circuit_dealer: 100,
+            // Cropped sprites — bottom seated on belt (Y≈572).
+            cry_baby: 36,
+            rebellious_umbrella: -36,
+            parrot_robot: -19,
+            companion_humanoid: 31,
+            phonograph: -45,
+            debrief_machine: 41,
+            baby_care_teaching_machine: 16,
+            jester_in_the_box: 5,
+            rich_mf: 45,
+            taxi_car_robot: 14,
+            charging_station_port: -34,
+            security_camera_bot: 42,
+            miku_machine: -41,
+            traffic_cone_bot: -46,
+            coffee_machine: -38,
+            circuit_dealer: -62,
+            track_and_discus_robot: -77,
         };
         return offsets[machineVariant?.machineId] || 0;
     }
