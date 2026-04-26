@@ -187,30 +187,30 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         // Command frame — pink-accented focal point
         const commandFrame = this.scene.add.rectangle(-232, -140, 572, 118, 0x06070e, 0.97)
-            .setStrokeStyle(1, 0xC040C8, 0.88);
+            .setStrokeStyle(1, 0x285a9a, 0.88);
         // Terminal-style output panels: magenta header strip on top with a
         // CONSOLE > label, then the dark monospace body underneath. Matches
         // the rulebook CODE diagram so the player sees the same visual
         // language in the rules and in the actual puzzle.
         const actualFrame = this.scene.add.rectangle(286, -126, 352, 146, 0x05070b, 0.97)
-            .setStrokeStyle(1, 0xC040C8, 0.85);
-        const actualHeaderBg = this.scene.add.rectangle(286, -126 - 73 + 12, 352, 24, 0x1c0a23, 1)
-            .setStrokeStyle(1, 0xC040C8, 0.95);
-        const actualHeaderLabel = this.scene.add.text(286 - 176 + 12, -126 - 73 + 12, 'CONSOLE > ACTUAL', {
+            .setStrokeStyle(1, 0x285a9a, 0.85);
+        const actualHeaderBg = this.scene.add.rectangle(286, -126 - 73 + 12, 352, 24, 0x0a0d23, 1)
+            .setStrokeStyle(1, 0x285a9a, 0.95);
+        const actualHeaderLabel = this.scene.add.text(286 - 176 + 12, -126 - 73 + 12, 'CONSOLE: ACTUAL', {
             fontFamily: 'Courier New',
             fontSize: '11px',
-            color: '#F684F7',
+            color: '#eeeeee',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
 
         const expectedFrame = this.scene.add.rectangle(286, 20, 352, 126, 0x05070b, 0.97)
-            .setStrokeStyle(1, 0xC040C8, 0.85);
-        const expectedHeaderBg = this.scene.add.rectangle(286, 20 - 63 + 12, 352, 24, 0x1c0a23, 1)
-            .setStrokeStyle(1, 0xC040C8, 0.95);
-        const expectedHeaderLabel = this.scene.add.text(286 - 176 + 12, 20 - 63 + 12, 'CONSOLE > EXPECTED', {
+            .setStrokeStyle(1, 0x285a9a, 0.85);
+        const expectedHeaderBg = this.scene.add.rectangle(286, 20 - 63 + 12, 352, 24, 0x0a0d23, 1)
+            .setStrokeStyle(1, 0x285a9a, 0.95);
+        const expectedHeaderLabel = this.scene.add.text(286 - 176 + 12, 20 - 63 + 12, 'CONSOLE: EXPECTED', {
             fontFamily: 'Courier New',
             fontSize: '11px',
-            color: '#F684F7',
+            color: '#eeeeee',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         const detailFrame = this.scene.add.rectangle(0, 188, PANEL_WIDTH - 86, 176, 0x06070d, 0.96)
@@ -218,8 +218,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         // --- Corner bracket decorations (outer panel) ---
         const cornerGfx = this.scene.add.graphics();
-        cornerGfx.lineStyle(3, 0xF684F7, 0.82);
-        const hw = PANEL_WIDTH / 2, hh = PANEL_HEIGHT / 2, arm = 26;
+        cornerGfx.lineStyle(3, 0x2b96ed, 0.82);
+        const hw = PANEL_WIDTH / 2, hh = PANEL_HEIGHT / 2, arm = 50;
         cornerGfx.lineBetween(-hw, -hh + arm, -hw, -hh); cornerGfx.lineBetween(-hw, -hh, -hw + arm, -hh);
         cornerGfx.lineBetween(hw - arm, -hh, hw, -hh);   cornerGfx.lineBetween(hw, -hh, hw, -hh + arm);
         cornerGfx.lineBetween(-hw, hh - arm, -hw, hh);   cornerGfx.lineBetween(-hw, hh, -hw + arm, hh);
@@ -229,7 +229,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const title = this.scene.add.text(-520, -277, `MACHINE DIAGNOSTICS: ${this._machineName}`, {
             fontFamily: 'Courier New',
             fontSize: '22px',
-            color: '#F684F7',
+            color: '#eeeeee',
             letterSpacing: 3,
             wordWrap: { width: 900 },
         }).setOrigin(0, 0.5);
@@ -239,7 +239,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         ].filter(Boolean).join('\n'), {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#F684F7',
+            color: '#eeeeee',
             wordWrap: { width: 840 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
@@ -247,19 +247,19 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const commandLabel = this.scene.add.text(-510, -184, 'COMMAND INPUT', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#F684F7',
+            color: '#eeeeee',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._modeText = this.scene.add.text(-119, -155, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#F684F7',
+            color: '#eeeeee',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._statusText = this.scene.add.text(-509, -40, '', {
             fontFamily: 'Courier New',
             fontSize: '14px',
-            color: '#F684F7',
+            color: '#eeeeee',
             letterSpacing: 1,
         }).setOrigin(0, 0.5);
 
@@ -269,7 +269,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._specialCommandButtonText = this.scene.add.text(-146, -40, 'STEAL DATA', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#5ab8f0',
+            color: '#eeeeee',
             letterSpacing: 1,
         }).setOrigin(0.5);
         this._specialCommandButtonBg.on('pointerover', () => {
@@ -284,7 +284,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         });
 
         this._commandZone = this.scene.add.rectangle(-232, this._commandTextY, this._commandZoneWidth, this._commandZoneHeight, 0x03050a, 0.99)
-            .setStrokeStyle(1, 0xF684F7, 0.48)
+            .setStrokeStyle(1, 0x285a9a, 0.48)
             .setInteractive({ useHandCursor: true });
         this._commandZone.on('pointerdown', (pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
@@ -312,24 +312,24 @@ export default class DebugConsolePuzzle extends MinigameBase {
         // Body text is offset to leave room for the strip and a leading "$"
         // prompt glyph so the panel reads like a console prompt.
         const actualPrompt = this.scene.add.text(115, -150, '$', {
-            fontFamily: 'Courier New', fontSize: '14px', color: '#F684F7', letterSpacing: 1,
+            fontFamily: 'Courier New', fontSize: '14px', color: '#eeeeee', letterSpacing: 1,
         }).setOrigin(0, 0);
         this._actualOutputText = this.scene.add.text(132, -150, '', {
             fontFamily: 'Courier New',
             fontSize: '15px',
-            color: '#F4BCFF',
+            color: '#eeeeee',
             wordWrap: { width: 308, useAdvancedWrap: true },
             lineSpacing: 6,
         }).setOrigin(0, 0);
 
         // EXPECTED OUTPUT body
         const expectedPrompt = this.scene.add.text(115, 6, '$', {
-            fontFamily: 'Courier New', fontSize: '14px', color: '#F684F7', letterSpacing: 1,
+            fontFamily: 'Courier New', fontSize: '14px', color: '#eeeeee', letterSpacing: 1,
         }).setOrigin(0, 0);
         this._expectedOutputText = this.scene.add.text(132, 6, '', {
             fontFamily: 'Courier New',
             fontSize: '15px',
-            color: '#32AAFF',
+            color: '#eeeeee',
             wordWrap: { width: 308, useAdvancedWrap: true },
             lineSpacing: 6,
         }).setOrigin(0, 0);
@@ -337,26 +337,26 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const detailLabel = this.scene.add.text(-488, 124, 'PATCH NOTES', {
             fontFamily: 'Courier New',
             fontSize: '13px',
-            color: '#38609a',
+            color: '#eeeeee',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._instructionText = this.scene.add.text(-488, 150, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#50709a',
+            color: '#eeeeee',
             wordWrap: { width: 596 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
         this._bugCounterText = this.scene.add.text(148, 126, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#F684F7',
+            color: '#eeeeee',
             letterSpacing: 2,
         }).setOrigin(0, 0.5);
         this._messageText = this.scene.add.text(148, 152, '', {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#486aaa',
+            color: '#eeeeee',
             wordWrap: { width: 332 },
             lineSpacing: 5,
         }).setOrigin(0, 0);
@@ -369,16 +369,16 @@ export default class DebugConsolePuzzle extends MinigameBase {
         this._closeButtonText = this.scene.add.text(0, closeBaseY, 'RETURN TO BOOTH [ESC]', {
             fontFamily: 'Courier New',
             fontSize: '15px',
-            color: '#5ab8f0',
+            color: '#eeeeee',
             letterSpacing: 2,
         }).setOrigin(0.5);
         this._closeButtonBg.on('pointerover', () => {
             this._closeButtonBg?.setFillStyle(0x0f163a, 0.99).setStrokeStyle(2, 0x5ab8f0, 0.95);
-            this._closeButtonText?.setColor('#94d8ff');
+            this._closeButtonText?.setColor('#eeeeee');
         });
         this._closeButtonBg.on('pointerout', () => {
             this._closeButtonBg?.setFillStyle(0x0a0f1e, 0.97).setStrokeStyle(2, 0x285a9a, 0.9);
-            this._closeButtonText?.setColor('#5ab8f0');
+            this._closeButtonText?.setColor('#eeeeee');
             this.scene.tweens.add({
                 targets: [this._closeButtonBg, this._closeButtonText],
                 y: closeBaseY,
@@ -436,7 +436,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
         const sample = this.scene.add.text(0, 0, 'W', {
             fontFamily: 'Courier New',
             fontSize: CHAR_FONT_SIZE,
-            color: '#ffffff',
+            color: '#eeeeee',
         }).setVisible(false);
         this._panel.add(sample);
         this._charWidth = Math.max(13, Math.ceil(sample.width));
