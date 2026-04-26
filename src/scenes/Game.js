@@ -8493,15 +8493,6 @@ export default class GameScene extends Phaser.Scene {
             labelContainer?.add(tag);
         });
 
-        const hazardCount = Math.min(3, flowPuzzle.forbiddenCount || 0);
-        for (let index = 0; index < hazardCount; index++) {
-            const hazardX = left + width - 14 - (index * 12);
-            const hazardY = top + height - 6;
-            graphics.fillStyle(forbiddenUsed ? 0xff6644 : 0xffb347, 0.95);
-            graphics.fillTriangle(hazardX, hazardY - 5, hazardX + 5, hazardY, hazardX, hazardY + 5);
-            graphics.fillTriangle(hazardX, hazardY - 5, hazardX - 5, hazardY, hazardX, hazardY + 5);
-        }
-
         const progressText = flowState?.scrapRequired
             ? (flowState.scrapStatus || 'FLOW SCRAP')
             : flowState?.completed
