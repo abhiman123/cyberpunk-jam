@@ -1,15 +1,17 @@
 import * as Phaser from 'phaser';
 import { SOUND_MANIFEST } from '../constants/gameConstants.js';
 import { MACHINE_SPRITE_MANIFEST } from '../data/machineCatalog.js';
+import { WavedashSDK } from "@wvdsh/sdk-js";
+
 
 export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
 
     preload() {
-        if (window.WavedashJS) {
+        if (window.Wavedash) {
             this.load.on('progress', (value) => {
-                // value is a float between 0.0 and 1.0
-                window.WavedashJS.updateLoadProgressZeroToOne(value);
+                // Update the Wavedash shell loading bar
+                window.Wavedash.updateLoadProgressZeroToOne(value);
             });
         }
         // Loading bar
@@ -93,12 +95,9 @@ export default class BootScene extends Phaser.Scene {
         this._createNewMachineSpritesFromSource();
         this._generatePlaceholders();
 
-        // ADD THIS: Tell Wavedash the game is ready to be seen
-        if (window.WavedashJS && typeof window.WavedashJS.signalGameReady === 'function') {
-            window.WavedashJS.signalGameReady();
-        } else if (window.WavedashJS && typeof window.WavedashJS.signalReady === 'function') {
-            // Fallback for older SDK versions
-            window.WavedashJS.signalReady();
+        if (window.Wavedash) {
+            // This dismisses the Wavedash loading screen
+            window.Wavedash.init(); 
         }
 
         this.scene.start('Title');

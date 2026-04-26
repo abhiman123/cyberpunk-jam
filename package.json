@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@wvdsh/sdk-js": "^1.2.4",
     "vite": "^8.0.10"
   },
   "dependencies": {
