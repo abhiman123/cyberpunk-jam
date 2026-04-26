@@ -7205,29 +7205,17 @@ export default class GameScene extends Phaser.Scene {
                 this._queueIndex = 0;
                 this._pendingKonamiFinalCase = null;
                 this._scheduleNextCase(700);
+                return;
             }
+
+            this._queueIndex++;
+            this._emitSequenceDebug('advance case scheduled', {
+                nextQueueIndex: this._queueIndex,
+                scheduledCasesRemaining: Math.max(0, (this._queue?.length || 0) - this._queueIndex),
+                machineQueueLength: this._machineQueue?.length || 0,
+            });
+            this._scheduleNextCase(700);
         });
-
-        if (finalCaseTriggered) {
-            return;
-        }
-
-        if (shiftShouldEnd) {
-            return;
-        }
-
-        if (hasPendingKonamiFinale) {
-            return;
-        }
-
-        this._queueIndex++;
-        this._emitSequenceDebug('advance case scheduled', {
-            nextQueueIndex: this._queueIndex,
-            scheduledCasesRemaining: Math.max(0, (this._queue?.length || 0) - this._queueIndex),
-            machineQueueLength: this._machineQueue?.length || 0,
-        });
-
-        this._scheduleNextCase(700);
     }
 
     // ── Shift end ─────────────────────────────────────────────────────────────
