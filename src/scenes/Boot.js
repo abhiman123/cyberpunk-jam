@@ -234,7 +234,7 @@ export default class BootScene extends Phaser.Scene {
             this._createNearestUpscaledTexture('machine_circuit_dealer_source', 'machine_circuit_dealer', 1);
         }
         if (this.textures.exists('machine_rebellious_umbrella_v2_source')) {
-            this._createNearestUpscaledTexture('machine_rebellious_umbrella_v2_source', 'machine_rebellious_umbrella_v2', 1);
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_v2_source', 'machine_rebellious_umbrella_v2', 4);
         }
         if (this.textures.exists('machine_baby_care_teaching_machine_source')) {
             this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_source', 'machine_baby_care_teaching_machine', 4);
@@ -295,6 +295,11 @@ export default class BootScene extends Phaser.Scene {
         this._createCroppedUpscaledTexture('rich_mf_portrait_sick_source',       'rich_mf_portrait_sick',        1, { sx: 54,  sy: 11, sw: 439, sh: 654 });
         // sadCB: content at (79,28) 314×531 in 500×587 (43% transparent)
         this._createCroppedUpscaledTexture('cry_baby_portrait_source',           'cry_baby_portrait',            1, { sx: 79,  sy: 28, sw: 314, sh: 531 });
+        ['machine_cry_baby', 'machine_cry_baby_close', 'cry_baby_portrait'].forEach((key) => {
+            if (this.textures.exists(key)) {
+                this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+            }
+        });
     }
 
     _createMainBackgroundFromSource() {
@@ -309,11 +314,11 @@ export default class BootScene extends Phaser.Scene {
     }
 
     _createTrackAndDiscusRobotFromSource() {
-        this._createNearestUpscaledTexture('track_and_discus_robot_source', 'machine_track_and_discus_robot', 4);
+        this._createNearestUpscaledTexture('track_and_discus_robot_source', 'machine_track_and_discus_robot', 20);
     }
 
     _createTrackAndDiscusRobotCloseFromSource() {
-        this._createNearestUpscaledTexture('track_and_discus_robot_close_source', 'machine_track_and_discus_robot_close', 4);
+        this._createNearestUpscaledTexture('track_and_discus_robot_close_source', 'machine_track_and_discus_robot_close', 20);
     }
 
     _createFutureLoungeChairFromSource() {

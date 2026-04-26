@@ -8362,6 +8362,14 @@ export default class GameScene extends Phaser.Scene {
             pool_cleanup_roomba: 20,
             house_roomba: 20,
             furby_bot: 30,
+            rebellious_umbrella: -100,
+            taxi_car_robot: -100,
+            phonograph: -100,
+            debrief_machine: -100,
+            companion_humanoid: -100,
+            parrot_robot: -100,
+            jester_in_the_box: -100,
+            circuit_dealer: 100,
         };
         return offsets[machineVariant?.machineId] || 0;
     }

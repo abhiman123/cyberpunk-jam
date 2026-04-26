@@ -12,6 +12,8 @@ const PANEL_Y = 90;
 const SLIDER_LEFT = 256;
 const SLIDER_WIDTH = 376;
 const SLIDER_THUMB_RADIUS = 14;
+/** How much of the way toward the slider target each event applies to screen zoom (0–1). */
+const ZOOM_IMPACT_DAMP = 0.1;
 
 const SLIDER_DEFS = [
     {
@@ -56,7 +58,8 @@ export default class FactorySettingsOverlay {
         this._callbacks = callbacks;
         this._sliderDragging = null; // id of slider being dragged, or null
         this._sliders = new Map();
-        this._zoomPointerAnchor = null; // { n0, v0 } while dragging zoom; 10:1 track→value mapping
+        /** 0–1 track position for zoom while dragging (thumb follows pointer 1:1). */
+        this._zoomTrackNorm = null;
         this._handleGlobalPointerMove = this._handleGlobalPointerMove.bind(this);
         this._handleGlobalPointerUp = this._handleGlobalPointerUp.bind(this);
         this.scene.input.on('pointermove', this._handleGlobalPointerMove);
@@ -211,7 +214,11 @@ export default class FactorySettingsOverlay {
             const { def } = slider;
             const rawValue = def.getValue(settings);
             const range = def.max - def.min;
-            const normalized = range > 0 ? Math.max(0, Math.min(1, (rawValue - def.min) / range)) : 0;
+            const fromSettings = range > 0 ? Math.max(0, Math.min(1, (rawValue - def.min) / range)) : 0;
+            const zoomDragging = def.id === 'zoom' && this._sliderDragging === 'zoom' && this._zoomTrackNorm != null;
+            // Zoom: thumb + fill follow the pointer (1:1 track); other sliders use the stored value.
+            const normalized = zoomDragging ? this._zoomTrackNorm : fromSettings;
+            const tintNorm = zoomDragging ? this._zoomTrackNorm : fromSettings;
             const fillWidth = SLIDER_WIDTH * normalized;
             const thumbX = SLIDER_LEFT + fillWidth;
 
@@ -229,9 +236,9 @@ export default class FactorySettingsOverlay {
             const muted = (def.id === 'music' || def.id === 'sfx') && rawValue <= 0;
             const state = muted
                 ? { color: 0x7f7878 }
-                : normalized < 0.34
+                : tintNorm < 0.34
                     ? { color: 0x72daf0 }
-                    : normalized < 0.67
+                    : tintNorm < 0.67
                         ? { color: 0x6ce0d9 }
                         : { color: 0x63f1c5 };
 
@@ -248,6 +255,7 @@ export default class FactorySettingsOverlay {
     open() {
         if (this._root.visible) return;
 
+        this._zoomTrackNorm = null;
         this.refresh();
         this._callbacks.onOpen?.();
 
@@ -276,6 +284,7 @@ export default class FactorySettingsOverlay {
         if (!this._root.visible) return;
 
         this._sliderDragging = null;
+        this._zoomTrackNorm = null;
         this._sliders.forEach((_, id) => this._setSliderHoverState(id, false));
         if (immediate) {
             this.scene.tweens.killTweensOf([this._backdrop, this._panel]);
@@ -321,7 +330,7 @@ export default class FactorySettingsOverlay {
     _handleGlobalPointerUp() {
         if (!this._sliderDragging) return;
         this._sliderDragging = null;
-        this._zoomPointerAnchor = null;
+        this._zoomTrackNorm = null;
         this.refresh();
     }
 
@@ -337,16 +346,17 @@ export default class FactorySettingsOverlay {
         const localX = pointer.worldX - PANEL_X;
         const normalized = (localX - SLIDER_LEFT) / SLIDER_WIDTH;
         const clamped = Math.max(0, Math.min(1, normalized));
+        if (def.id !== 'zoom') {
+            this._zoomTrackNorm = null;
+        }
         let value;
         if (def.id === 'zoom') {
+            this._zoomTrackNorm = clamped;
             const range = def.max - def.min;
-            if (!this._zoomPointerAnchor) {
-                this._zoomPointerAnchor = { n0: clamped, v0: getGameSettings().screenZoom };
-            }
-            const { n0, v0 } = this._zoomPointerAnchor;
-            // One full drag across the track moves zoom by 1/10 of the available range
-            // (e.g. ~7.5% on the 25%–100% control).
-            value = v0 + (clamped - n0) * (range / 10);
+            const raw = def.min + clamped * range;
+            const cur = getGameSettings().screenZoom;
+            // Slider follows pointer 1:1; only the applied zoom nudges 10% toward the target each tick.
+            value = cur + (raw - cur) * ZOOM_IMPACT_DAMP;
             value = Math.max(def.min, Math.min(def.max, value));
         } else {
             value = def.min + clamped * (def.max - def.min);

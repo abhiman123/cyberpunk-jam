@@ -382,8 +382,8 @@ export default class EndScene extends Phaser.Scene {
         // layers (depths up to ~25); otherwise the full-bleed art occludes the
         // conveyor debrief track entirely.
         const managerKey = this.textures.exists('manager_robot') ? 'manager_robot' : 'manager_robot_source';
-        this._managerSprite = this.add.image(1700, 470, managerKey)
-            .setScale(3.0)
+        this._managerSprite = this.add.image(1700, 370, managerKey)
+            .setScale(3 / 5)
             .setDepth(28)
             .setVisible(false);
         if (this.textures.exists(managerKey)) {
@@ -410,24 +410,6 @@ export default class EndScene extends Phaser.Scene {
         this._playerShadow = this.add.ellipse(0, 0, 1, 1, 0x000000, 0).setDepth(8).setVisible(false);
 
         this._world.add([this._managerSprite, this._umbrellaSprite]);
-        // Place the manager directly after the painted background (depth 1)
-        // but before the table/conveyor, lights, props and buttons. Find the
-        // last "background" layer dynamically so future layer additions don't
-        // break this ordering.
-        this._reorderManagerBehindFactory();
-    }
-
-    _reorderManagerBehindFactory() {
-        const list = this._world?.list;
-        if (!Array.isArray(list) || list.length === 0 || !this._managerSprite) return;
-        if (!list.includes(this._managerSprite)) return;
-        // Manager should sit just above the painted background art and the
-        // backing rectangle, so anything higher up the layer stack (table,
-        // conveyor, props, scrap button, lights) occludes him. Index 2 puts
-        // him right after the background rectangle (index 0) and the
-        // bottom-painted art (index 1).
-        const targetIndex = Math.min(2, Math.max(0, list.length - 1));
-        try { this._world.moveTo(this._managerSprite, targetIndex); } catch (_) { /* noop */ }
     }
 
     _drawPlayerFigure(g) {
@@ -763,7 +745,7 @@ export default class EndScene extends Phaser.Scene {
         this._setDebriefPanelAlpha(0);
         const managerEntry = this._enterActor(this._managerSprite, {
             x: 660,
-            y: 470,
+            y: 370,
             startX: 1700,
             duration: 4600,
             ease: 'Sine.InOut',
@@ -810,7 +792,7 @@ export default class EndScene extends Phaser.Scene {
 
         const umbrellaRide = this._enterActor(this._umbrellaSprite, {
             x: MACHINE_PRESENTATION.conveyorTargetX,
-            y: 470,
+            y: 370,
             startX: MACHINE_PRESENTATION.conveyorEntryX,
             duration: 4200,
             ease: 'Sine.InOut',
@@ -838,7 +820,7 @@ export default class EndScene extends Phaser.Scene {
 
     _setUmbrellaOnConveyorStart() {
         this._umbrellaSprite.setVisible(true);
-        this._umbrellaSprite.setPosition(MACHINE_PRESENTATION.conveyorEntryX, 470);
+        this._umbrellaSprite.setPosition(MACHINE_PRESENTATION.conveyorEntryX, 370);
     }
 
     _setFactoryRulingVisible(visible) {
@@ -865,7 +847,7 @@ export default class EndScene extends Phaser.Scene {
         this._setDebriefPanelAlpha(0);
         const managerEntry = this._enterActor(this._managerSprite, {
             x: 660,
-            y: 470,
+            y: 370,
             startX: 1700,
             duration: 4600,
             ease: 'Sine.InOut',
@@ -1004,7 +986,7 @@ export default class EndScene extends Phaser.Scene {
         this._umbrellaSprite.setAlpha(1);
         const scrap = this._rulingScrap;
         const tx = scrap ? scrap.x + scrap.displayWidth / 2 : 1038;
-        const ty = scrap ? scrap.y + scrap.displayHeight / 2 : 470;
+        const ty = scrap ? scrap.y + scrap.displayHeight / 2 : 370;
         this._umbrellaSprite.setPosition(tx, -160);
 
         return new Promise((resolve) => {

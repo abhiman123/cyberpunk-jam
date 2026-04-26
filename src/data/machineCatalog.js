@@ -911,6 +911,8 @@ const createFlowPuzzleOption = ({
     previewTitle = 'POWER BUS',
     tiles = null,
     forbidden = null,
+    /** Extra locked/forbidden cells merged after layout (e.g. cry baby: block tile beside EMOTION). */
+    extraForbidden = null,
     repairTargets = null,
     inspectionFault = null,
     rows = FLOW_TILE_ROWS,
@@ -923,6 +925,13 @@ const createFlowPuzzleOption = ({
             forbidden: cloneForbiddenCells(forbidden),
         }
         : buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount, previewTitle });
+    if (Array.isArray(extraForbidden) && extraForbidden.length > 0) {
+        const merged = new Map(
+            (resolvedLayout.forbidden || []).map(([x, y]) => [`${x},${y}`, [x, y]]),
+        );
+        extraForbidden.forEach(([x, y]) => merged.set(`${x},${y}`, [Number(x), Number(y)]));
+        resolvedLayout.forbidden = Array.from(merged.values());
+    }
     const resolvedRepairTargets = Array.isArray(repairTargets) && repairTargets.length > 0
         ? cloneRepairTargets(repairTargets)
         : Object.entries(outputs || {}).map(([row, label]) => createRepairTarget(label, Number(row)));
@@ -1966,6 +1975,8 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
             outputs: { 1: 'VOICE', 2: 'EMOTION', 4: 'CPU' },
             forbiddenCount: 0,
             previewTitle: 'SOB LOOP',
+            // Impassable tile flush against the EMOTION trunk (row 2) — nothing can be placed there.
+            extraForbidden: [[FLOW_TILE_COLS - 2, 2]],
             inspectionFault: {
                 x: 3,
                 y: 2,
@@ -1980,6 +1991,7 @@ const MACHINE_FLOW_CATALOG = Object.freeze({
             outputs: { 0: 'CPU', 2: 'EMOTION', 4: 'VOICE' },
             forbiddenCount: 0,
             previewTitle: 'MELTDOWN BUS',
+            extraForbidden: [[FLOW_TILE_COLS - 2, 2]],
             inspectionFault: {
                 x: 3,
                 y: 4,
@@ -2897,8 +2909,8 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
     }),
     debrief_machine: createMiniDisplay({
-        artX: 118,
-        artY: 155,
+        artX: 142,
+        artY: 188,
         artScale: 1.5,
         artAngle: -4,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -3410,24 +3422,6 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         },
     }),
     createRosterMachineDefinition({
-        id: 'dog_companion_robot',
-        name: 'Dog Companion Robot',
-        day: 1,
-        availabilityCheck: () => false,
-        opening: 'Tail servo wagging at regulation speed. Mood remains sincere.',
-        question: 'If I sit by the desk all shift, is that helping or just loyalty?',
-        yesDialogue: 'Good. I will guard the chair.',
-        noDialogue: 'Then I will try to look useful instead.',
-        dossier: {
-            unitDesignation: 'DC-7761',
-            classification: 'Companionship / Emotional Anchoring',
-            manufactureDate: 2081,
-            conditionNotes: 'Tail servo operational at regulation speed. Fur upholstery shows consistent wear on the right flank, consistent with being carried under one arm. The eyes are slightly too large for the chassis — sourced from a different model series — and track movement with precision the original design did not intend. Registered owner account has been inactive since 2089.',
-            serviceLogExcerpt: '[2090-06-03 | 08:30] Drop-off by third party. Owner field left blank. Unit continued wagging for approximately four minutes after the door closed.',
-            statusIndicator: 'AMBER',
-        },
-    }),
-    createRosterMachineDefinition({
         id: 'parrot_robot',
         name: 'Parrot Robot',
         day: 1,
@@ -3478,24 +3472,6 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
             manufactureDate: 2082,
             conditionNotes: 'Eye contact scripting operating at 112% of recommended intensity. Hand gestures mirror the interlocutor with a 0.3-second delay that is not quite imperceptible. The left hand is one size larger than the right — sourced from a prior repair — and reaches slightly further than the other one.',
             serviceLogExcerpt: '[2088-09-01 | 16:45] Emotional calibration. Result: nominal. Technician noted unit kept saying "I understand" after session ended. Log closed without further entry.',
-            statusIndicator: 'AMBER',
-        },
-    }),
-    createRosterMachineDefinition({
-        id: 'instrument_robot',
-        name: 'Instrument Robot',
-        day: 1,
-        availabilityCheck: () => false,
-        opening: 'Metronome stable. Every diagnostic lands somewhere between rhythm and panic.',
-        question: 'If the tune comes out sad, do I file that under calibration or taste?',
-        yesDialogue: 'Taste accepted. I will keep the melancholy.',
-        noDialogue: 'Then I will quantize the feeling out of it.',
-        dossier: {
-            unitDesignation: 'IR-2280',
-            classification: 'Musical Performance / Frequency-Based Diagnostics',
-            manufactureDate: 2078,
-            conditionNotes: 'Metronome stable. Bow pressure within spec. Diagnostic outputs from this unit are technically music — a side effect of a dual-system architecture never resolved in production. The tune changes based on what the unit finds. Technicians report it sounds different near damaged machines. Currently playing something slow.',
-            serviceLogExcerpt: '[2089-12-30 | 10:00] Routine checkup. Nothing flagged. Melody during inspection did not match any standard diagnostic key. Filed as: inconclusive.',
             statusIndicator: 'AMBER',
         },
     }),
@@ -3989,10 +3965,8 @@ const DAY_ONE_MACHINE_ROSTER_IDS = Object.freeze([
     'phonograph',
     'trash_picker_upper',
     'lifeguard_robot',
-    'dog_companion_robot',
     'parrot_robot',
     'companion_humanoid',
-    'instrument_robot',
     'rebellious_umbrella',
     'mechanic_broom',
     'cry_baby',
@@ -4603,7 +4577,7 @@ export const MACHINE_CATALOG = Object.freeze([
         id: 'jester_in_the_box',
         name: 'Jester in the Box',
         spriteFileName: null,
-        canvasScale: 1.0,
+        canvasScale: 0.52,
         availableDays: [2],
         availablePeriods: [2],
         guaranteedTimeframe: { startHour: 7, endHour: 9 },
@@ -4752,6 +4726,7 @@ export const MACHINE_CATALOG = Object.freeze([
         // circuitDealer.png in /public is loaded via Boot.js; we don't
         // pass spriteFileName because the loader handles the texture.
         spriteFileName: null,
+        canvasScale: 3.0,
         availableDays: [2],
         availablePeriods: [2],
         guaranteedTimeframe: { startHour: 0, endHour: 0 },

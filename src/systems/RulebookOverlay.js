@@ -519,9 +519,8 @@ export default class RulebookOverlay {
 
         // Numbered scrap rule rows. Each number tile grows + brightens on
         // hover, and hovering also swaps the right card to that day's scrap-
-        // rule preview image. On the OVERVIEW tab, scrap rows are read-only
-        // (no hover, no right-card swap).
-        const isOverview = this._selectedTab === 'overview';
+        // rule preview image (including on OVERVIEW — pointerout restores the
+        // default diagram).
         const scrapEntries = resolveDayContentWithDays(content.scrapRules, day);
         scrapEntries.forEach((entry, idx) => {
             const rowY = cursor;
@@ -557,29 +556,27 @@ export default class RulebookOverlay {
                 ruleText.setColor(active ? '#eaffff' : '#c8e3ec');
             };
 
-            if (!isOverview) {
-                hoverHit.setInteractive({ useHandCursor: true });
-                hoverHit.on('pointerover', () => {
-                    setHoverState(true);
-                    this._hoveredHowRule = null;
-                    this._hoveredScrapRule = {
-                        tab: this._selectedTab,
-                        index: idx,
-                        day: entry.day,
-                        text: entry.text,
-                    };
-                    this._refreshDiagramOnly();
-                });
-                hoverHit.on('pointerout', () => {
-                    setHoverState(false);
-                    if (this._hoveredScrapRule?.tab === this._selectedTab
-                        && this._hoveredScrapRule?.index === idx) {
-                        this._hoveredScrapRule = null;
-                        this._refreshDiagramOnly();
-                    }
-                });
-                this._scrapNumberHovers.set(idx, { setHoverState });
-            }
+            hoverHit.setInteractive({ useHandCursor: true });
+            hoverHit.on('pointerover', () => {
+                setHoverState(true);
+                this._hoveredHowRule = null;
+                this._hoveredScrapRule = {
+                    tab: this._selectedTab,
+                    index: idx,
+                    day: entry.day,
+                    text: entry.text,
+                };
+                this._refreshDiagramOnly();
+            });
+            hoverHit.on('pointerout', () => {
+                setHoverState(false);
+                if (this._hoveredScrapRule?.tab === this._selectedTab
+                    && this._hoveredScrapRule?.index === idx) {
+                    this._hoveredScrapRule = null;
+                }
+                this._refreshDiagramOnly();
+            });
+            this._scrapNumberHovers.set(idx, { setHoverState });
 
             scrollContainer.add([numBg, numLabel, ruleText, hoverHit]);
             cursor += Math.max(numBoxSize, ruleText.height) + 16;
