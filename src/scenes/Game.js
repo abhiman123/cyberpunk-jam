@@ -7466,9 +7466,15 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _getCurrentMachineConveyorOffsetY(machineVariant = this._currentMachineVariant) {
+        // Per-machine vertical nudge so units actually sit ON the belt.
+        // Short or wide units (Roombas) get pushed down further because
+        // their texture is anchored at center but the visible shape only
+        // fills the bottom half of the canvas.
         const offsets = {
             lifeguard_robot: 18,
             trash_picker_upper: 16,
+            house_roomba: 36,
+            pool_cleanup_roomba: 36,
         };
         return offsets[machineVariant?.machineId] || 0;
     }

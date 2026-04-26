@@ -374,8 +374,12 @@ export default class MachinePuzzleOverlay {
         this._tableGfx.strokeRoundedRect(tableLeft, tableTop, tableWidth, tableHeight, 22);
 
         const slotRectWidth = MACHINE_PUZZLE.dominoWidth + 18;
+        // Reserve a small horizontal safe margin inside the table so the
+        // rightmost / leftmost domino slot rect doesn't kiss the wooden
+        // border (or in worst-case puzzles spill past it / off-screen).
+        const horizontalSafeMargin = 18;
         const slotSpacing = count > 1
-            ? Math.min(124, (tableWidth - slotRectWidth) / (count - 1))
+            ? Math.min(124, (tableWidth - slotRectWidth - (2 * horizontalSafeMargin)) / (count - 1))
             : 0;
         const slotStartX = count > 1 ? -(slotSpacing * (count - 1)) / 2 : 0;
         const slotY = tableCenterY;
