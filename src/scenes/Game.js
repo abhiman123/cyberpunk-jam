@@ -151,6 +151,12 @@ export default class GameScene extends Phaser.Scene {
 
         this._caseSM = new StateMachine('intake');
 
+        if (window.WavedashJS) {
+                window.WavedashJS.init();
+            }
+
+        this._caseSM = new StateMachine('intake');
+
         const fx = applyCyberpunkLook(this);
         this._cmFilter = fx.cmFilter;
 
@@ -225,6 +231,11 @@ export default class GameScene extends Phaser.Scene {
             }
         } else {
             this.time.delayedCall(300, () => this._beginShift());
+        }
+
+        // ADD THIS: Tell Wavedash the game is ready to be seen
+        if (window.WavedashJS) {
+            window.WavedashJS.signalReady();
         }
     }
 

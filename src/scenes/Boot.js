@@ -6,6 +6,12 @@ export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
 
     preload() {
+        if (window.WavedashJS) {
+            this.load.on('progress', (value) => {
+                // value is a float between 0.0 and 1.0
+                window.WavedashJS.updateLoadProgressZeroToOne(value);
+            });
+        }
         // Loading bar
         const barBg = this.add.rectangle(640, 360, 400, 20, 0x222222);
         const bar   = this.add.rectangle(440, 360, 0, 16, 0x00ccff);
