@@ -153,6 +153,7 @@ export default class CreditsScene extends Phaser.Scene {
     }
 
     _installSkipHandler() {
+        // Keyboard still skips straight to the end (long-standing behaviour).
         const skip = () => {
             if (!this._scrollTween || this._scrollTween.progress >= 1) return;
             this._scrollTween.complete();
@@ -160,13 +161,21 @@ export default class CreditsScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-SPACE', skip);
         this.input.keyboard?.on('keydown-ESC', skip);
         this.input.keyboard?.on('keydown-ENTER', skip);
-        // Background tap to skip — registered behind PLAY AGAIN, which only
-        // becomes interactive after fade-in (alpha gates pointer in Phaser).
+
+        // Click on the credits area no longer cancels the scroll — each click
+        // ramps the tween's timeScale up so the user can fast-forward through
+        // names without losing them entirely.
+        this._scrollSpeedMultiplier = 1;
+        const speedUp = () => {
+            if (!this._scrollTween || this._scrollTween.progress >= 1) return;
+            this._scrollSpeedMultiplier = Math.min(8, this._scrollSpeedMultiplier * 1.7);
+            this._scrollTween.timeScale = this._scrollSpeedMultiplier;
+        };
         const bg = this.add.zone(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W, SCREEN_H)
             .setOrigin(0.5)
             .setDepth(0)
             .setInteractive();
-        bg.on('pointerdown', skip);
+        bg.on('pointerdown', speedUp);
     }
 
     _playMusic() {
