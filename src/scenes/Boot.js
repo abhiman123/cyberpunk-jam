@@ -98,7 +98,6 @@ export default class BootScene extends Phaser.Scene {
         this._generatePlaceholders();
 
         if (window.Wavedash) {
-            // This dismisses the Wavedash loading screen
             window.Wavedash.init(); 
         }
 
