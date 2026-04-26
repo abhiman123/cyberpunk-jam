@@ -177,16 +177,17 @@ export default class DebugConsolePuzzle extends MinigameBase {
 
         this._panel = this.scene.add.container(640, 360).setDepth(depth);
 
+        const headerRule = this.scene.add.rectangle(-5, -252, PANEL_WIDTH - 90, 2, 0x285a9a, 0.82);
+
         // --- Frames ---
         const outer = this.scene.add.rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x050a0c, 0.98)
             .setStrokeStyle(2, 0x285a9a, 0.95);
         const inner = this.scene.add.rectangle(0, 0, PANEL_WIDTH - 34, PANEL_HEIGHT - 34, 0x07090f, 0.96)
             .setStrokeStyle(1, 0x18283d, 0.72);
-        const headerRule = this.scene.add.rectangle(0, -252, PANEL_WIDTH - 90, 2, 0x285a9a, 0.82);
+
         // Command frame — pink-accented focal point
-        const commandFrame = this.scene.add.rectangle(-231, -112, 572, 118, 0x06070e, 0.97)
-            .setStrokeStyle(2, 0xC040C8, 0.88);
-        const commandTopAccent = this.scene.add.rectangle(-231, -171, 572, 2, 0xF684F7, 0.55);
+        const commandFrame = this.scene.add.rectangle(-232, -138, 572, 118, 0x06070e, 0.97)
+            .setStrokeStyle(1, 0xC040C8, 0.88);
         // Terminal-style output panels: magenta header strip on top with a
         // CONSOLE > label, then the dark monospace body underneath. Matches
         // the rulebook CODE diagram so the player sees the same visual
@@ -224,46 +225,26 @@ export default class DebugConsolePuzzle extends MinigameBase {
         cornerGfx.lineBetween(-hw, hh - arm, -hw, hh);   cornerGfx.lineBetween(-hw, hh, -hw + arm, hh);
         cornerGfx.lineBetween(hw - arm, hh, hw, hh);     cornerGfx.lineBetween(hw, hh - arm, hw, hh);
 
-        // Corner brackets on command frame
-        const cmdBracketGfx = this.scene.add.graphics();
-        cmdBracketGfx.lineStyle(2, 0xF684F7, 0.65);
-        const cfx = -231, cfy = -112, cfw2 = 286, cfh2 = 59, ca = 12;
-        cmdBracketGfx.lineBetween(cfx - cfw2, cfy - cfh2 + ca, cfx - cfw2, cfy - cfh2);
-        cmdBracketGfx.lineBetween(cfx - cfw2, cfy - cfh2, cfx - cfw2 + ca, cfy - cfh2);
-        cmdBracketGfx.lineBetween(cfx + cfw2 - ca, cfy - cfh2, cfx + cfw2, cfy - cfh2);
-        cmdBracketGfx.lineBetween(cfx + cfw2, cfy - cfh2, cfx + cfw2, cfy - cfh2 + ca);
-        cmdBracketGfx.lineBetween(cfx - cfw2, cfy + cfh2 - ca, cfx - cfw2, cfy + cfh2);
-        cmdBracketGfx.lineBetween(cfx - cfw2, cfy + cfh2, cfx - cfw2 + ca, cfy + cfh2);
-        cmdBracketGfx.lineBetween(cfx + cfw2 - ca, cfy + cfh2, cfx + cfw2, cfy + cfh2);
-        cmdBracketGfx.lineBetween(cfx + cfw2, cfy + cfh2 - ca, cfx + cfw2, cfy + cfh2);
-
-        // --- Scanline overlay ---
-        const scanlines = this.scene.add.graphics();
-        scanlines.lineStyle(1, 0x000000, 0.1);
-        for (let sy = -hh; sy < hh; sy += 3) {
-            scanlines.lineBetween(-hw, sy, hw, sy);
-        }
-
         // --- Text ---
-        const title = this.scene.add.text(-520, -284, `${this._machineName} // SOFTWARE DIAGNOSTIC`, {
+        const title = this.scene.add.text(-520, -277, `MACHINE DIAGNOSTICS: ${this._machineName}`, {
             fontFamily: 'Courier New',
             fontSize: '22px',
-            color: '#cce4f0',
+            color: '#ffffff',
             letterSpacing: 3,
             wordWrap: { width: 900 },
         }).setOrigin(0, 0.5);
         const subtitle = this.scene.add.text(-520, -234, [
-            debugPuzzle.description || 'Run the diagnostic command. If the output drifts, patch the machine and stabilize the test.',
+            debugPuzzle.description || 'Execute the diagnostics command. If it errors, patch the machine.',
             this._specialCommand?.hint || '',
         ].filter(Boolean).join('\n'), {
             fontFamily: 'Courier New',
             fontSize: '12px',
-            color: '#506a8a',
+            color: '#ffffff',
             wordWrap: { width: 840 },
             lineSpacing: 4,
         }).setOrigin(0, 0);
 
-        const commandLabel = this.scene.add.text(-509, -155, 'COMMAND LINE', {
+        const commandLabel = this.scene.add.text(-510, -184, 'COMMAND LINE', {
             fontFamily: 'Courier New',
             fontSize: '13px',
             color: '#F684F7',
@@ -302,8 +283,8 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._toggleSpecialCommandMode();
         });
 
-        this._commandZone = this.scene.add.rectangle(-231, -96, this._commandZoneWidth, this._commandZoneHeight, 0x03050a, 0.99)
-            .setStrokeStyle(2, 0xF684F7, 0.48)
+        this._commandZone = this.scene.add.rectangle(-232, -138, this._commandZoneWidth, this._commandZoneHeight, 0x03050a, 0.99)
+            .setStrokeStyle(1, 0xF684F7, 0.48)
             .setInteractive({ useHandCursor: true });
         this._commandZone.on('pointerdown', (pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
@@ -421,7 +402,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
             inner,
             headerRule,
             commandFrame,
-            commandTopAccent,
             actualFrame,
             expectedFrame,
             actualHeaderBg,
@@ -430,7 +410,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
             expectedHeaderLabel,
             detailFrame,
             cornerGfx,
-            cmdBracketGfx,
             title,
             subtitle,
             commandLabel,
@@ -450,7 +429,6 @@ export default class DebugConsolePuzzle extends MinigameBase {
             this._messageText,
             this._closeButtonBg,
             this._closeButtonText,
-            scanlines,
         ]);
 
         this.container.add([this._blocker, this._panel]);
