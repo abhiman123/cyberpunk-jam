@@ -7105,14 +7105,13 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const travelDistance = Math.abs(MACHINE_PRESENTATION.conveyorExitX - this._unitContainer.x);
-        const exitDurationMs = Math.max(200, Math.round((travelDistance / MACHINE_PRESENTATION.conveyorSpeedPxPerSecond) * 1000));
         const conveyorLayers = [this._mainViewLayers?.mainview_bottom].filter(Boolean);
         if (conveyorLayers.length > 0) {
             this._conveyorAnimTween?.stop();
             this._conveyorAnimTween = this.tweens.add({
                 targets: conveyorLayers,
                 tilePositionX: `+=${travelDistance}`,
-                duration: exitDurationMs,
+                duration: 500,
                 ease: 'Linear',
             });
         }
@@ -7120,7 +7119,7 @@ export default class GameScene extends Phaser.Scene {
         this._unitExitTween = this.tweens.add({
             targets: this._unitContainer,
             x: MACHINE_PRESENTATION.conveyorExitX,
-            duration: exitDurationMs,
+            duration: 500,
             ease: 'Linear',
             onComplete: () => {
                 this._unitExitTween = null;
