@@ -391,14 +391,19 @@ export default class CircuitRouting extends MinigameBase {
             }
         }
         this._tiles = tiles;
-        // Forbidden cells were the amber-tinted "obstacle" tiles. They no
-        // longer ship as a player-facing mechanic — the puzzle was always
-        // solvable around them, so they read as decorative dead weight.
-        // Force the set empty regardless of what the data layer or saved
-        // progress provides; that keeps every legacy field a no-op without
-        // having to scrub case definitions.
-        forbiddenList = [];
-        this._forbidden = new Set();
+        // Only **authored** forbidden coordinates (machine flow options, e.g.
+        // cry baby’s EMOTION-adjacent cell) are active. Random per-session
+        // forbidden from legacy generation is not re-applied here.
+        const authoredForbidden = Array.isArray(circuit.forbidden) && circuit.forbidden.length > 0
+            ? circuit.forbidden.map(([fx, fy]) => [Number(fx), Number(fy)])
+            : [];
+        this._forbidden = new Set(authoredForbidden.map(([fx, fy]) => `${fx},${fy}`));
+        authoredForbidden.forEach(([fx, fy]) => {
+            if (fy >= 0 && fy < this.rows && fx >= 0 && fx < this.cols && this._tiles[fy]?.[fx]) {
+                this._tiles[fy][fx] = { type: 'empty', rotation: 0 };
+            }
+        });
+        this._stripWiresOnForbiddenCells();
         this._tileGfx = [];
 
         // Full-screen input blocker so clicks don't leak to UI below
@@ -592,11 +597,15 @@ export default class CircuitRouting extends MinigameBase {
         const title = this.scene.add.text(-90, -(panelHeight / 2) + 16, 'REPAIR TARGETS', {
             fontFamily: 'Courier New', fontSize: '12px', color: '#8ffcff', letterSpacing: 1,
         }).setOrigin(0, 0.5);
-        const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, this._outputSpecs.some((target) => target.powerClass === 'red')
-            ? 'Red module ports are crackling hazards. They cannot be repaired safely.'
-            : (this._outputSpecs.some((target) => target.powerClass && target.powerClass !== 'neutral')
-                ? 'Match each output to the color feed it is asking for.'
-                : 'Route power to restore each subsystem.'), {
+        const day2ScrapFlow = Boolean(this._circuit?.inspectionFault && Number(this._circuit?.dayStage || 1) === 2);
+        const hintBody = day2ScrapFlow
+            ? 'SCRAP LINE: red target class marks an unsafe bus — this unit cannot be cleared on the floor.'
+            : (this._outputSpecs.some((target) => target.powerClass === 'red')
+                ? 'Red module ports are crackling hazards. They cannot be repaired safely.'
+                : (this._outputSpecs.some((target) => target.powerClass && target.powerClass !== 'neutral')
+                    ? 'Match each output to the color feed it is asking for.'
+                    : 'Route power to restore each subsystem.'));
+        const hint = this.scene.add.text(-90, (panelHeight / 2) - 14, hintBody, {
             fontFamily: 'Courier New', fontSize: '9px', color: '#6da4ad', wordWrap: { width: 178 },
         }).setOrigin(0, 0.5);
 
@@ -623,6 +632,14 @@ export default class CircuitRouting extends MinigameBase {
         });
 
         this.container.add(panel);
+    }
+
+    /** Day-2 flow rolls that include an inspection fault should read as scrap in the HUD (red target cue). */
+    _flowDay2ScrapHudActive() {
+        return Boolean(
+            this._inspectionFault
+            && Number(this._circuit?.dayStage || 1) === 2,
+        );
     }
 
     _getWireFilter(x, y) {
@@ -889,6 +906,10 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     _startFlowDragFromBoard(pending, pointer) {
+        if (this._forbidden.has(`${pending.gx},${pending.gy}`)) {
+            this._flowBoardPending = null;
+            return;
+        }
         const t = this._tiles[pending.gy]?.[pending.gx];
         if (!t || t.type === 'empty' || t.locked) {
             this._flowBoardPending = null;
@@ -1067,7 +1088,8 @@ export default class CircuitRouting extends MinigameBase {
             if (d < threshold) {
                 const { gx, gy } = this._flowBoardPending;
                 const live = this._tiles[gy]?.[gx];
-                if (live && live.type !== 'empty' && !live.locked) {
+                if (live && live.type !== 'empty' && !live.locked
+                    && !this._forbidden.has(`${gx},${gy}`)) {
                     live.rotation = (live.rotation + 1) % 4;
                     const view = this._tileGfx[gy][gx];
                     this._animateTileRotation(view, live.rotation);
@@ -1537,22 +1559,27 @@ export default class CircuitRouting extends MinigameBase {
 
     _refreshRepairTargets(repairStates, forbiddenUsed) {
         const stateMap = new Map((repairStates || []).map((state) => [state.key, state]));
+        const scrapHud = this._flowDay2ScrapHudActive();
 
         this._repairTargetViews.forEach(({ target, dot, nameText, statusText }) => {
             const state = stateMap.get(target.key) || target;
             const repaired = Boolean(state.repaired);
             const invalidSignal = Boolean(state.feedCount > 0 && state.issueCode);
             const isSurge = state.issueCode === 'day3-surge';
+            const forceRedScrapCue = scrapHud && !repaired && !invalidSignal && !forbiddenUsed;
+            const requirementClass = forceRedScrapCue
+                ? 'red'
+                : (state.actualPowerClass || target.powerClass || 'neutral');
             const displayPalette = isSurge
                 ? getFlowPowerPalette('red')
-                : getFlowPowerPalette(state.actualPowerClass || target.powerClass || 'neutral');
+                : getFlowPowerPalette(requirementClass);
             const actualPalette = displayPalette;
-            const idleStatusColor = target.powerClass && target.powerClass !== 'neutral'
+            const idleStatusColor = (target.powerClass && target.powerClass !== 'neutral') || forceRedScrapCue
                 ? actualPalette.label
                 : '#ffb695';
             dot.setFillStyle(repaired ? displayPalette.tint : (invalidSignal ? displayPalette.tint : 0x2f4a57), 1);
-            dot.setStrokeStyle(1, repaired ? 0xe8fff1 : (invalidSignal ? 0xff4f4f : 0x7aa8b7), 0.88);
-            nameText.setColor(repaired ? '#ddffed' : (invalidSignal ? (isSurge ? '#ff9b8f' : '#ffd7d1') : '#b8dbe1'));
+            dot.setStrokeStyle(1, repaired ? 0xe8fff1 : (invalidSignal ? 0xff4f4f : (forceRedScrapCue ? 0xff5a4a : 0x7aa8b7)), 0.88);
+            nameText.setColor(repaired ? '#ddffed' : (invalidSignal ? (isSurge ? '#ff9b8f' : '#ffd7d1') : (forceRedScrapCue ? '#ffb4ae' : '#b8dbe1')));
             statusText
                 .setText(
                     repaired
@@ -1563,8 +1590,8 @@ export default class CircuitRouting extends MinigameBase {
                                 : String(state.issueCode || 'MISMATCH').replace(/-/g, ' ').toUpperCase())
                             : (forbiddenUsed
                                 ? 'BROKEN // MOD'
-                                : (target.powerClass === 'red'
-                                    ? 'HAZARD // SCRAP'
+                                : (forceRedScrapCue || target.powerClass === 'red'
+                                    ? 'RED // SCRAP'
                                     : (target.powerClass && target.powerClass !== 'neutral'
                                         ? String(target.powerClass).toUpperCase()
                                         : 'BROKEN'))))
@@ -1902,7 +1929,22 @@ export default class CircuitRouting extends MinigameBase {
         this._energyTickEvent = null;
     }
 
+    _stripWiresOnForbiddenCells() {
+        if (!this._forbidden?.size || !this._tiles) return;
+        this._forbidden.forEach((key) => {
+            const [xs, ys] = key.split(',');
+            const x = Number(xs);
+            const y = Number(ys);
+            if (y < 0 || y >= this.rows || x < 0 || x >= this.cols) return;
+            const t = this._tiles[y][x];
+            if (t && t.type !== 'empty') {
+                this._tiles[y][x] = { type: 'empty', rotation: 0 };
+            }
+        });
+    }
+
     _updateAll() {
+        this._stripWiresOnForbiddenCells();
         const { reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity, tilePowerClasses } = this._computeReached();
         const snapshot = this._buildProgressSnapshot({ reached, reachedOutputs, forbiddenHit, flowSegments, outputFeeds, sourceActivity, tilePowerClasses });
 

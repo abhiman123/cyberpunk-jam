@@ -124,6 +124,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
             fixed: false,
             outputMatched: false,
             dayStage: 1,
+            scrapVisualStage: 1,
             resultType: 'stable',
             bugsEnabled: false,
             bugsSquashed: 0,
@@ -946,12 +947,21 @@ export default class DebugConsolePuzzle extends MinigameBase {
             : (this.evidence.actualOutput || '');
 
         const dayStage = Math.max(1, Math.min(3, Number(this._puzzle?.dayStage || this.evidence.dayStage || 1)));
+        const scrapVisualStage = Math.max(1, Math.min(dayStage, Number(this.evidence.scrapVisualStage || dayStage) || dayStage));
         const lowDayHarness = dayStage <= 2;
         const scrapLike = this.evidence.scrapRequired || this.evidence.phase === 'scrap';
 
         if (lowDayHarness && scrapLike) {
-            this._expectedOutputText?.setText('INVALID');
-            this._expectedOutputText?.setColor('#ff3333');
+            if (dayStage >= 2) {
+                this._expectedOutputText?.setText('INVALID');
+                this._expectedOutputText?.setColor('#ff3333');
+            } else if (scrapVisualStage <= 1) {
+                this._expectedOutputText?.setText(this._maskScrapOutput(this.evidence.expectedOutput || 'INVALID'));
+                this._expectedOutputText?.setColor('#9fb8d6');
+            } else {
+                this._expectedOutputText?.setText('INVALID');
+                this._expectedOutputText?.setColor('#ff3333');
+            }
         } else {
             this._expectedOutputText?.setText(this.evidence.expectedOutput || 'NO EXPECTED OUTPUT');
             this._expectedOutputText?.setColor('#32AAFF');
@@ -1140,6 +1150,7 @@ export default class DebugConsolePuzzle extends MinigameBase {
                 scrapKind: this.evidence.scrapKind || 'compliance',
                 scrapStatus: this.evidence.scrapStatus || 'PROTOCOL INVALID',
                 scrapReason: this.evidence.scrapReason || 'Output format is compromised. Floor repair is forbidden.',
+                scrapVisualStage: this.evidence.scrapVisualStage || Math.max(1, Math.min(3, Number(this.evidence.dayStage || 1))),
             });
             this._hiddenInput.value = '';
             this._stopBugSpawner();

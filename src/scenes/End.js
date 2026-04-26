@@ -397,7 +397,7 @@ export default class EndScene extends Phaser.Scene {
             : (this.textures.exists('machine_rebellious_umbrella_v2')
                 ? 'machine_rebellious_umbrella_v2'
                 : 'machine_rebellious_umbrella');
-        this._umbrellaSprite = this.add.image(1440, 360, umbrellaTextureKey)
+        this._umbrellaSprite = this.add.image(1440, 330, umbrellaTextureKey)
             .setScale(1.1)
             .setDepth(29)
             .setVisible(false);
@@ -745,7 +745,7 @@ export default class EndScene extends Phaser.Scene {
         this._setDebriefPanelAlpha(0);
         const managerEntry = this._enterActor(this._managerSprite, {
             x: 660,
-            y: 370,
+            y: 340,
             startX: 1700,
             duration: 4600,
             ease: 'Sine.InOut',
@@ -792,7 +792,7 @@ export default class EndScene extends Phaser.Scene {
 
         const umbrellaRide = this._enterActor(this._umbrellaSprite, {
             x: MACHINE_PRESENTATION.conveyorTargetX,
-            y: 370,
+            y: 340,
             startX: MACHINE_PRESENTATION.conveyorEntryX,
             duration: 4200,
             ease: 'Sine.InOut',
@@ -820,7 +820,7 @@ export default class EndScene extends Phaser.Scene {
 
     _setUmbrellaOnConveyorStart() {
         this._umbrellaSprite.setVisible(true);
-        this._umbrellaSprite.setPosition(MACHINE_PRESENTATION.conveyorEntryX, 370);
+        this._umbrellaSprite.setPosition(MACHINE_PRESENTATION.conveyorEntryX, 340);
     }
 
     _setFactoryRulingVisible(visible) {
@@ -847,7 +847,7 @@ export default class EndScene extends Phaser.Scene {
         this._setDebriefPanelAlpha(0);
         const managerEntry = this._enterActor(this._managerSprite, {
             x: 660,
-            y: 370,
+            y: 340,
             startX: 1700,
             duration: 4600,
             ease: 'Sine.InOut',

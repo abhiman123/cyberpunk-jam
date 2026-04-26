@@ -518,7 +518,7 @@ export default class GearGridPuzzle extends MinigameBase {
         const showClampExplainer = stage >= 3 && Boolean(this._puzzle?.useDeadlockClamp);
 
         if (!showRustExplainer && !showClampExplainer) {
-            const emptyText = this.scene.add.text(218, 104, 'NO SPECIAL HAZARDS', {
+            const emptyText = this.scene.add.text(218, 84, 'NO SPECIAL HAZARDS', {
                 fontFamily: 'Courier New',
                 fontSize: '11px',
                 color: '#c9dbe3',
@@ -557,7 +557,7 @@ export default class GearGridPuzzle extends MinigameBase {
         }
 
         explainers.forEach((entry, index) => {
-            const y = 110 + (index * 110);
+            const y = 72 + (index * 106);
 
             const socketBg = this.scene.add.rectangle(218, y, 64, 64, 0x081a23, 0.94)
                 .setStrokeStyle(1, 0x5dc5e2, 0.65);
@@ -636,12 +636,14 @@ export default class GearGridPuzzle extends MinigameBase {
     _getFaultTypeForStaticView(row, col) {
         const fault = this._puzzle?.inspectionFault;
         if (!fault || fault.pieceId) return null;
+        if (!this._shouldRevealInspectionFault(fault.type)) return null;
         return fault.row === row && fault.col === col ? fault.type : null;
     }
 
     _getFaultTypeForPiece(piece, row = piece?.row, col = piece?.col) {
         const fault = this._puzzle?.inspectionFault;
         if (!fault || !piece) return null;
+        if (!this._shouldRevealInspectionFault(fault.type)) return null;
         if (fault.pieceId) {
             return fault.pieceId === (piece.id || null) ? fault.type : null;
         }
@@ -1087,6 +1089,8 @@ export default class GearGridPuzzle extends MinigameBase {
         visual.faultGfx.clear();
         visual.faultText.setVisible(false).setText('').setAngle(0).setPosition(0, 0);
 
+        const scrapD2 = Number(this._puzzle?.dayStage || 1) === 2 && Boolean(this._puzzle?.inspectionFault);
+
         if (clamped && !isClamp) {
             const size = this._cellSize - 16;
             visual.faultGfx.fillStyle(0xcfd5db, 0.12);
@@ -1105,7 +1109,7 @@ export default class GearGridPuzzle extends MinigameBase {
             // or the IN/OUT text. Width sized to the text + padding.
             visual.faultGfx.fillStyle(0x070707, 0.34);
             visual.faultGfx.fillTriangle(-12, -16, 6, -2, 22, 14);
-            visual.faultGfx.lineStyle(3, 0xffc39c, 0.95);
+            visual.faultGfx.lineStyle(scrapD2 ? 4 : 3, scrapD2 ? 0xff6a5c : 0xffc39c, 0.95);
             visual.faultGfx.beginPath();
             visual.faultGfx.moveTo(-16, -14);
             visual.faultGfx.lineTo(-4, -2);
@@ -1119,28 +1123,34 @@ export default class GearGridPuzzle extends MinigameBase {
             const pillY = (this._cellSize / 2) + 4;
             const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
             const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
-            visual.faultGfx.fillStyle(0x4a0d0a, 0.95);
+            visual.faultGfx.fillStyle(scrapD2 ? 0x5a0c0c : 0x4a0d0a, 0.95);
             visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
-            visual.faultGfx.lineStyle(1, 0xffc39c, 0.92);
+            visual.faultGfx.lineStyle(1, scrapD2 ? 0xff7a6e : 0xffc39c, 0.92);
             visual.faultGfx.strokeRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
             visual.faultText
                 .setText('CRACK')
                 .setVisible(true)
+                .setColor(scrapD2 ? '#ffb8b0' : '#ffe3df')
                 .setPosition(0, pillY + pillH / 2);
             return;
         }
 
         if (faultType === 'virus-gear') {
-            visual.faultGfx.lineStyle(2, 0xff736c, 0.96);
+            visual.faultGfx.lineStyle(scrapD2 ? 3 : 2, scrapD2 ? 0xff4d44 : 0xff736c, 0.96);
             visual.faultGfx.strokeRoundedRect(-24, -10, 48, 20, 6);
             visual.faultGfx.lineBetween(-20, -14, 20, 14);
             visual.faultGfx.lineBetween(-16, 14, 16, -14);
-            visual.faultText.setText('VIRUS').setVisible(true).setAngle(-16).setPosition(0, 0);
+            visual.faultText
+                .setText('VIRUS')
+                .setVisible(true)
+                .setAngle(-16)
+                .setPosition(0, 0)
+                .setColor(scrapD2 ? '#ffb8b0' : '#ffe3df');
             return;
         }
 
         if (faultType === 'spark-instability') {
-            visual.faultGfx.lineStyle(2, 0xff6960, 0.96);
+            visual.faultGfx.lineStyle(scrapD2 ? 3 : 2, scrapD2 ? 0xff4d44 : 0xff6960, 0.96);
             visual.faultGfx.lineBetween(-20, -16, -30, -28);
             visual.faultGfx.lineBetween(-4, -24, 4, -38);
             visual.faultGfx.lineBetween(14, -10, 26, -24);
@@ -1151,13 +1161,14 @@ export default class GearGridPuzzle extends MinigameBase {
             const pillY = (this._cellSize / 2) + 4;
             const pillW = Math.max(46, Math.floor(this._cellSize * 0.62));
             const pillH = Math.max(14, Math.floor(this._cellSize * 0.20));
-            visual.faultGfx.fillStyle(0x3a0a0a, 0.95);
+            visual.faultGfx.fillStyle(scrapD2 ? 0x5a0c0c : 0x3a0a0a, 0.95);
             visual.faultGfx.fillRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
-            visual.faultGfx.lineStyle(1, 0xff6960, 0.92);
+            visual.faultGfx.lineStyle(1, scrapD2 ? 0xff7a6e : 0xff6960, 0.92);
             visual.faultGfx.strokeRoundedRect(-pillW / 2, pillY, pillW, pillH, pillH / 2);
             visual.faultText
                 .setText('SPARK')
                 .setVisible(true)
+                .setColor(scrapD2 ? '#ffb8b0' : '#ffe3df')
                 .setPosition(0, pillY + pillH / 2);
         }
     }
@@ -1187,6 +1198,15 @@ export default class GearGridPuzzle extends MinigameBase {
     _beginPieceIntent(pieceView, pointer) {
         if (!this.active) return;
         if (pieceView.piece.movable === false) return;
+        if (pieceView.piece.role === 'deadlock-clamp') {
+            const blockedByStackedPart = this._pieceViews.some((otherPiece) => (
+                otherPiece !== pieceView
+                && otherPiece.piece.row === pieceView.piece.row
+                && otherPiece.piece.col === pieceView.piece.col
+                && otherPiece.piece.role !== 'deadlock-clamp'
+            ));
+            if (blockedByStackedPart) return;
+        }
         if (this._dragState && this._dragState.pointerId !== pointer.id) return;
 
         this._dragState = {
@@ -1299,10 +1319,7 @@ export default class GearGridPuzzle extends MinigameBase {
     _canPlacePieceAt(pieceView, row, col) {
         if (pieceView?.piece?.role === 'deadlock-clamp') {
             const cellCode = this._board?.[row]?.[col];
-            if (cellCode === GEAR_CODES.WALL || cellCode === GEAR_CODES.SOURCE || cellCode === GEAR_CODES.SINK) {
-                return false;
-            }
-
+            if (cellCode === GEAR_CODES.WALL) return false;
             return !this._pieceViews.some((otherPiece) => (
                 otherPiece !== pieceView
                 && otherPiece.piece.role === 'deadlock-clamp'
@@ -1432,15 +1449,17 @@ export default class GearGridPuzzle extends MinigameBase {
         const fixedCount = pieces.length - movableCount;
         const pieceSummary = pieces.map((piece) => `${piece.movable === false ? 'FIX' : 'MOVE'} ${getPieceLabel(piece.type) || 'GEAR'} @ ${piece.row + 1},${piece.col + 1}`);
 
-        if (this._puzzle?.inspectionFault) {
-            const statusColor = this._puzzle.inspectionFault.kind === 'hazard'
+        const inspectionFault = this._puzzle?.inspectionFault || null;
+        const revealInspectionFault = this._shouldRevealInspectionFault(inspectionFault?.type, evaluation);
+        if (inspectionFault && revealInspectionFault) {
+            const statusColor = inspectionFault.kind === 'hazard'
                 ? '#ff9c93'
-                : (this._puzzle.inspectionFault.kind === 'compliance' ? '#ffd39c' : '#ffc38d');
+                : (inspectionFault.kind === 'compliance' ? '#ffd39c' : '#ffc38d');
             this._statusText
-                ?.setText(this._puzzle.inspectionFault.status || 'SCRAP REQUIRED')
+                ?.setText(inspectionFault.status || 'SCRAP REQUIRED')
                 .setColor(statusColor);
             this._summaryText?.setText([
-                this._puzzle.inspectionFault.reason || 'Drivetrain fault requires immediate scrap.',
+                inspectionFault.reason || 'Drivetrain fault requires immediate scrap.',
                 '',
                 `Active gears: ${activeGearCount}`,
                 `Loose parts: ${movableCount}`,
@@ -1477,6 +1496,12 @@ export default class GearGridPuzzle extends MinigameBase {
         }, pieces);
         this._puzzle.progress = snapshot;
         this.emitEvidence(snapshot);
+    }
+
+    _shouldRevealInspectionFault(faultType = null, evaluation = this._lastEvaluation) {
+        if (!faultType) return false;
+        if (faultType !== 'spark-instability') return true;
+        return Boolean(evaluation?.sinkPowered);
     }
 
     _triggerSpecialAction() {

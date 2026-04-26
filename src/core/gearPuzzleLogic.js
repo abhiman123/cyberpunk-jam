@@ -214,12 +214,11 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
         });
     }
 
-    // Aggressive rust check: if a rusted gear is 4-way adjacent to ANY
-    // gear — powered or not — the corrosion seizes that gear. The earlier
-    // BFS only catches contacts along matched connection edges and only
-    // for powered cells, which left non-powered gears sitting next to
-    // rust still spinning. Any contact = scrap, and the contacted gear
-    // is added to the jammed set so it stops spinning visually.
+    // Global rust check: evaluate direct, edge-aligned contact against all
+    // placed gears (not just the currently powered chain). Rust only jams
+    // when a neighboring gear is oriented to connect through the shared edge.
+    // Example: a horizontal gear jams if rust is left/right; a vertical gear
+    // jams if rust is up/down.
     if (!allowRustedGears) {
         const rustCells = [];
         for (let rowIndex = 0; rowIndex < board.length; rowIndex += 1) {
@@ -245,6 +244,8 @@ export function evaluateGearPuzzleBoard(board, pieces = [], options = {}) {
                 const nEntry = occupancy.get(nKey);
                 if (!nEntry) return;
                 if (!isGearType(nEntry.type) || isRustGearType(nEntry.type)) return;
+                const neighborConnections = getGearConnections(nEntry.type);
+                if (!neighborConnections.includes(dir.opposite)) return;
                 pushUniquePair(rustContacts, seenRustContacts, rustKey, nKey, {
                     source: nKey,
                     target: rustKey,

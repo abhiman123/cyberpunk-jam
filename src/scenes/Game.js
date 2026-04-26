@@ -79,6 +79,7 @@ export default class GameScene extends Phaser.Scene {
         this._rosterClearBonusQueued = false;
         /** @type {null | 'code' | 'grid' | 'flow' | 'gear'} */
         this._debugScrapHotkey = null;
+        this._debugScrapHotkeyArmedDigit = null;
         this._rulebookDeskItem = null;
         this._rulebookTutorialArrow = null;
         this._rulebookTutorialLineActive = false;
@@ -3290,14 +3291,18 @@ export default class GameScene extends Phaser.Scene {
         metal.frequency.setValueAtTime(4200, now);
         metal.Q.setValueAtTime(4.2, now);
 
+        const sfxVolume = getSfxVolume();
+        if (sfxVolume <= 0) return;
+        const gainFloor = 0.0001;
+
         const g1 = context.createGain();
         const g2 = context.createGain();
-        g1.gain.setValueAtTime(0.0001, now);
-        g1.gain.exponentialRampToValueAtTime(0.034 * getSfxVolume(), now + 0.004);
-        g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
-        g2.gain.setValueAtTime(0.0001, now);
-        g2.gain.exponentialRampToValueAtTime(0.02 * getSfxVolume(), now + 0.003);
-        g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+        g1.gain.setValueAtTime(gainFloor, now);
+        g1.gain.exponentialRampToValueAtTime(Math.max(gainFloor, 0.034 * sfxVolume), now + 0.004);
+        g1.gain.exponentialRampToValueAtTime(gainFloor, now + 0.04);
+        g2.gain.setValueAtTime(gainFloor, now);
+        g2.gain.exponentialRampToValueAtTime(Math.max(gainFloor, 0.02 * sfxVolume), now + 0.003);
+        g2.gain.exponentialRampToValueAtTime(gainFloor, now + 0.035);
 
         body.connect(metal);
         metal.connect(g1);
@@ -7444,13 +7449,10 @@ export default class GameScene extends Phaser.Scene {
 
     _handleKonamiKey(event) {
         const digit = event?.key;
-        if (!event?.repeat && ['1', '2', '3', '4', '0'].includes(digit) && !this._settingsOpen) {
-            const map = { 1: 'code', 2: 'grid', 3: 'flow', 4: 'gear' };
-            if (digit === '0') {
-                this._debugScrapHotkey = null;
-            } else {
-                this._debugScrapHotkey = map[digit] || null;
-            }
+        if (!event?.repeat && digit === '0' && !this._settingsOpen) {
+            this._debugScrapHotkey = null;
+            this._debugScrapHotkeyArmedDigit = null;
+            this._showFeedback('DEBUG: scrap override cleared', '#9ad7ff');
             this._showFeedback(
                 this._debugScrapHotkey
                     ? `DEBUG: ${this._debugScrapHotkey.toUpperCase()} SCRAP BADGE`
@@ -7598,6 +7600,7 @@ export default class GameScene extends Phaser.Scene {
                 umbrellaPermanentlyScrapped: GameState.umbrellaPermanentlyScrapped,
                 specialItems: GameState.specialItems,
                 forceMachineId: queuedMachineDefinition.id,
+                forceScrapPuzzleKey: this._debugScrapHotkey,
             });
             this._emitSequenceDebug('machine variant created', {
                 machineId: queuedMachineDefinition.id,
@@ -9174,6 +9177,8 @@ export default class GameScene extends Phaser.Scene {
         const evaluation = evaluateGearPuzzleBoard(board, pieces, {
             allowRustedGears: Boolean(gearPuzzle?.allowRustedGears || evidence?.allowRustedGears),
         });
+        const sparkFaultHidden = gearPuzzle?.inspectionFault?.type === 'spark-instability' && !evaluation.sinkPowered;
+        const displayScrapRequired = Boolean(evidence?.scrapRequired) && !sparkFaultHidden;
         const rows = board.length;
         const cols = Math.max(...board.map((row) => row.length));
         const cellSize = Math.max(8, Math.min(14, Math.floor(Math.min(width / cols, height / rows))));
@@ -9335,13 +9340,13 @@ export default class GameScene extends Phaser.Scene {
         const progressLabel = this.add.text(
             left + 2,
             top + height - 10,
-            evidence?.scrapRequired
+            displayScrapRequired
                 ? (evidence.scrapStatus || 'GEAR SCRAP')
                 : (evaluation.completed ? 'GEAR CLEAR' : 'GEAR STALL'),
             {
             fontFamily: 'Courier New',
             fontSize: '7px',
-            color: evidence?.scrapRequired
+            color: displayScrapRequired
                 ? (evidence.scrapKind === 'hazard' ? '#ffc4bd' : '#ffd6a8')
                 : (evaluation.completed ? '#d8ffe6' : '#ffd6a8'),
             stroke: '#000000',

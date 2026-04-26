@@ -1277,9 +1277,14 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         }
 
         if (randomFn() < 0.34) {
-            stagedOption.inspectionFault = randomFn() < 0.5
-                ? createMissingLeadFault(stagedOption)
-                : createRedWireFault(stagedOption);
+            const visualStage = pickUnlockedScrapStage(stage, randomFn);
+            if (visualStage <= 1) {
+                stagedOption.inspectionFault = createMissingLeadFault(stagedOption);
+            } else {
+                stagedOption.inspectionFault = randomFn() < 0.5
+                    ? createMissingLeadFault(stagedOption)
+                    : createRedWireFault(stagedOption);
+            }
         }
 
         return stagedOption;
@@ -1377,12 +1382,21 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
     }
 
     if (outputSpecs.length > 0 && randomFn() < 0.28) {
-        const hazardousOutput = pickRandomEntry(outputSpecs, randomFn) || outputSpecs[0];
-        hazardousOutput.powerClass = 'red';
-        hazardousOutput.sourceKey = null;
-        stagedOption.outputSpecs = cloneFlowOutputSpecs(outputSpecs);
-        stagedOption.repairTargets = cloneRepairTargets(outputSpecs);
-        stagedOption.inspectionFault = createCracklingOutputFault(hazardousOutput);
+        const visualStage = pickUnlockedScrapStage(stage, randomFn);
+        if (visualStage <= 1) {
+            stagedOption.inspectionFault = createMissingLeadFault(stagedOption);
+        } else if (visualStage === 2) {
+            stagedOption.inspectionFault = randomFn() < 0.5
+                ? createMissingLeadFault(stagedOption)
+                : createRedWireFault(stagedOption);
+        } else {
+            const hazardousOutput = pickRandomEntry(outputSpecs, randomFn) || outputSpecs[0];
+            hazardousOutput.powerClass = 'red';
+            hazardousOutput.sourceKey = null;
+            stagedOption.outputSpecs = cloneFlowOutputSpecs(outputSpecs);
+            stagedOption.repairTargets = cloneRepairTargets(outputSpecs);
+            stagedOption.inspectionFault = createCracklingOutputFault(hazardousOutput);
+        }
     }
 
     return stagedOption;
@@ -1737,14 +1751,30 @@ function applyGearStageToOption(gearPuzzleOption, stage = 1, randomFn = Math.ran
     if (stage === 1 && randomFn() < 0.28) {
         stagedOption.inspectionFault = createCrackedDriveFault(stagedOption, randomFn);
     } else if (stage === 2 && randomFn() < 0.34) {
-        const primaryFault = randomFn() < 0.5
-            ? createCrackedDriveFault(stagedOption, randomFn)
-            : createVirusGearFault(stagedOption, randomFn);
-        stagedOption.inspectionFault = primaryFault
-            || createVirusGearFault(stagedOption, randomFn)
-            || createCrackedDriveFault(stagedOption, randomFn);
+        const visualStage = pickUnlockedScrapStage(stage, randomFn);
+        if (visualStage <= 1) {
+            stagedOption.inspectionFault = createCrackedDriveFault(stagedOption, randomFn);
+        } else {
+            const primaryFault = randomFn() < 0.5
+                ? createCrackedDriveFault(stagedOption, randomFn)
+                : createVirusGearFault(stagedOption, randomFn);
+            stagedOption.inspectionFault = primaryFault
+                || createVirusGearFault(stagedOption, randomFn)
+                || createCrackedDriveFault(stagedOption, randomFn);
+        }
     } else if (stage >= 3 && randomFn() < 0.24) {
-        stagedOption.inspectionFault = createSparkInstabilityFault(stagedOption, randomFn);
+        const visualStage = pickUnlockedScrapStage(stage, randomFn);
+        if (visualStage <= 1) {
+            stagedOption.inspectionFault = createCrackedDriveFault(stagedOption, randomFn);
+        } else if (visualStage === 2) {
+            stagedOption.inspectionFault = (randomFn() < 0.5
+                ? createCrackedDriveFault(stagedOption, randomFn)
+                : createVirusGearFault(stagedOption, randomFn))
+                || createVirusGearFault(stagedOption, randomFn)
+                || createCrackedDriveFault(stagedOption, randomFn);
+        } else {
+            stagedOption.inspectionFault = createSparkInstabilityFault(stagedOption, randomFn);
+        }
     }
 
     // Authored puzzles store movable gears at their solution coordinates,
@@ -1818,6 +1848,12 @@ function corruptDebugPrompt(prompt = '', randomFn = Math.random) {
     return characters.join('');
 }
 
+function toBlockMaskedDebugOutput(value = '') {
+    const text = String(value || '');
+    if (!text) return '█';
+    return text.replace(/[A-Za-z0-9]/g, '█');
+}
+
 function applyDebugStageToOption(debugPuzzleOption, stage = 1, randomFn = Math.random) {
     if (!debugPuzzleOption) return null;
 
@@ -1882,6 +1918,8 @@ function createDebugProgress(debugPuzzleOption, randomFn = Math.random) {
     let lastStatus = 'TEST READY';
     let flags = [];
     let symptoms = ['Diagnostic harness is stable.'];
+    const dayStage = Math.max(1, Math.min(3, Number(debugPuzzleOption?.dayStage || 1)));
+    const scrapVisualStage = pickUnlockedScrapStage(dayStage, randomFn);
 
     if (resultType === 'corrupted-command') {
         actualOutput = '';
@@ -1921,7 +1959,8 @@ function createDebugProgress(debugPuzzleOption, randomFn = Math.random) {
         repairRequired,
         scrapRequired,
         reviewed: scrapRequired,
-        dayStage: Number(debugPuzzleOption?.dayStage || 1),
+        dayStage,
+        scrapVisualStage,
         resultType,
         prompt: String(debugPuzzleOption?.prompt || ''),
         repairPrompt: String(debugPuzzleOption?.repairPrompt || ''),
@@ -1939,6 +1978,89 @@ function createDebugProgress(debugPuzzleOption, randomFn = Math.random) {
         flags,
         symptoms,
     };
+}
+
+function pickUnlockedScrapStage(stage = 1, randomFn = Math.random) {
+    const maxStage = Math.max(1, Math.min(3, Number(stage) || 1));
+    return 1 + Math.floor(randomFn() * maxStage);
+}
+
+function buildForcedFlowScrapOption(flowPuzzleOption, stage = 1, randomFn = Math.random) {
+    if (!flowPuzzleOption) return null;
+    const activeStage = Math.max(1, Math.min(3, Number(stage) || 1));
+    const stagedOption = applyFlowStageToOption(cloneFlowPuzzleOption(flowPuzzleOption), activeStage, randomFn);
+    if (!stagedOption) return null;
+    if (stagedOption.inspectionFault) return stagedOption;
+
+    const visualStage = pickUnlockedScrapStage(activeStage, randomFn);
+    if (visualStage <= 1) {
+        stagedOption.inspectionFault = createMissingLeadFault(stagedOption);
+    } else if (visualStage === 2) {
+        stagedOption.inspectionFault = randomFn() < 0.5
+            ? createMissingLeadFault(stagedOption)
+            : createRedWireFault(stagedOption);
+    } else {
+        const outputs = Array.isArray(stagedOption.outputSpecs) ? stagedOption.outputSpecs : [];
+        const hazardousOutput = pickRandomEntry(outputs, randomFn) || outputs[0] || null;
+        if (hazardousOutput) {
+            hazardousOutput.powerClass = 'red';
+            hazardousOutput.sourceKey = null;
+            stagedOption.outputSpecs = cloneFlowOutputSpecs(outputs);
+            stagedOption.repairTargets = cloneRepairTargets(outputs);
+            stagedOption.inspectionFault = createCracklingOutputFault(hazardousOutput);
+        } else {
+            stagedOption.inspectionFault = createRedWireFault(stagedOption);
+        }
+    }
+
+    return stagedOption;
+}
+
+function buildForcedGearScrapOption(gearPuzzleOption, stage = 1, randomFn = Math.random) {
+    if (!gearPuzzleOption) return null;
+    const activeStage = Math.max(1, Math.min(3, Number(stage) || 1));
+    const stagedOption = applyGearStageToOption(cloneGearPuzzleOption(gearPuzzleOption), activeStage, randomFn);
+    if (!stagedOption) return null;
+    if (stagedOption.inspectionFault) return stagedOption;
+
+    const visualStage = pickUnlockedScrapStage(activeStage, randomFn);
+    if (visualStage <= 1) {
+        stagedOption.inspectionFault = createCrackedDriveFault(stagedOption, randomFn);
+    } else if (visualStage === 2) {
+        stagedOption.inspectionFault = randomFn() < 0.5
+            ? createCrackedDriveFault(stagedOption, randomFn)
+            : createVirusGearFault(stagedOption, randomFn);
+    } else {
+        stagedOption.inspectionFault = createSparkInstabilityFault(stagedOption, randomFn);
+    }
+    return stagedOption;
+}
+
+function buildForcedDebugScrapOption(debugPuzzleOption, stage = 1, randomFn = Math.random) {
+    if (!debugPuzzleOption) return null;
+    const activeStage = Math.max(1, Math.min(3, Number(stage) || 1));
+    const stagedOption = applyDebugStageToOption(cloneDebugPuzzleOption(debugPuzzleOption), activeStage, randomFn);
+    if (!stagedOption) return null;
+
+    const visualStage = pickUnlockedScrapStage(activeStage, randomFn);
+    stagedOption.scrapVisualStage = visualStage;
+    if (visualStage <= 1) {
+        stagedOption.resultType = 'corrupted-command';
+        stagedOption.scrapKind = 'compliance';
+        stagedOption.scrapStatus = 'CORRUPTED COMMAND';
+        stagedOption.scrapReason = 'Command stream collapsed into unreadable glyphs. Scrap the unit.';
+    } else if (visualStage === 2) {
+        stagedOption.resultType = 'protocol-invalid';
+        stagedOption.scrapKind = 'compliance';
+        stagedOption.scrapStatus = 'PROTOCOL INVALID';
+        stagedOption.scrapReason = 'Output protocol is invalid and cannot be repaired on the floor.';
+    } else {
+        stagedOption.resultType = 'spark-hazard';
+        stagedOption.scrapKind = 'hazard';
+        stagedOption.scrapStatus = 'SPARKED DEBUG BUG';
+        stagedOption.scrapReason = 'A sparked debugger bug indicates unstable software contamination. Scrap the unit immediately.';
+    }
+    return stagedOption;
 }
 
 const DEFAULT_MACHINE_DAYS = Object.freeze([1, 2, 3, 4]);
@@ -7048,6 +7170,7 @@ export function createMachineVariant(options = {}) {
     const targetDay = typeof options === 'function' ? null : (options.day ?? null);
     const targetPeriod = typeof options === 'function' ? null : (options.period ?? null);
     const forcedMachineId = typeof options === 'function' ? null : (options.forceMachineId ?? null);
+    const forcedScrapPuzzleKey = typeof options === 'function' ? null : (options.forceScrapPuzzleKey ?? null);
 
     const eligibilityContext = typeof options === 'function' ? {} : options;
     const machinePool = getMachinePoolDefinitions(targetDay, targetPeriod, eligibilityContext);
@@ -7103,8 +7226,15 @@ export function createMachineVariant(options = {}) {
         const rustFreePool = possibleGears.filter((gearOption) => !gearOptionHasRustedContent(gearOption));
         return rustFreePool.length > 0 ? rustFreePool : possibleGears;
     })();
+    const effectiveGearPool = (() => {
+        if (definition.id === 'rebellious_umbrella' && (targetPeriod ?? 1) === 2) {
+            const rustFreePool = gearPool.filter((gearOption) => !gearOptionHasRustedContent(gearOption));
+            if (rustFreePool.length > 0) return rustFreePool;
+        }
+        return gearPool;
+    })();
     let selectedGearPuzzle = applyGearStageToOption(
-        cloneGearPuzzleOption(pickRandomEntry(gearPool, randomFn)),
+        cloneGearPuzzleOption(pickRandomEntry(effectiveGearPool, randomFn)),
         targetPeriod ?? 1,
         randomFn,
     );
@@ -7113,6 +7243,25 @@ export function createMachineVariant(options = {}) {
         targetPeriod ?? 1,
         randomFn,
     );
+    const forcedKey = forcedScrapPuzzleKey && ['grid', 'flow', 'gear', 'code'].includes(forcedScrapPuzzleKey)
+        ? forcedScrapPuzzleKey
+        : null;
+    if (forcedKey === 'grid' && selectedGrid) {
+        const forcedGridTemplate = { ...selectedGrid, impossible: true };
+        const forcedStage = pickUnlockedScrapStage(targetPeriod ?? 1, randomFn);
+        const forcedGrid = applyGridStageToOption(forcedGridTemplate, forcedStage, randomFn);
+        selectedGrid.impossible = Boolean(forcedGrid.impossible);
+        selectedGrid.inspectionFault = forcedGrid.inspectionFault ? { ...forcedGrid.inspectionFault } : null;
+        selectedGrid.scrapKind = forcedGrid.scrapKind || null;
+        selectedGrid.scrapStatus = forcedGrid.scrapStatus || null;
+        selectedGrid.scrapReason = forcedGrid.scrapReason || null;
+    } else if (forcedKey === 'flow' && selectedFlowPuzzle) {
+        selectedFlowPuzzle = buildForcedFlowScrapOption(selectedFlowPuzzle, targetPeriod ?? 1, randomFn);
+    } else if (forcedKey === 'gear' && selectedGearPuzzle) {
+        selectedGearPuzzle = buildForcedGearScrapOption(selectedGearPuzzle, targetPeriod ?? 1, randomFn);
+    } else if (forcedKey === 'code' && selectedDebugPuzzle) {
+        selectedDebugPuzzle = buildForcedDebugScrapOption(selectedDebugPuzzle, targetPeriod ?? 1, randomFn);
+    }
     if (protectedStoryMachine && selectedGrid) {
         selectedGrid.impossible = false;
         selectedGrid.inspectionFault = null;
@@ -7140,6 +7289,12 @@ export function createMachineVariant(options = {}) {
             selectedDebugPuzzle.scrapKind = null;
             selectedDebugPuzzle.scrapStatus = null;
             selectedDebugPuzzle.scrapReason = null;
+            if (definition.id === 'rebellious_umbrella' && (targetPeriod ?? 1) >= 2) {
+                selectedDebugPuzzle.resultType = 'repairable-mismatch';
+                selectedDebugPuzzle.actualOutputs = [
+                    toBlockMaskedDebugOutput(selectedDebugPuzzle.expectedOutput || 'INVALID'),
+                ];
+            }
         }
         selectedDebugPuzzle.progress = createDebugProgress(selectedDebugPuzzle, randomFn);
     }

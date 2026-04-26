@@ -249,7 +249,7 @@ export const FIRST_SHIFT_INTRO = Object.freeze({
                 createIntroSequenceLine('line1', 'Morning. Company pushed a fresh directive while you were asleep, you know the new rule, right?', SOUND_ASSETS.phoneDay2Intro1),
             ],
             yes: [
-                createIntroSequenceLine('line3', 'Perfect. Again, just remember to inspect carefully and shift ends at 12.', SOUND_ASSETS.phoneDay2YesLine1),
+                createIntroSequenceLine('line3', 'Perfect. Again, just remember to inspect carefully and shift ends at 12.', SOUND_ASSETS.phoneDay2Intro2),
             ],
             no: [
                 createIntroSequenceLine('line3', "Alright listen. Day two is the same as day one but the problems in machines don't make it impossible to solve.", SOUND_ASSETS.phoneDay2NoLine1),

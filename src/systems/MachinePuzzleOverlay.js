@@ -1123,9 +1123,18 @@ export default class MachinePuzzleOverlay {
         let fillColor = 0x2c241f;
         let strokeColor = 0x6a5643;
 
+        const dayStage = Number(this._puzzleState?.dayStage || 1);
+        const gridScrapDay2 = dayStage === 2 && Boolean(inspectionFault);
+
         if (inspectionFault) {
-            fillColor = inspectionFault.kind === 'hazard' ? 0x5d241f : 0x4f341f;
-            strokeColor = inspectionFault.kind === 'hazard' ? 0xff8e7f : 0xffd08a;
+            const hazard = inspectionFault.kind === 'hazard';
+            if (gridScrapDay2) {
+                fillColor = hazard || inspectionFault.type === 'corrupted-marker' ? 0x6a1818 : 0x5a2218;
+                strokeColor = hazard ? 0xff5c52 : 0xff8a6b;
+            } else {
+                fillColor = hazard ? 0x5d241f : 0x4f341f;
+                strokeColor = hazard ? 0xff8e7f : 0xffd08a;
+            }
         } else if (baseValue === CELL_WALL) {
             // NYT-style: walls are the negative space around the board — hide
             // the cell rectangle entirely so the shape's outline reads clearly.
@@ -1223,7 +1232,7 @@ export default class MachinePuzzleOverlay {
         if (inspectionFault) {
             cellView.valueText.setVisible(true);
             cellView.valueText.setText(inspectionFault.type === 'corrupted-marker' ? String(inspectionFault.glyph || '?') : '!');
-            cellView.valueText.setColor(inspectionFault.kind === 'hazard' ? '#ffd0c9' : '#ffe2aa');
+            cellView.valueText.setColor(gridScrapDay2 ? '#ff9a8f' : (inspectionFault.kind === 'hazard' ? '#ffd0c9' : '#ffe2aa'));
         } else if (chargeLevel > 0) {
             // Per-cell charge target is now drawn as a gold pill hanging off
             // the bottom edge of the cell (see _refreshComparatorBadges).
@@ -1319,11 +1328,14 @@ export default class MachinePuzzleOverlay {
                 }
             });
 
+            const day2 = Number(this._puzzleState?.dayStage || 1) === 2;
             const label = this.scene.add.text(groupCenter.x, groupCenter.y, corruptedMarker ? String(corruptedMarker.glyph || '#') : group.displayTarget, {
                 fontFamily: 'Courier New',
                 fontSize: '19px',
-                color: corruptedMarker ? '#ffd7ab' : (group.matched ? '#f3ffd5' : '#d9eef7'),
-                stroke: '#000000',
+                color: corruptedMarker
+                    ? (day2 ? '#ff8f82' : '#ffd7ab')
+                    : (group.matched ? '#f3ffd5' : '#d9eef7'),
+                stroke: corruptedMarker && day2 ? '#2a0606' : '#000000',
                 strokeThickness: 3,
             }).setOrigin(0.5);
             this._groupLabelLayer.add(label);
@@ -1486,17 +1498,31 @@ export default class MachinePuzzleOverlay {
             });
         });
 
+        const scrapChargeFault = this._puzzleState?.inspectionFault?.type === 'isolated-charge-cell'
+            ? this._puzzleState.inspectionFault
+            : null;
+        const day2Grid = Number(this._puzzleState?.dayStage || 1) === 2;
+
         chargeBadges.forEach((entry) => {
             const isMatched = !this._powerEffectsSuspended && entry.matched;
+            const isFaultCharge = day2Grid && scrapChargeFault
+                && scrapChargeFault.row === entry.row
+                && scrapChargeFault.col === entry.col;
             drawPill({
                 row: entry.row,
                 col: entry.col,
                 label: `${entry.chargeLevel}`,
-                fillColor: isMatched ? 0xd9b13e : 0x6a5320,
-                strokeColor: isMatched ? 0xfff5c8 : 0xf2d68a,
-                glowColor: 0xc99a36,
-                glowAlpha: isMatched ? 0.46 : 0.24,
-                textColor: isMatched ? '#fffbe1' : '#ffe9a8',
+                fillColor: isFaultCharge
+                    ? (isMatched ? 0xc44a4a : 0x6e1515)
+                    : (isMatched ? 0xd9b13e : 0x6a5320),
+                strokeColor: isFaultCharge
+                    ? (isMatched ? 0xffc4c0 : 0xff6b6b)
+                    : (isMatched ? 0xfff5c8 : 0xf2d68a),
+                glowColor: isFaultCharge ? 0xff4444 : 0xc99a36,
+                glowAlpha: isFaultCharge ? (isMatched ? 0.5 : 0.38) : (isMatched ? 0.46 : 0.24),
+                textColor: isFaultCharge
+                    ? (isMatched ? '#fff0f0' : '#ffb8b0')
+                    : (isMatched ? '#fffbe1' : '#ffe9a8'),
             });
         });
 
