@@ -3,6 +3,7 @@ import { GameState } from '../GameState.js';
 import { applyCyberpunkLook } from '../fx/applyCyberpunkLook.js';
 import { SOUND_ASSETS, SOUND_VOLUMES } from '../constants/gameConstants.js';
 import { getMusicVolume } from '../state/gameSettings.js';
+import { buildGradingReport } from '../systems/GradingReport.js';
 
 const ENDING_DIALOGUE = Object.freeze({
     replacement: [
@@ -498,6 +499,7 @@ export default class EndScene extends Phaser.Scene {
             break;
         }
 
+        await this._showGradingScreen();
         await this._showTitleCard();
     }
 
@@ -829,6 +831,160 @@ export default class EndScene extends Phaser.Scene {
         await this._wait(920);
         this.cameras.main.fade(700, 120, 6, 6);
         await this._wait(820);
+    }
+
+    async _showGradingScreen() {
+        // Pulled together after the fall: a structured QC report so the
+        // player sees how their run was scored. Letter grade S–F based on
+        // a weighted blend of verdict accuracy, repair execution,
+        // throughput and compensation. Each axis is rendered with its
+        // own bar + the line of detail text the report layer produced.
+
+        // Hide the catwalk world / dialogue chrome so the grading panel
+        // sits on a clean black backdrop.
+        this._world.setVisible(false);
+        this._playerFigure.setVisible(false);
+        this._playerShadow.setVisible(false);
+        this._dialogueText.setVisible(false);
+        this._panelShadow.setVisible(false);
+        this._panel.setVisible(false);
+        this._panelHeaderStrip.setVisible(false);
+        this._panelStripes.setVisible(false);
+        this._panelBrackets.setVisible(false);
+        this._panelAlertDot.setVisible(false);
+        this._panelTag.setVisible(false);
+        this._panelMeta.setVisible(false);
+        this._speakerTween?.stop();
+
+        this.cameras.main.setZoom(1);
+        this.cameras.main.fadeIn(450, 0, 0, 0);
+
+        const report = buildGradingReport(GameState);
+        const W  = 1280;
+        const H  = 720;
+        const cx = W / 2;
+
+        const layer = this.add.container(0, 0).setDepth(60);
+
+        const bg = this.add.rectangle(cx, H / 2, W, H, 0x040608, 1);
+        layer.add(bg);
+
+        // Soft scanline wash on top of the panel
+        const scan = this.add.graphics();
+        scan.fillStyle(0x000000, 0.18);
+        for (let y = 0; y < H; y += 4) scan.fillRect(0, y, W, 1);
+        layer.add(scan);
+
+        const header = this.add.text(cx, 64, 'SHIFT EVALUATION', {
+            fontFamily: 'Courier New', fontSize: '16px', color: '#cce6f0', letterSpacing: 6,
+        }).setOrigin(0.5);
+        const subhead = this.add.text(cx, 92, '// FOUR-DAY PERFORMANCE REVIEW', {
+            fontFamily: 'Courier New', fontSize: '12px', color: '#5a7a8c', letterSpacing: 4,
+        }).setOrigin(0.5);
+        const ruleTop = this.add.rectangle(cx, 116, 980, 1, 0x1a3548, 1);
+        layer.add([header, subhead, ruleTop]);
+
+        // Big letter grade panel on the left, axis breakdown on the right.
+        const gradeBoxX = 280;
+        const gradeBoxY = 280;
+        const gradeBox = this.add.rectangle(gradeBoxX, gradeBoxY, 320, 320, 0x070b10, 1)
+            .setStrokeStyle(2, Phaser.Display.Color.HexStringToColor(report.grade.color).color, 0.85);
+        const gradeLabel = this.add.text(gradeBoxX, gradeBoxY - 110, 'FINAL GRADE', {
+            fontFamily: 'Courier New', fontSize: '13px', color: '#7a99ad', letterSpacing: 5,
+        }).setOrigin(0.5);
+        const gradeLetter = this.add.text(gradeBoxX, gradeBoxY - 5, report.grade.letter, {
+            fontFamily: 'Courier New', fontSize: '180px', color: report.grade.color,
+        }).setOrigin(0.5);
+        const gradeScore = this.add.text(gradeBoxX, gradeBoxY + 92, `${report.finalScore} / 100`, {
+            fontFamily: 'Courier New', fontSize: '20px', color: '#cce6f0', letterSpacing: 4,
+        }).setOrigin(0.5);
+        const gradeTone = this.add.text(gradeBoxX, gradeBoxY + 124, report.grade.tone, {
+            fontFamily: 'Courier New', fontSize: '12px', color: '#7a99ad',
+            wordWrap: { width: 296 }, align: 'center', lineSpacing: 4,
+        }).setOrigin(0.5);
+        layer.add([gradeBox, gradeLabel, gradeLetter, gradeScore, gradeTone]);
+
+        // Axis breakdown column
+        const breakdownX = 500;
+        const breakdownTop = 156;
+        const rowGap = 92;
+        const breakdownLabel = this.add.text(breakdownX, breakdownTop - 28, 'BREAKDOWN', {
+            fontFamily: 'Courier New', fontSize: '13px', color: '#7a99ad', letterSpacing: 5,
+        }).setOrigin(0, 0.5);
+        layer.add(breakdownLabel);
+
+        report.axes.forEach((axis, idx) => {
+            const baseY = breakdownTop + idx * rowGap;
+            const axisColor = axis.score >= 85 ? '#7be3a3'
+                : axis.score >= 65 ? '#9ad6ff'
+                    : axis.score >= 60 ? '#e6cc6a'
+                        : '#ff7a7a';
+
+            const axisLabel = this.add.text(breakdownX, baseY, axis.label, {
+                fontFamily: 'Courier New', fontSize: '14px', color: '#cce6f0', letterSpacing: 3,
+            }).setOrigin(0, 0.5);
+
+            const axisWeight = this.add.text(breakdownX, baseY + 18, `WEIGHT ${axis.weight}%`, {
+                fontFamily: 'Courier New', fontSize: '10px', color: '#4f6878', letterSpacing: 2,
+            }).setOrigin(0, 0.5);
+
+            const axisScore = this.add.text(breakdownX + 460, baseY, `${Math.round(axis.score)}`, {
+                fontFamily: 'Courier New', fontSize: '20px', color: axisColor,
+            }).setOrigin(1, 0.5);
+
+            // Score bar — track + fill, fill width tweens in on reveal
+            const barTrackY = baseY + 38;
+            const barTrack = this.add.rectangle(breakdownX, barTrackY, 460, 8, 0x0d1620, 1)
+                .setStrokeStyle(1, 0x1d2f3e, 0.8)
+                .setOrigin(0, 0.5);
+            const fillWidth = Math.max(1, (axis.score / 100) * 460);
+            const barFill = this.add.rectangle(breakdownX, barTrackY, 1, 8,
+                Phaser.Display.Color.HexStringToColor(axisColor).color, 1).setOrigin(0, 0.5);
+
+            const detail = this.add.text(breakdownX, baseY + 58, axis.detail, {
+                fontFamily: 'Courier New', fontSize: '11px', color: '#6c8a9e',
+                wordWrap: { width: 580 }, lineSpacing: 3,
+            }).setOrigin(0, 0);
+
+            layer.add([axisLabel, axisWeight, axisScore, barTrack, barFill, detail]);
+
+            this.tweens.add({
+                targets: barFill,
+                width: fillWidth,
+                duration: 700,
+                delay: 220 + idx * 140,
+                ease: 'Cubic.Out',
+            });
+        });
+
+        // Continue button
+        const btnY  = 656;
+        const btnBg = this.add.rectangle(cx, btnY, 220, 40, 0x0a0e14, 1)
+            .setStrokeStyle(1, 0x3a5d76, 0.9)
+            .setInteractive({ useHandCursor: true });
+        const btnLabel = this.add.text(cx, btnY, 'CONTINUE', {
+            fontFamily: 'Courier New', fontSize: '14px', color: '#9ac0d4', letterSpacing: 5,
+        }).setOrigin(0.5);
+        layer.add([btnBg, btnLabel]);
+
+        btnBg.on('pointerover', () => {
+            btnBg.setStrokeStyle(1, 0x6ea4c4, 1);
+            btnLabel.setColor('#cce6f0');
+        });
+        btnBg.on('pointerout', () => {
+            btnBg.setStrokeStyle(1, 0x3a5d76, 0.9);
+            btnLabel.setColor('#9ac0d4');
+        });
+
+        await new Promise((resolve) => {
+            btnBg.once('pointerdown', () => {
+                this.cameras.main.fade(420, 0, 0, 0);
+                this.time.delayedCall(420, () => {
+                    layer.destroy();
+                    resolve(true);
+                });
+            });
+        });
     }
 
     async _showTitleCard() {
