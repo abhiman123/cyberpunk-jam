@@ -193,12 +193,6 @@ export default class RulebookOverlay {
 
     isVisible() { return this._visible; }
 
-    setRuleState(activeRuleIds, newRuleIds = null) {
-        this.activeRuleIds = Array.isArray(activeRuleIds) ? [...activeRuleIds] : [];
-        if (newRuleIds !== null) this.newRuleIds = new Set(Array.isArray(newRuleIds) ? newRuleIds : []);
-        if (this._visible) this._refresh();
-    }
-
     // ── Build chrome (called once) ────────────────────────────────────────────
 
     _build() {

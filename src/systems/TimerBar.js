@@ -92,11 +92,6 @@ export default class TimerBar {
         return 0xff2200;                     // red
     }
 
-    /** Returns 0.0–1.0 of time remaining. */
-    getRatio() {
-        return Math.max(0, 1 - this.elapsed / this.duration);
-    }
-
     destroy() {
         this.stop();
         this._track.destroy();

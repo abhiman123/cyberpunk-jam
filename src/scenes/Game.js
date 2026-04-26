@@ -19,7 +19,6 @@ import { GEAR_CODES, evaluateGearPuzzleBoard, gearCellKey, getGearConnections } 
 import { createMachineVariant, getEligibleMachineDefinitions, resolveMachineTexture } from '../data/machineCatalog.js';
 import { getMusicVolume } from '../state/gameSettings.js';
 
-import StateMachine from '../core/StateMachine.js';
 import CircuitRouting from '../systems/minigames/CircuitRouting.js';
 import GearGridPuzzle from '../systems/minigames/GearGridPuzzle.js';
 import DebugConsolePuzzle from '../systems/minigames/DebugConsolePuzzle.js';
@@ -149,8 +148,6 @@ export default class GameScene extends Phaser.Scene {
         this._konamiProgress = 0;
         this._konamiFinaleTriggered = false;
         this._initializeMachineShiftQueue();
-
-        this._caseSM = new StateMachine('intake');
 
         const fx = applyCyberpunkLook(this);
         this._cmFilter = fx.cmFilter;
@@ -4150,11 +4147,6 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    _syncRulebookState(newRuleIds = null) {
-        this._rulebook?.setRuleState(GameState.activeRules, newRuleIds);
-    }
-
-
     _beginRebelliousUmbrellaProposal() {
         const machineVariant = this._currentMachineVariant;
         if (!this._isRebelliousUmbrella(machineVariant) || GameState.day !== 1 || this._getUmbrellaQuest()) {
@@ -5071,7 +5063,7 @@ export default class GameScene extends Phaser.Scene {
             'mainview_fam2',
             'mainview_fam1',
         ];
-        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key)); console.log("hasMainViewLayers:", hasMainViewLayers, mainViewLayerKeys.map(k => `${k}: ${this.textures.exists(k)}`));
+        const hasMainViewLayers = mainViewLayerKeys.some((key) => this.textures.exists(key));
         if (!hasMainViewLayers) {
             const fallbackBg = this.add.image(640, 360, `bg_p${GameState.period}`).setDisplaySize(1280, 720);
             this._conveyorContainer.add(fallbackBg);
@@ -6641,7 +6633,6 @@ export default class GameScene extends Phaser.Scene {
         this._clearUnsafeAcceptConfirmation();
 
         this._actionLocked = true;
-        this._caseSM.transition('verdict');
         this._setPhoneButtonsActive(false);
         this._pendingExitAction = action;
         this._refreshFactoryActionButtons();
@@ -6890,7 +6881,6 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        this._caseSM.transition('intake');
         this._phoneBodyScrollOffset = 0;
         this._phoneStickToBottom = true;
 
