@@ -518,18 +518,39 @@ export default class GearGridPuzzle extends MinigameBase {
             return;
         }
 
+        // The inventory area sits between the banner (bottom ≈ y=70) and the
+        // first action button below — that's the CLOSE button at y=224 of
+        // the panel by default, or the SPECIAL ACTION button at y=185 when
+        // present. Compute the row spacing so the list never crashes into
+        // the buttons no matter how many loose parts the puzzle generated.
+        const inventoryTop = 96;
+        const inventoryBottom = this._specialActionButton ? 185 : 224;
+        const availableHeight = Math.max(60, inventoryBottom - inventoryTop);
+        const rowCount = movablePieces.length;
+        const rawSpacing = rowCount > 0 ? availableHeight / rowCount : 60;
+        const rowSpacing = Math.max(34, Math.min(60, rawSpacing));
+        // Compact = drop the helper hint line, shrink the socket frame so
+        // 5+ parts (Day 3 boards with multiple loose gears + clamps) fit
+        // without overlapping the CLOSE button.
+        const compact = rowSpacing < 50;
+        const socketHalf = compact ? 18 : 25;
+        const sampleScale = compact ? 0.32 : 0.42;
+        const titleFontSize = compact ? '11px' : '12px';
+        const labelFontSize = compact ? '9px' : '10px';
+        const textCol = compact ? 244 : 252;
+
         movablePieces.forEach((pieceView, index) => {
-            const y = 96 + (index * 60);
+            const y = inventoryTop + (index * rowSpacing);
             // Socket frame around the gear thumbnail (parts-bin look).
-            const socketBg = this.scene.add.rectangle(218, y, 50, 50, 0x081a23, 0.92)
+            const socketBg = this.scene.add.rectangle(218, y, socketHalf * 2, socketHalf * 2, 0x081a23, 0.92)
                 .setStrokeStyle(1, 0x5dc5e2, 0.55);
             // Corner ticks on the socket.
             const socketGfx = this.scene.add.graphics();
             socketGfx.lineStyle(2, 0x6fdcf5, 0.85);
             const sx = 218;
             const sy = y;
-            const sh = 25;
-            const tick = 6;
+            const sh = socketHalf;
+            const tick = compact ? 4 : 6;
             // top-left
             socketGfx.lineBetween(sx - sh, sy - sh, sx - sh + tick, sy - sh);
             socketGfx.lineBetween(sx - sh, sy - sh, sx - sh, sy - sh + tick);
@@ -544,7 +565,7 @@ export default class GearGridPuzzle extends MinigameBase {
             socketGfx.lineBetween(sx + sh, sy + sh, sx + sh, sy + sh - tick);
 
             const sample = this._createGearVisual(pieceView.piece.type, true);
-            sample.container.setScale(0.42);
+            sample.container.setScale(sampleScale);
             sample.container.setPosition(218, y);
             this._drawGearVisual(sample, pieceView.piece.type, {
                 movable: true,
@@ -559,25 +580,40 @@ export default class GearGridPuzzle extends MinigameBase {
             const partCode = pieceView.piece.role === 'deadlock-clamp'
                 ? 'CLAMP'
                 : (getPieceLabel(pieceView.piece.type) || 'GEAR');
-            const title = this.scene.add.text(252, y - 12, partName, {
-                fontFamily: 'Courier New',
-                fontSize: '12px',
-                color: '#e3f4f9',
-                letterSpacing: 1,
-            }).setOrigin(0, 0.5);
-            const label = this.scene.add.text(252, y + 4, `${partCode} · #${index + 1}`, {
-                fontFamily: 'Courier New',
-                fontSize: '10px',
-                color: '#7eb5c5',
-                letterSpacing: 1,
-            }).setOrigin(0, 0.5);
-            const hint = this.scene.add.text(252, y + 19, pieceView.piece.role === 'deadlock-clamp' ? 'DEAD-SPACE TOOL' : 'DRAG TO INSTALL', {
-                fontFamily: 'Courier New',
-                fontSize: '9px',
-                color: '#9ddff0',
-                letterSpacing: 1,
-            }).setOrigin(0, 0.5);
-            this._legendContainer.add([socketBg, socketGfx, sample.container, title, label, hint]);
+
+            const rowItems = [socketBg, socketGfx, sample.container];
+            if (compact) {
+                // Single-line label keeps the row at ~36px tall and still
+                // names the part for the player.
+                const inlineLabel = this.scene.add.text(textCol, y, `${partName} · ${partCode}#${index + 1}`, {
+                    fontFamily: 'Courier New',
+                    fontSize: titleFontSize,
+                    color: '#e3f4f9',
+                    letterSpacing: 1,
+                }).setOrigin(0, 0.5);
+                rowItems.push(inlineLabel);
+            } else {
+                const title = this.scene.add.text(textCol, y - 12, partName, {
+                    fontFamily: 'Courier New',
+                    fontSize: titleFontSize,
+                    color: '#e3f4f9',
+                    letterSpacing: 1,
+                }).setOrigin(0, 0.5);
+                const label = this.scene.add.text(textCol, y + 4, `${partCode} · #${index + 1}`, {
+                    fontFamily: 'Courier New',
+                    fontSize: labelFontSize,
+                    color: '#7eb5c5',
+                    letterSpacing: 1,
+                }).setOrigin(0, 0.5);
+                const hint = this.scene.add.text(textCol, y + 19, pieceView.piece.role === 'deadlock-clamp' ? 'DEAD-SPACE TOOL' : 'DRAG TO INSTALL', {
+                    fontFamily: 'Courier New',
+                    fontSize: '9px',
+                    color: '#9ddff0',
+                    letterSpacing: 1,
+                }).setOrigin(0, 0.5);
+                rowItems.push(title, label, hint);
+            }
+            this._legendContainer.add(rowItems);
         });
     }
 
