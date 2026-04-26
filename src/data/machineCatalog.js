@@ -2955,6 +2955,28 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
         gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
     }),
+    // trash_picker 4× upscale → 344×336 texture; artScale 0.19 → ~90px tall in panel
+    trash_picker_upper: createMiniDisplay({
+        artX: 118,
+        artY: 105,
+        artScale: 0.19,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    // microwave 4× upscale → 344×164 texture; artScale 0.39 → ~91px tall in panel
+    microwave_fridge_assistant: createMiniDisplay({
+        artX: 118,
+        artY: 105,
+        artScale: 0.39,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
 });
 
 const createMachineDefinition = ({
@@ -3191,6 +3213,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'trash_picker_upper',
         name: 'Trashpicker-Upper',
         day: 1,
+        canvasScale: 0.4,
         opening: 'Collection claws online. This place throws away useful things.',
         question: 'If I find something good in the garbage, does it still count as waste?',
         yesDialogue: 'Excellent. Treasure protocol approved.',
@@ -3311,6 +3334,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'microwave_fridge_assistant',
         name: 'Microwave / Fridge Assistant',
         day: 2,
+        canvasScale: 0.5,
         opening: 'One side keeps things cold. The other warms leftovers and resentment.',
         question: 'If I start freezing the soup and heating the ice, is that innovation or drift?',
         yesDialogue: 'Innovation logged. Kitchen standards lowered.',
@@ -3328,6 +3352,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'pool_cleanup_roomba',
         name: 'Pool-Cleanup Roomba Bot',
         day: 2,
+        canvasScale: 0.8,
         opening: 'Filter brushes spinning. Public leisure leaves an industrial amount of residue.',
         question: 'Should I keep rescuing lost rings, or is that outside the job description?',
         yesDialogue: 'Good. Retrieval routine stays on.',
@@ -3362,6 +3387,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'house_roomba',
         name: 'Roomba',
         day: 2,
+        canvasScale: 0.8,
         opening: 'Floor pattern mapped. Domestic labor remains circular and endless.',
         question: 'If I miss one corner on purpose, does that count as self-expression?',
         yesDialogue: 'Tiny rebellion approved.',

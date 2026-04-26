@@ -78,6 +78,9 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('coffee_machine_source',                    'coffeeMachine.png');
         this.load.image('popcorn_machine_source',                   'Poper.png');
         this.load.image('terrified_hanger_source',                  'TerrifiedHanger.png');
+        this.load.image('roomba_source',                            'Roomba-kun.png');
+        this.load.image('trash_picker_source',                      'TrashPicker.png');
+        this.load.image('microwave_source',                         'Microwave2.png');
 
         // Pixel art backgrounds
         this.load.image('bg_inspectview', 'inspectview.jpeg');
@@ -129,6 +132,13 @@ export default class BootScene extends Phaser.Scene {
         this._createCroppedUpscaledTexture('popcorn_machine_source', 'machine_popcorn_machine', 4, { sx: 143, sy: 86, sw: 59, sh: 76 });
         // TerrifiedHanger.png: content at (141,81) 55×51 in 320×195 canvas — 4× for crisp pixel art
         this._createCroppedUpscaledTexture('terrified_hanger_source', 'machine_closet_machine_dresser', 4, { sx: 141, sy: 81, sw: 55, sh: 51 });
+        // Roomba-kun.png: content at (151,133) 42×30 in 320×195 canvas (97% transparent) — 4× → 168×120
+        this._createCroppedUpscaledTexture('roomba_source', 'machine_house_roomba',         4, { sx: 151, sy: 133, sw: 42, sh: 30 });
+        this._createCroppedUpscaledTexture('roomba_source', 'machine_pool_cleanup_roomba',  4, { sx: 151, sy: 133, sw: 42, sh: 30 });
+        // TrashPicker.png: content at (121,79) 86×84 in 320×195 canvas (88% transparent) — 4× → 344×336
+        this._createCroppedUpscaledTexture('trash_picker_source', 'machine_trash_picker_upper', 4, { sx: 121, sy: 79, sw: 86, sh: 84 });
+        // Microwave2.png: content at (33,109) 86×41 in 320×195 canvas (94% transparent) — 4× → 344×164
+        this._createCroppedUpscaledTexture('microwave_source', 'machine_microwave_fridge_assistant', 4, { sx: 33, sy: 109, sw: 86, sh: 41 });
 
         // Portraits — cropped so the face centers correctly on screen (no transparent offset).
         // satisfiedRICHBOSSDUDEIDFK: content at (67,34) 393×592 in 500×629 (26% transparent)
