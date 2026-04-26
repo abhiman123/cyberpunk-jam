@@ -43,13 +43,15 @@ if (typeof _origUpdateText === 'function') {
 
 const config = {
     type: Phaser.AUTO,
-    scale: {
-        parent: 'game-container',
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
-        width: 1280,
-        height: 720,
-    },
+    width: 1280,
+    height: 720,
+    // scale: {
+    //     parent: 'game-container',
+    //     mode: Phaser.Scale.FIT,
+    //     autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
+    //     width: 1280,
+    //     height: 720,
+    // },
     antialias: false,
     pixelArt: true,
     resolution: window.devicePixelRatio,
