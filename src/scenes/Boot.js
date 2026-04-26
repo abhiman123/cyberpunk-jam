@@ -94,7 +94,10 @@ export default class BootScene extends Phaser.Scene {
         this._generatePlaceholders();
 
         // ADD THIS: Tell Wavedash the game is ready to be seen
-        if (window.WavedashJS) {
+        if (window.WavedashJS && typeof window.WavedashJS.signalGameReady === 'function') {
+            window.WavedashJS.signalGameReady();
+        } else if (window.WavedashJS && typeof window.WavedashJS.signalReady === 'function') {
+            // Fallback for older SDK versions
             window.WavedashJS.signalReady();
         }
 
