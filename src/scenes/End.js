@@ -86,9 +86,9 @@ const CREDIT_ROLL_LINES = Object.freeze([
     { text: 'Corporate Music - Julien Vincent' },
     { text: 'Managing Music - Shane Ollek' },
     { text: 'Credits Music - Shane Ollek', gapAfter: 54 },
-    { text: 'thanks to wavedash and gamedev.js' },
-    { text: 'for hosting the gamejam', gapAfter: 54 },
-    { text: "You were there when we weren't." },
+    { text: 'Thanks to Wavedash and Gamedev.js' },
+    { text: 'For hosting the Gamejam', gapAfter: 54 },
+    { text: "You were there when we were not." },
 ]);
 const SCORE_GRADES = Object.freeze([
     { grade: 'Z', min: 0 },
