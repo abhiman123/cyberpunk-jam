@@ -47,6 +47,25 @@ function deriveFlowDisplayPowerClass(powerClasses = []) {
     return uniqueClasses[0];
 }
 
+/** Orange ports take orange only, green only green, neutral takes green/orange/neutral (incl. mixed as valid). */
+function flowPowerSatisfiesTarget(expectedClass, feedClasses, actualPowerClass) {
+    const exp = expectedClass || 'neutral';
+    const feeds = (feedClasses || []).filter((c) => c != null);
+    if (feeds.length === 0) return false;
+    if (feeds.includes('red') || actualPowerClass === 'red') return false;
+    if (exp === 'orange') return actualPowerClass === 'orange' && !(feeds.some((c) => c && c !== 'orange'));
+    if (exp === 'green') return actualPowerClass === 'green' && !(feeds.some((c) => c && c !== 'green'));
+    if (exp === 'neutral') {
+        const allowed = (c) => c === 'neutral' || c === 'green' || c === 'orange';
+        if (!feeds.every(allowed)) return false;
+        if (actualPowerClass === 'mixed') {
+            return feeds.length > 0 && !feeds.includes('red');
+        }
+        return allowed(actualPowerClass);
+    }
+    return actualPowerClass === exp;
+}
+
 function recordFlowFeed(targetMap, key, source) {
     if (!targetMap[key]) {
         targetMap[key] = [];
@@ -233,6 +252,15 @@ export default class CircuitRouting extends MinigameBase {
         this._inventoryViews = {};
         this._inventoryPanelGfx = null;
         this._voltageHudText = null;
+        this._day3GridScrapOverflow = false;
+        this._flowDepth = 180;
+        this._flowPtrMove = null;
+        this._flowPtrUp = null;
+        this._flowDrag = null;
+        this._flowBoardPending = null;
+        this._flowInvPointer = null;
+        this._flowGhost = null;
+        this._invDropRect = null;
     }
 
     _defaultEvidence() {
@@ -264,6 +292,7 @@ export default class CircuitRouting extends MinigameBase {
         }
 
         this._circuit = circuit;
+        this._flowDepth = depth;
         // Disable the browser context menu so right-click on tiles can be
         // used as the "pick up piece back to inventory" gesture.
         try { this.scene.input.mouse?.disableContextMenu(); } catch {}
@@ -302,6 +331,7 @@ export default class CircuitRouting extends MinigameBase {
         this._outputs = Object.fromEntries(this._outputSpecs.map((outputSpec) => [outputSpec.row, outputSpec.label]));
         this._sourceRow = this._sources[0]?.row ?? circuit.sourceRow ?? 2;
         this._inspectionFault = circuit.progress?.inspectionFault || circuit.inspectionFault || null;
+        this._day3GridScrapOverflow = Boolean(caseData?.day3GridScrapOverflow);
         this._repairTargets = this._resolveRepairTargets(circuit);
         this._repairTargetViews = [];
         if (this.evidence.scrapRequired && !this.evidence.reviewed) {
@@ -529,6 +559,7 @@ export default class CircuitRouting extends MinigameBase {
         this._escKeyDown = (e) => { if (e.key === 'Escape' && this.active) this._finalizeAndClose(); };
         window.addEventListener('keydown', this._escKeyDown);
 
+        this._bindFlowDragListeners();
         this._updateAll();
         this._startCircuitAnimationLoop();
     }
@@ -768,11 +799,15 @@ export default class CircuitRouting extends MinigameBase {
             const isForbiddenNow = this._forbidden.has(`${x},${y}`);
             const isLockedNow = isForbiddenNow || liveTile?.locked === true;
             if (!liveTile || isLockedNow || liveTile.type === 'empty') return;
-
-            liveTile.rotation = (liveTile.rotation + 1) % 4;
-            this._animateTileRotation(tileView, liveTile.rotation);
-            this._playWireTurnSound();
-            this._updateAll();
+            if (this._flowBoardPending || this._flowDrag) return;
+            this._flowInvPointer = null;
+            this._flowBoardPending = {
+                gx: x,
+                gy: y,
+                sx: pointer.x,
+                sy: pointer.y,
+                id: pointer.id,
+            };
         });
         bg.on('pointerup', (_pointer, _localX, _localY, event) => {
             event?.stopPropagation?.();
@@ -789,6 +824,229 @@ export default class CircuitRouting extends MinigameBase {
         });
 
         return tileView;
+    }
+
+    _bindFlowDragListeners() {
+        this._unbindFlowDragListeners();
+        this._flowPtrMove = (pointer) => this._onFlowGlobalPointerMove(pointer);
+        this._flowPtrUp = (pointer) => this._onFlowGlobalPointerUp(pointer);
+        this.scene.input.on('pointermove', this._flowPtrMove);
+        this.scene.input.on('pointerup', this._flowPtrUp);
+    }
+
+    _unbindFlowDragListeners() {
+        if (this._flowPtrMove) {
+            this.scene.input.off('pointermove', this._flowPtrMove);
+        }
+        if (this._flowPtrUp) {
+            this.scene.input.off('pointerup', this._flowPtrUp);
+        }
+        this._flowPtrMove = null;
+        this._flowPtrUp = null;
+    }
+
+    _destroyFlowGhost() {
+        if (this._flowGhost) {
+            this._flowGhost.destroy();
+            this._flowGhost = null;
+        }
+    }
+
+    _drawGhostPipeAt(gfx, type, cellSize, rot) {
+        const conns = rotatedConnections(type, rot);
+        const half = cellSize / 2 - 2;
+        const color = 0x00ffcc;
+        const width = 8;
+        gfx.clear();
+        gfx.lineStyle(width, color, 1);
+        if (conns[0]) gfx.lineBetween(0, 0, 0, -half);
+        if (conns[1]) gfx.lineBetween(0, 0, half, 0);
+        if (conns[2]) gfx.lineBetween(0, 0, 0, half);
+        if (conns[3]) gfx.lineBetween(0, 0, -half, 0);
+        gfx.fillStyle(color, 1);
+        gfx.fillCircle(0, 0, width * 0.7);
+    }
+
+    _createFlowGhost(pointer) {
+        this._destroyFlowGhost();
+        if (!this._flowDrag) return;
+        const { type, rot } = this._flowDrag;
+        const cont = this.scene.add.container(0, 0).setDepth((this._flowDepth || 180) + 220);
+        const pipe = this.scene.add.graphics();
+        cont.add(pipe);
+        this._drawGhostPipeAt(pipe, type, this.cellSize, rot);
+        this.container.add(cont);
+        this._flowGhost = cont;
+        this._moveFlowGhost(pointer);
+        this.container.bringToTop(this._flowGhost);
+    }
+
+    _moveFlowGhost(pointer) {
+        if (!this._flowGhost) return;
+        this._flowGhost.setPosition(
+            pointer.x - this.container.x,
+            pointer.y - this.container.y,
+        );
+        this.container.bringToTop(this._flowGhost);
+    }
+
+    _startFlowDragFromBoard(pending, pointer) {
+        const t = this._tiles[pending.gy]?.[pending.gx];
+        if (!t || t.type === 'empty' || t.locked) {
+            this._flowBoardPending = null;
+            return;
+        }
+        this._flowDrag = {
+            from: 'board',
+            origGx: pending.gx,
+            origGy: pending.gy,
+            type: t.type,
+            rot: t.rotation,
+        };
+        this._tiles[pending.gy][pending.gx] = { type: 'empty', rotation: 0 };
+        this._flowBoardPending = null;
+        this._createFlowGhost(pointer);
+        this._playWireTurnSound();
+        this._updateAll();
+    }
+
+    _startFlowDragFromInv(pointer) {
+        if (!this._flowInvPointer) return;
+        const { type } = this._flowInvPointer;
+        this._flowInvPointer = null;
+        const n = this._inventory[type] || 0;
+        if (n <= 0) return;
+        this._flowDrag = {
+            from: 'inv',
+            origGx: -1,
+            origGy: -1,
+            type,
+            rot: 0,
+        };
+        this._createFlowGhost(pointer);
+        this._playWireTurnSound();
+    }
+
+    _hitInventoryDrop(pointer) {
+        if (!this._invDropRect) return false;
+        return pointer.x >= this._invDropRect.x
+            && pointer.x <= (this._invDropRect.x + this._invDropRect.width)
+            && pointer.y >= this._invDropRect.y
+            && pointer.y <= (this._invDropRect.y + this._invDropRect.height);
+    }
+
+    _screenToGrid(pointer) {
+        const x = (pointer.x - this.container.x - this.boardX) / this.cellSize;
+        const y = (pointer.y - this.container.y - this.boardY) / this.cellSize;
+        const gx = Math.floor(x);
+        const gy = Math.floor(y);
+        if (gx < 0 || gy < 0 || gx >= this.cols || gy >= this.rows) return null;
+        return { gx, gy };
+    }
+
+    _canDropTileAt(gx, gy) {
+        if (this._forbidden.has(`${gx},${gy}`)) return false;
+        const t = this._tiles[gy]?.[gx];
+        if (!t) return false;
+        if (t.locked) return false;
+        return t.type === 'empty';
+    }
+
+    _commitFlowDrag(pointer) {
+        const p = this._flowDrag;
+        if (!p) return;
+
+        if (this._hitInventoryDrop(pointer)) {
+            if (p.from === 'board') {
+                this._inventory[p.type] = (this._inventory[p.type] || 0) + 1;
+                this._refreshInventoryPanel();
+            }
+            this._destroyFlowGhost();
+            this._flowDrag = null;
+            this._updateAll();
+            return;
+        }
+
+        const g = this._screenToGrid(pointer);
+        if (g && this._canDropTileAt(g.gx, g.gy)) {
+            this._tiles[g.gy][g.gx] = { type: p.type, rotation: p.rot };
+            if (p.from === 'inv') {
+                this._inventory[p.type] = Math.max(0, (this._inventory[p.type] || 0) - 1);
+                this._selectedInventoryType = null;
+                this._refreshInventoryPanel();
+            }
+            this._destroyFlowGhost();
+            this._flowDrag = null;
+            this._updateAll();
+            return;
+        }
+
+        if (p.from === 'board') {
+            this._tiles[p.origGy][p.origGx] = { type: p.type, rotation: p.rot };
+        }
+        this._destroyFlowGhost();
+        this._flowDrag = null;
+        this._updateAll();
+    }
+
+    _onFlowGlobalPointerMove(pointer) {
+        if (!this.active) return;
+        if (this._flowDrag) {
+            this._moveFlowGhost(pointer);
+            return;
+        }
+        const threshold = 10;
+        if (this._flowBoardPending) {
+            const dx = pointer.x - this._flowBoardPending.sx;
+            const dy = pointer.y - this._flowBoardPending.sy;
+            const d = Math.hypot(dx, dy);
+            if (d > threshold) {
+                this._startFlowDragFromBoard(this._flowBoardPending, pointer);
+            }
+        } else if (this._flowInvPointer) {
+            const dx = pointer.x - this._flowInvPointer.sx;
+            const dy = pointer.y - this._flowInvPointer.sy;
+            const d = Math.hypot(dx, dy);
+            if (d > threshold) {
+                this._startFlowDragFromInv(pointer);
+            }
+        }
+    }
+
+    _onFlowGlobalPointerUp(pointer) {
+        if (!this.active) return;
+        if (this._flowDrag) {
+            this._commitFlowDrag(pointer);
+            return;
+        }
+        const threshold = 8;
+        if (this._flowInvPointer && pointer.id === this._flowInvPointer.id) {
+            const dx = pointer.x - this._flowInvPointer.sx;
+            const dy = pointer.y - this._flowInvPointer.sy;
+            const d = Math.hypot(dx, dy);
+            if (d < threshold) {
+                this._toggleInventorySelection(this._flowInvPointer.type);
+            }
+            this._flowInvPointer = null;
+            return;
+        }
+        if (this._flowBoardPending && pointer.id === this._flowBoardPending.id) {
+            const dx = pointer.x - this._flowBoardPending.sx;
+            const dy = pointer.y - this._flowBoardPending.sy;
+            const d = Math.hypot(dx, dy);
+            if (d < threshold) {
+                const { gx, gy } = this._flowBoardPending;
+                const live = this._tiles[gy]?.[gx];
+                if (live && live.type !== 'empty' && !live.locked) {
+                    live.rotation = (live.rotation + 1) % 4;
+                    const view = this._tileGfx[gy][gx];
+                    this._animateTileRotation(view, live.rotation);
+                    this._playWireTurnSound();
+                    this._updateAll();
+                }
+            }
+            this._flowBoardPending = null;
+        }
     }
 
     _drawOctagonFrame(gfx, cx, cy, size, opts = {}) {
@@ -884,39 +1142,24 @@ export default class CircuitRouting extends MinigameBase {
         const panelH = Math.max(220, this.rows * this.cellSize);
         const panelW = 108;
 
-        // Wooden tray styling that matches the dominoes table aesthetic.
-        const panelGfx = this.scene.add.graphics().setDepth(depth);
-        const panelLeft = panelX - panelW / 2;
-        panelGfx.fillStyle(0x5b3827, 0.98);
-        panelGfx.fillRoundedRect(panelLeft, panelY, panelW, panelH, 14);
-        panelGfx.fillStyle(0x734936, 0.92);
-        panelGfx.fillRoundedRect(panelLeft + 8, panelY + 8, panelW - 16, panelH - 16, 12);
-        panelGfx.fillStyle(0x2b1b14, 0.22);
-        const grainCount = Math.max(4, Math.floor((panelH - 24) / 28));
-        for (let lineIndex = 0; lineIndex < grainCount; lineIndex++) {
-            panelGfx.fillRect(panelLeft + 14, panelY + 22 + (lineIndex * 28), panelW - 28, 3);
-        }
-        panelGfx.lineStyle(2, 0x9b7058, 0.95);
-        panelGfx.strokeRoundedRect(panelLeft, panelY, panelW, panelH, 14);
-
+        const panelBg = this.scene.add.rectangle(panelX, panelY + panelH / 2, panelW, panelH, 0x001a20, 0.9)
+            .setStrokeStyle(1, 0x00cccc, 0.75)
+            .setDepth(depth);
         const title = this.scene.add.text(panelX, panelY + 14, 'INVENTORY', {
-            fontFamily: 'Courier New', fontSize: '10px', color: '#fde7b9', letterSpacing: 2,
+            fontFamily: 'Courier New', fontSize: '10px', color: '#00eeee', letterSpacing: 2,
         }).setOrigin(0.5).setDepth(depth + 1);
         const hint = this.scene.add.text(panelX, panelY + panelH - 14,
-            'Drag onto grid   R-click: pickup', {
-                fontFamily: 'Courier New', fontSize: '7px', color: '#e6c89a', align: 'center',
+            'L-click: place   R-click: pickup', {
+                fontFamily: 'Courier New', fontSize: '7px', color: '#66aaaa', align: 'center',
                 wordWrap: { width: panelW - 12 },
             }).setOrigin(0.5).setDepth(depth + 1);
-        this.container.add([panelGfx, title, hint]);
+        this.container.add([panelBg, title, hint]);
 
-        this._inventoryPanelArea = { panelX, panelY, panelW, panelH };
-        this._inventoryPanelGfx = panelGfx;
-
-        // Reverse slot ordering so the tray reads before the board visually.
-        const pieces = ['cross', 'tee', 'curve', 'straight'];
+        const pieces = ['straight', 'curve', 'tee', 'cross'];
         const slotSize = 50;
         const slotGap = 8;
         const slotsStartY = panelY + 38;
+        this._invDropRect = { x: panelX - panelW / 2, y: panelY, width: panelW, height: panelH };
         pieces.forEach((type, idx) => {
             const sx = panelX;
             const sy = slotsStartY + idx * (slotSize + slotGap) + slotSize / 2;
@@ -924,170 +1167,31 @@ export default class CircuitRouting extends MinigameBase {
             const pipeGfx = this.scene.add.graphics().setDepth(depth + 2);
             const countText = this.scene.add.text(sx + slotSize / 2 - 4, sy + slotSize / 2 - 4,
                 '0', {
-                    fontFamily: 'Courier New', fontSize: '13px', color: '#fff7d9',
+                    fontFamily: 'Courier New', fontSize: '13px', color: '#e6faff',
                     stroke: '#000000', strokeThickness: 2, fontStyle: 'bold',
                 }).setOrigin(1, 1).setDepth(depth + 3);
             const labelText = this.scene.add.text(sx, sy + slotSize / 2 + 4,
                 type.toUpperCase(), {
-                    fontFamily: 'Courier New', fontSize: '7px', color: '#e6c89a',
+                    fontFamily: 'Courier New', fontSize: '7px', color: '#9dd6d6',
                 }).setOrigin(0.5, 0).setDepth(depth + 2);
             const hitArea = this.scene.add.rectangle(sx, sy, slotSize, slotSize, 0x000000, 0)
                 .setInteractive({ useHandCursor: true })
                 .setDepth(depth + 4);
-            hitArea.on('pointerdown', (pointer, _lx, _ly, event) => {
+            hitArea.on('pointerdown', (p, _lx, _ly, event) => {
                 event?.stopPropagation?.();
-                this._beginInventoryDragIntent(type, pointer);
+                this._flowBoardPending = null;
+                const invCount = this._inventory[type] || 0;
+                if (invCount <= 0) {
+                    this._toggleInventorySelection(type);
+                    return;
+                }
+                this._flowInvPointer = { type, sx: p.x, sy: p.y, id: p.id };
             });
             this.container.add([slotGfx, pipeGfx, labelText, countText, hitArea]);
             this._inventoryViews[type] = { type, sx, sy, slotSize, slotGfx, pipeGfx, countText, hitArea };
         });
 
-        // Ghost graphic that follows the cursor while a piece is being dragged.
-        this._dragGhostGfx = this.scene.add.graphics().setDepth(depth + 30).setVisible(false);
-        this.container.add(this._dragGhostGfx);
-
         this._refreshInventoryPanel();
-    }
-
-    _beginInventoryDragIntent(type, pointer) {
-        if (!type) return;
-        if ((this._inventory[type] || 0) <= 0) {
-            this._toggleInventorySelection(type);
-            return;
-        }
-
-        this._teardownInventoryDrag();
-
-        this._dragHandlerMove = (movePointer) => this._handleInventoryDragMove(movePointer);
-        this._dragHandlerUp = (upPointer) => this._handleInventoryDragUp(upPointer);
-
-        this._dragState = {
-            type,
-            active: false,
-            startX: pointer.x,
-            startY: pointer.y,
-            lastX: pointer.x,
-            lastY: pointer.y,
-        };
-        this.scene.input.on('pointermove', this._dragHandlerMove);
-        this.scene.input.on('pointerup', this._dragHandlerUp);
-        this.scene.input.on('pointerupoutside', this._dragHandlerUp);
-    }
-
-    _handleInventoryDragMove(pointer) {
-        const state = this._dragState;
-        if (!state) return;
-        state.lastX = pointer.x;
-        state.lastY = pointer.y;
-        const dx = pointer.x - state.startX;
-        const dy = pointer.y - state.startY;
-        if (!state.active && (dx * dx + dy * dy) > 36) {
-            state.active = true;
-            this._dragGhostGfx?.setVisible(true);
-        }
-        if (state.active) {
-            this._updateInventoryDragGhost(pointer.x, pointer.y);
-        }
-    }
-
-    _handleInventoryDragUp(pointer) {
-        const state = this._dragState;
-        this._teardownInventoryDrag();
-        if (!state) return;
-
-        if (!state.active) {
-            this._toggleInventorySelection(state.type);
-            return;
-        }
-
-        const targetX = pointer?.x ?? state.lastX;
-        const targetY = pointer?.y ?? state.lastY;
-        const cell = this._cellFromGlobalPoint(targetX, targetY);
-        if (!cell) return;
-
-        const { x, y } = cell;
-        const tile = this._tiles?.[y]?.[x];
-        if (!tile) return;
-        if (this._forbidden.has(`${x},${y}`)) return;
-        if (tile.locked || tile.type !== 'empty') return;
-        if ((this._inventory[state.type] || 0) <= 0) return;
-
-        this._inventory[state.type] -= 1;
-        this._tiles[y][x] = { type: state.type, rotation: 0 };
-        if ((this._inventory[state.type] || 0) <= 0 && this._selectedInventoryType === state.type) {
-            this._selectedInventoryType = null;
-        }
-        this._refreshInventoryPanel();
-        this._updateAll();
-        this._playWireTurnSound?.();
-    }
-
-    _teardownInventoryDrag() {
-        if (this._dragHandlerMove) {
-            this.scene.input.off('pointermove', this._dragHandlerMove);
-            this._dragHandlerMove = null;
-        }
-        if (this._dragHandlerUp) {
-            this.scene.input.off('pointerup', this._dragHandlerUp);
-            this.scene.input.off('pointerupoutside', this._dragHandlerUp);
-            this._dragHandlerUp = null;
-        }
-        if (this._dragGhostGfx) {
-            this._dragGhostGfx.clear();
-            this._dragGhostGfx.setVisible(false);
-        }
-        this._dragState = null;
-    }
-
-    _cellFromGlobalPoint(globalX, globalY) {
-        const localX = globalX - this.boardX;
-        const localY = globalY - this.boardY;
-        if (localX < 0 || localY < 0) return null;
-        const x = Math.floor(localX / this.cellSize);
-        const y = Math.floor(localY / this.cellSize);
-        if (x < 0 || x >= this.cols || y < 0 || y >= this.rows) return null;
-        return { x, y };
-    }
-
-    _updateInventoryDragGhost(globalX, globalY) {
-        if (!this._dragGhostGfx || !this._dragState) return;
-        const { type } = this._dragState;
-        const gfx = this._dragGhostGfx;
-        gfx.clear();
-
-        const cell = this._cellFromGlobalPoint(globalX, globalY);
-        let cx = globalX;
-        let cy = globalY;
-        let valid = false;
-        if (cell) {
-            const tile = this._tiles?.[cell.y]?.[cell.x];
-            const isForbidden = this._forbidden.has(`${cell.x},${cell.y}`);
-            if (tile && tile.type === 'empty' && !isForbidden && !tile.locked) {
-                cx = this.boardX + cell.x * this.cellSize + this.cellSize / 2;
-                cy = this.boardY + cell.y * this.cellSize + this.cellSize / 2;
-                valid = true;
-            }
-        }
-
-        if (valid) {
-            const half = (this.cellSize - 6) / 2;
-            gfx.fillStyle(0x0a4f55, 0.32);
-            gfx.fillRoundedRect(cx - half, cy - half, half * 2, half * 2, 6);
-            gfx.lineStyle(2, 0x66ffff, 0.95);
-            gfx.strokeRoundedRect(cx - half, cy - half, half * 2, half * 2, 6);
-        }
-
-        const r = 18;
-        const color = valid ? 0x73ffae : 0xff7167;
-        const alpha = valid ? 1 : 0.7;
-        gfx.lineStyle(4, color, alpha);
-        const conns = TILE_BASE[type] || [0, 0, 0, 0];
-        if (conns[0]) gfx.lineBetween(cx, cy, cx, cy - r);
-        if (conns[1]) gfx.lineBetween(cx, cy, cx + r, cy);
-        if (conns[2]) gfx.lineBetween(cx, cy, cx, cy + r);
-        if (conns[3]) gfx.lineBetween(cx, cy, cx - r, cy);
-        gfx.fillStyle(color, alpha);
-        gfx.fillCircle(cx, cy, 4.5);
     }
 
     _refreshInventoryPanel() {
@@ -1333,14 +1437,18 @@ export default class CircuitRouting extends MinigameBase {
             const actualPowerClass = deriveFlowDisplayPowerClass(feedClasses);
             const hazardousTarget = expectedClass === 'red';
             const hazardousFeed = actualPowerClass === 'red';
+            const satisfied = flowPowerSatisfiesTarget(expectedClass, feedClasses, actualPowerClass);
+            const day3Surge = Boolean(this._day3GridScrapOverflow) && feeds.length > 0 && !hazardousTarget;
             const classMismatch = feeds.length > 0
                 && !hazardousTarget
                 && !hazardousFeed
-                && actualPowerClass !== expectedClass;
-            const repaired = feeds.length > 0
+                && !day3Surge
+                && !satisfied;
+            const repaired = !day3Surge
+                && feeds.length > 0
                 && !hazardousTarget
                 && !hazardousFeed
-                && actualPowerClass === expectedClass;
+                && satisfied;
             let issueCode = null;
             let issueMessage = null;
 
@@ -1350,6 +1458,9 @@ export default class CircuitRouting extends MinigameBase {
             } else if (hazardousFeed) {
                 issueCode = 'red-feed';
                 issueMessage = `${target.displayName || target.label} is being flooded by unsafe red power.`;
+            } else if (day3Surge) {
+                issueCode = 'day3-surge';
+                issueMessage = `${target.displayName || target.label} overflowed. This unit is already filing as SCRAP — routing power trips the bus.`;
             } else if (classMismatch) {
                 issueCode = 'class-mismatch';
                 issueMessage = `${target.displayName || target.label} received the wrong power class.`;
@@ -1371,10 +1482,16 @@ export default class CircuitRouting extends MinigameBase {
         const brokenTargets = repairStates.filter((target) => !target.repaired).map((target) => target.key);
         const signalIssues = repairStates.filter((target) => target.issueCode);
         const redHazard = repairStates.find((target) => target.issueCode === 'red-feed' || target.issueCode === 'crackling-module') || null;
-        const scrapRequired = Boolean(this._inspectionFault) || Boolean(redHazard);
-        const scrapKind = this._inspectionFault?.kind || (redHazard ? 'hazard' : null);
-        const scrapStatus = this._inspectionFault?.status || (redHazard ? 'CRACKLING ENERGY' : null);
-        const scrapReason = this._inspectionFault?.reason || redHazard?.issueMessage || null;
+        const day3SurgeHazard = repairStates.find((target) => target.issueCode === 'day3-surge') || null;
+        const scrapRequired = Boolean(this._inspectionFault) || Boolean(redHazard) || Boolean(day3SurgeHazard);
+        const scrapKind = this._inspectionFault?.kind
+            || (redHazard || day3SurgeHazard ? 'hazard' : null);
+        const scrapStatus = this._inspectionFault?.status
+            || (redHazard ? 'CRACKLING ENERGY' : (day3SurgeHazard ? 'BUS SURGE' : null));
+        const scrapReason = this._inspectionFault?.reason
+            || redHazard?.issueMessage
+            || day3SurgeHazard?.issueMessage
+            || null;
         const flags = repairStates
             .filter((target) => target.issueCode)
             .map((target) => target.issueCode.toUpperCase());
@@ -1425,20 +1542,24 @@ export default class CircuitRouting extends MinigameBase {
             const state = stateMap.get(target.key) || target;
             const repaired = Boolean(state.repaired);
             const invalidSignal = Boolean(state.feedCount > 0 && state.issueCode);
-            const actualPalette = getFlowPowerPalette(state.actualPowerClass || target.powerClass || 'neutral');
+            const isSurge = state.issueCode === 'day3-surge';
+            const displayPalette = isSurge
+                ? getFlowPowerPalette('red')
+                : getFlowPowerPalette(state.actualPowerClass || target.powerClass || 'neutral');
+            const actualPalette = displayPalette;
             const idleStatusColor = target.powerClass && target.powerClass !== 'neutral'
                 ? actualPalette.label
                 : '#ffb695';
-            dot.setFillStyle(repaired ? actualPalette.tint : (invalidSignal ? actualPalette.tint : 0x2f4a57), 1);
-            dot.setStrokeStyle(1, repaired ? 0xe8fff1 : (invalidSignal ? 0xffd4cf : 0x7aa8b7), 0.88);
-            nameText.setColor(repaired ? '#ddffed' : (invalidSignal ? '#ffd7d1' : '#b8dbe1'));
+            dot.setFillStyle(repaired ? displayPalette.tint : (invalidSignal ? displayPalette.tint : 0x2f4a57), 1);
+            dot.setStrokeStyle(1, repaired ? 0xe8fff1 : (invalidSignal ? 0xff4f4f : 0x7aa8b7), 0.88);
+            nameText.setColor(repaired ? '#ddffed' : (invalidSignal ? (isSurge ? '#ff9b8f' : '#ffd7d1') : '#b8dbe1'));
             statusText
                 .setText(
                     repaired
                         ? 'REPAIRED'
                         : (invalidSignal
-                            ? (state.issueCode === 'crackling-module' || state.issueCode === 'red-feed'
-                                ? 'HAZARD // SCRAP'
+                            ? (state.issueCode === 'crackling-module' || state.issueCode === 'red-feed' || isSurge
+                                ? (isSurge ? 'SURGE // SCRAP' : 'HAZARD // SCRAP')
                                 : String(state.issueCode || 'MISMATCH').replace(/-/g, ' ').toUpperCase())
                             : (forbiddenUsed
                                 ? 'BROKEN // MOD'
@@ -1532,7 +1653,6 @@ export default class CircuitRouting extends MinigameBase {
         if (!reached || tile.type === 'empty') return;
 
         const half = this.cellSize / 2 - 6;
-        const dashLength = 10;
         const directionVectors = [
             { x: 0, y: -1 },
             { x: 1, y: 0 },
@@ -1540,30 +1660,20 @@ export default class CircuitRouting extends MinigameBase {
             { x: -1, y: 0 },
         ];
         const phase = (this._energyPhase + (((x * 0.07) + (y * 0.11)) % 1)) % 1;
-        const dashHead = 3 + (phase * (half + dashLength - 2));
-        const dashTail = Math.max(0, dashHead - dashLength);
+        const pulse = 0.45 + 0.55 * Math.sin(phase * Math.PI * 2);
 
-        // Bright dashed "power" trail + moving dot, rendered ABOVE the pipe so
-        // the player can clearly read the flow direction.
-        energy.lineStyle(3, palette.tint, 0.55);
+        energy.lineStyle(3, palette.tint, 0.5);
         energy.fillStyle(palette.tint, 0.95);
         directionVectors.forEach((vector, index) => {
             if (!conns[index]) return;
-
-            const tail = Math.min(half, dashTail);
-            const head = Math.min(half, dashHead);
-            energy.lineBetween(vector.x * tail, vector.y * tail, vector.x * head, vector.y * head);
-            // Outer halo behind the travelling dot for extra pop on the pipe.
-            energy.fillStyle(palette.tint, 0.35);
-            energy.fillCircle(vector.x * head, vector.y * head, 5);
-            energy.fillStyle(palette.tint, 0.95);
-            energy.fillCircle(vector.x * head, vector.y * head, 3);
+            const endX = vector.x * half;
+            const endY = vector.y * half;
+            energy.lineBetween(0, 0, endX, endY);
+            energy.fillStyle(palette.tint, 0.4 * pulse);
+            energy.fillCircle(endX, endY, 5);
+            energy.fillStyle(palette.tint, 0.95 * pulse);
+            energy.fillCircle(endX, endY, 3);
         });
-
-        energy.fillStyle(palette.tint, 0.5);
-        energy.fillCircle(0, 0, 5.5);
-        energy.fillStyle(0xffffff, 0.85);
-        energy.fillCircle(0, 0, 2.2);
     }
 
     _computeReached() {
@@ -1859,7 +1969,6 @@ export default class CircuitRouting extends MinigameBase {
 
     hide() {
         this._stopCircuitAnimationLoop();
-        this._teardownInventoryDrag();
         this._tileGfx?.forEach((row) => {
             row?.forEach((tileView) => {
                 tileView?.rotationTween?.stop();
@@ -1878,7 +1987,6 @@ export default class CircuitRouting extends MinigameBase {
         this._wireFilterMap = new Map();
         this._inspectionFaultGfx = null;
         this._inspectionFault = null;
-        this._dragGhostGfx = null;
         this._inventoryViews = {};
         this._specialAction = null;
         this._specialActionButton = null;
@@ -1892,6 +2000,11 @@ export default class CircuitRouting extends MinigameBase {
             window.removeEventListener('keydown', this._escKeyDown);
             this._escKeyDown = null;
         }
+        this._unbindFlowDragListeners();
+        this._flowBoardPending = null;
+        this._flowInvPointer = null;
+        this._flowDrag = null;
+        this._destroyFlowGhost();
         this._closeButton?.destroy();
         this._closeButton = null;
         this._closeButtonLabel?.destroy();
@@ -1904,6 +2017,7 @@ export default class CircuitRouting extends MinigameBase {
             window.removeEventListener('keydown', this._escKeyDown);
             this._escKeyDown = null;
         }
+        this._unbindFlowDragListeners();
         this._closeButton?.destroy();
         this._closeButton = null;
         this._closeButtonLabel?.destroy();

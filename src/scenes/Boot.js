@@ -159,13 +159,13 @@ export default class BootScene extends Phaser.Scene {
 
         // Umbrella primary sprite — openumbrella.png if present, else freakass fallback.
         if (this.textures.exists('machine_rebellious_umbrella_source')) {
-            this._createNearestUpscaledTexture('machine_rebellious_umbrella_source', 'machine_rebellious_umbrella', 1);
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_source', 'machine_rebellious_umbrella', 20);
         } else if (this.textures.exists('machine_rebellious_umbrella_fallback_source')) {
-            this._createNearestUpscaledTexture('machine_rebellious_umbrella_fallback_source', 'machine_rebellious_umbrella', 1);
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_fallback_source', 'machine_rebellious_umbrella', 20);
         }
         // Closed umbrella variant for the scrap state (asset optional).
         if (this.textures.exists('machine_rebellious_umbrella_scrapped_source')) {
-            this._createNearestUpscaledTexture('machine_rebellious_umbrella_scrapped_source', 'machine_rebellious_umbrella_scrapped', 1);
+            this._createNearestUpscaledTexture('machine_rebellious_umbrella_scrapped_source', 'machine_rebellious_umbrella_scrapped', 20);
         }
         // Camera bot: lying-down sprite for conveyor, inspect sprite for close-up.
         // Falls back to the original camerabot.png if either new asset is missing.
@@ -194,9 +194,9 @@ export default class BootScene extends Phaser.Scene {
             this._createNearestUpscaledTexture('machine_cry_baby_fallback_source', 'machine_cry_baby_close', 1);
         }
         if (this.textures.exists('machine_jester_in_the_box_source')) {
-            this._createNearestUpscaledTexture('machine_jester_in_the_box_source', 'machine_jester_in_the_box', 1);
+            this._createNearestUpscaledTexture('machine_jester_in_the_box_source', 'machine_jester_in_the_box', 20);
         } else if (this.textures.exists('machine_jester_in_the_box_fallback_source')) {
-            this._createNearestUpscaledTexture('machine_jester_in_the_box_fallback_source', 'machine_jester_in_the_box', 1);
+            this._createNearestUpscaledTexture('machine_jester_in_the_box_fallback_source', 'machine_jester_in_the_box', 20);
         }
         if (this.textures.exists('machine_companion_humanoid_source')) {
             this._createNearestUpscaledTexture('machine_companion_humanoid_source', 'machine_companion_humanoid', 1);
@@ -211,13 +211,13 @@ export default class BootScene extends Phaser.Scene {
             this._createNearestUpscaledTexture('machine_phonograph_source', 'machine_phonograph', 1);
         }
         if (this.textures.exists('machine_parrot_robot_source')) {
-            this._createNearestUpscaledTexture('machine_parrot_robot_source', 'machine_parrot_robot', 1);
+            this._createNearestUpscaledTexture('machine_parrot_robot_source', 'machine_parrot_robot', 20);
         }
         if (this.textures.exists('machine_soda_machine_source')) {
             this._createNearestUpscaledTexture('machine_soda_machine_source', 'machine_soda_machine', 1);
         }
         if (this.textures.exists('machine_medical_surgeon_robot_source')) {
-            this._createNearestUpscaledTexture('machine_medical_surgeon_robot_source', 'machine_medical_surgeon_robot', 1);
+            this._createNearestUpscaledTexture('machine_medical_surgeon_robot_source', 'machine_medical_surgeon_robot', 20);
         }
         if (this.textures.exists('machine_furby_bot_source')) {
             this._createNearestUpscaledTexture('machine_furby_bot_source', 'machine_furby_bot', 1);
@@ -235,10 +235,10 @@ export default class BootScene extends Phaser.Scene {
             this._createNearestUpscaledTexture('machine_rebellious_umbrella_v2_source', 'machine_rebellious_umbrella_v2', 1);
         }
         if (this.textures.exists('machine_baby_care_teaching_machine_source')) {
-            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_source', 'machine_baby_care_teaching_machine', 1);
+            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_source', 'machine_baby_care_teaching_machine', 20);
         }
         if (this.textures.exists('machine_baby_care_teaching_machine_inspect_source')) {
-            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_inspect_source', 'machine_baby_care_teaching_machine_close', 1);
+            this._createNearestUpscaledTexture('machine_baby_care_teaching_machine_inspect_source', 'machine_baby_care_teaching_machine_close', 20);
         }
         if (this.textures.exists('machine_charging_station_port_source')) {
             this._createNearestUpscaledTexture('machine_charging_station_port_source', 'machine_charging_station_port', 1);
@@ -251,13 +251,13 @@ export default class BootScene extends Phaser.Scene {
         // default, swapping to happyrichinspect.png when the personality module
         // is connected (see _applyMachineSprite).
         if (this.textures.exists('machine_rich_mf_conveyor_source')) {
-            this._createNearestUpscaledTexture('machine_rich_mf_conveyor_source', 'machine_rich_mf', 1);
+            this._createNearestUpscaledTexture('machine_rich_mf_conveyor_source', 'machine_rich_mf', 20);
         }
         if (this.textures.exists('machine_rich_mf_inspect_source')) {
-            this._createNearestUpscaledTexture('machine_rich_mf_inspect_source', 'machine_rich_mf_inspect', 1);
+            this._createNearestUpscaledTexture('machine_rich_mf_inspect_source', 'machine_rich_mf_inspect', 20);
         }
         if (this.textures.exists('machine_rich_mf_inspect_happy_source')) {
-            this._createNearestUpscaledTexture('machine_rich_mf_inspect_happy_source', 'machine_rich_mf_inspect_happy', 1);
+            this._createNearestUpscaledTexture('machine_rich_mf_inspect_happy_source', 'machine_rich_mf_inspect_happy', 20);
         }
         // Debrief machine has a dual-sprite setup like the camera bot:
         // conveyor uses debrief.png, inspect view uses inspectdebrief.png.

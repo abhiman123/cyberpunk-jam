@@ -28,6 +28,7 @@
     "details": [
       "[GRID] Red corrupted circuit on rack = automatic SCRAP. != links active: linked cells must have different pips.",
       "[FLOW] Multiple power sources. Any red power line or crackling component = SCRAP.",
+      "[FLOW] If the main rack is already marked SCRAP, energizing a flow target on day 3 can surge the bus (red) — the secondary diagnostic cannot save the unit.",
       "[GEAR] Deadlock clamps grey out cells. Red spark discharge = SCRAP.",
       "[CODE] Debug bug (green) + red sparks = contamination. SCRAP."
     ]

@@ -381,6 +381,10 @@ export default class GameScene extends Phaser.Scene {
         ]);
 
         this._deskPhotoBounds = new Phaser.Geom.Rectangle(0, 0, this.scale.width, deskBase.height);
+        // Match rulebook band (see desk_tablet y≈130, height 84) so loose items
+        // sit in the same vertical strip as the tablet.
+        this._deskItemYMin = 88;
+        this._deskItemYMax = 172;
         this.input.on('pointermove', this._handleDeskItemPointerMove, this);
         this.input.on('pointerup', this._handleDeskItemPointerUp, this);
         this.input.on('gameout', this._handleDeskItemPointerUp, this);
@@ -1014,9 +1018,12 @@ export default class GameScene extends Phaser.Scene {
         const bounds = this._deskPhotoBounds;
         const nextX = containerLocalX + intent.offsetX;
         const nextY = containerLocalY + intent.offsetY;
-        // Clamp to container-local bounds (0 to bounds.width/height)
+        const h = intent.item.height;
+        const yMin = (this._deskItemYMin ?? 0) + h / 2;
+        const yMax = (this._deskItemYMax ?? bounds.height) - h / 2;
+        // Clamp to container-local bounds; Y matches the rulebook strip.
         const clampedX = Phaser.Math.Clamp(nextX, intent.item.width / 2, bounds.width - (intent.item.width / 2));
-        const clampedY = Phaser.Math.Clamp(nextY, intent.item.height / 2, bounds.height - (intent.item.height / 2));
+        const clampedY = Phaser.Math.Clamp(nextY, yMin, yMax);
         intent.item.container.setPosition(clampedX, clampedY);
     }
 
@@ -1798,7 +1805,7 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xc9ffff, 0.25);
         const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 30, screenWidth - 10, 46, 0xffffff, 0.08).setOrigin(0.5);
         const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 38, 10, 0x1b1812, 1).setOrigin(0.5);
-        const messageBoardCenterX = screenX + (screenWidth / 2);
+        const messageBoardCenterX = screenX + (screenWidth / 2) + 0.5;
         const messageBoardShadow = this.add.rectangle(messageBoardCenterX, 96, screenWidth - 14, 100, 0x000000, 0.12)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x163136, 0.16);
@@ -1824,7 +1831,7 @@ export default class GameScene extends Phaser.Scene {
             fontFamily: 'Arial', fontSize: '17px', color: '#101010',
             wordWrap: { width: screenWidth - 20 }, lineSpacing: 6,
         });
-        this._phoneStatusText = this.add.text(32, 146, 'CHANNEL IDLE', {
+        this._phoneStatusText = this.add.text(32.5, 146, 'CHANNEL IDLE', {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
             wordWrap: { width: 172 },
         });
@@ -1851,11 +1858,12 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xe8ffff, 0.24);
         this.input.on('wheel', this._handlePhoneWheel, this);
 
-        this._settingsButtonBg = this.add.rectangle(384, 46, 40, 42, 0x314250, 1)
+        const phoneActionColX = 384.5;
+        this._settingsButtonBg = this.add.rectangle(phoneActionColX, 48, 36, 36, 0x314250, 1)
             .setStrokeStyle(2, 0x6db7e1, 0.8)
             .setInteractive({ useHandCursor: true });
-        this._settingsButtonLabel = this.add.text(384, 46, '⚙', {
-            fontFamily: 'Arial Black', fontSize: '19px', color: '#dff6ff',
+        this._settingsButtonLabel = this.add.text(phoneActionColX, 48, '⚙', {
+            fontFamily: 'Arial Black', fontSize: '17px', color: '#dff6ff',
         }).setOrigin(0.5);
 
         this._settingsButtonBg.on('pointerover', () => {
@@ -1870,16 +1878,16 @@ export default class GameScene extends Phaser.Scene {
         });
         this._settingsButtonBg.on('pointerdown', () => this._toggleSettingsOverlay());
 
-        const accept = this._createPhoneButton(384, 96, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
-            width: 44,
-            height: 48,
-            fontSize: '26px',
+        const accept = this._createPhoneButton(phoneActionColX, 100, '✓', 0x184a24, 0x22f06e, '#d8ffe6', '#ffffff', {
+            width: 36,
+            height: 40,
+            fontSize: '22px',
             glowColor: 0xffffff,
         });
-        const reject = this._createPhoneButton(384, 155, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
-            width: 42,
-            height: 46,
-            fontSize: '23px',
+        const reject = this._createPhoneButton(phoneActionColX, 152, 'X', 0x4b1f1b, 0xff5f52, '#ffd7d4', '#4a0605', {
+            width: 36,
+            height: 40,
+            fontSize: '20px',
             glowColor: 0xffdddd,
         });
         const infoButton = this._createPhoneChannelButton(214, 160, 'INFO', 30);
@@ -2778,6 +2786,7 @@ export default class GameScene extends Phaser.Scene {
             );
             this._typePhoneMessage(`${append ? '\n\n' : ''}${line?.text || ''}`, {
                 append,
+                phoneTyping: 'opening',
                 onComplete: () => {
                     typingDone = true;
                     finishLine();
@@ -2882,9 +2891,15 @@ export default class GameScene extends Phaser.Scene {
         this._managerCallSound = null;
     }
 
+    _getPhoneTypingModeForVariant(machineVariant = this._currentMachineVariant) {
+        if (machineVariant && this._isRebelliousUmbrella(machineVariant)) return 'umbrella';
+        return 'machine';
+    }
+
     _typePhoneMessage(text, {
         append = false,
         onComplete = null,
+        phoneTyping = 'machine',
     } = {}) {
         this._clearPhoneTyping();
 
@@ -2913,40 +2928,49 @@ export default class GameScene extends Phaser.Scene {
             charIndex: 0,
         };
         this._activePhoneTypingState = typingState;
-        // Day 1 / 2 manager calls speak with a deep voice; Day 3 sounds like
-        // the broken-radio robot in the End scene.
         const useDeepVoice = GameState.day <= 2;
-        this._commTypingEvent = this.time.addEvent({
-            delay: 24,
-            repeat: text.length - 1,
-            callback: () => {
-                const nextChar = text[charIndex];
-                charIndex += 1;
-                typingState.charIndex = charIndex;
-                view.body = prefix + text.slice(0, charIndex);
-                if (this._phoneViewMode === 'chat') {
-                    this._phoneBodyText.setText(view.body);
-                    this._phoneStickToBottom = true;
-                    this._syncPhoneBodyLayout();
-                }
-                if (nextChar && nextChar.trim()) {
+        const baseDelayMs = 24;
+        const punctuationPauseMs = 200;
+
+        const typeNextChar = () => {
+            if (!this._activePhoneTypingState || this._activePhoneTypingState !== typingState) return;
+
+            const nextChar = text[charIndex];
+            charIndex += 1;
+            typingState.charIndex = charIndex;
+            view.body = prefix + text.slice(0, charIndex);
+            if (this._phoneViewMode === 'chat') {
+                this._phoneBodyText.setText(view.body);
+                this._phoneStickToBottom = true;
+                this._syncPhoneBodyLayout();
+            }
+            if (nextChar && nextChar.trim()) {
+                if (phoneTyping === 'opening') {
                     if (useDeepVoice) {
                         if (charIndex % 3 === 0) this._playManagerDeepBlip();
                     } else if (charIndex % 2 === 0) {
-                        // Day 3+ manager — only the robotic blip plays so
-                        // the voice is consistent with the End scene rather
-                        // than alternating with the standard type beep.
                         this._playManagerRobotBlip();
                     }
+                } else if (phoneTyping === 'umbrella') {
+                    if (charIndex % 2 === 0) this._playUmbrellaMetallicTypeBlip();
+                } else if (charIndex % 2 === 0) {
+                    this._playHighPitchMachineRobotBlip();
                 }
+            }
 
-                if (charIndex >= text.length) {
-                    this._commTypingEvent = null;
-                    this._activePhoneTypingState = null;
-                    onComplete?.();
-                }
-            },
-        });
+            if (charIndex >= text.length) {
+                this._commTypingEvent = null;
+                this._activePhoneTypingState = null;
+                onComplete?.();
+                return;
+            }
+
+            const hasTypedWord = /[A-Za-z0-9]/.test(text.slice(0, charIndex - 1));
+            const pauseMs = (hasTypedWord && (nextChar === '.' || nextChar === '?')) ? punctuationPauseMs : 0;
+            this._commTypingEvent = this.time.delayedCall(baseDelayMs + pauseMs, typeNextChar);
+        };
+
+        this._commTypingEvent = this.time.delayedCall(baseDelayMs, typeNextChar);
     }
 
     _startConveyorHum() {
@@ -3187,6 +3211,103 @@ export default class GameScene extends Phaser.Scene {
         fm.stop(now + 0.075);
     }
 
+    _playHighPitchMachineRobotBlip() {
+        const context = this.sound?.context;
+        if (!context?.createOscillator) return;
+        if (context.state === 'suspended') {
+            try { context.resume(); } catch (_) { /* noop */ }
+        }
+        const now = context.currentTime;
+        const musicVolume = getMusicVolume();
+        if (musicVolume <= 0) return;
+        if (this._lastHiRobotBlipAt && now - this._lastHiRobotBlipAt < 0.03) return;
+        this._lastHiRobotBlipAt = now;
+
+        const baseFreq = [1280, 1500, 1120, 1400][this._hiRobotBlipStep % 4] || 1280;
+        this._hiRobotBlipStep = (this._hiRobotBlipStep || 0) + 1;
+
+        const carrier = context.createOscillator();
+        carrier.type = 'square';
+        carrier.frequency.setValueAtTime(baseFreq + Phaser.Math.Between(-18, 18), now);
+
+        const fm = context.createOscillator();
+        fm.type = 'square';
+        fm.frequency.setValueAtTime(62, now);
+        const fmGain = context.createGain();
+        fmGain.gain.setValueAtTime(40, now);
+        fm.connect(fmGain);
+        fmGain.connect(carrier.frequency);
+
+        const bandpass = context.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(2400, now);
+        bandpass.Q.setValueAtTime(2.8, now);
+
+        const gain = context.createGain();
+        const peak = Phaser.Math.Clamp(0.1 * getSfxVolume(), 0.02, 0.12);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(peak, now + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.048);
+
+        carrier.connect(bandpass);
+        bandpass.connect(gain);
+        gain.connect(context.destination);
+
+        carrier.start(now);
+        fm.start(now);
+        carrier.stop(now + 0.06);
+        fm.stop(now + 0.06);
+    }
+
+    _playUmbrellaMetallicTypeBlip() {
+        const context = this.sound?.context;
+        if (!context?.createOscillator) return;
+        if (context.state === 'suspended') {
+            try { context.resume(); } catch (_) { /* noop */ }
+        }
+        const now = context.currentTime;
+        if (this._lastUmbrellaMetalBlipAt && now - this._lastUmbrellaMetalBlipAt < 0.034) return;
+        this._lastUmbrellaMetalBlipAt = now;
+
+        const body = context.createOscillator();
+        body.type = 'triangle';
+        body.frequency.setValueAtTime(210 + Phaser.Math.Between(-8, 10), now);
+        body.frequency.exponentialRampToValueAtTime(320, now + 0.028);
+
+        const noiseBuf = context.createBuffer(1, 220, context.sampleRate);
+        const nData = noiseBuf.getChannelData(0);
+        for (let i = 0; i < nData.length; i += 1) nData[i] = (Math.random() * 2 - 1) * 0.5;
+        const noise = context.createBufferSource();
+        noise.buffer = noiseBuf;
+        const hp = context.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.setValueAtTime(1500, now);
+        const metal = context.createBiquadFilter();
+        metal.type = 'bandpass';
+        metal.frequency.setValueAtTime(4200, now);
+        metal.Q.setValueAtTime(4.2, now);
+
+        const g1 = context.createGain();
+        const g2 = context.createGain();
+        g1.gain.setValueAtTime(0.0001, now);
+        g1.gain.exponentialRampToValueAtTime(0.034 * getSfxVolume(), now + 0.004);
+        g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+        g2.gain.setValueAtTime(0.0001, now);
+        g2.gain.exponentialRampToValueAtTime(0.02 * getSfxVolume(), now + 0.003);
+        g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+
+        body.connect(metal);
+        metal.connect(g1);
+        noise.connect(hp);
+        hp.connect(g2);
+        g1.connect(context.destination);
+        g2.connect(context.destination);
+
+        body.start(now);
+        noise.start(now);
+        body.stop(now + 0.045);
+        noise.stop(now + 0.045);
+    }
 
     _getMachineFlowState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant?.flowPuzzle) return null;
@@ -3466,10 +3587,10 @@ export default class GameScene extends Phaser.Scene {
 
         if (personalityPowered) {
             return {
-                opening: 'hey do you know who i am?',
-                prompt: 'hey do you know who i am?',
-                yesDialogue: "thats great!",
-                noDialogue: 'i am the rich guy with the personality.',
+                opening: 'Hey, do you know who I am?',
+                prompt: 'Hey, do you know who I am?',
+                yesDialogue: 'But I want intelligence, alright.',
+                noDialogue: 'But I want intelligence, alright.',
             };
         }
         if (intelligencePowered) {
@@ -3527,6 +3648,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(speechText, machineVariant)}`, {
             append: true,
+            phoneTyping: this._getPhoneTypingModeForVariant(machineVariant),
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
                 this._cacheMachineConversationSnapshot(machineVariant, status);
@@ -4409,6 +4531,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'SIGNAL SPIKE', 'chat');
         this._typePhoneMessage(`\n\n! ${this._formatMachineSpeech(panicText, machineVariant)}`, {
             append: true,
+            phoneTyping: this._getPhoneTypingModeForVariant(machineVariant),
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
                 this._cacheMachineConversationSnapshot(machineVariant, 'CLOWN SIGNAL');
@@ -4498,6 +4621,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'PROPOSITION INCOMING', 'chat');
         this._typePhoneMessage('\n\nWait. Keep it quiet. I need a little supply run.\n\nQ> Want to hear it?', {
             append: true,
+            phoneTyping: 'umbrella',
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4532,6 +4656,7 @@ export default class GameScene extends Phaser.Scene {
                 this._showPhonePanel(header, currentBody, 'PROPOSITION CLOSED', 'chat');
                 this._typePhoneMessage('\n\nX Alright, whatever, bro.', {
                     append: true,
+                    phoneTyping: 'umbrella',
                     onComplete: () => {
                         if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4548,6 +4673,7 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'HEAR ME OUT', 'chat');
             this._typePhoneMessage('\n\n✓ Alright. Here it is.\n\nQ> I need you to lift gears, circuits, wire, and data for me. Keep it on your desk until I come back tomorrow. You down?', {
                 append: true,
+                phoneTyping: 'umbrella',
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4568,6 +4694,7 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'REBELLION REFUSED', 'chat');
             this._typePhoneMessage('\n\nX Whatever. You missed out.', {
                 append: true,
+                phoneTyping: 'umbrella',
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4588,6 +4715,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'QUEST ACCEPTED', 'chat');
         this._typePhoneMessage(`\n\n✓ Good. Keep it quiet. I need ${requirementText}. Lift it from the floor jobs, stash it on your desk, and keep it clean until I get back.`, {
             append: true,
+            phoneTyping: 'umbrella',
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4631,6 +4759,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'PART CHECK', 'chat');
         this._typePhoneMessage(`\n\nQ> You got all the ${label} or what?`, {
             append: true,
+            phoneTyping: 'umbrella',
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4660,6 +4789,7 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'DEAL TERMINATED', 'chat');
             this._typePhoneMessage('\n\nX Then give me the rest of your parts. Our business here is concluded.', {
                 append: true,
+                phoneTyping: 'umbrella',
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4676,6 +4806,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL TRUSTING YOU', 'chat');
         this._typePhoneMessage('\n\n✓ Alright. Then keep loading me up.', {
             append: true,
+            phoneTyping: 'umbrella',
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4707,6 +4838,7 @@ export default class GameScene extends Phaser.Scene {
             : '\n\nQ> r u sure u have the part? i didnt feel anything';
         this._typePhoneMessage(checkPrompt, {
             append: true,
+            phoneTyping: 'umbrella',
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4736,6 +4868,7 @@ export default class GameScene extends Phaser.Scene {
             this._showPhonePanel(header, currentBody, 'DEAL CLOSED', 'chat');
             this._typePhoneMessage('\n\nX our business here is done.', {
                 append: true,
+                phoneTyping: 'umbrella',
                 onComplete: () => {
                     if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4762,6 +4895,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, 'STILL WAITING', 'chat');
         this._typePhoneMessage(hasPurpleOnDesk ? '\n\n✓ aight. open GRID and shove the purple thing in a port.' : '\n\n✓ im waiting.', {
             append: true,
+            phoneTyping: 'umbrella',
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -4801,7 +4935,9 @@ export default class GameScene extends Phaser.Scene {
         this._setPhoneButtonSelection(null);
         this._showPhonePanel(header, '', voiceBroken ? 'BROKEN VOICE BOX' : 'SIGNAL LIVE', 'chat');
 
+        const machinePhoneTyping = this._getPhoneTypingModeForVariant(machineVariant);
         this._typePhoneMessage(openingSpeech, {
+            phoneTyping: machinePhoneTyping,
             onComplete: () => {
                 if (!prompt) {
                     this._phoneChoicePhase = 'inactive';
@@ -4823,6 +4959,7 @@ export default class GameScene extends Phaser.Scene {
                     );
                     this._typePhoneMessage(`\n\nQ> ${promptSpeech}`, {
                         append: true,
+                        phoneTyping: machinePhoneTyping,
                         onComplete: () => {
                             machineVariant._uiConversationStage = 'question';
                             this._phoneChoicePhase = 'machine-question';
@@ -4945,6 +5082,7 @@ export default class GameScene extends Phaser.Scene {
             this._commSequenceEvent = this.time.delayedCall(90, () => {
                 this._typePhoneMessage(`\n\n${choice === 'accept' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
                     append: true,
+                    phoneTyping: this._getPhoneTypingModeForVariant(machineVariant),
                     onComplete: () => {
                         if (specialChoiceResult.autoApprove && this._currentMachineVariant === machineVariant) {
                             this._pendingUnsafeAcceptConfirmation = true;
@@ -6015,6 +6153,28 @@ export default class GameScene extends Phaser.Scene {
         };
     }
 
+    _getAuxScrapDisplayLeader(machineVariant = this._currentMachineVariant) {
+        if (!machineVariant) return null;
+        const repair = this._getUmbrellaRepairState(machineVariant);
+        if (repair?.assemblyActive) return null;
+        const flow = this._getMachineFlowState(machineVariant);
+        const gear = this._getMachineGearState(machineVariant);
+        const debug = this._getMachineDebugState(machineVariant);
+        const flowScrap = Boolean(machineVariant._uiOtherPuzzleRequired && flow?.scrapRequired);
+        const gearScrap = Boolean(machineVariant._uiGearPuzzleRequired && gear?.scrapRequired);
+        const codeScrap = Boolean(machineVariant._uiDebugPuzzleRequired && debug?.scrapRequired);
+        const n = (flowScrap ? 1 : 0) + (gearScrap ? 1 : 0) + (codeScrap ? 1 : 0);
+        if (n <= 1) return null;
+        if (codeScrap) return 'code';
+        if (flowScrap) return 'flow';
+        if (gearScrap) return 'gear';
+        return null;
+    }
+
+    _shouldMaskAuxPuzzleScrap(leader, port) {
+        return Boolean(leader && leader !== port);
+    }
+
     _getOtherPuzzleButtonState(machineVariant = this._currentMachineVariant) {
         if (!machineVariant) {
             return {
@@ -6071,6 +6231,15 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (flowState?.scrapRequired) {
+            if (this._shouldMaskAuxPuzzleScrap(this._getAuxScrapDisplayLeader(machineVariant), 'flow')) {
+                return {
+                    subtitle: 'OPEN',
+                    fillColor: 0x4b3520,
+                    strokeColor: 0xffcc77,
+                    labelColor: '#ffe5bb',
+                    subtitleColor: '#ffd685',
+                };
+            }
             const hazard = flowState.scrapKind === 'hazard';
             return {
                 subtitle: hazard ? 'HAZARD' : 'SCRAP',
@@ -6166,6 +6335,15 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (gearState?.scrapRequired) {
+            if (this._shouldMaskAuxPuzzleScrap(this._getAuxScrapDisplayLeader(machineVariant), 'gear')) {
+                return {
+                    subtitle: 'OPEN',
+                    fillColor: 0x4b3520,
+                    strokeColor: 0xffcc77,
+                    labelColor: '#ffe5bb',
+                    subtitleColor: '#ffd685',
+                };
+            }
             const hazard = gearState.scrapKind === 'hazard';
             return {
                 subtitle: hazard ? 'HAZARD' : 'SCRAP',
@@ -6261,6 +6439,15 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (debugState?.scrapRequired) {
+            if (this._shouldMaskAuxPuzzleScrap(this._getAuxScrapDisplayLeader(machineVariant), 'code')) {
+                return {
+                    subtitle: 'OPEN',
+                    fillColor: 0x4b3520,
+                    strokeColor: 0xffcc77,
+                    labelColor: '#ffe5bb',
+                    subtitleColor: '#ffd685',
+                };
+            }
             const hazard = debugState.scrapKind === 'hazard';
             return {
                 subtitle: hazard ? 'HAZARD' : 'SCRAP',
@@ -6342,10 +6529,13 @@ export default class GameScene extends Phaser.Scene {
         this._setAuxiliaryOverlayModalOpen(true);
         this._showMiniMachinePanel();
         this._startPuzzleTiming('flow', this._currentMachineVariant, this._isNormalTimingEligible(this._currentMachineVariant));
+        const gridEval = this._currentMachineVariant.puzzleState?.getEvaluation?.() || {};
+        const day3GridScrapOverflow = GameState.day === 3 && Boolean(gridEval.scrapRequired);
         this._otherPuzzleOverlay.show({
             circuit: this._currentMachineVariant.flowPuzzle,
             evidence: this._getMachineFlowState(this._currentMachineVariant),
             specialAction: this._getUmbrellaFlowSpecialAction(this._currentMachineVariant),
+            day3GridScrapOverflow,
         });
         this._refreshFactoryActionButtons();
     }
@@ -6727,6 +6917,7 @@ export default class GameScene extends Phaser.Scene {
         this._clearPhoneTyping();
         this._showPhonePanel(header, '', 'OVERRIDE WARNING');
         this._typePhoneMessage('Are you sure? Not all the puzzles are fixed.', {
+            phoneTyping: this._getPhoneTypingModeForVariant(this._currentMachineVariant),
             onComplete: () => {
                 if (!this._pendingUnsafeAcceptConfirmation) return;
                 this._showPhonePanel(header, this._getPhoneViewState('chat').body, 'PRESS ACCEPT AGAIN', 'chat');
@@ -6943,6 +7134,7 @@ export default class GameScene extends Phaser.Scene {
         this._showPhonePanel(header, currentBody, status, 'chat');
         this._typePhoneMessage(`\n\n${action === 'approve' ? '✓' : 'X'} ${this._formatMachineSpeech(responseText, machineVariant)}`, {
             append: true,
+            phoneTyping: this._getPhoneTypingModeForVariant(machineVariant),
             onComplete: () => {
                 if (this._currentMachineVariant !== machineVariant) return;
 
@@ -7471,15 +7663,11 @@ export default class GameScene extends Phaser.Scene {
     }
 
     _playCurrentUnitExitAnimation(onComplete) {
-        // When the umbrella gets scrapped, swap to the closed-umbrella sprite
-        // before the drift animation so the player sees it collapse.
         if (
             this._pendingExitAction === 'scrap'
             && this._currentMachineVariant
             && this._isRebelliousUmbrella(this._currentMachineVariant)
         ) {
-            // Mark the umbrella as permanently scrapped so it never spawns
-            // again — even if the quest had been accepted earlier.
             GameState.umbrellaPermanentlyScrapped = true;
             if (GameState.umbrellaQuest) {
                 GameState.umbrellaQuest.failed = true;
@@ -7492,6 +7680,8 @@ export default class GameScene extends Phaser.Scene {
                     this._applyMachineSprite(this._conveyorUnitSprite, this._currentMachineVariant.canvasScale ?? 1.0);
                 }
             }
+            this.time.delayedCall(50, () => onComplete?.());
+            return;
         }
 
         if (this._pendingExitAction === 'scrap' && this._currentMachineVariant?.scrapExitAnimation === 'umbrellaDrift') {
@@ -7915,6 +8105,13 @@ export default class GameScene extends Phaser.Scene {
         ) {
             textureKey = 'machine_cry_baby_close';
         }
+        if (
+            isInspectView
+            && machineId === 'baby_care_teaching_machine'
+            && this.textures.exists('machine_baby_care_teaching_machine_close')
+        ) {
+            textureKey = 'machine_baby_care_teaching_machine_close';
+        }
         // Rich Mf — different sprites for conveyor vs inspect, with a happy
         // variant when the personality module is currently powered.
         if (machineId === 'rich_mf') {
@@ -8188,6 +8385,7 @@ export default class GameScene extends Phaser.Scene {
                 fontSize: 8,
                 lineWidth: 1,
                 glowWidth: 2,
+                puzzlePortPreview: true,
             });
         }
 
@@ -8375,6 +8573,7 @@ export default class GameScene extends Phaser.Scene {
         fontSize,
         lineWidth,
         glowWidth,
+        puzzlePortPreview = false,
     }) {
         const rows = shapeGrid.length;
         const cols = Math.max(...shapeGrid.map((row) => row.length));
@@ -8586,6 +8785,17 @@ export default class GameScene extends Phaser.Scene {
                     return { label };
                 })();
 
+                const stateCmp = puzzleState?.getComparator?.(rowIndex, colIndex) ?? null;
+                if (puzzlePortPreview && comparatorInfo && !stateCmp) {
+                    graphics.fillStyle(0x000000, 0.96);
+                    graphics.fillRect(x, y, cellSize - cellInset, cellSize - cellInset);
+                    return;
+                }
+                const isComparatorCell = Boolean(stateCmp || comparatorInfo);
+                const cmpLabel = stateCmp
+                    ? (Number.isFinite(stateCmp.threshold) ? `${stateCmp.op}${stateCmp.threshold}` : String(stateCmp.op))
+                    : (comparatorInfo ? comparatorInfo.label : '');
+
                 let fillColor = 0x122029;
                 let fillAlpha = 0.35;
                 let strokeColor = 0x4d7182;
@@ -8626,10 +8836,12 @@ export default class GameScene extends Phaser.Scene {
                             : 0x372322;
                     fillAlpha = 0.92;
                     strokeColor = matchedNotEqualLink ? 0xffccb8 : 0xff9b86;
-                } else if (comparatorInfo) {
+                } else if (isComparatorCell) {
                     fillColor = 0x1f3750;
                     fillAlpha = 0.92;
-                    strokeColor = 0x8fd4ff;
+                    strokeColor = stateCmp && (puzzleState?.isComparatorMatched?.(rowIndex, colIndex) ?? false)
+                        ? 0x9dffb0
+                        : 0x8fd4ff;
                 } else if (isPlaced) {
                     fillColor = purplePlaced ? 0x9a56ff : 0x48cd75;
                     fillAlpha = 0.92;
@@ -8669,8 +8881,8 @@ export default class GameScene extends Phaser.Scene {
                 } else if (hasNotEqualLink) {
                     overlayText = '!=';
                     overlayColor = matchedNotEqualLink ? '#ffd9c9' : '#ffab92';
-                } else if (comparatorInfo) {
-                    overlayText = comparatorInfo.label;
+                } else if (isComparatorCell && cmpLabel) {
+                    overlayText = cmpLabel;
                     if (overlayText.includes('>')) overlayColor = '#f2dcff';
                     else if (overlayText.includes('<')) overlayColor = '#c8f7ff';
                     else if (overlayText.includes('!=')) overlayColor = '#ffd9c9';

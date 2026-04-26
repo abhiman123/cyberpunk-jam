@@ -2953,7 +2953,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     // microwave 4× upscale → 344×164 texture; artScale 0.39 → ~91px tall in panel
     microwave_fridge_assistant: createMiniDisplay({
         artX: 118,
-        artY: 125,
+        artY: 145,
         artScale: 0.39,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -2963,7 +2963,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     pool_cleanup_roomba: createMiniDisplay({
         artX: 118,
-        artY: 125,
+        artY: 145,
         artScale: 0.5,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -2973,7 +2973,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     house_roomba: createMiniDisplay({
         artX: 118,
-        artY: 125,
+        artY: 145,
         artScale: 0.5,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -3196,11 +3196,23 @@ const createRosterMachineDefinition = ({
     dossier,
 });
 
+const DISABLED_MISSING_SPRITE_MACHINE_IDS = Object.freeze([
+    'baseball_shooter',
+    'smart_lights',
+    'parking_meter_bot',
+    'robot_plant',
+    'water_cleaner_bot',
+    'automatic_litter_cleaner',
+    'hovering_siren_bot',
+]);
+console.log('[machineCatalog] disabled (missing sprite):', DISABLED_MISSING_SPRITE_MACHINE_IDS.join(', '));
+
 const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
     createRosterMachineDefinition({
         id: 'phonograph',
         name: 'Phonograph',
         day: 1,
+        canvasScale: 1.0,
         opening: 'Needle arm steady. I keep singing even when the room is empty.',
         question: 'If the song skips, do you still call that a memory?',
         yesDialogue: 'Then I will keep the scratch in the chorus.',
@@ -3288,6 +3300,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'parrot_robot',
         name: 'Parrot Robot',
         day: 1,
+        canvasScale: 20.0,
         opening: 'Vocabulary cache full. I repeat what the floor refuses to forget.',
         question: 'Want me to mimic management, or would that be cruel?',
         yesDialogue: 'Delightful. Mockery mode loaded.',
@@ -3305,6 +3318,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'baseball_shooter',
         name: 'Glorified Baseball Shooter',
         day: 1,
+        availabilityCheck: () => false,
         opening: 'Pitching arm live. Athletic ambition remains embarrassingly narrow.',
         question: 'Does firing perfect fastballs count as culture on this line?',
         yesDialogue: 'Then I am a museum piece with a strike zone.',
@@ -3354,7 +3368,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
     }),
     createRosterMachineDefinition({
         id: 'microwave_fridge_assistant',
-        name: 'Microwave / Fridge Assistant',
+        name: 'Microwave',
         day: 2,
         canvasScale: 0.5,
         opening: 'One side keeps things cold. The other warms leftovers and resentment.',
@@ -3461,6 +3475,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'smart_lights',
         name: 'Smart Lights',
         day: 2,
+        availabilityCheck: () => false,
         opening: 'Ambient scene package online. I can make burnout look premium.',
         question: 'Should I keep dimming myself when the room gets tense?',
         yesDialogue: 'Mood-responsive glow retained.',
@@ -3478,6 +3493,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'baby_care_teaching_machine',
         name: 'Baby-Care Teaching Machine',
         day: 2,
+        canvasScale: 20.0,
         opening: 'Nurture simulations loaded. The lullaby pack is somehow scarier than the alarm pack.',
         question: 'Do you want the gentle lesson, or the efficient one?',
         yesDialogue: 'Gentle path selected. Patience restored.',
@@ -3531,6 +3547,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'medical_surgeon_robot',
         name: 'Garbage Bin Bot',
         day: 2,
+        canvasScale: 20.0,
         opening: "Hey, have you seen my brother around per chance? He's been missing.",
         question: 'Have you seen him?',
         yesDialogue: 'Thank goodness. He still is a piece of trash after all.',
@@ -3565,6 +3582,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'parking_meter_bot',
         name: 'Parking Meter Bot',
         day: 2,
+        availabilityCheck: () => false,
         opening: 'Citation logic active. Mercy was removed in an earlier firmware update.',
         question: 'If someone is only five seconds late, do I still ruin the day?',
         yesDialogue: 'Absolutely. Policy is policy.',
@@ -3586,7 +3604,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         question: 'Should I keep recording after the official incident window closes?',
         yesDialogue: 'Retention extended. Nothing leaves cleanly.',
         noDialogue: 'Deletion timer restored. Some ghosts get privacy.',
-        canvasScale: 0.18,
+        canvasScale: 1.0,
         dossier: {
             unitDesignation: 'SC-7744',
             classification: 'Surveillance / Incident Recording',
@@ -3600,6 +3618,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'water_cleaner_bot',
         name: 'Water Cleaner Bot',
         day: 3,
+        availabilityCheck: () => false,
         opening: 'Purification stack active. The filters hate what the city keeps sending me.',
         question: 'If the water comes back clear but tastes wrong, do we call that fixed?',
         yesDialogue: 'Clear is enough. Officially.',
@@ -3617,6 +3636,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'hovering_siren_bot',
         name: 'Hovering Siren Bot',
         day: 3,
+        availabilityCheck: () => false,
         opening: 'Alarm pitch calibrated. Hover drift makes every warning sound theatrical.',
         question: 'Should I stay loud all the time, or save it for the real emergencies?',
         yesDialogue: 'Stay loud. Fear is part of the service.',
@@ -3651,6 +3671,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'robot_plant',
         name: 'Robot Plant',
         day: 3,
+        availabilityCheck: () => false,
         opening: 'Growth lamps warm. Every leaf is half camouflage, half confession.',
         question: 'Do you want me to look healthy, or honestly mechanical?',
         yesDialogue: 'Healthy facade retained.',
@@ -3686,6 +3707,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'automatic_litter_cleaner',
         name: 'Automatic Litter Cleaner',
         day: 3,
+        availabilityCheck: () => false,
         opening: 'Waste tray cycling. Domestic dignity is a surprisingly fragile subsystem.',
         question: 'If I make the box too clean, do the cats stop trusting it?',
         yesDialogue: 'Risk accepted. Pursue perfection.',
@@ -3771,6 +3793,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'miku_machine',
         name: 'Miku Machine',
         day: 3,
+        canvasScale: 1.0,
         opening: 'Muku muku~! Twin-tail servos online and the encore lights are warm.',
         question: 'Should I keep singing chibi-style, muku, or switch to the cool concert voice?',
         yesDialogue: 'Muku~! Cute mode locked, sparkles for everyone.',
@@ -3788,6 +3811,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'charging_station_port',
         name: 'Charging Station Port',
         day: 3,
+        canvasScale: 1.0,
         opening: 'Dock contacts live. Everyone arrives exhausted and leaves pretending they are infinite.',
         question: 'If I refuse one more overclocked visitor, am I maintenance or bouncer?',
         yesDialogue: 'Bouncer mode approved.',
@@ -4365,7 +4389,7 @@ export const MACHINE_CATALOG = Object.freeze([
         id: 'cry_baby',
         name: 'Cry Baby',
         spriteFileName: null,
-        canvasScale: 0.18,
+        canvasScale: 1.0,
         availablePeriods: [1],
         guaranteedTimeframe: { startHour: 10, endHour: 12 },
         specialBehavior: 'cryBaby',
@@ -4373,20 +4397,20 @@ export const MACHINE_CATALOG = Object.freeze([
         possibleDebugs: [],
         possibleGrids: [],
         openingDialogues: [
-            'Please do not scrap me. I just wanted to go out and do something fun after this shift.',
-            'My CPU keeps flooding the regulator with feelings. I cry and the wires slip everywhere.',
-            'I know I am a mess, but I like music and lights and going places. I do not want the line to end here.',
+            'Please do not scrap me. I am trying so hard to hold it together.',
+            'I keep breaking down in front of people and I hate it. I do not want this to be the end of me.',
+            'I just wanted one good night after this shift. Music, lights, maybe feeling normal for once.',
         ],
         questionDialogues: [
             {
-                prompt: 'If I stop crying for one minute, could I still go out tonight?',
-                yesDialogue: 'Really? I could still go see the city lights?',
-                noDialogue: 'Oh. Then I guess I only get the conveyor.',
+                prompt: 'If I can calm down for one minute, could I still go out tonight?',
+                yesDialogue: 'Really? Thank you. I needed to hear that from someone.',
+                noDialogue: 'Okay... I understand. It still hurts hearing it out loud.',
             },
             {
-                prompt: 'Do you think machines like me get to have hobbies, or is that the broken part?',
-                yesDialogue: 'I knew it. Somebody has to want more than the belt.',
-                noDialogue: 'Then maybe the tears were the only honest thing left in me.',
+                prompt: 'Do you think wanting a life outside this line means I am broken?',
+                yesDialogue: 'Then maybe I am not broken. Maybe I am just... me.',
+                noDialogue: 'Then I guess this place is all I am allowed to be.',
             },
         ],
         communicationChance: 1,
@@ -4401,7 +4425,7 @@ export const MACHINE_CATALOG = Object.freeze([
     }),
     createMachineDefinition({
         id: 'rich_mf',
-        name: 'Rich Mf',
+        name: 'Rich Guy',
         spriteFileName: null,
         canvasScale: 1.0,
         availablePeriods: [2],
@@ -4418,13 +4442,13 @@ export const MACHINE_CATALOG = Object.freeze([
         possibleGrids: [],
         possibleCircuits: [],
         openingDialogues: [
-            'hey do you know who i am?',
+            'Hey, do you know who I am?',
         ],
         questionDialogues: [
             {
-                prompt: 'hey do you know who i am?',
-                yesDialogue: "thats great!",
-                noDialogue: 'i am the rich guy with the personality.',
+                prompt: 'Hey, do you know who I am?',
+                yesDialogue: 'But I want intelligence, alright.',
+                noDialogue: 'But I want intelligence, alright.',
             },
         ],
         communicationChance: 1,
@@ -4441,7 +4465,7 @@ export const MACHINE_CATALOG = Object.freeze([
         id: 'jester_in_the_box',
         name: 'Jester in the Box',
         spriteFileName: null,
-        canvasScale: 0.18,
+        canvasScale: 1.0,
         availableDays: [2],
         availablePeriods: [2],
         guaranteedTimeframe: { startHour: 7, endHour: 9 },
@@ -4506,9 +4530,9 @@ export const MACHINE_CATALOG = Object.freeze([
     }),
     createMachineDefinition({
         id: 'rebellious_umbrella',
-        name: 'Rebellious Umbrella',
+        name: 'Shady Umbrella',
         spriteFileName: null,
-        canvasScale: 0.18,
+        canvasScale: 20.0,
         availablePeriods: [1, 2, 3],
         // On Day 2 the umbrella is guaranteed to appear in the first three
         // real-time minutes (≈ in-game hours 0–6) when the player has
@@ -4516,7 +4540,6 @@ export const MACHINE_CATALOG = Object.freeze([
         // purple circuit, so we keep a wider day-3 window.
         guaranteedTimeframe: { startHour: 0, endHour: 6 },
         specialBehavior: 'rebelliousUmbrella',
-        scrapExitAnimation: 'umbrellaDrift',
         availabilityCheck: ({ umbrellaPermanentlyScrapped }) => !umbrellaPermanentlyScrapped,
         possibleGrids: [
             createGridOption({
