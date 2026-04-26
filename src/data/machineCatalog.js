@@ -3875,7 +3875,7 @@ const DAY_THREE_MACHINE_ROSTER_IDS = Object.freeze([
     'workforce_quality_control_supervisor',
 ]);
 
-export const MACHINE_CATALOG = Object.freeze([
+const MACHINE_CATALOG = Object.freeze([
     createMachineDefinition({
         id: 'assembler_alpha',
         name: 'Assembler Alpha',
@@ -5485,7 +5485,7 @@ function normalizeGridDefinition(shapeGrid) {
     };
 }
 
-export class MachinePuzzleState {
+class MachinePuzzleState {
     constructor(gridOption) {
         const clonedGridOption = cloneGridOption(gridOption);
         const normalizedGrid = normalizeGridDefinition(clonedGridOption.grid);

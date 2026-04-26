@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'cyberpunk-jam.settings';
 
-export const DEFAULT_GAME_SETTINGS = Object.freeze({
+const DEFAULT_GAME_SETTINGS = Object.freeze({
     musicVolume: 0.2,
 });
 
@@ -64,7 +64,7 @@ export function getGameSettings() {
     return normalizeSettings(cachedSettings);
 }
 
-export function updateGameSettings(patch) {
+function updateGameSettings(patch) {
     const currentSettings = getGameSettings();
     let nextMusicVolume = currentSettings.musicVolume;
 
