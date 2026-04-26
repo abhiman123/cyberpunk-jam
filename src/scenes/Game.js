@@ -1785,10 +1785,12 @@ export default class GameScene extends Phaser.Scene {
             .setStrokeStyle(1, 0xc9ffff, 0.25);
         const gloss = this.add.rectangle(screenX + (screenWidth / 2), screenY + 30, screenWidth - 10, 46, 0xffffff, 0.08).setOrigin(0.5);
         const tray = this.add.rectangle(frameWidth / 2, frameHeight - 15, frameWidth - 38, 10, 0x1b1812, 1).setOrigin(0.5);
-        const messageBoardShadow = this.add.rectangle(146, 96, 244, 100, 0x000000, 0.12)
+        // The dialogue board fills the cyan screen interior almost edge-to-edge
+        // so the body text can be sized up without leaving large blank gaps.
+        const messageBoardShadow = this.add.rectangle(150, 94, 260, 108, 0x000000, 0.12)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x163136, 0.16);
-        const messageBoard = this.add.rectangle(146, 96, 240, 96, 0xf3ffff, 0.22)
+        const messageBoard = this.add.rectangle(150, 94, 256, 104, 0xf3ffff, 0.22)
             .setOrigin(0.5)
             .setStrokeStyle(1, 0x17363d, 0.28);
         this._phoneMessageBoardShadow = messageBoardShadow;
@@ -1800,22 +1802,23 @@ export default class GameScene extends Phaser.Scene {
             scanlines.fillRect(screenX, screenY + offset, screenWidth, 6);
         }
 
-        this._phoneHeaderText = this.add.text(34, 30, 'FACTORY LINK', {
+        this._phoneHeaderText = this.add.text(30, 28, 'FACTORY LINK', {
             fontFamily: 'Arial Black', fontSize: '13px', color: '#0c171b',
             wordWrap: { width: 258 },
         });
-        // Bigger body text to fill the dialogue board — was 14px and left
-        // the bottom half of the screen blank during short prompts.
-        this._phoneBodyText = this.add.text(28, 50, '', {
-            fontFamily: 'Arial', fontSize: '17px', color: '#101010',
-            wordWrap: { width: 258 }, lineSpacing: 6,
+        // Body text is 19px now and left-anchored at the top so multi-line
+        // wraps grow downward into the freshly-enlarged board instead of
+        // leaving the bottom half of the screen blank on short prompts.
+        this._phoneBodyText = this.add.text(28, 48, '', {
+            fontFamily: 'Arial', fontSize: '19px', color: '#101010',
+            wordWrap: { width: 244 }, lineSpacing: 6,
         });
-        this._phoneStatusText = this.add.text(32, 146, 'CHANNEL IDLE', {
+        this._phoneStatusText = this.add.text(32, 152, 'CHANNEL IDLE', {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
             wordWrap: { width: 172 },
         });
 
-        this._phoneBodyViewport = { x: 28, y: 48, width: 258, height: 96 };
+        this._phoneBodyViewport = { x: 28, y: 46, width: 244, height: 96 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
 
