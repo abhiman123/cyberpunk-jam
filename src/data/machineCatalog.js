@@ -1213,26 +1213,34 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             randomFn,
         });
 
-        // Spread output power classes between the two sources. Always include
-        // at least one of each so the player has to use both inputs.
-        const classCycle = ['neutral', auxClass];
-        const outputSpecs = targets.map((target, index) => {
-            const powerClass = classCycle[index % classCycle.length];
+        // Assign each output to the source whose row is closest. This keeps
+        // each source's vertical wiring legs on its OWN side of the grid so
+        // we never have to route a neutral wire through the orange/green
+        // source's trunk row (which would mix currents at the junction and
+        // make the puzzle unsolvable).
+        const outputSpecs = targets.map((target) => {
+            const distMain = Math.abs(target.row - mainRow);
+            const distAux = Math.abs(target.row - auxRow);
+            const useAux = distAux < distMain;
+            const powerClass = useAux ? auxClass : 'neutral';
             return createFlowOutputSpec(target.label, target.row, {
                 ...target,
                 powerClass,
                 sourceKey: powerClass === 'neutral' ? 'main' : auxClass,
             });
         });
-        // Guarantee both classes appear (above index-mod logic already does
-        // this for >=2 outputs, but be defensive).
+        // Guarantee both classes appear so the player has to use both
+        // inputs. If proximity assignment clustered everything on one side,
+        // flip the most-distant target to the missing class.
         if (!outputSpecs.some((spec) => spec.powerClass === 'neutral')) {
-            outputSpecs[0].powerClass = 'neutral';
-            outputSpecs[0].sourceKey = 'main';
+            const farthest = outputSpecs.slice().sort((a, b) => Math.abs(a.row - auxRow) - Math.abs(b.row - auxRow)).pop();
+            farthest.powerClass = 'neutral';
+            farthest.sourceKey = 'main';
         }
         if (!outputSpecs.some((spec) => spec.powerClass === auxClass)) {
-            outputSpecs[outputSpecs.length - 1].powerClass = auxClass;
-            outputSpecs[outputSpecs.length - 1].sourceKey = auxClass;
+            const farthest = outputSpecs.slice().sort((a, b) => Math.abs(a.row - mainRow) - Math.abs(b.row - mainRow)).pop();
+            farthest.powerClass = auxClass;
+            farthest.sourceKey = auxClass;
         }
 
         const layout = buildTypedFlowOptionLayout({
@@ -1313,28 +1321,38 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         .slice(0, dayThreeTargets.length)
         .sort((left, right) => left - right);
 
-    // Distribute the three power classes across 4-5 outputs. Always
-    // include all three classes so every source must be used; remaining
-    // slots are randomly assigned to maintain variety.
-    const powerCycle = ['neutral', 'green', 'orange'];
-    const shuffledClasses = (() => {
-        const required = [...powerCycle].sort(() => randomFn() - 0.5);
-        const result = required.slice(0, Math.min(dayThreeTargets.length, required.length));
-        while (result.length < dayThreeTargets.length) {
-            result.push(powerCycle[Math.floor(randomFn() * powerCycle.length)]);
-        }
-        // Shuffle so the three required classes aren't always in the same slots.
-        return result.sort(() => randomFn() - 0.5);
-    })();
-
+    // Assign each output to the source whose row is closest. Each source
+    // owns its own band of rows so its vertical legs never have to cross
+    // another source's trunk row (which would mix currents at the
+    // junction and make the puzzle unsolvable).
     const outputSpecs = dayThreeTargets.map((target, index) => {
-        const powerClass = shuffledClasses[index];
-        return createFlowOutputSpec(target.label, outputRows[index], {
+        const targetRow = outputRows[index];
+        const closestSource = sources.reduce((best, candidate) => (
+            Math.abs(candidate.row - targetRow) < Math.abs(best.row - targetRow) ? candidate : best
+        ), sources[0]);
+        const powerClass = closestSource.powerClass;
+        return createFlowOutputSpec(target.label, targetRow, {
             ...target,
-            row: outputRows[index],
+            row: targetRow,
             powerClass,
             sourceKey: powerClass === 'neutral' ? 'main' : powerClass,
         });
+    });
+
+    // Guarantee every source is used at least once. If proximity assignment
+    // skipped a source (e.g. all outputs clustered near just two sources),
+    // pick the output whose row is FARTHEST from any of the already-used
+    // sources and reassign it to the missing source. This keeps the
+    // re-route as harmless as possible — the swap may introduce one
+    // crossing, but only when the layout couldn't be balanced cleanly.
+    sources.forEach((source) => {
+        if (outputSpecs.some((spec) => spec.powerClass === source.powerClass)) return;
+        const candidate = outputSpecs.slice().sort((a, b) => (
+            Math.abs(a.row - source.row) - Math.abs(b.row - source.row)
+        ))[0];
+        if (!candidate) return;
+        candidate.powerClass = source.powerClass;
+        candidate.sourceKey = source.powerClass === 'neutral' ? 'main' : source.powerClass;
     });
     const layout = buildTypedFlowOptionLayout({
         sources,
@@ -3402,7 +3420,7 @@ const DAY_ROSTER_MACHINE_DEFINITIONS = Object.freeze([
         id: 'microwave_fridge_assistant',
         name: 'Microwave / Fridge Assistant',
         day: 2,
-        canvasScale: 0.5,
+        canvasScale: 0.42,
         opening: 'One side keeps things cold. The other warms leftovers and resentment.',
         question: 'If I start freezing the soup and heating the ice, is that innovation or drift?',
         yesDialogue: 'Innovation logged. Kitchen standards lowered.',

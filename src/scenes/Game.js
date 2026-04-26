@@ -7475,6 +7475,7 @@ export default class GameScene extends Phaser.Scene {
             trash_picker_upper: 16,
             house_roomba: 36,
             pool_cleanup_roomba: 36,
+            microwave_fridge_assistant: 40,
         };
         return offsets[machineVariant?.machineId] || 0;
     }

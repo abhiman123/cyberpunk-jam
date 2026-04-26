@@ -18,8 +18,12 @@ const DIRS = [
 ];
 
 const FLOW_POWER_PALETTES = Object.freeze({
+    // Neutral kept cyan. Green pushed toward lime/chartreuse so it reads
+    // distinctly against the cyan neutral wire — at the previous teal-ish
+    // green, both colors looked similar enough that players couldn't tell
+    // a green-required output from a neutral one.
     neutral: { tint: 0x00ffcc, label: '#00ffcc', idle: '#66aaaa', dot: 0xffcc44 },
-    green: { tint: 0x73ffae, label: '#73ffae', idle: '#77b494', dot: 0x73ffae },
+    green: { tint: 0xb8ff3c, label: '#b8ff3c', idle: '#7d9c50', dot: 0xb8ff3c },
     orange: { tint: 0xffbe6d, label: '#ffbe6d', idle: '#c79a66', dot: 0xffbe6d },
     mixed: { tint: 0xff7167, label: '#ffb0a8', idle: '#cc847c', dot: 0xff7167 },
     red: { tint: 0xff4f4f, label: '#ff8d8d', idle: '#b76464', dot: 0xff4f4f },
