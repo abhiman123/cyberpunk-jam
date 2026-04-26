@@ -9,10 +9,10 @@ const SCREEN_H = 720;
 
 const CREDITS = Object.freeze([
     { role: 'PROGRAMMING', names: [
-        'Safiullah Baig',
-        'Orion Allen Borntrager',
-        'Andrew Bui',
         'Abhimanyu Bhalla',
+        'Safiullah Baig',
+        'Andrew Bui',
+        'Orion Allen Borntrager',
         'Ethan Nishimura',
         'Minh Tran',
     ] },
