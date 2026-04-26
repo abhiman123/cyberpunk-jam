@@ -232,11 +232,6 @@ export default class GameScene extends Phaser.Scene {
         } else {
             this.time.delayedCall(300, () => this._beginShift());
         }
-
-        // ADD THIS: Tell Wavedash the game is ready to be seen
-        if (window.WavedashJS) {
-            window.WavedashJS.signalReady();
-        }
     }
 
     update(_time, delta) {

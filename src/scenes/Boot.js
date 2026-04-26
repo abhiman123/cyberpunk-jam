@@ -92,6 +92,12 @@ export default class BootScene extends Phaser.Scene {
         this._createTrapdoorFramesFromSource();
         this._createNewMachineSpritesFromSource();
         this._generatePlaceholders();
+
+        // ADD THIS: Tell Wavedash the game is ready to be seen
+        if (window.WavedashJS) {
+            window.WavedashJS.signalReady();
+        }
+
         this.scene.start('Title');
     }
 
