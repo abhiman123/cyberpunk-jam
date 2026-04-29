@@ -1831,16 +1831,16 @@ export default class GameScene extends Phaser.Scene {
         });
         // Bigger body text to fill the dialogue board — was 14px and left
         // the bottom half of the screen blank during short prompts.
-        this._phoneBodyText = this.add.text(28, 50, '', {
+        this._phoneBodyText = this.add.text(33, 50, '', {
             fontFamily: 'Arial', fontSize: '17px', color: '#101010',
-            wordWrap: { width: screenWidth - 20 }, lineSpacing: 6,
+            wordWrap: { width: screenWidth - 35 }, lineSpacing: 6,
         });
         this._phoneStatusText = this.add.text(32.5, 146, 'CHANNEL IDLE', {
             fontFamily: 'Arial Black', fontSize: '10px', color: '#15313a',
             wordWrap: { width: 172 },
         });
 
-        this._phoneBodyViewport = { x: 28, y: 48, width: screenWidth - 20, height: 96 };
+        this._phoneBodyViewport = { x: 33, y: 48, width: screenWidth - 35, height: 96 };
         this._phoneScrollTrackTop = this._phoneBodyViewport.y + 2;
         this._phoneScrollTrackHeight = this._phoneBodyViewport.height - 4;
 
@@ -1993,6 +1993,16 @@ export default class GameScene extends Phaser.Scene {
         this._phoneHeaderText.setText(view.header || '');
         this._phoneBodyText.setText(view.body || '');
         this._phoneStatusText.setText(view.status || '');
+
+        // INFO is dense structured data; CHAT/notifications need larger text for prose
+        if (this._phoneViewMode === 'info') {
+            this._phoneBodyText.setFontSize('12px');
+            this._phoneBodyText.setLineSpacing(3);
+        } else {
+            this._phoneBodyText.setFontSize('17px');
+            this._phoneBodyText.setLineSpacing(6);
+        }
+
         this._restorePhoneViewScroll();
         this._syncPhoneBodyLayout();
         this._refreshPhoneChannelButtons();

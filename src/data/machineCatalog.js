@@ -2883,7 +2883,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     cry_baby: createMiniDisplay({
         artX: 118,
-        artY: -100,
+        artY: 100,
         artScale: 0.244,
         artAngle: -2,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -2893,7 +2893,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     rich_mf: createMiniDisplay({
         artX: 118,
-        artY: -75,
+        artY: 75,
         artScale: 0.22,
         artAngle: -5,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -2913,7 +2913,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     rebellious_umbrella: createMiniDisplay({
         artX: 118,
-        artY: -75,
+        artY: 75,
         artScale: 0.055,
         artAngle: -3,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -2923,7 +2923,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     security_camera_bot: createMiniDisplay({
         artX: 118,
-        artY: -75,
+        artY: 75,
         artScale: 0.042,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -3055,7 +3055,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     phonograph: createMiniDisplay({
         artX: 118,
-        artY: -75,
+        artY: 75,
         artScale: 0.26,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -3065,7 +3065,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     parrot_robot: createMiniDisplay({
         artX: 118,
-        artY: -75,
+        artY: 75,
         artScale: 0.24,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -3075,7 +3075,7 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
     }),
     companion_humanoid: createMiniDisplay({
         artX: 118,
-        artY: -135,
+        artY: 75,
         artScale: 0.3,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
@@ -3137,6 +3137,50 @@ const MACHINE_MINI_DISPLAY_CATALOG = Object.freeze({
         artX: 128,
         artY: 100,
         artScale: 0.2,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    // lifeguard.png: 1× crop 105×147 → displayed ~67×94px at artScale 0.45
+    lifeguard_robot: createMiniDisplay({
+        artX: 118,
+        artY: 100,
+        artScale: 0.45,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    // soda.png: 1× full 150×171 → displayed ~81×93px at artScale 0.38
+    soda_machine: createMiniDisplay({
+        artX: 118,
+        artY: 100,
+        artScale: 0.38,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    // magic.png: 4× crop 114×193 → 456×772px; artScale 0.09 → ~58×99px displayed
+    magic_machine: createMiniDisplay({
+        artX: 118,
+        artY: 90,
+        artScale: 0.09,
+        artAngle: 0,
+        gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
+        flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
+        codePreview: { x: 25, y: 50, width: 60, height: 40, label: 'CODE' },
+        gearPreview: { x: 150, y: 110, width: 60, height: 40, label: 'GEAR' },
+    }),
+    // coffeeMachine.png: 4× crop 33×60 → 132×240px; artScale 0.28 → ~53×96px displayed
+    coffee_machine: createMiniDisplay({
+        artX: 118,
+        artY: 100,
+        artScale: 0.28,
         artAngle: 0,
         gridPreview: { x: 25, y: 110, width: 60, height: 40, label: 'GRID' },
         flowPreview: { x: 150, y: 50, width: 60, height: 40, label: 'FLOW' },
