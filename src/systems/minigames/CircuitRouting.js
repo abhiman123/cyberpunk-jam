@@ -182,12 +182,33 @@ function generateCircuit(spec, rows, cols) {
         Array.from({ length: cols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
     );
     const sr = spec.sourceRow ?? spec.sources?.[0]?.row ?? Math.floor(rows / 2) ?? 2;
-    const outputRows = spec.outputSpecs 
-        ? spec.outputSpecs.map(s => Number(s.row)) 
+    const rawOutputRows = spec.outputSpecs
+        ? spec.outputSpecs.map(s => Number(s.row))
         : Object.keys(spec.outputs || {}).map(Number);
+    // Dedupe: two outputs sharing a row would carve the same path twice.
+    const outputRows = Array.from(new Set(rawOutputRows));
 
+    // Assign each output a unique branch column so paths don't collapse onto
+    // each other (which leaves later outputs disconnected).
+    const usedBranchCols = new Set();
     outputRows.forEach((outRow, i) => {
-        const branchCol = outRow === sr ? (cols - 1) : Math.min(1 + i, cols - 2);
+        let branchCol;
+        if (outRow === sr) {
+            branchCol = cols - 1;
+        } else {
+            const desired = Math.min(1 + i, cols - 2);
+            branchCol = desired;
+            // Walk left/right until we find a column not already used.
+            let offset = 0;
+            while (usedBranchCols.has(branchCol) && offset < cols) {
+                offset += 1;
+                const left = desired - offset;
+                const right = desired + offset;
+                if (right <= cols - 2 && !usedBranchCols.has(right)) { branchCol = right; break; }
+                if (left >= 1 && !usedBranchCols.has(left)) { branchCol = left; break; }
+            }
+        }
+        usedBranchCols.add(branchCol);
         carvePath(tiles, sr, outRow, cols, branchCol);
     });
 
@@ -200,10 +221,18 @@ function generateCircuit(spec, rows, cols) {
 
     tiles.forEach(row => row.forEach(cell => { finalizeTile(cell); delete cell._dirs; }));
 
-    // Scramble rotations (skip empty and rotation-symmetric tiles)
+    // Scramble rotations.
+    //   - 'empty' and 'cross' are fully rotation-symmetric: skip.
+    //   - 'straight' is 2-fold symmetric (rot 0≡2, 1≡3); a +2 scramble looks
+    //     identical to the player ("rotating does nothing"), so flip strictly
+    //     between 0 and 1.
+    //   - 'curve' / 'tee' are asymmetric: +1..+3 guarantees a non-solved start.
     tiles.forEach(row => row.forEach(cell => {
         if (cell.type === 'empty' || cell.type === 'cross') return;
-        // Scramble but ensure starting rotation is not already solved (add 1-3)
+        if (cell.type === 'straight') {
+            cell.rotation = (cell.rotation + 1) % 2;
+            return;
+        }
         cell.rotation = (cell.rotation + 1 + Math.floor(Math.random() * 3)) % 4;
     }));
 

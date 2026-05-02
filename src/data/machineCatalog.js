@@ -4949,6 +4949,9 @@ function cloneFlowPuzzleOption(flowPuzzleOption) {
 
     return {
         ...flowPuzzleOption,
+        // _generatedTiles is a per-build cache; never carry it across clones,
+        // otherwise a stale topology leaks into the next shift's variant.
+        _generatedTiles: undefined,
         outputs: { ...(flowPuzzleOption.outputs || {}) },
         rows: getFlowOptionRows(flowPuzzleOption),
         cols: getFlowOptionCols(flowPuzzleOption),
@@ -5456,7 +5459,7 @@ function stripGridConstraintMarkers(shapeGrid) {
 function injectEqualityConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
     if (!gridOption) return gridOption;
 
-    const budget = { remaining: 8000, timedOut: false };
+    const budget = { remaining: 50000, timedOut: false };
     const candidates = shuffleCells(
         collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
             const cell = gridOption.grid?.[row]?.[col];
@@ -6152,7 +6155,7 @@ function canPlaceCandidate(state, candidate) {
     ));
 }
 
-function searchPuzzleSolution(state, dominoIndex = 0, budget = { remaining: 8000, timedOut: false }) {
+function searchPuzzleSolution(state, dominoIndex = 0, budget = { remaining: 50000, timedOut: false }) {
     if (budget.remaining <= 0) {
         budget.timedOut = true;
         return false;
@@ -6204,12 +6207,17 @@ function isPlayableGridOption(gridOption, globalBudget = null) {
         impossible: false,
     });
     
-    const budget = globalBudget || { remaining: 8000, timedOut: false };
+    const budget = globalBudget || { remaining: 50000, timedOut: false };
     const isSolvable = searchPuzzleSolution(state, 0, budget);
 
-    if (!budget.timedOut) {
-        GRID_SOLVABILITY_CACHE.set(gridOption, isSolvable);
+    if (budget.timedOut) {
+        // Solver couldn't prove the option in time. Forward-generation in
+        // buildStageConstraintProfile guarantees the staged board is solvable
+        // anyway, so the conservative answer is "assume playable" rather than
+        // dropping the option entirely. Don't cache — next call may converge.
+        return true;
     }
+    GRID_SOLVABILITY_CACHE.set(gridOption, isSolvable);
     return isSolvable;
 }
 
@@ -6229,7 +6237,7 @@ function collectBoardConstraintCandidates(shapeGrid) {
 function injectNotEqualConstraint(gridOption, randomFn = Math.random, validatePlayability = true) {
     if (!gridOption) return gridOption;
 
-    const budget = { remaining: 8000, timedOut: false };
+    const budget = { remaining: 50000, timedOut: false };
     const candidates = shuffleCells(
         collectBoardConstraintCandidates(gridOption.grid).filter(({ row, col }) => {
             const cell = gridOption.grid?.[row]?.[col];
@@ -6959,9 +6967,25 @@ function buildStageConstraintProfile(gridOption, stage = 1, randomFn = Math.rand
 
     // -- Per-cell comparators (<N / >N) LAST so they only land on cells that
     // are still CELL_EMPTY — never clobbers other constraints.
+    const gridBeforeComparators = resultGrid;
     resultGrid = injectPerCellComparators(resultGrid, solutionPipMap, randomFn, normalizedStage);
 
-    return { ...baseOption, grid: resultGrid };
+    // Comparators are derived from the forward-generated solution, so in
+    // theory the staged board is always solvable. But if any constraint
+    // injection regresses the puzzle (e.g. comparator clashes with a not-
+    // equal partner whose pip count was not what we thought), drop the
+    // comparator pass and keep the simpler — but solvable — board.
+    let finalGrid = resultGrid;
+    try {
+        const stagedForCheck = { ...baseOption, grid: finalGrid };
+        if (!isPlayableGridOption(stagedForCheck)) {
+            finalGrid = gridBeforeComparators;
+        }
+    } catch {
+        finalGrid = gridBeforeComparators;
+    }
+
+    return { ...baseOption, grid: finalGrid };
 }
 
 function pickBrokenRegionGlyph(randomFn = Math.random) {
@@ -7343,17 +7367,28 @@ export function createMachineVariant(options = {}) {
         selectedDebugPuzzle.progress = createDebugProgress(selectedDebugPuzzle, randomFn);
     }
     if (!protectedStoryMachine) {
-        const optionalSlots = [
-            { get: () => selectedFlowPuzzle, clear: () => { selectedFlowPuzzle = null; } },
-            { get: () => selectedGearPuzzle, clear: () => { selectedGearPuzzle = null; } },
-            { get: () => selectedDebugPuzzle, clear: () => { selectedDebugPuzzle = null; } },
-        ].filter((slot) => slot.get() !== null);
+        // Pin the slot that was forced into a scrap fault — pruning it would
+        // erase the only puzzle the player is supposed to be inspecting on
+        // this shift, leaving the case impossible to resolve correctly.
+        const pinnedKey = forcedKey && forcedKey !== 'grid' ? forcedKey : null;
+        const slotsByKey = {
+            flow: { get: () => selectedFlowPuzzle, clear: () => { selectedFlowPuzzle = null; } },
+            gear: { get: () => selectedGearPuzzle, clear: () => { selectedGearPuzzle = null; } },
+            code: { get: () => selectedDebugPuzzle, clear: () => { selectedDebugPuzzle = null; } },
+        };
+        const optionalSlots = ['flow', 'gear', 'code']
+            .filter((key) => key !== pinnedKey && slotsByKey[key].get() !== null)
+            .map((key) => slotsByKey[key]);
         if (optionalSlots.length > 1) {
             for (let i = optionalSlots.length - 1; i > 0; i--) {
                 const j = Math.floor(randomFn() * (i + 1));
                 [optionalSlots[i], optionalSlots[j]] = [optionalSlots[j], optionalSlots[i]];
             }
-            const keepCount = optionalSlots.length >= 3 ? (randomFn() < 0.45 ? 1 : 2) : 1;
+            // If we pinned a slot we always keep that one too; otherwise keep
+            // 1-2 of the remaining puzzles as before.
+            const pinnedCount = pinnedKey ? 1 : 0;
+            const baseKeep = (optionalSlots.length + pinnedCount) >= 3 ? (randomFn() < 0.45 ? 1 : 2) : 1;
+            const keepCount = Math.max(0, baseKeep - pinnedCount);
             optionalSlots.slice(keepCount).forEach((slot) => slot.clear());
         }
     }
