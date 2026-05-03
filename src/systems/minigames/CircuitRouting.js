@@ -876,6 +876,10 @@ export default class CircuitRouting extends MinigameBase {
         this._flowPtrUp = (pointer) => this._onFlowGlobalPointerUp(pointer);
         this.scene.input.on('pointermove', this._flowPtrMove);
         this.scene.input.on('pointerup', this._flowPtrUp);
+        // Phaser fires pointerupoutside instead of pointerup when the release
+        // happens off the canvas (very common when dragging). Without this the
+        // drag/pending state is never cleared and subsequent drags are blocked.
+        this.scene.input.on('pointerupoutside', this._flowPtrUp);
     }
 
     _unbindFlowDragListeners() {
@@ -884,9 +888,31 @@ export default class CircuitRouting extends MinigameBase {
         }
         if (this._flowPtrUp) {
             this.scene.input.off('pointerup', this._flowPtrUp);
+            this.scene.input.off('pointerupoutside', this._flowPtrUp);
         }
         this._flowPtrMove = null;
         this._flowPtrUp = null;
+    }
+
+    // Restore any in-flight drag/pending state to a clean slate. Safe to call
+    // when the puzzle is being closed mid-drag — returns the held tile to its
+    // origin (board or inventory) and tears down the ghost.
+    _abortFlowDrag() {
+        if (this._flowDrag) {
+            const p = this._flowDrag;
+            if (p.from === 'board') {
+                const row = this._tiles[p.origGy];
+                if (row && row[p.origGx]) {
+                    row[p.origGx] = { type: p.type, rotation: p.rot };
+                }
+            }
+            // Inventory drags: the count was never decremented at pickup time,
+            // so nothing to restore beyond clearing the drag state.
+            this._flowDrag = null;
+        }
+        this._destroyFlowGhost();
+        this._flowBoardPending = null;
+        this._flowInvPointer = null;
     }
 
     _destroyFlowGhost() {
@@ -1094,36 +1120,54 @@ export default class CircuitRouting extends MinigameBase {
     }
 
     _onFlowGlobalPointerUp(pointer) {
-        if (!this.active) return;
+        // Even when the puzzle is inactive (e.g. closed mid-drag) we still
+        // need to flush stale state — otherwise the ghost sprite, _flowDrag,
+        // and _flowBoardPending leak into the next session and block drags.
+        if (!this.active) {
+            this._abortFlowDrag();
+            return;
+        }
         if (this._flowDrag) {
             this._commitFlowDrag(pointer);
             return;
         }
         const threshold = 8;
-        if (this._flowInvPointer && pointer.id === this._flowInvPointer.id) {
-            const dx = pointer.x - this._flowInvPointer.sx;
-            const dy = pointer.y - this._flowInvPointer.sy;
-            const d = Math.hypot(dx, dy);
-            if (d < threshold) {
-                this._toggleInventorySelection(this._flowInvPointer.type);
+        // NOTE: we previously gated state-clearing on `pointer.id` matching
+        // the stored id. On some browsers/OSes the up-event arrives with a
+        // different id (lost focus, alt-tab, multi-touch handoff), which
+        // would orphan _flowInvPointer/_flowBoardPending forever and block
+        // every subsequent drag at the pointerdown short-circuit. The id is
+        // now only used to validate the click-vs-drag distance gesture.
+        if (this._flowInvPointer) {
+            const sameId = pointer.id === this._flowInvPointer.id;
+            if (sameId) {
+                const dx = pointer.x - this._flowInvPointer.sx;
+                const dy = pointer.y - this._flowInvPointer.sy;
+                const d = Math.hypot(dx, dy);
+                if (d < threshold) {
+                    this._toggleInventorySelection(this._flowInvPointer.type);
+                }
             }
             this._flowInvPointer = null;
             return;
         }
-        if (this._flowBoardPending && pointer.id === this._flowBoardPending.id) {
-            const dx = pointer.x - this._flowBoardPending.sx;
-            const dy = pointer.y - this._flowBoardPending.sy;
-            const d = Math.hypot(dx, dy);
-            if (d < threshold) {
-                const { gx, gy } = this._flowBoardPending;
-                const live = this._tiles[gy]?.[gx];
-                if (live && live.type !== 'empty' && !live.locked
-                    && !this._forbidden.has(`${gx},${gy}`)) {
-                    live.rotation = (live.rotation + 1) % 4;
-                    const view = this._tileGfx[gy][gx];
-                    this._animateTileRotation(view, live.rotation);
-                    this._playWireTurnSound();
-                    this._updateAll();
+        if (this._flowBoardPending) {
+            const sameId = pointer.id === this._flowBoardPending.id;
+            if (sameId) {
+                const dx = pointer.x - this._flowBoardPending.sx;
+                const dy = pointer.y - this._flowBoardPending.sy;
+                const d = Math.hypot(dx, dy);
+                if (d < threshold) {
+                    const { gx, gy } = this._flowBoardPending;
+                    const live = this._tiles[gy]?.[gx];
+                    if (live && live.type !== 'empty' && !live.locked
+                        && !this._forbidden.has(`${gx},${gy}`)) {
+                        live.rotation = (live.rotation + 1) % 4;
+                        const view = this._tileGfx[gy][gx];
+                        this._animateTileRotation(view, live.rotation);
+                        this._playWireTurnSound();
+                        this._updateAll();
+                    }
                 }
             }
             this._flowBoardPending = null;
@@ -2071,11 +2115,10 @@ export default class CircuitRouting extends MinigameBase {
             window.removeEventListener('keydown', this._escKeyDown);
             this._escKeyDown = null;
         }
+        // Restore any in-flight drag back to its origin so the player doesn't
+        // lose the tile when closing the puzzle mid-drag.
+        this._abortFlowDrag();
         this._unbindFlowDragListeners();
-        this._flowBoardPending = null;
-        this._flowInvPointer = null;
-        this._flowDrag = null;
-        this._destroyFlowGhost();
         this._closeButton?.destroy();
         this._closeButton = null;
         this._closeButtonLabel?.destroy();

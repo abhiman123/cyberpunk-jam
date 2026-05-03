@@ -773,61 +773,167 @@ function buildFlowOptionLayout({ sourceRow, outputs, forbiddenCount = 0, preview
     };
 }
 
+// Plan the cells `carveFlowPath` would touch for (source.row → outRow) at
+// `branchCol`, without mutating the tile grid. Mirrors carveFlowPath's
+// geometry: trunk on source.row from col 0..branchCol, vertical at branchCol,
+// horizontal on outRow from branchCol..cols-1. Returns a list of {x,y} cells.
+function planCarveFlowCells(sourceRow, outRow, cols, branchCol) {
+    const cells = [];
+    for (let x = 0; x <= branchCol; x += 1) cells.push({ x, y: sourceRow });
+    if (outRow !== sourceRow) {
+        const step = outRow < sourceRow ? -1 : 1;
+        let y = sourceRow + step;
+        while (y !== outRow) {
+            cells.push({ x: branchCol, y });
+            y += step;
+        }
+        cells.push({ x: branchCol, y: outRow });
+    }
+    for (let x = branchCol + 1; x <= cols - 1; x += 1) cells.push({ x, y: outRow });
+    return cells;
+}
+
+// Same as carveFlowPath, but also stamps the source's powerClass into the
+// `owners` grid so we can detect cross-class crossings later.
+function carveFlowPathWithOwner(tiles, owners, sourceRow, outRow, cols, branchCol, ownerClass) {
+    carveFlowPath(tiles, sourceRow, outRow, cols, branchCol);
+    planCarveFlowCells(sourceRow, outRow, cols, branchCol).forEach(({ x, y }) => {
+        owners[y][x] = ownerClass;
+    });
+}
+
+// Returns true if every cell the planned carve would touch is either empty
+// (in `owners`) or already owned by `ownerClass`. A cell owned by another
+// class would, after the carve, end up in the runtime as a tee/cross feeding
+// from two different-class sources at once, which `flowPowerSatisfiesTarget`
+// rejects — i.e. it would make the board unsolvable.
+function canCarveFlowWithoutClassConflict(owners, sourceRow, outRow, cols, branchCol, ownerClass) {
+    const cells = planCarveFlowCells(sourceRow, outRow, cols, branchCol);
+    for (let index = 0; index < cells.length; index += 1) {
+        const { x, y } = cells[index];
+        const occupant = owners[y]?.[x];
+        if (occupant && occupant !== ownerClass) return false;
+    }
+    return true;
+}
+
+function attemptTypedFlowCarve({ sources, outputSpecs, rows, cols, seededRandom }) {
+    const tiles = Array.from({ length: rows }, () => (
+        Array.from({ length: cols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
+    ));
+    const owners = Array.from({ length: rows }, () => Array(cols).fill(null));
+
+    // Order outputs so each source's branches are placed together (same-class
+    // sharing is fine; this just keeps deterministic shuffles tidy).
+    const orderedSpecs = [...outputSpecs];
+    orderedSpecs.sort((a, b) => String(a.sourceKey).localeCompare(String(b.sourceKey)));
+
+    for (let index = 0; index < orderedSpecs.length; index += 1) {
+        const spec = orderedSpecs[index];
+        const source = sources.find((cand) => cand.key === spec.sourceKey) || sources[index % sources.length];
+        const ownerClass = source.powerClass || 'neutral';
+
+        if (spec.row === source.row) {
+            // Same-row routing — no vertical needed; carve a straight trunk
+            // out to the output port.
+            const branchCol = cols - 1;
+            if (!canCarveFlowWithoutClassConflict(owners, source.row, spec.row, cols, branchCol, ownerClass)) {
+                return null;
+            }
+            carveFlowPathWithOwner(tiles, owners, source.row, spec.row, cols, branchCol, ownerClass);
+            continue;
+        }
+
+        const candidateCols = [];
+        for (let col = 1; col <= cols - 2; col += 1) candidateCols.push(col);
+        // Shuffle so retries with a perturbed seed produce different geometries.
+        for (let i = candidateCols.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(seededRandom() * (i + 1));
+            [candidateCols[i], candidateCols[j]] = [candidateCols[j], candidateCols[i]];
+        }
+
+        let placed = false;
+        for (let i = 0; i < candidateCols.length; i += 1) {
+            const branchCol = candidateCols[i];
+            if (canCarveFlowWithoutClassConflict(owners, source.row, spec.row, cols, branchCol, ownerClass)) {
+                carveFlowPathWithOwner(tiles, owners, source.row, spec.row, cols, branchCol, ownerClass);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) return null;
+    }
+
+    return { tiles, owners };
+}
+
+// Last-resort fallback: every output is routed on its source's own row, so
+// the entire board collapses to a small set of horizontal trunks that
+// physically cannot share cells with another source. Rebrands `outputSpecs`
+// by mutating each spec's `row` in place so the runtime renders the output
+// markers in the right place.
+function carveSameRowFallback({ sources, outputSpecs, rows, cols }) {
+    const tiles = Array.from({ length: rows }, () => (
+        Array.from({ length: cols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
+    ));
+
+    outputSpecs.forEach((spec, index) => {
+        const source = sources.find((cand) => cand.key === spec.sourceKey) || sources[index % sources.length];
+        // Force the output to land on its source's row so no vertical carving
+        // is needed — this guarantees no cross-class cell sharing.
+        spec.row = source.row;
+        carveFlowPath(tiles, source.row, source.row, cols, cols - 1);
+    });
+
+    return { tiles };
+}
+
 function buildTypedFlowOptionLayout({ sources, outputSpecs, previewTitle = 'POWER BUS', rows = FLOW_TILE_ROWS, cols = FLOW_TILE_COLS, randomFn = Math.random }) {
     const safeRows = Math.max(3, Number(rows || FLOW_TILE_ROWS));
     const safeCols = Math.max(3, Number(cols || FLOW_TILE_COLS));
-    const tiles = Array.from({ length: safeRows }, () => (
-        Array.from({ length: safeCols }, () => ({ type: 'empty', rotation: 0, _dirs: new Set() }))
-    ));
-    // Mix the live randomFn into the seed so different units get different
-    // boards even on the same template; previously the seed was deterministic
-    // per template which meant Day-3 boards repeated across robots.
-    const seededRandom = createSeededRandom(
-        `${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}:${Math.floor(randomFn() * 1e9)}`,
-    );
 
-    // Assign each non-trunk output its own branch column. We allow occasional
-    // reuse across sources so wires can criss-cross through shared trunks
-    // (which forces tees/crosses and makes Day-3 boards feel like a circuit
-    // rather than three independent strips).
-    const bySource = new Map();
-    outputSpecs.forEach((spec, index) => {
-        const source = sources.find((cand) => cand.key === spec.sourceKey) || sources[index % sources.length];
-        const key = source.key;
-        if (!bySource.has(key)) bySource.set(key, { source, specs: [] });
-        bySource.get(key).specs.push(spec);
-    });
-    const branchColBySpec = new Map();
-    bySource.forEach(({ source, specs }) => {
-        const cols = [];
-        for (let col = 1; col <= safeCols - 2; col += 1) cols.push(col);
-        const shuffled = cols.sort(() => seededRandom() - 0.5);
-        let nextCol = 0;
-        specs.forEach((spec) => {
-            if (spec.row === source.row) return;
-            branchColBySpec.set(spec, shuffled[nextCol % shuffled.length]);
-            nextCol += 1;
+    // Try a few times with different seeds. A carve attempt only fails when
+    // some output would need to cross another source's wires — re-shuffling
+    // the branch-column order usually finds a routing that doesn't collide.
+    const baseSeedSuffix = Math.floor(randomFn() * 1e9);
+    const MAX_ATTEMPTS = 12;
+    let result = null;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+        const seededRandom = createSeededRandom(
+            `${previewTitle}:${sources.map((source) => `${source.key}:${source.row}`).join('|')}:${baseSeedSuffix}:${attempt}`,
+        );
+        const candidate = attemptTypedFlowCarve({
+            sources,
+            outputSpecs,
+            rows: safeRows,
+            cols: safeCols,
+            seededRandom,
         });
-    });
+        if (candidate) {
+            result = { ...candidate, seededRandom };
+            break;
+        }
+    }
 
-    outputSpecs.forEach((outputSpec, index) => {
-        const source = sources.find((candidate) => candidate.key === outputSpec.sourceKey) || sources[index % sources.length];
-        const branchCol = outputSpec.row === source.row
-            ? safeCols - 1
-            : (branchColBySpec.get(outputSpec) ?? Math.min(1 + index, safeCols - 2));
-        carveFlowPath(tiles, source.row, outputSpec.row, safeCols, branchCol);
-    });
+    if (!result) {
+        // No conflict-free routing exists for the current source/output rows.
+        // Collapse outputs to their source rows so the puzzle is at least
+        // solvable. This degrades visual variety but never strands the player.
+        const fallback = carveSameRowFallback({ sources, outputSpecs, rows: safeRows, cols: safeCols });
+        const seededRandom = createSeededRandom(
+            `${previewTitle}:fallback:${baseSeedSuffix}`,
+        );
+        result = { tiles: fallback.tiles, owners: null, seededRandom };
+    }
+
+    const { tiles, seededRandom } = result;
 
     tiles.forEach((row) => row.forEach((cell) => {
         finalizeFlowTile(cell);
         delete cell._dirs;
     }));
 
-    // Scramble tile rotations so the player has real work to do. Previously
-    // straights got a deterministic +1 (so every horizontal straight became
-    // vertical and vice-versa, giving the "boring grid of vertical pipes"
-    // look). Now every rotatable tile picks a random offset 0–3, with the
-    // straight-bias removed.
+    // Scramble tile rotations so the player has real work to do.
     tiles.forEach((row) => row.forEach((cell) => {
         if (cell.type === 'empty' || cell.type === 'cross') return;
         cell.rotation = Math.floor(seededRandom() * 4);
@@ -1206,9 +1312,14 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
         const cols = 7;
         const auxClass = randomFn() < 0.5 ? 'green' : 'orange';
         const auxLabel = auxClass === 'green' ? 'GRN' : 'ORG';
-        // Source rows: top half + bottom half so they're visually separated.
-        const mainRow = 1 + Math.floor(randomFn() * 2);            // 1 or 2
-        const auxRow = 4 + Math.floor(randomFn() * 2);             // 4 or 5
+        // Place each source on opposite edge rows so neither source's wires
+        // ever need to cross the other source's trunk. Combined with output
+        // rows partitioned into upper/lower halves below, this guarantees
+        // the typed flow board is solvable. (Previously the sources sat in
+        // the middle of the grid, which let neutral wires need to pass
+        // through the coloured trunk row — making the puzzle unsolvable.)
+        const mainRow = 0;
+        const auxRow = rows - 1;
         const sources = [
             createFlowSource('main', mainRow, 'neutral', 'PWR'),
             createFlowSource(auxClass, auxRow, auxClass, auxLabel),
@@ -1244,6 +1355,38 @@ function applyFlowStageToOption(flowPuzzleOption, stage = 1, randomFn = Math.ran
             outputSpecs[outputSpecs.length - 1].powerClass = auxClass;
             outputSpecs[outputSpecs.length - 1].sourceKey = auxClass;
         }
+
+        // Partition output rows so neutral outputs sit in the upper half
+        // (closer to the main source at the top) and aux outputs sit in the
+        // lower half. This keeps each source's verticals strictly inside its
+        // own zone and avoids any cross-class cell sharing.
+        const midRow = Math.floor(rows / 2);
+        const upperRows = [];
+        const lowerRows = [];
+        for (let row = 1; row < midRow; row += 1) upperRows.push(row);
+        for (let row = midRow; row < rows - 1; row += 1) lowerRows.push(row);
+        const shuffleInPlace = (list) => {
+            for (let i = list.length - 1; i > 0; i -= 1) {
+                const j = Math.floor(randomFn() * (i + 1));
+                [list[i], list[j]] = [list[j], list[i]];
+            }
+        };
+        shuffleInPlace(upperRows);
+        shuffleInPlace(lowerRows);
+
+        const neutralSpecs = outputSpecs.filter((spec) => spec.powerClass === 'neutral');
+        const auxSpecs = outputSpecs.filter((spec) => spec.powerClass !== 'neutral');
+        // If counts exceed available rows in their preferred half, spill the
+        // overflow into the other half — the typed-carve retry will still
+        // find a solvable routing in that case.
+        const reassignRow = (specsList, primaryRows, fallbackRows) => {
+            specsList.forEach((spec, index) => {
+                if (index < primaryRows.length) spec.row = primaryRows[index];
+                else spec.row = fallbackRows[index - primaryRows.length];
+            });
+        };
+        reassignRow(neutralSpecs, upperRows, lowerRows);
+        reassignRow(auxSpecs, lowerRows, upperRows);
 
         const layout = buildTypedFlowOptionLayout({
             sources,
